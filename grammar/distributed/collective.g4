@@ -10,126 +10,71 @@
  *     Collective
  *
  * Status:
- *     Production-target distributed collective-computation parser grammar.
- *
- * Language:
- *     Zamani
+ *     Production distributed collective-computation grammar
  *
  * ANTLR:
  *     ANTLR4 parser grammar
  *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Rust integration:
+ *     Rust 1.97+
  *     Edition 2021
- *
- * Safety:
- *     - No embedded Rust actions.
- *     - No semantic predicates.
- *     - No unsafe code.
- *     - No filesystem access.
- *     - No network access.
- *     - No hardware access.
- *     - No runtime callbacks.
- *     - No randomness.
- *     - No environment queries.
- *     - No target discovery.
+ *     Safe Rust only
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar owns the SOURCE-LEVEL STRUCTURAL SYNTAX for distributed
- * collective computation.
+ * This grammar owns the source-level structural syntax for collective
+ * computation.
  *
- * A collective operation represents a computation whose semantic participants
- * are a set/group/collection of logical execution entities rather than a
- * single source-level caller and callee.
+ * A collective is a target-independent computational intent involving a
+ * logically defined participant set.
  *
- * Examples of semantic collective operations include:
+ * The grammar deliberately does NOT enumerate collective algorithms.
+ *
+ * Therefore names such as:
  *
  *     broadcast
  *     scatter
  *     gather
- *     all-gather
  *     reduce
- *     all-reduce
+ *     all_reduce
+ *     all_gather
+ *     all_to_all
  *     scan
- *     all-to-all
  *     barrier
  *     exchange
- *     collective synchronization
- *     future collective protocols
+ *     custom.collective
+ *     vendor.collective
+ *     future.collective
  *
- * IMPORTANT:
+ * are ordinary semantic operation names.
  *
- * This grammar deliberately DOES NOT enumerate those operations.
- *
- * The operation name is semantic data.
- *
- * Consequently future collective operations can be introduced without
- * modifying this grammar merely because a new collective algorithm or
- * execution model is added.
+ * Adding a new collective operation MUST NOT require changing this grammar.
  *
  * ============================================================================
- * CORE ARCHITECTURAL PRINCIPLE
+ * ARCHITECTURAL PRINCIPLE
  * ============================================================================
  *
- * Collective syntax describes:
+ * This grammar describes:
  *
  *     WHAT collective computation is requested.
  *
- * It does not decide:
+ * It does NOT describe:
  *
  *     WHERE it executes;
- *     HOW participants are physically discovered;
+ *     WHICH machine executes it;
+ *     WHICH process executes it;
+ *     WHICH CPU/GPU/FPGA/ASIC/QPU executes it;
  *     WHICH transport is used;
- *     WHICH network topology is selected;
+ *     WHICH network is used;
+ *     WHICH physical topology is used;
+ *     WHICH routing algorithm is used;
  *     WHICH scheduler is used;
- *     WHICH placement algorithm is used;
- *     WHICH collective algorithm is selected;
- *     WHICH tree/ring/mesh topology is used;
- *     WHICH hardware is used;
- *     HOW many physical resources exist.
+ *     WHICH implementation algorithm is used;
+ *     WHICH resources are allocated.
  *
  * Those decisions belong downstream.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Collective syntax participates in:
- *
- *     Program
- *          Once
- *             |
- *          Compile
- *          Once
- *             |
- *       Run Everywhere
- *             |
- *        Run Anywhere
- *             |
- *          Forever
- *
- * The source describes portable distributed intent.
- *
- * A collective may therefore ultimately be realized on:
- *
- *     - one process;
- *     - multiple processes;
- *     - multiple CPU cores;
- *     - multiple machines;
- *     - embedded systems;
- *     - edge systems;
- *     - HPC systems;
- *     - clusters;
- *     - supercomputers;
- *     - cloud systems;
- *     - heterogeneous systems;
- *     - CPU/GPU/FPGA systems;
- *     - quantum-classical systems;
- *     - distributed quantum systems;
- *     - future computational substrates.
  *
  * ============================================================================
  * OWNERSHIP
@@ -137,291 +82,216 @@
  *
  * THIS FILE OWNS:
  *
- *     - collective declaration structure;
- *     - collective operation invocation structure;
- *     - collective participant expressions;
- *     - collective value expressions;
- *     - collective result expressions;
- *     - collective operation attributes;
- *     - collective clauses;
- *     - collective nested metadata;
- *     - collective source-level structural composition.
+ *     collectiveConstruct
+ *     collectiveDeclaration
+ *     collectiveInvocation
+ *     collectiveBody
+ *     collectiveMember
+ *     collectiveProperty
+ *     collectiveSection
+ *     collectiveRequirementClause
+ *     collectiveContractClause
+ *     collectivePolicyClause
+ *     collectiveCapabilityClause
+ *     collectiveResourceClause
+ *     collectiveEffectClause
+ *     collectiveProvenanceClause
+ *     collectiveEvidenceClause
+ *     collectiveAttributeAttachment
  *
  * THIS FILE DOES NOT OWN:
  *
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - expression precedence;
- *     - types;
- *     - generic declarations;
- *     - channels;
- *     - messages;
- *     - network protocols;
- *     - endpoints;
- *     - routing;
- *     - topology;
- *     - placement;
- *     - scheduling;
- *     - replication;
- *     - consistency;
- *     - consensus;
- *     - fault tolerance;
- *     - recovery;
- *     - resource allocation;
- *     - hardware;
- *     - accelerator selection;
- *     - quantum gates;
- *     - physical qubits;
- *     - quantum topology;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - canonical IR.
+ *     identifiers
+ *     qualified names
+ *     expressions
+ *     expression precedence
+ *     attributes
+ *     types
+ *     effects
+ *     capabilities
+ *     resources
+ *     policies
+ *     contracts
+ *     provenance semantics
+ *     messages
+ *     channels
+ *     actors
+ *     services
+ *     network protocols
+ *     topology realization
+ *     placement
+ *     routing
+ *     scheduling
+ *     replication
+ *     consistency algorithms
+ *     fault-tolerance implementation
+ *     quantum operations
+ *     physical qubits
+ *     QEC
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
  * DEPENDENCIES
  * ============================================================================
  *
- * Canonical dependencies:
+ * Canonical parser dependencies:
+ *
+ *     Names
+ *     Expressions
+ *     Attributes
+ *
+ * Canonical lexer:
  *
  *     ZamaniLexer
- *          |
- *          +--> Names
- *          |      |
- *          |      +--> identifier
- *          |      +--> qualifiedName
- *          |
- *          +--> Expressions
- *                 |
- *                 +--> expression
- *                 +--> expressionList
- *                 +--> optionalExpressionList
- *                 |
- *                 v
- *             Collective
  *
- * This grammar MUST NOT redefine:
- *
- *     IDENTIFIER
- *     identifier
- *     qualifiedName
- *     expression
- *     expressionList
- *     operators
- *     punctuation
+ * This grammar does not define lexer rules.
  *
  * ============================================================================
- * OPEN-WORLD OPERATION MODEL
+ * PUBLIC RULE
  * ============================================================================
  *
- * Collective operation names are semantic names.
+ * The only public distributed entry point owned here is:
  *
- * The grammar intentionally does NOT define:
+ *     collectiveConstruct
  *
- *     BROADCAST
- *     SCATTER
- *     GATHER
- *     REDUCE
- *     ALLREDUCE
- *     ALLGATHER
- *     ALLTOALL
- *     SCAN
- *     BARRIER
- *     EXCHANGE
+ * The parent distributed grammar consumes that rule.
  *
- * as lexer/parser alternatives.
+ * ============================================================================
+ * OPEN-WORLD CONTRACT
+ * ============================================================================
  *
- * Examples of semantically meaningful operation names include:
+ * Collective operation names are qualified names.
+ *
+ * The grammar does not contain alternatives such as:
  *
  *     broadcast
  *     scatter
  *     gather
  *     reduce
+ *     barrier
  *     all_reduce
- *     custom.collective
- *     vendor.collective
- *     future_collective
  *
- * The semantic layer determines whether an operation is:
+ * as syntax.
  *
- *     known;
- *     supported;
- *     experimental;
- *     deprecated;
- *     vendor-specific;
- *     user-defined;
- *     unsupported;
- *     invalid for the selected semantic context.
+ * This keeps the collective language open to:
+ *
+ *     standard operations
+ *     user-defined operations
+ *     library operations
+ *     dialect operations
+ *     vendor operations
+ *     experimental operations
+ *     future operations
+ *
+ * Semantic analysis determines whether an operation is known, supported,
+ * deprecated, authorized, or realizable.
  *
  * ============================================================================
- * PARTICIPANT MODEL
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * Participants are expressions.
+ * No language-level capacity is encoded.
  *
- * This permits:
+ * This grammar contains no limits for:
  *
  *     participants
- *     group
- *     collection
- *     dynamically computed participant sets
- *     symbolic participant sets
- *     named distributed entities
- *     resource-derived participant sets
- *     future participant abstractions
+ *     groups
+ *     processes
+ *     nodes
+ *     workers
+ *     replicas
+ *     values
+ *     arguments
+ *     properties
+ *     nested sections
+ *     collectives
+ *     resources
+ *     memory
+ *     bandwidth
+ *     devices
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     QPUs
+ *     network size
+ *     topology size
  *
- * The grammar does not impose a finite participant count.
+ * ANTLR repetition is used where collections are structurally unbounded.
  *
- * Examples:
+ * Actual limits are implementation/resource constraints and must remain
+ * outside language semantics.
+ *
+ * ============================================================================
+ * POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * A collective source program expresses logical intent.
+ *
+ * The same source may be considered for realization on:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     CPUs
+ *     multicore systems
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     heterogeneous systems
+ *     future computational substrates
+ *
+ * without changing the collective grammar merely because target capacity
+ * changes.
+ *
+ * ============================================================================
+ * SYNTAX MODEL
+ * ============================================================================
+ *
+ * Declaration/block form:
  *
  *     collective broadcast {
  *         participants: workers;
  *         value: data;
  *     }
  *
- *     collective reduce {
- *         participants: workers;
- *         value: partial;
- *         operation: sum;
- *     }
- *
- *     collective custom.reduce {
- *         participants: group;
- *         value: values;
- *         operation: reducer;
- *     }
- *
- * ============================================================================
- * SEMANTIC REQUIREMENT
- * ============================================================================
- *
- * A collective operation does not imply a physical execution mechanism.
- *
- * For example:
- *
- *     collective broadcast {
- *         participants: workers;
- *         value: x;
- *     }
- *
- * means that the semantic value x is to be made available according to the
- * collective operation named `broadcast`.
- *
- * It does NOT mean:
- *
- *     MPI_Bcast
- *     TCP broadcast
- *     UDP broadcast
- *     RDMA multicast
- *     GPU collective
- *     FPGA fabric operation
- *     quantum communication primitive
- *
- * Those are downstream realizations.
- *
- * ============================================================================
- * RESOURCE / CAPABILITY SEPARATION
- * ============================================================================
- *
- * Collective syntax may carry source-level semantic requirements and
- * capabilities as expressions.
- *
- * For example:
- *
- *     requires capability("collective.communication")
- *
- *     requires capability("collective.reduce")
- *
- *     requires memory >= required_memory
- *
- *     requires bandwidth >= required_bandwidth
- *
- * Such requirements are semantic expressions.
- *
- * This grammar does NOT evaluate them.
- *
- * It also does not establish universal maximums.
- *
- * ============================================================================
- * HARD-CODING PROHIBITION
- * ============================================================================
- *
- * This grammar MUST NOT define:
- *
- *     MAX_PARTICIPANTS
- *     MAX_GROUP_SIZE
- *     MAX_NODES
- *     MAX_PROCESSES
- *     MAX_WORKERS
- *     MAX_REPLICAS
- *     MAX_CHANNELS
- *     MAX_MESSAGES
- *     MAX_COLLECTIVES
- *     MAX_VALUES
- *     MAX_REDUCERS
- *     MAX_DEVICES
- *     MAX_GPUS
- *     MAX_CPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_MEMORY
- *     MAX_BANDWIDTH
- *
- * It also MUST NOT enumerate physical resources.
- *
- * There is no:
- *
- *     node0
- *     node1
- *     worker0
- *     worker1
- *     gpu0
- *     gpu1
- *
- * language-level resource model.
- *
- * Repetition is represented by ANTLR's unbounded repetition operators.
- *
- * Actual limits arise only from:
- *
- *     - source program semantics;
- *     - implementation representation;
- *     - compiler resources;
- *     - runtime resources;
- *     - target capabilities;
- *     - deployment resources.
- *
- * ============================================================================
- * STRUCTURAL DESIGN
- * ============================================================================
- *
- * A collective construct has one explicit structural introducer followed by
- * an operation name and a body.
- *
- * Canonical form:
- *
- *     collective broadcast {
- *         participants: workers;
- *         value: data;
- *     }
- *
- * Invocation-oriented form:
+ * Invocation form:
  *
  *     collective broadcast(participants, data);
  *
- * The block form is the primary extensible form because it permits future
- * collective metadata without requiring the grammar to be redesigned.
+ * Operation names are semantic data.
  *
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * ATTRIBUTE MODEL
  * ============================================================================
  *
- * Higher-level distributed grammar consumes:
+ * Generic attributes are owned by:
  *
- *     collectiveConstruct
+ *     grammar/core/attributes.g4
  *
- * This is the ONLY public entry point owned by this grammar.
+ * This grammar reuses:
+ *
+ *     optionalAttributes
+ *
+ * It does not recreate attribute syntax.
+ *
+ * ============================================================================
+ * EXPRESSION MODEL
+ * ============================================================================
+ *
+ * All values, participant sets, topology requirements, reducers, policies,
+ * resource expressions, capability expressions and other semantic values use
+ * the canonical `expression` grammar.
+ *
+ * This grammar does not create a second expression language.
  *
  * ============================================================================
  */
@@ -432,7 +302,11 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+import
+    Names,
+    Expressions,
+    Attributes
+;
 
 
 /*
@@ -440,7 +314,11 @@ import Names, Expressions;
  * 1. PUBLIC ENTRY POINT
  * ============================================================================
  *
- * Stable integration boundary.
+ * Stable integration boundary consumed by:
+ *
+ *     grammar/distributed/distributed.g4
+ *
+ * and other grammars that explicitly compose distributed collective syntax.
  */
 collectiveConstruct
     : collectiveDeclaration
@@ -453,22 +331,26 @@ collectiveConstruct
  * 2. COLLECTIVE DECLARATION
  * ============================================================================
  *
- * Canonical extensible form:
+ * Block form:
  *
  *     collective broadcast {
  *         participants: workers;
  *         value: data;
  *     }
  *
- * The literal `collective` is intentionally represented through the canonical
- * identifier vocabulary rather than a new lexer keyword in this file.
+ * The operation name is a qualified name and is therefore open-world.
  *
- * The distributed composition grammar owns the contextual recognition of this
- * structural form.
+ * The body is mandatory.
+ *
+ * This makes declaration syntax structurally distinct from invocation syntax:
+ *
+ *     declaration -> { ... }
+ *     invocation  -> ( ... ) ;
  */
 collectiveDeclaration
-    : collectiveMarker
+    : COLLECTIVE
       collectiveOperationName
+      collectiveAttributeAttachment?
       collectiveBody
     ;
 
@@ -478,18 +360,17 @@ collectiveDeclaration
  * 3. COLLECTIVE INVOCATION
  * ============================================================================
  *
- * Compact form:
+ * Invocation:
  *
- *     collective broadcast(participants, value);
+ *     collective broadcast(participants, data);
  *
- *     collective reduce(values, reducer);
- *
- * The meaning of each argument is semantic and belongs to the operation
- * definition.
+ * An empty argument list is valid because some collective operations may have
+ * no explicit source arguments and obtain their semantic inputs from context.
  */
 collectiveInvocation
-    : collectiveMarker
+    : COLLECTIVE
       collectiveOperationName
+      collectiveAttributeAttachment?
       LPAREN
       optionalExpressionList
       RPAREN
@@ -499,40 +380,18 @@ collectiveInvocation
 
 /*
  * ============================================================================
- * 4. COLLECTIVE MARKER
+ * 4. OPERATION NAME
  * ============================================================================
  *
- * `collective` is a structural marker.
- *
- * It remains an identifier-level word until the canonical lexical policy
- * deliberately promotes it to a reserved keyword.
- *
- * This avoids introducing a private lexer token owned only by this grammar.
- *
- * The semantic/composition layer MUST ensure that the marker is recognized
- * only in the collective construct position.
- */
-collectiveMarker
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * 5. OPERATION NAME
- * ============================================================================
- *
- * Operation names are open-world qualified names.
- *
- * Examples:
+ * Qualified names remain open-world:
  *
  *     broadcast
- *     reduce
- *     all_reduce
- *     custom.reduce
- *     vendor.collective
+ *     distributed::broadcast
+ *     custom::reduce
+ *     vendor::collective
+ *     future::collective::operation
  *
- * The grammar does not enumerate operations.
+ * The semantic layer resolves meaning.
  */
 collectiveOperationName
     : qualifiedName
@@ -541,21 +400,20 @@ collectiveOperationName
 
 /*
  * ============================================================================
- * 6. COLLECTIVE BODY
+ * 5. ATTRIBUTE ATTACHMENT
  * ============================================================================
  *
- * The body is deliberately open-ended but structurally constrained.
- *
- * Members are either:
- *
- *     - named properties;
- *     - semantic clauses;
- *     - nested sections.
- *
- * Arbitrary statements are NOT accepted.
- *
- * This prevents a collective declaration from becoming a second general
- * purpose program block.
+ * Delegates completely to the canonical attribute grammar.
+ */
+collectiveAttributeAttachment
+    : optionalAttributes
+    ;
+
+
+/*
+ * ============================================================================
+ * 6. COLLECTIVE BODY
+ * ============================================================================
  */
 collectiveBody
     : LBRACE
@@ -568,93 +426,82 @@ collectiveBody
  * ============================================================================
  * 7. COLLECTIVE MEMBER
  * ============================================================================
+ *
+ * Each member has a structurally distinguishable first token:
+ *
+ *     identifier -> property or nested section
+ *     REQUIRES   -> requirement
+ *     CONTRACT   -> contract
+ *     REQUIRES/ENSURES/... -> contract item when inside contract
+ *     POLICY     -> policy
+ *     CAPABILITY -> capability
+ *     RESOURCE   -> resource
+ *     EFFECT/EFFECTS -> effect
+ *     PROVENANCE -> provenance
+ *     EVIDENCE   -> evidence
+ *
+ * This avoids the former generic "identifier identifier" ambiguity.
  */
 collectiveMember
     : collectiveProperty
-    | collectiveClause
     | collectiveSection
+    | collectiveRequirementClause
+    | collectiveContractClause
+    | collectivePolicyClause
+    | collectiveCapabilityClause
+    | collectiveResourceClause
+    | collectiveEffectClause
+    | collectiveProvenanceClause
+    | collectiveEvidenceClause
     ;
 
 
 /*
  * ============================================================================
- * 8. COLLECTIVE PROPERTY
+ * 8. NAMED PROPERTY
  * ============================================================================
  *
- * Canonical property form:
+ * Examples:
  *
  *     participants: workers;
- *
  *     value: data;
- *
- *     root: coordinator;
- *
- *     operation: reducer;
- *
  *     result: output;
+ *     reducer: combine;
+ *     root: coordinator;
+ *     topology: required_topology;
  *
- * Property names remain identifiers rather than becoming keywords.
+ * Property names are identifiers, not a closed keyword catalogue.
+ *
+ * Therefore future semantic properties do not require grammar changes.
  */
 collectiveProperty
     : identifier
       COLON
-      collectiveValue
-      SEMICOLON?
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 9. COLLECTIVE CLAUSE
+ * 9. NESTED NAMED SECTION
  * ============================================================================
- *
- * Generic semantic clauses allow future collective requirements without
- * requiring a new grammar rule for every policy category.
  *
  * Examples:
- *
- *     requires capability("collective.reduce");
- *
- *     requires bandwidth >= required_bandwidth;
- *
- *     ensures result != nil;
- *
- *     guarantees deterministic;
- *
- * The actual semantic meaning is determined downstream.
- */
-collectiveClause
-    : collectiveClauseName
-      expression
-      SEMICOLON?
-    ;
-
-
-collectiveClauseName
-    : REQUIRES
-    | ENSURES
-    | identifier
-    ;
-
-
-/*
- * ============================================================================
- * 10. COLLECTIVE SECTION
- * ============================================================================
- *
- * Nested sections provide an extensibility boundary.
- *
- * Example:
  *
  *     topology {
  *         preference: hierarchical;
  *     }
  *
- *     resources {
- *         requires: required_resources;
+ *     metadata {
+ *         source: model;
  *     }
  *
- * The parser does not decide what those sections mean.
+ *     implementation {
+ *         strategy: custom;
+ *     }
+ *
+ * The section name is semantic data.
  */
 collectiveSection
     : identifier
@@ -664,430 +511,645 @@ collectiveSection
 
 /*
  * ============================================================================
- * 11. COLLECTIVE VALUE
+ * 10. REQUIREMENT
  * ============================================================================
- *
- * Values delegate ordinary computation to the canonical expression grammar.
- *
- * Nested objects/lists provide structured collective metadata without creating
- * a second data language.
- */
-collectiveValue
-    : expression
-    | collectiveObject
-    | collectiveList
-    ;
-
-
-/*
- * ============================================================================
- * 12. COLLECTIVE OBJECT
- * ============================================================================
- *
- * Nested object form:
- *
- *     metadata: {
- *         key: value;
- *     };
- *
- * Object members reuse the same collective member contract.
- */
-collectiveObject
-    : LBRACE
-      collectiveMember*
-      RBRACE
-    ;
-
-
-/*
- * ============================================================================
- * 13. COLLECTIVE LIST
- * ============================================================================
- *
- * Lists have no grammar-level cardinality limit.
- */
-collectiveList
-    : LBRACKET
-      collectiveListElement*
-      RBRACKET
-    ;
-
-
-collectiveListElement
-    : expression
-    | collectiveObject
-    | collectiveList
-    ;
-
-
-/*
- * ============================================================================
- * 14. PARTICIPANT LIST
- * ============================================================================
- *
- * A participant set is semantically an expression rather than a parser-level
- * resource enumeration.
- *
- * This wrapper exists so downstream AST construction can identify the
- * participant position without inventing a second expression language.
- */
-collectiveParticipantList
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 15. VALUE EXPRESSION
- * ============================================================================
- *
- * Wrapper for semantic AST classification.
- */
-collectiveValueExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * 16. REDUCTION / COMBINATION EXPRESSION
- * ============================================================================
- *
- * A reduction operation may be represented by any expression.
  *
  * Examples:
  *
- *     sum
- *     reducer
- *     combine
- *     custom.reducer
- *     lambda expression
+ *     requires capability("distributed.collective");
+ *     requires capability("collective.reduce");
+ *     requires memory >= required_memory;
+ *     requires bandwidth >= required_bandwidth;
+ *     requires topology(required_topology);
  *
- * The semantic/type system determines whether the expression is a valid
- * associative/commutative/reproducible reducer where required.
+ * The expression is not evaluated by the parser.
+ *
+ * Resource and capability resolution are downstream responsibilities.
  */
-collectiveReductionExpression
-    : expression
+collectiveRequirementClause
+    : REQUIRES
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 17. RESULT EXPRESSION
+ * 11. CONTRACTS
  * ============================================================================
  *
- * Collective results remain ordinary Zamani expressions.
+ * A collective may carry local correctness contracts.
+ *
+ * Examples:
+ *
+ *     requires ...
+ *     ensures ...
+ *     invariant ...
+ *     assume ...
+ *     guarantee ...
+ *     property ...
+ *
+ * A contract block keeps contract membership structurally isolated from
+ * ordinary collective properties.
  */
-collectiveResultExpression
-    : expression
+collectiveContractClause
+    : CONTRACT
+      LBRACE
+      collectiveContractItem*
+      RBRACE
+    | collectiveContractItem
+    ;
+
+
+collectiveContractItem
+    : REQUIRES
+      expression
+      SEMICOLON
+    | ENSURES
+      expression
+      SEMICOLON
+    | INVARIANT
+      expression
+      SEMICOLON
+    | ASSUME
+      expression
+      SEMICOLON
+    | GUARANTEE
+      expression
+      SEMICOLON
+    | PROPERTY
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * 18. ATTRIBUTE-LIKE SEMANTIC VALUE
+ * 12. POLICIES
  * ============================================================================
  *
- * This rule deliberately delegates to expressions rather than defining
- * hardware/resource literals.
+ * Policies govern allowed/preferred execution behavior.
+ *
+ * They do not select a physical target.
+ *
+ * Block form:
+ *
+ *     policy {
+ *         allow capability("collective.communication");
+ *         forbid effect("network");
+ *         prefer topology(preferred_topology);
+ *     }
+ *
+ * Compact form:
+ *
+ *     policy policy_reference;
+ *
+ * Semantic policy interpretation belongs downstream.
  */
-collectiveSemanticExpression
-    : expression
+collectivePolicyClause
+    : POLICY
+      LBRACE
+      collectivePolicyItem*
+      RBRACE
+    | POLICY
+      expression
+      SEMICOLON
+    | collectivePolicyItem
+    ;
+
+
+collectivePolicyItem
+    : ALLOW
+      expression
+      SEMICOLON
+    | FORBID
+      expression
+      SEMICOLON
+    | PERMIT
+      expression
+      SEMICOLON
+    | DENY
+      expression
+      SEMICOLON
+    | PREFER
+      expression
+      SEMICOLON
+    | FALLBACK
+      expression
+      SEMICOLON
+    | RETRY
+      expression
+      SEMICOLON
+    | RECOVER
+      expression
+      SEMICOLON
+    | ESCALATE
+      expression
+      SEMICOLON
+    | REJECT
+      expression
+      SEMICOLON
     ;
 
 
 /*
  * ============================================================================
- * AST CONTRACT
+ * 13. CAPABILITIES
  * ============================================================================
  *
- * Every successful parse of collectiveConstruct must map to one semantic AST
- * construct representing:
+ * Capabilities describe realizable computational abilities.
  *
- *     kind:
- *         declaration | invocation
+ * Examples:
  *
- *     operation:
- *         qualified source name
+ *     capability("collective.communication");
+ *     capability("collective.reduce");
+ *     capability("network.multicast");
  *
- *     members:
- *         ordered source members
- *
- *     arguments:
- *         ordered invocation expressions
- *
- *     source_span:
- *         complete source span
- *
- *     operation_source:
- *         source span of the operation name
- *
- * No physical participant IDs are created by this grammar.
- *
- * No resource allocation is created by this grammar.
- *
+ * The capability identity is an expression and is not enumerated here.
+ */
+collectiveCapabilityClause
+    : CAPABILITY
+      expression
+      SEMICOLON
+    | CAPABILITIES
+      expression
+      SEMICOLON
+    ;
+
+
+/*
  * ============================================================================
- * SEMANTIC CONTRACT
+ * 14. RESOURCES
  * ============================================================================
  *
- * Semantic analysis must determine:
+ * Resources describe source-level requirements or resource intent.
  *
- *     - whether the operation exists;
- *     - whether the operation is available in the selected dialect/version;
- *     - whether participants are valid;
- *     - whether participant expressions denote compatible entities;
- *     - whether values have compatible types;
- *     - whether a reducer is valid when required;
- *     - whether the operation requires ordering guarantees;
- *     - whether deterministic reduction is required;
- *     - whether the operation is associative;
- *     - whether the operation is commutative;
- *     - whether identity values are required;
- *     - whether empty participant sets are legal;
- *     - whether the operation requires a root;
- *     - whether the operation requires all participants;
- *     - whether the result is collective or per-participant;
- *     - whether required capabilities are available;
- *     - whether resource requirements can be satisfied.
+ * Examples:
  *
- * None of these checks belong in the parser.
+ *     resource memory >= required_memory;
+ *     resource bandwidth >= required_bandwidth;
+ *     resource participants;
+ *
+ * This grammar never translates such expressions into fixed capacities.
+ */
+collectiveResourceClause
+    : RESOURCE
+      expression
+      SEMICOLON
+    | RESOURCES
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 15. EFFECTS
+ * ============================================================================
+ *
+ * Effects describe observable computational behavior.
+ *
+ * Examples may refer to:
+ *
+ *     distributed communication
+ *     networking
+ *     mutation
+ *     measurement
+ *     foreign execution
+ *     simulation
+ *     learning
+ *     adaptation
+ *
+ * The effect system remains the authoritative semantic owner.
+ */
+collectiveEffectClause
+    : EFFECT
+      expression
+      SEMICOLON
+    | EFFECTS
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. PROVENANCE
+ * ============================================================================
+ *
+ * Provenance records source-level origin/derivation intent.
+ *
+ * The parser only preserves structure.
+ */
+collectiveProvenanceClause
+    : PROVENANCE
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 17. EVIDENCE
+ * ============================================================================
+ *
+ * Evidence can be attached to a collective requirement, contract, policy or
+ * decision without introducing an AI-specific grammar.
+ */
+collectiveEvidenceClause
+    : EVIDENCE
+      expression
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * 18. AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST should represent:
+ *
+ *     CollectiveOperation
+ *         operation_name
+ *         attributes
+ *         form
+ *         members
+ *         arguments
+ *         source_span
+ *
+ * where:
+ *
+ *     form = declaration | invocation
+ *
+ * Members should retain source order.
+ *
+ * The AST must preserve:
+ *
+ *     operation-name segments
+ *     argument ordering
+ *     property ordering
+ *     section nesting
+ *     contract ordering
+ *     policy ordering
+ *     requirement ordering
+ *     capability expressions
+ *     resource expressions
+ *     effect expressions
+ *     provenance expressions
+ *     evidence expressions
+ *     source spans
+ *
+ * The grammar does not create physical participant IDs or resource handles.
  *
  * ============================================================================
- * IR CONTRACT
+ * 19. SEMANTIC CONTRACT
  * ============================================================================
  *
- * This grammar creates NO IR.
+ * Semantic analysis owns:
  *
- * After semantic analysis, collective operations may contribute to the
- * canonical distributed semantic representation.
+ *     operation lookup
+ *     operation version compatibility
+ *     participant-set validity
+ *     participant type compatibility
+ *     value type compatibility
+ *     result type compatibility
+ *     reducer validity
+ *     identity-element requirements
+ *     associativity requirements
+ *     commutativity requirements
+ *     ordering requirements
+ *     determinism requirements
+ *     reproducibility requirements
+ *     synchronization requirements
+ *     consistency requirements
+ *     fault/recovery requirements
+ *     capability availability
+ *     resource sufficiency
+ *     policy authorization
+ *     contract validity
+ *     provenance validation
+ *     target feasibility
  *
- * If the collective operates on quantum data or quantum execution state,
- * semantic lowering may integrate the relevant operation with:
+ * None of those decisions occur during parsing.
  *
+ * ============================================================================
+ * 20. RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Requirements are symbolic.
+ *
+ * The parser accepts expressions such as:
+ *
+ *     requires capability("collective.communication");
+ *     requires memory >= required_memory;
+ *     requires bandwidth >= required_bandwidth;
+ *     requires topology(required_topology);
+ *
+ * The compiler later resolves:
+ *
+ *     requirement
+ *         ->
+ *     capability/resource negotiation
+ *         ->
+ *     execution planning
+ *         ->
+ *     target realization
+ *
+ * A failed requirement is a semantic feasibility diagnostic, not a parser
+ * failure.
+ *
+ * ============================================================================
+ * 21. NETWORKING CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not select:
+ *
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     RDMA
+ *     MPI
+ *     InfiniBand
+ *     vendor fabrics
+ *     future transports
+ *
+ * Networking grammars and semantic analysis own transport realization.
+ *
+ * A collective operation may therefore remain unchanged while its realization
+ * changes between environments.
+ *
+ * ============================================================================
+ * 22. CONCURRENCY CONTRACT
+ * ============================================================================
+ *
+ * This grammar does not define:
+ *
+ *     actor lifecycle
+ *     task scheduling
+ *     channels
+ *     locks
+ *     futures
+ *     async execution
+ *
+ * Existing concurrency grammars remain authoritative.
+ *
+ * A participant expression may semantically resolve to an actor, process,
+ * task, service, device abstraction or other logical execution entity.
+ *
+ * ============================================================================
+ * 23. QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Collective computation may operate on:
+ *
+ *     classical values
+ *     tensors
+ *     measurement results
+ *     logical quantum data
+ *     hybrid values
+ *     accelerator values
+ *
+ * Quantum-specific meaning is resolved downstream.
+ *
+ * The lowering path remains:
+ *
+ *     collective source
+ *         ->
+ *     domain-neutral AST
+ *         ->
+ *     distributed/quantum semantic analysis
+ *         ->
  *     quantum::ir
+ *         ->
+ *     optimization
+ *         ->
+ *     routing
+ *         ->
+ *     scheduling
+ *         ->
+ *     resilience / QEC
+ *         ->
+ *     ZQN
+ *         ->
+ *     HAL
  *
- * The grammar MUST NOT introduce:
+ * This grammar does not define physical qubits, gate sets, calibration,
+ * coupling maps, QEC codes or quantum hardware.
+ *
+ * ============================================================================
+ * 24. CLASSICAL / AI / DATA CONTRACT
+ * ============================================================================
+ *
+ * Collective syntax is intentionally domain-neutral.
+ *
+ * It can therefore support semantic uses including:
+ *
+ *     distributed tensor computation
+ *     model synchronization
+ *     gradient aggregation
+ *     parameter exchange
+ *     distributed inference
+ *     knowledge aggregation
+ *     scientific reduction
+ *     data aggregation
+ *     probabilistic aggregation
+ *     collective reasoning
+ *
+ * No AI framework, numerical library or application vocabulary is embedded.
+ *
+ * ============================================================================
+ * 25. HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * A collective may eventually lower to:
+ *
+ *     CPU execution
+ *     GPU execution
+ *     FPGA fabric
+ *     ASIC logic
+ *     accelerator infrastructure
+ *     hardware communication engines
+ *     quantum-classical infrastructure
+ *     future computational substrates
+ *
+ * Hardware realization is downstream.
+ *
+ * ============================================================================
+ * 26. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar creates no IR.
+ *
+ * It MUST NOT introduce:
  *
  *     CollectiveIR
+ *     DistributedIR
  *     DistributedQuantumIR
  *     CollectiveQuantumIR
  *
- * as competing intermediate representations.
+ * as competing canonical representations.
  *
- * ============================================================================
- * DISTRIBUTED INTEGRATION
- * ============================================================================
+ * Collective semantic information must enter the repository's canonical
+ * semantic/IR pipeline.
  *
- * Distributed semantics own:
+ * Classical computation follows the classical IR path.
  *
- *     participant resolution;
- *     collective operation resolution;
- *     distributed dependencies;
- *     placement requirements;
- *     communication requirements;
- *     collective scheduling requirements.
+ * Quantum computation follows:
  *
- * This grammar only supplies the source structure.
- *
- * ============================================================================
- * NETWORKING INTEGRATION
- * ============================================================================
- *
- * A collective operation does not select:
- *
- *     TCP;
- *     UDP;
- *     QUIC;
- *     MPI;
- *     RDMA;
- *     InfiniBand;
- *     vendor fabric;
- *     custom transport.
- *
- * Networking determines an appropriate realization downstream.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Resource expressions may describe requirements such as:
- *
- *     requires memory >= required_memory;
- *
- *     requires capability("collective.communication");
- *
- *     requires capability("collective.reduce");
- *
- *     requires topology(required_topology);
- *
- * These are expressions and semantic requirements.
- *
- * They are NOT parser-enforced hardware limits.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * A collective may operate over:
- *
- *     classical values;
- *     tensors;
- *     distributed state;
- *     measurement results;
- *     logical quantum data;
- *     hybrid values;
- *     accelerator values.
- *
- * If quantum semantics are involved:
- *
- *     collective syntax
- *          |
- *          v
- *     domain-neutral AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          v
  *     quantum::ir
  *
- * The grammar does not define:
- *
- *     physical qubits;
- *     QubitId;
- *     gate kinds;
- *     topology;
- *     calibration;
- *     QEC;
- *     ZQN.
+ * HDL/hardware semantics follow the established hardware representation.
  *
  * ============================================================================
- * HDL / HARDWARE INTEGRATION
+ * 27. PROVENANCE CONTRACT
  * ============================================================================
  *
- * Collective computation may eventually lower to:
+ * Source provenance must remain available for:
  *
- *     CPU execution;
- *     GPU collectives;
- *     FPGA communication fabrics;
- *     accelerator networks;
- *     hardware collective engines;
- *     quantum-classical communication;
- *     future hardware.
+ *     diagnostics
+ *     reproducibility
+ *     explainability
+ *     optimization decisions
+ *     resource decisions
+ *     target decisions
+ *     policy decisions
+ *     distributed execution decisions
  *
- * This grammar remains hardware-neutral.
- *
- * ============================================================================
- * AI / DATA INTEGRATION
- * ============================================================================
- *
- * Collective operations may be used for:
- *
- *     distributed tensor computation;
- *     model synchronization;
- *     gradient reduction;
- *     parameter exchange;
- *     federated computation;
- *     dataset aggregation;
- *     distributed inference.
- *
- * The grammar does not encode AI-framework-specific operations.
+ * The grammar preserves structure and source spans; provenance semantics are
+ * downstream.
  *
  * ============================================================================
- * DETERMINISM
+ * 28. DETERMINISM CONTRACT
  * ============================================================================
  *
- * Parsing is deterministic with respect to:
+ * Parsing depends only on:
  *
- *     source;
- *     token stream;
- *     selected grammar version;
- *     canonical lexical policy.
+ *     source token stream
+ *     grammar version
+ *     explicitly selected language configuration
  *
- * There are no:
+ * Parsing must not depend on:
  *
- *     actions;
- *     semantic predicates;
- *     environment queries;
- *     random decisions;
- *     runtime callbacks.
+ *     hardware
+ *     target availability
+ *     resources
+ *     network state
+ *     filesystem state
+ *     runtime state
+ *     time
+ *     randomness
  *
- * ============================================================================
- * SOURCE-PRESERVATION CONTRACT
- * ============================================================================
- *
- * AST construction must preserve:
- *
- *     - declaration/invocation order;
- *     - operation-name segment order;
- *     - argument order;
- *     - member order;
- *     - nested section order;
- *     - expression structure;
- *     - source spans.
- *
- * Semantic normalization happens after parsing.
+ * Identical source and lexical/parser configuration must produce equivalent
+ * parser structure.
  *
  * ============================================================================
- * DIAGNOSTICS CONTRACT
+ * 29. SECURITY / SAFETY CONTRACT
  * ============================================================================
  *
- * Syntax diagnostics should identify:
+ * Parsing grants no:
  *
- *     - missing operation name;
- *     - missing collective body;
- *     - malformed invocation;
- *     - malformed property;
- *     - malformed nested section;
- *     - malformed expression.
+ *     network access
+ *     filesystem access
+ *     credential access
+ *     hardware access
+ *     deployment authority
+ *     foreign-function authority
  *
- * Semantic diagnostics, not parser diagnostics, should identify:
+ * Security and authorization are semantic/runtime concerns.
  *
- *     - unknown collective operation;
- *     - unsupported collective operation;
- *     - invalid participant set;
- *     - invalid reducer;
- *     - incompatible value types;
- *     - unsatisfied capability;
- *     - insufficient resources;
- *     - incompatible target.
+ * The grammar contains:
  *
- * Diagnostics must preserve source spans.
+ *     no embedded Rust
+ *     no semantic predicates
+ *     no actions
+ *     no runtime callbacks
+ *     no unsafe code
  *
  * ============================================================================
- * SECURITY
+ * 30. DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * This grammar does not grant:
+ * Parser diagnostics cover structural errors such as:
  *
- *     - network access;
- *     - filesystem access;
- *     - hardware access;
- *     - credential access;
- *     - deployment authority.
+ *     missing `collective`
+ *     missing operation name
+ *     missing body
+ *     malformed invocation
+ *     malformed property
+ *     malformed contract
+ *     malformed policy
+ *     malformed capability clause
+ *     malformed resource clause
+ *     malformed effect clause
+ *     malformed provenance clause
+ *     malformed evidence clause
  *
- * Collective execution authorization remains a semantic/runtime concern.
+ * Semantic diagnostics cover:
+ *
+ *     unknown operation
+ *     unsupported operation
+ *     invalid participant set
+ *     invalid reducer
+ *     incompatible types
+ *     missing capability
+ *     insufficient resources
+ *     forbidden policy
+ *     invalid contract
+ *     unavailable realization
  *
  * ============================================================================
- * COMPATIBILITY
+ * 31. COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * Existing generic distributed operations remain owned by:
+ * Existing parent integration remains:
  *
  *     grammar/distributed/distributed.g4
+ *         ->
+ *     import Collective
+ *         ->
+ *     collectiveConstruct
  *
- * This grammar must not duplicate the generic `distributedOperation` rule.
+ * The public rule `collectiveConstruct` is intentionally preserved.
  *
- * A collective construct becomes canonical only through the explicit
- * `collective` structural form.
+ * The `collective` spelling becomes a reserved lexical word because a
+ * production distributed parser requires an unambiguous structural marker.
  *
- * Future collective operations do not require grammar changes.
+ * This is a compatibility-affecting lexical change and must be recorded in
+ * grammar/compatibility/.
+ *
+ * Programs that previously used `collective` as an ordinary identifier must
+ * migrate that identifier to another name or use the repository's explicit
+ * compatibility mechanism.
+ *
+ * No other collective algorithm names are reserved.
  *
  * ============================================================================
- * TEST CONTRACT
+ * 32. HARD-CODING AUDIT
  * ============================================================================
  *
- * Positive tests MUST cover:
+ * This grammar contains:
+ *
+ *     no fixed participant count
+ *     no fixed node count
+ *     no fixed process count
+ *     no fixed worker count
+ *     no fixed device count
+ *     no fixed memory capacity
+ *     no fixed bandwidth
+ *     no fixed topology size
+ *     no fixed collective algorithm list
+ *     no fixed transport list
+ *     no fixed CPU/GPU/FPGA/QPU catalogue
+ *     no physical identifiers
+ *     no hardware addresses
+ *     no target-specific constants
+ *
+ * ============================================================================
+ * 33. TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE:
  *
  *     collective broadcast {
  *         participants: workers;
@@ -1097,110 +1159,138 @@ collectiveSemanticExpression
  *     collective reduce {
  *         participants: workers;
  *         value: values;
- *         operation: reducer;
+ *         reducer: reducer;
  *     }
  *
- *     collective all_reduce(participants, values);
- *
- *     collective custom.reduce {
+ *     collective custom::reduce {
  *         participants: group;
  *         value: values;
- *         operation: custom_reducer;
+ *         reducer: custom::combine;
  *     }
  *
- *     collective vendor.collective {
- *         participants: group;
+ *     collective future::collective::operation {
+ *         participants: computed_group;
  *         value: tensor;
  *     }
  *
- * Negative tests MUST cover:
+ *     collective broadcast(workers, data);
+ *
+ *     collective all_reduce(workers, values);
+ *
+ *     collective reduce {
+ *         participants: workers;
+ *         value: values;
+ *
+ *         requires capability("collective.reduce");
+ *         requires memory >= required_memory;
+ *         requires topology(required_topology);
+ *
+ *         contract {
+ *             requires values_are_valid;
+ *             ensures result_is_valid;
+ *         }
+ *
+ *         policy {
+ *             allow capability("distributed.collective");
+ *             prefer topology(preferred_topology);
+ *         }
+ *
+ *         provenance source_record;
+ *         evidence validation_record;
+ *     }
+ *
+ * ATTRIBUTES:
+ *
+ *     collective broadcast @collective.metadata {
+ *         participants: workers;
+ *         value: data;
+ *     }
+ *
+ * NEGATIVE:
  *
  *     collective;
- *     collective broadcast;
  *     collective { };
+ *     collective broadcast;
  *     collective broadcast(;
- *     collective broadcast() malformed forms;
- *     malformed properties;
- *     malformed nested sections;
- *     malformed expressions.
+ *     collective broadcast(workers;
+ *     collective broadcast() malformed;
+ *     collective broadcast {
+ *         participants workers;
+ *     }
  *
- * Boundary tests MUST cover:
+ * BOUNDARY:
  *
- *     one participant;
- *     many symbolic participants;
- *     empty participant expression where syntactically legal;
- *     deeply nested metadata;
- *     deeply nested sections;
+ *     one participant expression;
+ *     computed participant sets;
+ *     deeply qualified operation names;
  *     large argument lists;
- *     large property lists.
+ *     large property sets;
+ *     deeply nested sections;
+ *     large symbolic resource expressions;
+ *     custom/vendor/future operation names.
  *
- * Scalability tests MUST verify that the grammar introduces no artificial
- * participant, node, process, message, resource, tensor, device, or topology
- * ceiling.
+ * SCALABILITY:
  *
- * Determinism tests MUST verify identical token streams produce identical
- * parse structures.
+ *     progressively larger participant expressions;
+ *     progressively larger argument lists;
+ *     progressively deeper qualified names;
+ *     progressively larger member sets;
+ *     progressively deeper metadata sections.
  *
- * ============================================================================
- * HARD-CODING AUDIT
- * ============================================================================
+ * The language itself must not define a finite ceiling.
  *
- * This grammar contains no:
+ * DETERMINISM:
  *
- *     MAX_* resource constants;
- *     fixed participant counts;
- *     fixed node counts;
- *     fixed operation lists;
- *     physical device IDs;
- *     topology IDs;
- *     CPU/GPU/QPU assumptions;
- *     memory-size assumptions;
- *     register-width assumptions;
- *     network-size assumptions.
+ *     identical source + identical lexer/parser configuration
+ *         ->
+ *     equivalent parse structure.
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * 34. COMPLETION CRITERIA
  * ============================================================================
  *
- * This file is complete when:
+ * This file is DONE when:
  *
- *     [x] collective syntax has one canonical entry point;
- *     [x] operation names are open-world;
- *     [x] identifiers are delegated to Names;
- *     [x] expressions are delegated to Expressions;
- *     [x] no generic distributed operation is duplicated;
- *     [x] no physical topology is encoded;
- *     [x] no hardware limits are encoded;
- *     [x] no collective algorithm is hard-coded;
- *     [x] AST contract exists;
- *     [x] semantic contract exists;
- *     [x] IR contract exists;
- *     [x] quantum integration is defined;
- *     [x] networking integration is defined;
- *     [x] resource integration is defined;
- *     [x] compatibility boundary is defined;
- *     [x] diagnostics contract exists;
- *     [x] security boundary exists;
- *     [x] scalability contract exists;
- *     [x] test contract exists;
- *     [x] no Rust actions exist;
+ *     [x] collectiveConstruct remains the stable public entry point.
+ *     [x] `collective` has an unambiguous lexical token.
+ *     [x] operation names are open-world qualified names.
+ *     [x] participant sets use canonical expressions.
+ *     [x] values use canonical expressions.
+ *     [x] attributes use canonical Attributes grammar.
+ *     [x] requirements remain symbolic.
+ *     [x] contracts remain symbolic.
+ *     [x] policies remain symbolic.
+ *     [x] capabilities remain symbolic.
+ *     [x] resources remain symbolic.
+ *     [x] effects remain symbolic.
+ *     [x] provenance remains symbolic.
+ *     [x] evidence remains symbolic.
+ *     [x] no collective algorithm catalogue exists.
+ *     [x] no hardware catalogue exists.
+ *     [x] no transport catalogue exists.
+ *     [x] no physical topology is encoded.
+ *     [x] no capacity limit is encoded.
+ *     [x] no duplicate expression grammar exists.
+ *     [x] no duplicate attribute grammar exists.
+ *     [x] no IR is created.
+ *     [x] no runtime decision is made.
+ *     [x] no Rust action exists.
  *     [x] no unsafe implementation is required.
+ *     [x] Rust 1.97+ integration remains possible.
  *
- * The remaining production gate is repository conformance:
+ * Repository-level gates:
  *
- *     grammar
- *         ->
- *     generated parser
- *         ->
- *     Rust parser
- *         ->
- *     AST
- *         ->
- *     semantic analysis
- *         ->
- *     canonical IR
- *         ->
- *     tests
+ *     [ ] ANTLR generation succeeds.
+ *     [ ] Generated Rust parser builds on Rust 1.97+.
+ *     [ ] Safe-Rust policy passes.
+ *     [ ] Distributed composition tests pass.
+ *     [ ] Positive parser tests pass.
+ *     [ ] Negative parser tests pass.
+ *     [ ] Boundary tests pass.
+ *     [ ] Scalability tests pass within available resources.
+ *     [ ] Determinism tests pass.
+ *     [ ] AST mapping tests pass.
+ *     [ ] Semantic integration tests pass.
  *
  * ============================================================================
  */
