@@ -1,1999 +1,1752 @@
 /*
-
-* ============================================================================
-* Zamani Universal Programming Language
-* ============================================================================
-* 
-* FILE
-* ---
-* grammar/metaprogramming/introspection.g4
-* 
-* STATUS
-* ---
-* PRODUCTION METAPROGRAMMING PARSER COMPONENT
-* 
-* PURPOSE
-* ---
-* This grammar defines the source-level syntax for EXPLICIT INTROSPECTION.
-* 
-* Introspection is distinct from ordinary semantic reflection:
-* 
-* reflection
-*   = inspection of language-defined semantic information;
-* 
-* introspection
-*   = an explicitly requested inspection operation whose information may
-*     depend on an execution, compilation, deployment, capability,
-*     resource, target, or runtime context.
-* 
-* Introspection is therefore an explicit language construct.
-* 
-* It MUST NOT silently turn ordinary source programs into hardware-dependent
-* programs.
-* 
-* BASELINE
-* ---
-* ANTLR4
-* Rust 2021
-* Rust 1.97 / Rust 1.97.1
-* Safe Rust only
-* No unsafe Rust
-* 
-* ============================================================================
-* ARCHITECTURAL POSITION
-* ============================================================================
-* 
-* Zamani source
-*      |
-*      v
-* canonical lexer
-*      |
-*      v
-* canonical parser
-*      |
-*      v
-* domain-neutral frontend AST
-*      |
-*      v
-* semantic analysis
-*      |
-*      +--> name resolution
-*      +--> type analysis
-*      +--> effect analysis
-*      +--> capability analysis
-*      +--> resource analysis
-*      +--> portability analysis
-*      +--> introspection authorization
-*      |
-*      v
-* canonical semantic model
-*      |
-*      +--> classical semantics
-*      +--> quantum semantics
-*      +--> quantum::ir
-*      +--> HDL / hardware semantics
-*      +--> distributed semantics
-*      +--> AI / data / networking semantics
-*      |
-*      v
-* optimization / lowering / routing / scheduling / resilience
-*      |
-*      v
-* HAL / runtime / deployment
-* 
-* Introspection is a FRONTEND SYNTAX FACILITY.
-* 
-* This grammar does not perform introspection.
-* 
-* ============================================================================
-* OWNERSHIP
-* ============================================================================
-* 
-* THIS FILE OWNS
-* ---
-* 
-* - explicit "introspect" expression syntax;
-* - introspection subjects;
-* - introspection scopes;
-* - introspection query paths;
-* - introspection query arguments;
-* - introspection option/qualifier syntax;
-* - the canonical "introspectionExpressionCore" composition boundary.
-* 
-* THIS FILE DOES NOT OWN
-* ---
-* 
-* - lexical token definitions;
-* - identifiers;
-* - qualified names;
-* - ordinary expressions;
-* - ordinary calls;
-* - types;
-* - declarations;
-* - statements;
-* - attributes;
-* - effects;
-* - capabilities;
-* - resources;
-* - hardware discovery;
-* - runtime implementation;
-* - reflection semantics;
-* - compile-time evaluation;
-* - macro expansion;
-* - quotation;
-* - source generation;
-* - specialization;
-* - classical IR;
-* - quantum::ir;
-* - HDL IR;
-* - scheduling;
-* - routing;
-* - QEC;
-* - ZQN;
-* - resilience;
-* - HAL implementation.
-* 
-* ============================================================================
-* CORE ARCHITECTURAL DISTINCTION
-* ============================================================================
-* 
-* Introspection MUST remain explicit.
-* 
-* The following are different semantic categories:
-* 
-* reflect(MyType)
-* 
-* introspect(target)
-* 
-* introspect(resource)
-* 
-* introspect(capability)
-* 
-* introspect(runtime)
-* 
-* introspect(deployment)
-* 
-* The grammar only records the programmer's requested category.
-* 
-* Semantic analysis determines:
-* 
-* - whether that category is supported;
-* - whether the subject is valid;
-* - whether the information is observable;
-* - whether a capability is required;
-* - whether an effect is required;
-* - whether the result is portable;
-* - whether the request is compile-time or runtime;
-* - whether the result may be used in portable computation.
-* 
-* ============================================================================
-* REFLECTION IS NOT DUPLICATED
-* ============================================================================
-* 
-* "grammar/metaprogramming/reflection.g4" already owns:
-* 
-* reflectionExpressionCore
-* 
-* It defines language-semantic reflection such as:
-* 
-* reflect(value)
-* reflect(type(T))
-* reflect(value).name
-* reflect(value).members
-* 
-* This file MUST NOT redefine those rules.
-* 
-* Introspection is deliberately separate because the specification distinguishes
-* semantic reflection from implementation/target/runtime inspection.
-* 
-* ============================================================================
-* NO IMPLICIT HOST INTROSPECTION
-* ============================================================================
-* 
-* This grammar MUST NOT allow an introspection expression to mean:
-* 
-* inspect arbitrary process memory
-* inspect arbitrary filesystem state
-* inspect arbitrary environment variables
-* inspect credentials
-* inspect arbitrary operating-system state
-* inspect arbitrary network state
-* inspect compiler internals
-* inspect backend internals
-* 
-* merely because the word "introspect" occurs in source.
-* 
-* Such operations require explicit semantic capability/effect authorization.
-* 
-* ============================================================================
-* POCO-REAF
-* ============================================================================
-* 
-* Introspection must preserve:
-* 
-* Program Once
-*      |
-* Compile Once
-*      |
-* Run Everywhere
-*      |
-* Run Anywhere
-*      |
-* Forever
-* 
-* Therefore introspection syntax MUST NOT encode universal limits such as:
-* 
-* MAX_QUBITS
-* MAX_CPUS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_NODES
-* MAX_MEMORY
-* MAX_THREADS
-* MAX_TENSOR_RANK
-* MAX_REGISTER_WIDTH
-* MAX_NETWORK_SIZE
-* MAX_DEVICE_COUNT
-* MAX_INTROSPECTION_DEPTH
-* MAX_INTROSPECTION_RESULTS
-* 
-* Nor may it encode:
-* 
-* physical qubit identifiers
-* fixed GPU identifiers
-* fixed CPU identifiers
-* fixed FPGA identifiers
-* fixed QPU identifiers
-* fixed device counts
-* fixed topology sizes
-* vendor-specific hardware identities
-* 
-* Numeric values appearing in an introspection argument are program values.
-* 
-* They are never universal compiler limits.
-* 
-* ============================================================================
-* OPEN-WORLD DESIGN
-* ============================================================================
-* 
-* Introspection scopes and selectors are intentionally open-ended.
-* 
-* The grammar does NOT enumerate every possible property.
-* 
-* Examples of semantic selectors may include:
-* 
-* capability
-* availability
-* capacity
-* topology
-* memory
-* compute
-* accelerator
-* quantum
-* measurement
-* communication
-* reliability
-* version
-* architecture
-* feature
-* 
-* Those names remain ordinary identifiers.
-* 
-* Future domains can introduce new semantic information without continuously
-* expanding the core lexical vocabulary.
-* 
-* ============================================================================
-* LEXICAL CONTRACT
-* ============================================================================
-* 
-* This grammar is parser-only.
-* 
-* It consumes:
-* 
-* tokenVocab = ZamaniLexer;
-* 
-* The canonical lexer MUST provide:
-* 
-* INTROSPECT
-* 
-* with the spelling:
-* 
-* introspect
-* 
-* "INTROSPECT" is the ONLY new reserved word required by this grammar.
-* 
-* It belongs to:
-* 
-* grammar/lexer/keywords.g4
-* 
-* and is composed by:
-* 
-* grammar/antlr/ZamaniLexer.g4
-* 
-* This grammar MUST NOT define lexer rules.
-* 
-* All other names used by introspection remain ordinary identifiers wherever
-* the parser can distinguish them structurally.
-* 
-* ============================================================================
-* NAME CONTRACT
-* ============================================================================
-* 
-* Name syntax remains owned by:
-* 
-* grammar/core/names.g4
-* 
-* This grammar consumes:
-* 
-* qualifiedName
-* identifier
-* 
-* It does not redefine them.
-* 
-* ============================================================================
-* TYPE CONTRACT
-* ============================================================================
-* 
-* Type syntax remains owned by:
-* 
-* grammar/types/types.g4
-* 
-* Introspection may explicitly inspect a type:
-* 
-* introspect type(T)
-* 
-* The type itself is parsed by:
-* 
-* typeExpression
-* 
-* This grammar does not define a second type grammar.
-* 
-* ============================================================================
-* EXPRESSION CONTRACT
-* ============================================================================
-* 
-* Introspection arguments deliberately use a restricted argument-value form.
-* 
-* This prevents:
-* 
-* expression
-*     -> introspection
-*         -> expression
-* 
-* from creating avoidable recursive grammar coupling.
-* 
-* The subject can be:
-* 
-* a qualified source name;
-* an explicit type;
-* an explicit target/resource/capability scope;
-* a compile-time literal/value where the canonical argument grammar allows
-* it.
-* 
-* Arbitrary computed-expression introspection is NOT implicitly accepted.
-* 
-* If future language semantics require arbitrary expression inspection, it
-* should be introduced through the quotation/value metaprogramming facilities.
-* 
-* ============================================================================
-* INTROSPECTION MODEL
-* ============================================================================
-* 
-* Canonical source forms:
-* 
-* introspect(subject)
-* 
-* introspect type(Type)
-* 
-* introspect target(subject)
-* 
-* introspect resource(subject)
-* 
-* introspect capability(subject)
-* 
-* introspect runtime(subject)
-* 
-* introspect deployment(subject)
-* 
-* followed by zero or more selector projections:
-* 
-* .selector
-* 
-* Optional named query arguments may be supplied where the semantic contract
-* permits them:
-* 
-* introspect target(subject, property = value)
-* 
-* The grammar does not decide whether an option is legal.
-* 
-* ============================================================================
-* GRAMMAR DECLARATION
-* ============================================================================
-  */
+ * ============================================================================
+ * ZAMANI PROGRAMMING LANGUAGE
+ * ============================================================================
+ *
+ * FILE
+ * ----
+ * grammar/metaprogramming/introspection.g4
+ *
+ * GRAMMAR
+ * -------
+ * Introspection
+ *
+ * STATUS
+ * ------
+ * PRODUCTION METAPROGRAMMING COMPONENT
+ *
+ * BASELINE
+ * --------
+ * ANTLR4
+ * Rust 2021
+ * Rust 1.97+
+ * Safe Rust only
+ * No unsafe Rust
+ *
+ * ============================================================================
+ * 1. PURPOSE
+ * ============================================================================
+ *
+ * This file owns the SOURCE-LEVEL SYNTAX for explicit introspection.
+ *
+ * Introspection is deliberately distinct from ordinary reflection.
+ *
+ * Reflection:
+ *
+ *     asks about language-defined semantic structure.
+ *
+ * Introspection:
+ *
+ *     explicitly asks for observable information about a semantic subject,
+ *     execution context, target context, resource context, capability context,
+ *     or deployment context.
+ *
+ * This distinction is important for POCO-REAF.
+ *
+ * A normal source program must not silently become target-dependent merely
+ * because an implementation happens to expose additional machine information.
+ *
+ * Introspection therefore represents an EXPLICIT request.
+ *
+ * This grammar records syntax only.
+ *
+ * It does NOT:
+ *
+ *     - perform introspection;
+ *     - inspect hardware;
+ *     - inspect runtime state;
+ *     - inspect operating-system state;
+ *     - inspect filesystem state;
+ *     - inspect network state;
+ *     - authorize capabilities;
+ *     - grant permissions;
+ *     - resolve resources;
+ *     - select targets;
+ *     - select devices;
+ *     - select physical qubits;
+ *     - execute code;
+ *     - execute compile-time code;
+ *     - create an IR;
+ *     - create quantum::ir;
+ *     - create an HDL IR;
+ *     - bypass semantic analysis.
+ *
+ * ============================================================================
+ * 2. ARCHITECTURAL POSITION
+ * ============================================================================
+ *
+ * Zamani source
+ *      |
+ *      v
+ * canonical lexer
+ *      |
+ *      v
+ * canonical parser
+ *      |
+ *      v
+ * domain-neutral AST
+ *      |
+ *      v
+ * structural validation
+ *      |
+ *      +--> name resolution
+ *      +--> type analysis
+ *      +--> effect analysis
+ *      +--> capability analysis
+ *      +--> resource analysis
+ *      +--> policy analysis
+ *      +--> portability analysis
+ *      +--> provenance
+ *      |
+ *      v
+ * canonical semantic model
+ *      |
+ *      +--> classical semantics
+ *      +--> quantum semantics
+ *      +--> quantum::ir
+ *      +--> HDL / hardware semantics
+ *      +--> distributed semantics
+ *      +--> AI / data semantics
+ *      +--> networking semantics
+ *      |
+ *      v
+ * optimization / lowering / routing / scheduling / resilience
+ *      |
+ *      v
+ * HAL / runtime / deployment
+ *
+ * Introspection stops at the frontend/semantic boundary.
+ *
+ * ============================================================================
+ * 3. OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS
+ * -------------
+ *
+ *     introspectionExpressionCore
+ *     introspectionRequest
+ *     introspectionGeneralRequest
+ *     introspectionTypeRequest
+ *     introspectionTargetRequest
+ *     introspectionResourceRequest
+ *     introspectionCapabilityRequest
+ *     introspectionDeploymentRequest
+ *     introspectionSubject
+ *     introspectionArguments
+ *     introspectionArgument
+ *     introspectionArgumentValue
+ *     introspectionProjection
+ *     introspectionSelector
+ *
+ * THIS FILE DOES NOT OWN
+ * ----------------------
+ *
+ *     - lexer tokens;
+ *     - identifiers;
+ *     - qualified names;
+ *     - paths;
+ *     - ordinary expressions;
+ *     - ordinary member access;
+ *     - ordinary calls;
+ *     - types;
+ *     - literals;
+ *     - declarations;
+ *     - statements;
+ *     - reflection;
+ *     - macros;
+ *     - quotation;
+ *     - unquotation;
+ *     - source generation;
+ *     - specialization;
+ *     - compile-time execution;
+ *     - effects;
+ *     - capabilities;
+ *     - resources;
+ *     - policies;
+ *     - semantic analysis;
+ *     - AST implementation;
+ *     - canonical IR;
+ *     - quantum::ir;
+ *     - HDL/hardware IR;
+ *     - routing;
+ *     - scheduling;
+ *     - QEC;
+ *     - ZQN;
+ *     - HAL;
+ *     - runtime implementation.
+ *
+ * ============================================================================
+ * 4. SINGLE-OWNER RULE
+ * ============================================================================
+ *
+ * This file is the sole owner of the parser-level introspection core.
+ *
+ * No other grammar file may redefine:
+ *
+ *     introspectionExpressionCore
+ *
+ * No other grammar file may create an alternative introspection grammar.
+ *
+ * The composition layer may expose a wrapper, but the syntax remains owned
+ * here.
+ *
+ * ============================================================================
+ * 5. REFLECTION BOUNDARY
+ * ============================================================================
+ *
+ * Ordinary semantic reflection belongs to:
+ *
+ *     grammar/metaprogramming/reflection.g4
+ *
+ * Reflection answers questions such as:
+ *
+ *     what declaration is this?
+ *     what type is this?
+ *     what members does this type expose?
+ *     what metadata belongs to this semantic entity?
+ *
+ * Introspection answers explicitly requested contextual questions such as:
+ *
+ *     what capabilities are observable here?
+ *     what resources are available?
+ *     what target context is active?
+ *     what deployment context is active?
+ *
+ * This file MUST NOT redefine:
+ *
+ *     reflectionExpressionCore
+ *
+ * It MUST NOT turn reflection into hardware/runtime discovery.
+ *
+ * ============================================================================
+ * 6. LEXICAL CONTRACT
+ * ============================================================================
+ *
+ * This is a parser grammar.
+ *
+ * It consumes:
+ *
+ *     tokenVocab = ZamaniLexer;
+ *
+ * No lexer rules are defined here.
+ *
+ * The canonical lexical vocabulary already provides the language-level tokens
+ * needed by this grammar, including:
+ *
+ *     INTROSPECT
+ *     TYPE
+ *     TARGET
+ *     RESOURCE
+ *     CAPABILITY
+ *     DEPLOY
+ *     LPAREN
+ *     RPAREN
+ *     DOT
+ *     COMMA
+ *     ASSIGN
+ *
+ * No new lexer token is required for runtime introspection.
+ *
+ * Runtime context can be represented semantically through an ordinary source
+ * name such as:
+ *
+ *     runtime
+ *
+ * for example:
+ *
+ *     introspect(target(runtime))
+ *
+ * This deliberately avoids reserving another global keyword merely for one
+ * introspection category.
+ *
+ * New domain-specific selectors remain identifiers.
+ *
+ * Examples:
+ *
+ *     capacity
+ *     topology
+ *     architecture
+ *     version
+ *     availability
+ *     calibration
+ *     reliability
+ *     memory
+ *     compute
+ *     measurement
+ *
+ * are NOT lexer keywords merely because they may be useful selectors.
+ *
+ * ============================================================================
+ * 7. CANONICAL IMPORTS
+ * ============================================================================
+ *
+ * Names:
+ *
+ *     grammar/core/names.g4
+ *
+ * owns:
+ *
+ *     identifier
+ *     qualifiedName
+ *
+ * Types:
+ *
+ *     grammar/types/types.g4
+ *
+ * owns:
+ *
+ *     typeExpression
+ *
+ * Literals:
+ *
+ *     grammar/expressions/literals.g4
+ *
+ * owns:
+ *
+ *     literalExpression
+ *
+ * This file reuses those canonical rules.
+ *
+ * It does not recreate any of them.
+ *
+ * ============================================================================
+ */
 
 parser grammar Introspection;
 
 options {
-tokenVocab = ZamaniLexer;
+    tokenVocab = ZamaniLexer;
 }
 
-/*
-
-* ============================================================================
-* CANONICAL SHARED GRAMMAR IMPORTS
-* ============================================================================
-* 
-* Names and types are imported from their canonical owners.
-* 
-* The complete expressions grammar is intentionally NOT imported.
-* 
-* ============================================================================
-  */
-
 import
-Names,
-Types
+    Names,
+    Type,
+    Literals
 ;
 
 /*
-
-* ============================================================================
-* 1. PUBLIC INTEGRATION BOUNDARY
-* ============================================================================
-* 
-* This is the ONLY public production owned by this file.
-* 
-* "grammar/metaprogramming/metaprogramming.g4" should expose the wrapper:
-* 
-* introspectionExpression
-*     : introspectionExpressionCore
-*     ;
-* 
-* No competing "introspectionExpression" production belongs here.
-* ============================================================================
-  */
+ * ============================================================================
+ * 8. PUBLIC INTEGRATION BOUNDARY
+ * ============================================================================
+ *
+ * This is the canonical public rule owned by this file.
+ *
+ * The metaprogramming composition layer should consume:
+ *
+ *     introspectionExpressionCore
+ *
+ * through a wrapper if a wrapper is required by the composition architecture.
+ *
+ * No competing public introspection expression rule is defined here.
+ *
+ * ============================================================================
+ */
 
 introspectionExpressionCore
-: INTROSPECT
-LPAREN
+    : INTROSPECT
+      LPAREN
+      introspectionRequest
+      RPAREN
+      introspectionProjection*
+    ;
+
+
+/*
+ * ============================================================================
+ * 9. REQUEST DISPATCH
+ * ============================================================================
+ *
+ * The request category is explicit.
+ *
+ * This keeps the grammar open-ended while giving semantic analysis a stable
+ * category boundary.
+ *
+ * ============================================================================
+ */
+
 introspectionRequest
-RPAREN
-introspectionProjection*
-;
+    : introspectionGeneralRequest
+    | introspectionTypeRequest
+    | introspectionTargetRequest
+    | introspectionResourceRequest
+    | introspectionCapabilityRequest
+    | introspectionDeploymentRequest
+    ;
+
 
 /*
+ * ============================================================================
+ * 10. GENERAL INTROSPECTION
+ * ============================================================================
+ *
+ * General introspection operates on a named semantic subject.
+ *
+ * Example:
+ *
+ *     introspect(module::value)
+ *
+ * The parser does not determine whether the subject is:
+ *
+ *     - a value;
+ *     - declaration;
+ *     - module;
+ *     - type;
+ *     - operation;
+ *     - resource;
+ *     - capability;
+ *     - policy;
+ *     - domain object;
+ *     - future semantic entity.
+ *
+ * Name resolution and semantic analysis determine that.
+ *
+ * ============================================================================
+ */
 
-* ============================================================================
-* 2. INTROSPECTION REQUEST
-* ============================================================================
-* 
-* A request has one explicit scope.
-* 
-* Scope is syntactic intent.
-* 
-* Semantic authorization is downstream.
-* ============================================================================
-  */
+introspectionGeneralRequest
+    : qualifiedName
+      introspectionArguments?
+    ;
 
-introspectionRequest
-: introspectionGeneralSubject
-| introspectionTypeRequest
-| introspectionTargetRequest
-| introspectionResourceRequest
-| introspectionCapabilityRequest
-| introspectionRuntimeRequest
-| introspectionDeploymentRequest
-;
-
-/*
-
-* ============================================================================
-* 3. GENERAL SUBJECT
-* ============================================================================
-* 
-* A general subject is a canonical qualified name.
-* 
-* Semantic analysis determines what the name denotes and whether that entity
-* is eligible for introspection.
-* ============================================================================
-  */
-
-introspectionGeneralSubject
-: qualifiedName
-introspectionArgumentList?
-;
 
 /*
-
-* ============================================================================
-* 4. TYPE INTROSPECTION
-* ============================================================================
-* 
-* Example:
-* 
-* introspect type(T)
-* 
-* Optional query arguments may follow the type.
-* ============================================================================
-  */
+ * ============================================================================
+ * 11. TYPE INTROSPECTION
+ * ============================================================================
+ *
+ * Type syntax remains owned by the canonical type grammar.
+ *
+ * Example:
+ *
+ *     introspect(type(MyType))
+ *
+ * or, for a qualified type:
+ *
+ *     introspect(type(module::MyType))
+ *
+ * The typeExpression rule is not reimplemented here.
+ *
+ * ============================================================================
+ */
 
 introspectionTypeRequest
-: TYPE
-LPAREN
-typeExpression
-RPAREN
-introspectionArgumentList?
-;
+    : TYPE
+      LPAREN
+      typeExpression
+      RPAREN
+      introspectionArguments?
+    ;
+
 
 /*
-
-* ============================================================================
-* 5. TARGET INTROSPECTION
-* ============================================================================
-* 
-* Target inspection is explicitly marked.
-* 
-* It MUST NOT be inferred from an ordinary source-level name.
-* 
-* Examples:
-* 
-* introspect target(current)
-* introspect target(environment)
-* 
-* Whether the target is a compile-time target description or runtime target
-* state is a semantic/effect/capability decision.
-* ============================================================================
-  */
+ * ============================================================================
+ * 12. TARGET INTROSPECTION
+ * ============================================================================
+ *
+ * Target introspection explicitly requests information about the compilation
+ * or execution target context.
+ *
+ * Examples:
+ *
+ *     introspect(target(current))
+ *
+ *     introspect(target(runtime))
+ *
+ *     introspect(target(environment))
+ *
+ * The names:
+ *
+ *     current
+ *     runtime
+ *     environment
+ *
+ * remain ordinary semantic names.
+ *
+ * They are not universal target identities.
+ *
+ * The semantic layer determines what target context is observable.
+ *
+ * ============================================================================
+ */
 
 introspectionTargetRequest
-: TARGET
-LPAREN
-introspectionSubject
-introspectionArgumentList?
-RPAREN
-;
+    : TARGET
+      LPAREN
+      introspectionSubject
+      introspectionArguments?
+      RPAREN
+    ;
+
 
 /*
-
-* ============================================================================
-* 6. RESOURCE INTROSPECTION
-* ============================================================================
-* 
-* Examples:
-* 
-* introspect resource(quantum)
-* introspect resource(memory)
-* 
-* Resource semantics remain owned by the resource subsystem.
-* ============================================================================
-  */
+ * ============================================================================
+ * 13. RESOURCE INTROSPECTION
+ * ============================================================================
+ *
+ * Resource information is explicitly requested.
+ *
+ * Examples:
+ *
+ *     introspect(resource(memory))
+ *
+ *     introspect(resource(quantum))
+ *
+ *     introspect(resource(accelerator))
+ *
+ * The grammar does not define what resources exist.
+ *
+ * The resource subsystem owns those semantics.
+ *
+ * ============================================================================
+ */
 
 introspectionResourceRequest
-: RESOURCE
-LPAREN
-introspectionSubject
-introspectionArgumentList?
-RPAREN
-;
+    : RESOURCE
+      LPAREN
+      introspectionSubject
+      introspectionArguments?
+      RPAREN
+    ;
+
 
 /*
-
-* ============================================================================
-* 7. CAPABILITY INTROSPECTION
-* ============================================================================
-* 
-* Examples:
-* 
-* introspect capability(quantum::measurement)
-* introspect capability(accelerator)
-* 
-* Capability availability is not determined by the parser.
-* ============================================================================
-  */
+ * ============================================================================
+ * 14. CAPABILITY INTROSPECTION
+ * ============================================================================
+ *
+ * Capability information is explicitly requested.
+ *
+ * Examples:
+ *
+ *     introspect(capability(quantum::measurement))
+ *
+ *     introspect(capability(tensor::compute))
+ *
+ *     introspect(capability(accelerator))
+ *
+ * This syntax does not grant the capability.
+ *
+ * Capability resolution and authorization remain downstream.
+ *
+ * ============================================================================
+ */
 
 introspectionCapabilityRequest
-: CAPABILITY
-LPAREN
-introspectionSubject
-introspectionArgumentList?
-RPAREN
-;
+    : CAPABILITY
+      LPAREN
+      introspectionSubject
+      introspectionArguments?
+      RPAREN
+    ;
+
 
 /*
-
-* ============================================================================
-* 8. RUNTIME INTROSPECTION
-* ============================================================================
-* 
-* Runtime introspection is explicitly marked.
-* 
-* This rule does NOT grant runtime access by itself.
-* 
-* Semantic analysis must require whatever effect/capability contract the
-* language defines for runtime inspection.
-* ============================================================================
-  */
-
-introspectionRuntimeRequest
-: RUNTIME
-LPAREN
-introspectionSubject
-introspectionArgumentList?
-RPAREN
-;
-
-/*
-
-* ============================================================================
-* 9. DEPLOYMENT INTROSPECTION
-* ============================================================================
-* 
-* Deployment state is explicitly distinct from source semantics.
-* 
-* Example:
-* 
-* introspect deployment(environment)
-* 
-* This may be non-portable and therefore requires semantic portability
-* classification.
-* ============================================================================
-  */
+ * ============================================================================
+ * 15. DEPLOYMENT INTROSPECTION
+ * ============================================================================
+ *
+ * DEPLOY is the existing canonical lexical token.
+ *
+ * This grammar intentionally does not introduce a separate DEPLOYMENT
+ * keyword.
+ *
+ * Examples:
+ *
+ *     introspect(deploy(environment))
+ *
+ *     introspect(deploy(current))
+ *
+ * Deployment information may be target-dependent.
+ *
+ * Semantic analysis must therefore classify portability and effects.
+ *
+ * ============================================================================
+ */
 
 introspectionDeploymentRequest
-: DEPLOY
-LPAREN
+    : DEPLOY
+      LPAREN
+      introspectionSubject
+      introspectionArguments?
+      RPAREN
+    ;
+
+
+/*
+ * ============================================================================
+ * 16. INTROSPECTION SUBJECT
+ * ============================================================================
+ *
+ * A subject is deliberately restricted.
+ *
+ * Valid subjects are:
+ *
+ *     qualifiedName
+ *     literalExpression
+ *
+ * Arbitrary expression recursion is deliberately excluded.
+ *
+ * This prevents a circular grammar dependency of the form:
+ *
+ *     expression
+ *       -> introspection
+ *       -> expression
+ *       -> introspection
+ *       -> ...
+ *
+ * If future semantics require introspecting the result of an arbitrary
+ * computation, the program should explicitly represent that value through
+ * the normal expression/quotation/metaprogramming architecture rather than
+ * silently making introspection consume the entire expression grammar.
+ *
+ * ============================================================================
+ */
+
 introspectionSubject
-introspectionArgumentList?
-RPAREN
-;
+    : qualifiedName
+    | literalExpression
+    ;
+
 
 /*
+ * ============================================================================
+ * 17. QUERY ARGUMENTS
+ * ============================================================================
+ *
+ * Query arguments belong to the request being introspected.
+ *
+ * Canonical shape:
+ *
+ *     introspect(
+ *         target(subject,
+ *             property = value
+ *         )
+ *     )
+ *
+ * There is intentionally no hard-coded list of property names.
+ *
+ * The semantic owner determines whether an argument is valid for the selected
+ * introspection category.
+ *
+ * This allows future resource, quantum, hardware, distributed, networking,
+ * AI, data, or other domains to add semantic selectors without modifying this
+ * grammar.
+ *
+ * ============================================================================
+ */
 
-* ============================================================================
-* 10. INTROSPECTION SUBJECT
-* ============================================================================
-* 
-* The subject is deliberately non-recursive.
-* 
-* It may be:
-* 
-* qualifiedName
-* 
-* or:
-* 
-* type(Type)
-* 
-* or a literal value where the canonical literal vocabulary permits a value
-* to be used as an introspection key.
-* 
-* Arbitrary expressions are intentionally excluded.
-* ============================================================================
-  */
+introspectionArguments
+    : COMMA
+      introspectionArgument
+      (
+          COMMA
+          introspectionArgument
+      )*
+      COMMA?
+    ;
 
-introspectionSubject
-: qualifiedName
-| introspectionLiteral
-;
-
-/*
-
-* ============================================================================
-* 11. LITERAL SUBJECT
-* ============================================================================
-* 
-* Literal tokens are consumed from the canonical lexer.
-* 
-* This grammar does not redefine literal syntax.
-* ============================================================================
-  */
-
-introspectionLiteral
-: INTEGER
-| FLOAT
-| STRING
-| CHAR
-| TRUE
-| FALSE
-| NIL
-| NULL
-;
 
 /*
-
-* ============================================================================
-* 12. QUERY ARGUMENTS
-* ============================================================================
-* 
-* Query arguments are intentionally represented as:
-* 
-* name = literal
-* 
-* rather than embedding the complete expression grammar.
-* 
-* This keeps the grammar deterministic and avoids a circular dependency.
-* 
-* The semantic layer determines:
-* 
-* - whether the option is supported;
-* - its type;
-* - its effect;
-* - its capability requirements;
-* - whether it is portable.
-* ============================================================================
-  */
-
-introspectionArgumentList
-: LPAREN
-introspectionArgument
-(COMMA introspectionArgument)*
-COMMA?
-RPAREN
-;
+ * ============================================================================
+ * 18. NAMED INTROSPECTION ARGUMENT
+ * ============================================================================
+ *
+ * The argument name is an ordinary source identifier.
+ *
+ * The argument value is a canonical literal or symbolic name.
+ *
+ * Semantic analysis determines:
+ *
+ *     - whether the argument exists;
+ *     - whether the argument is allowed;
+ *     - the argument's type;
+ *     - whether the value is valid;
+ *     - whether the argument is portable;
+ *     - whether the argument requires a capability;
+ *     - whether the argument produces an effect.
+ *
+ * ============================================================================
+ */
 
 introspectionArgument
-: identifier
-ASSIGN
-introspectionArgumentValue
-;
+    : identifier
+      ASSIGN
+      introspectionArgumentValue
+    ;
 
-introspectionArgumentValue
-: introspectionLiteral
-| qualifiedName
-;
 
 /*
+ * ============================================================================
+ * 19. ARGUMENT VALUES
+ * ============================================================================
+ *
+ * Canonical literal syntax is reused rather than duplicating literal tokens.
+ *
+ * A qualified name is also accepted for symbolic values such as:
+ *
+ *     topology = hardware::topology
+ *
+ *     policy = execution::portable
+ *
+ *     profile = resource::preferred
+ *
+ * This grammar does not assign meaning to those names.
+ *
+ * ============================================================================
+ */
 
-* ============================================================================
-* 13. PROJECTION
-* ============================================================================
-* 
-* Projections are open-world identifiers.
-* 
-* Examples:
-* 
-* introspect(target).capability
-* introspect(target).availability
-* introspect(resource).capacity
-* introspect(runtime).version
-* introspect(deployment).topology
-* 
-* The semantic layer decides whether each projection is valid.
-* ============================================================================
-  */
+introspectionArgumentValue
+    : literalExpression
+    | qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * 20. PROJECTION
+ * ============================================================================
+ *
+ * After an introspection request, zero or more projections may select
+ * information from the returned introspection view.
+ *
+ * Examples:
+ *
+ *     introspect(target(current)).capability
+ *
+ *     introspect(target(current)).availability
+ *
+ *     introspect(resource(memory)).capacity
+ *
+ *     introspect(capability(quantum::measurement)).availability
+ *
+ *     introspect(deploy(environment)).topology
+ *
+ * Projection names remain open-world identifiers.
+ *
+ * The parser does not maintain a closed list of possible properties.
+ *
+ * ============================================================================
+ */
 
 introspectionProjection
-: DOT
+    : DOT
+      introspectionSelector
+    ;
+
+
+/*
+ * ============================================================================
+ * 21. SELECTOR
+ * ============================================================================
+ *
+ * Selectors are ordinary identifiers.
+ *
+ * They are intentionally NOT reserved keywords.
+ *
+ * This is essential for long-term extensibility.
+ *
+ * A future implementation may expose:
+ *
+ *     capacity
+ *     topology
+ *     architecture
+ *     version
+ *     feature
+ *     calibration
+ *     reliability
+ *     availability
+ *     memory
+ *     compute
+ *     measurement
+ *     communication
+ *     thermal
+ *     power
+ *     energy
+ *     latency
+ *
+ * without changing the universal grammar.
+ *
+ * ============================================================================
+ */
+
 introspectionSelector
-;
+    : identifier
+    ;
+
 
 /*
-
-* ============================================================================
-* 14. SELECTOR
-* ============================================================================
-* 
-* Selectors remain identifiers.
-* 
-* They are NOT keywords.
-* ============================================================================
-  */
-
-introspectionSelector
-: identifier
-;
-
-/*
-
-* ============================================================================
-* 15. QUERY ALIAS
-* ============================================================================
-* 
-* Named semantic/tooling boundary.
-* 
-* This does not create another syntax.
-* ============================================================================
-  */
-
-introspectionQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 16. PATH ALIAS
-* ============================================================================
-* 
-* The complete introspection request including projections.
-* ============================================================================
-  */
-
-introspectionPath
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 17. TARGET QUERY ALIAS
-* ============================================================================
-  */
-
-introspectionTargetQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 18. RESOURCE QUERY ALIAS
-* ============================================================================
-  */
-
-introspectionResourceQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 19. CAPABILITY QUERY ALIAS
-* ============================================================================
-  */
-
-introspectionCapabilityQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 20. RUNTIME QUERY ALIAS
-* ============================================================================
-  */
-
-introspectionRuntimeQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* 21. DEPLOYMENT QUERY ALIAS
-* ============================================================================
-  */
-
-introspectionDeploymentQuery
-: introspectionExpressionCore
-;
-
-/*
-
-* ============================================================================
-* AST CONTRACT
-* ============================================================================
-* 
-* The parser produces only a parse tree.
-* 
-* The frontend must lower the parse structure into the existing domain-neutral
-* AST architecture.
-* 
-* Conceptual representation:
-* 
-* IntrospectionExpr
-*     request
-*         scope
-*         subject
-*         arguments[]
-*     projections[]
-*     source_span
-* 
-* Conceptual request categories:
-* 
-* General
-* Type
-* Target
-* Resource
-* Capability
-* Runtime
-* Deployment
-* 
-* These are semantic categories, not a requirement to create Rust enum names
-* with exactly these spellings.
-* 
-* The exact Rust AST representation belongs to:
-* 
-* src/frontend/ast/
-* 
-* This grammar MUST NOT define Rust AST types.
-* 
-* ============================================================================
-* AST DATA THAT MUST BE PRESERVED
-* ============================================================================
-* 
-* The AST conversion must preserve:
-* 
-* - complete source span;
-* - request category;
-* - subject structure;
-* - qualified-name segments;
-* - type-expression structure;
-* - argument order;
-* - argument names;
-* - argument values;
-* - projection order;
-* - selector spelling;
-* - source provenance.
-* 
-* It MUST NOT store:
-* 
-* - physical device handles;
-* - runtime pointers;
-* - scheduler state;
-* - backend objects;
-* - hardware instances;
-* - mutable compiler state;
-* - quantum::ir nodes.
-* 
-* ============================================================================
-* SEMANTIC CONTRACT
-* ============================================================================
-* 
-* Parsing proves only syntactic validity.
-* 
-* Semantic analysis must determine:
-* 
-* 1. whether the subject resolves;
-* 2. whether the requested scope is legal;
-* 3. whether the entity is introspectable;
-* 4. whether the projection exists;
-* 5. whether the projection applies to that subject;
-* 6. whether the argument names are valid;
-* 7. whether argument values have valid types;
-* 8. whether the operation is compile-time or runtime;
-* 9. whether an effect is required;
-* 10. whether a capability is required;
-* 11. whether a resource is required;
-* 12. whether the result is deterministic;
-* 13. whether the result is portable;
-* 14. whether implementation-private information is being requested;
-* 15. whether security policy permits the request.
-* 
-* Semantic errors MUST NOT be implemented by parser-specific hacks.
-* 
-* ============================================================================
-* STATIC VERSUS DYNAMIC INFORMATION
-* ============================================================================
-* 
-* The semantic layer must distinguish at least:
-* 
-* STATIC_LANGUAGE_INFORMATION
-* COMPILE_TIME_INFORMATION
-* TARGET_INFORMATION
-* DEPLOYMENT_INFORMATION
-* RUNTIME_INFORMATION
-* 
-* Static language information may be portable.
-* 
-* Target/deployment/runtime information may be environment-dependent.
-* 
-* An environment-dependent result MUST NOT silently become portable program
-* semantics.
-* 
-* ============================================================================
-* EFFECT CONTRACT
-* ============================================================================
-* 
-* The grammar does not assign effects.
-* 
-* Semantic analysis determines whether an introspection request has effects.
-* 
-* In particular:
-* 
-* introspect(target(...))
-* 
-* does not automatically imply permission to inspect hardware.
-* 
-* introspect(runtime(...))
-* 
-* does not automatically grant runtime privileges.
-* 
-* introspect(deployment(...))
-* 
-* does not automatically grant deployment access.
-* 
-* Explicit capability/effect checking remains mandatory.
-* 
-* ============================================================================
-* CAPABILITY CONTRACT
-* ============================================================================
-* 
-* A capability may be required for:
-* 
-* target introspection;
-* resource introspection;
-* runtime introspection;
-* deployment introspection;
-* security-sensitive metadata;
-* implementation-specific metadata.
-* 
-* The grammar merely records the request.
-* 
-* The semantic/security layers decide whether the request is authorized.
-* 
-* A compile-time introspection capability MUST NOT silently imply an unrelated
-* runtime capability.
-* 
-* ============================================================================
-* RESOURCE CONTRACT
-* ============================================================================
-* 
-* Introspection may query resource descriptions only through the canonical
-* resource model.
-* 
-* The grammar does not define:
-* 
-* RAM size
-* VRAM size
-* qubit capacity
-* processor count
-* accelerator count
-* network-node count
-* topology size
-* 
-* as language limits.
-* 
-* Resource values are semantic data.
-* 
-* ============================================================================
-* HARDWARE CONTRACT
-* ============================================================================
-* 
-* Hardware introspection is target/deployment/runtime information, not a
-* parser-level hardware model.
-* 
-* It may eventually expose semantic properties such as:
-* 
-* capabilities
-* availability
-* supported operations
-* resource classes
-* topology descriptions
-* reliability metadata
-* 
-* only where the corresponding semantic contract declares those properties
-* observable.
-* 
-* It must not expose backend-private details as stable language semantics
-* without an explicit target-dependent contract.
-* 
-* ============================================================================
-* QUANTUM CONTRACT
-* ============================================================================
-* 
-* Introspection may inspect semantic information associated with:
-* 
-* quantum capabilities;
-* quantum resources;
-* quantum operations;
-* measurement capability;
-* logical quantum resources;
-* target quantum availability.
-* 
-* It MUST NOT itself:
-* 
-* - enumerate a fixed gate set;
-* - allocate qubits;
-* - assign physical qubits;
-* - route circuits;
-* - schedule circuits;
-* - perform QEC;
-* - perform ZQN analysis;
-* - mutate quantum::ir;
-* - select a QPU.
-* 
-* The canonical path remains:
-* 
-* source
-*   |
-*   v
-* AST
-*   |
-*   v
-* semantic quantum model
-*   |
-*   v
-* quantum::ir
-* 
-* Introspection is a query over permitted semantic/capability information.
-* 
-* ============================================================================
-* CLASSICAL CONTRACT
-* ============================================================================
-* 
-* Classical introspection may inspect source-defined or explicitly exposed
-* semantic information about:
-* 
-* functions
-* types
-* data
-* algorithms
-* capabilities
-* execution environments
-* 
-* It does not introduce another classical type system.
-* 
-* ============================================================================
-* HDL / HARDWARE CO-DESIGN CONTRACT
-* ============================================================================
-* 
-* Introspection may inspect semantic descriptions of:
-* 
-* HDL modules
-* ports
-* interfaces
-* capabilities
-* timing contracts
-* hardware resources
-* 
-* It does not itself perform:
-* 
-* synthesis
-* placement
-* routing
-* timing closure
-* physical design
-* 
-* Those remain downstream compiler/toolchain responsibilities.
-* 
-* ============================================================================
-* DISTRIBUTED CONTRACT
-* ============================================================================
-* 
-* Introspection may inspect explicitly exposed distributed properties such as:
-* 
-* capability;
-* service availability;
-* resource class;
-* communication capability;
-* consistency capability.
-* 
-* It must not establish a fixed node count or topology size.
-* 
-* ============================================================================
-* AI / DATA CONTRACT
-* ============================================================================
-* 
-* Introspection may inspect semantic descriptions of:
-* 
-* models
-* tensors
-* datasets
-* schemas
-* inference capabilities
-* accelerator capabilities
-* 
-* It must not impose tensor-rank or model-size limits.
-* 
-* ============================================================================
-* SECURITY CONTRACT
-* ============================================================================
-* 
-* The grammar itself performs no security-sensitive operation.
-* 
-* Semantic implementation must reject or require explicit authorization for
-* requests involving:
-* 
-* credentials
-* secret material
-* arbitrary host memory
-* arbitrary process state
-* unrestricted filesystem state
-* unrestricted network state
-* private compiler state
-* backend-private implementation state
-* 
-* Introspection must never become an unrestricted compiler escape hatch.
-* 
-* ============================================================================
-* DETERMINISM CONTRACT
-* ============================================================================
-* 
-* Parsing must be deterministic.
-* 
-* For identical:
-* 
-* source
-* language version
-* lexical vocabulary
-* parser grammar
-* dialect configuration
-* 
-* the parser must produce the same syntactic structure.
-* 
-* Parsing MUST NOT depend on:
-* 
-* CPU availability
-* GPU availability
-* FPGA availability
-* QPU availability
-* filesystem state
-* network state
-* wall-clock time
-* randomness
-* deployment state
-* runtime state.
-* 
-* Result determinism is semantic.
-* 
-* Static introspection SHOULD be deterministic.
-* 
-* Dynamic introspection may be environment-dependent, but that dependence must
-* be explicit in the semantic/effect/capability/portability model.
-* 
-* ============================================================================
-* SCALABILITY CONTRACT
-* ============================================================================
-* 
-* The grammar imposes no finite limits on:
-* 
-* - qualified-name depth;
-* - type complexity;
-* - projection count;
-* - query count;
-* - argument count;
-* - source size;
-* - number of domains;
-* - number of resources;
-* - number of capabilities;
-* - number of target properties.
-* 
-* Repetition is structural:
-* 
-* ( ... )*
-* 
-* rather than enumerated.
-* 
-* Compiler/parser implementation limits may exist for:
-* 
-* memory
-* input size
-* compilation time
-* cancellation
-* diagnostics
-* semantic evaluation
-* 
-* Such limits are implementation/resource policy, not language semantics.
-* 
-* ============================================================================
-* NO HARD-CODED SCALABILITY CONSTANTS
-* ============================================================================
-* 
-* This grammar contains no:
-* 
-* MAX_QUBITS
-* MAX_CPUS
-* MAX_GPUS
-* MAX_FPGAS
-* MAX_NODES
-* MAX_MEMORY
-* MAX_THREADS
-* MAX_TENSOR_RANK
-* MAX_REGISTER_WIDTH
-* MAX_NETWORK_SIZE
-* MAX_DEVICE_COUNT
-* MAX_INTROSPECTION_DEPTH
-* MAX_INTROSPECTION_RESULTS
-* 
-* It contains no fixed:
-* 
-* qubit IDs;
-* processor IDs;
-* GPU IDs;
-* FPGA IDs;
-* device IDs;
-* topology IDs;
-* vendor IDs.
-* 
-* ============================================================================
-* NO SECOND QUERY LANGUAGE
-* ============================================================================
-* 
-* This grammar deliberately does not introduce:
-* 
-* filters
-* joins
-* sorting
-* grouping
-* arbitrary predicates
-* recursive search DSLs
-* reflection-specific query comprehensions.
-* 
-* If such a facility becomes necessary, it must be specified independently and
-* integrated through canonical Zamani expressions rather than silently
-* expanding this grammar into a second programming language.
-* 
-* ============================================================================
-* NO SECOND REFLECTION SYSTEM
-* ============================================================================
-* 
-* "reflection.g4" remains authoritative for:
-* 
-* reflectionExpressionCore
-* 
-* This file is authoritative only for:
-* 
-* introspectionExpressionCore
-* 
-* The two mechanisms must remain semantically distinguishable.
-* 
-* ============================================================================
-* IR CONTRACT
-* ============================================================================
-* 
-* This grammar produces NO IR.
-* 
-* It must never directly create:
-* 
-* classical IR
-* quantum::ir
-* HDL IR
-* hardware IR
-* routing IR
-* scheduling IR
-* QEC operations
-* ZQN faults
-* resilience actions.
-* 
-* The required path is:
-* 
-* introspection syntax
-*      |
-*      v
-* canonical frontend AST
-*      |
-*      v
-* semantic introspection model
-*      |
-*      v
-* canonical semantic representation
-*      |
-*      v
-* ordinary IR lowering where applicable.
-* 
-* If introspection is compile-time-only and its result is consumed during
-* compilation, it may disappear before target lowering.
-* 
-* If its result remains in the program, it must be represented by the ordinary
-* canonical type/value/IR system.
-* 
-* ============================================================================
-* GENERATED CODE CONTRACT
-* ============================================================================
-* 
-* Introspection may be used by metaprograms that generate Zamani source.
-* 
-* Any generated source MUST re-enter the ordinary pipeline:
-* 
-* generated source
-*      |
-*      v
-* lexer
-*      |
-*      v
-* parser
-*      |
-*      v
-* canonical AST
-*      |
-*      v
-* semantic validation
-*      |
-*      v
-* canonical semantic representation
-* 
-* Introspection must never authorize generated code to bypass validation.
-* 
-* ============================================================================
-* MACRO CONTRACT
-* ============================================================================
-* 
-* Macro expansion remains owned by:
-* 
-* grammar/macros/
-* 
-* Introspection may occur in an authorized metaprogramming context, but macro
-* hygiene and expansion provenance remain owned by the macro subsystem.
-* 
-* Generated introspection expressions must be parsed and semantically validated
-* exactly like handwritten expressions.
-* 
-* ============================================================================
-* SOURCE PROVENANCE CONTRACT
-* ============================================================================
-* 
-* The frontend must retain enough provenance to distinguish:
-* 
-* handwritten introspection
-* macro-generated introspection
-* generated introspection
-* specialized introspection
-* 
-* Source spans must survive:
-* 
-* macro expansion;
-* generation;
-* specialization;
-* diagnostic reporting.
-* 
-* This grammar itself does not implement source maps.
-* 
-* ============================================================================
-* ERROR CONTRACT
-* ============================================================================
-* 
-* Syntax errors belong to lexer/parser diagnostics.
-* 
-* Semantic diagnostics include, as applicable:
-* 
-* unknown introspection subject
-* invalid introspection scope
-* invalid selector
-* invalid argument
-* unavailable information
-* forbidden information
-* missing capability
-* missing effect authorization
-* non-portable introspection
-* runtime-only request in compile-time context
-* compile-time-only request in runtime context
-* implementation-detail exposure
-* unsupported target inspection
-* security policy violation
-* resource-policy violation
-* 
-* These must NOT be encoded as a growing collection of parser alternatives.
-* 
-* ============================================================================
-* NEGATIVE SYNTAX CONTRACT
-* ============================================================================
-* 
-* The following must be rejected syntactically:
-* 
-* introspect()
-* 
-* introspect(,)
-* 
-* introspect type()
-* 
-* introspect type(,)
-* 
-* introspect target()
-* 
-* introspect resource()
-* 
-* introspect capability()
-* 
-* introspect runtime()
-* 
-* introspect deployment()
-* 
-* introspect(target
-* 
-* introspect(target))
-* 
-* introspect target
-* 
-* introspect type T
-* 
-* introspect(target, = value)
-* 
-* introspect(target, property =)
-* 
-* introspect(target, property = , other = value)
-* 
-* introspect(target)..capability
-* 
-* introspect(target). 
-* 
-* Arbitrary expression subjects such as:
-* 
-* introspect(foo + bar)
-* 
-* are intentionally not accepted.
-* 
-* If expression introspection is required in the future, it must be specified
-* through an explicit quotation/value mechanism.
-* 
-* ============================================================================
-* POSITIVE CONFORMANCE CONTRACT
-* ============================================================================
-* 
-* Minimum syntax cases:
-* 
-* introspect(foo)
-* 
-* introspect(namespace::foo)
-* 
-* introspect type(MyType)
-* 
-* introspect target(environment)
-* 
-* introspect resource(quantum)
-* 
-* introspect capability(quantum::measurement)
-* 
-* introspect runtime(environment)
-* 
-* introspect deployment(environment)
-* 
-* Projection cases:
-* 
-* introspect(target(environment)).capability
-* 
-* introspect(target(environment)).availability
-* 
-* introspect(resource(memory)).capacity
-* 
-* introspect(capability(quantum::measurement)).availability
-* 
-* introspect(runtime(environment)).version
-* 
-* introspect(deployment(environment)).topology
-* 
-* Argument cases:
-* 
-* introspect(target(environment, property = "compute"))
-* 
-* introspect(resource(memory, property = "capacity"))
-* 
-* introspect(capability(quantum::measurement, property = "availability"))
-* 
-* Multiple projections:
-* 
-* introspect(target(environment)).capability.availability
-* 
-* introspect(resource(memory)).capacity.unit
-* 
-* ============================================================================
-* BOUNDARY TEST CONTRACT
-* ============================================================================
-* 
-* Tests must include:
-* 
-* - one-segment names;
-* - deeply qualified names;
-* - nested type expressions;
-* - long projection chains;
-* - many query arguments;
-* - Unicode identifiers where canonical lexer permits them;
-* - whitespace variation;
-* - comments around tokens;
-* - source spans adjacent to EOF;
-* - literal boundary forms;
-* - empty/invalid argument forms;
-* - large but valid query structures.
-* 
-* The tests must distinguish:
-* 
-* syntax boundaries
-* 
-* from:
-* 
-* compiler resource limits.
-* 
-* ============================================================================
-* SCALABILITY TEST CONTRACT
-* ============================================================================
-* 
-* The following must remain structurally representable without introducing
-* grammar-level maxima:
-* 
-* introspect(a)
-* 
-* introspect(a::b::c)
-* 
-* introspect(a).x.y.z
-* 
-* introspect(target(a)).x.y.z
-* 
-* introspect(resource(a)).x.y.z
-* 
-* introspect(capability(a)).x.y.z
-* 
-* introspect(a, p1 = 1, p2 = 2, p3 = 3)
-* 
-* and arbitrarily larger structurally equivalent forms.
-* 
-* Tests must never assert a language maximum merely because the parser or test
-* runner has an operational resource limit.
-* 
-* ============================================================================
-* COMPATIBILITY CONTRACT
-* ============================================================================
-* 
-* Existing filename:
-* 
-* grammar/metaprogramming/introspection.g4
-* 
-* is established without renaming any existing grammar file.
-* 
-* Existing:
-* 
-* grammar/metaprogramming/reflection.g4
-* 
-* remains unchanged in ownership.
-* 
-* Existing:
-* 
-* reflectionExpressionCore
-* 
-* remains the reflection integration boundary.
-* 
-* This file introduces:
-* 
-* introspectionExpressionCore
-* 
-* as its independent boundary.
-* 
-* The spelling:
-* 
-* introspect
-* 
-* is a new reserved lexical spelling.
-* 
-* It therefore requires a compatibility-aware lexer update.
-* 
-* No existing keyword token may be renamed or repurposed.
-* 
-* ============================================================================
-* METAPROGRAMMING COMPOSITION CONTRACT
-* ============================================================================
-* 
-* "grammar/metaprogramming/metaprogramming.g4" must expose exactly one wrapper:
-* 
-* introspectionExpression
-*     : introspectionExpressionCore
-*     ;
-* 
-* It must NOT redefine the actual introspection syntax.
-* 
-* Its expression dispatch may then include:
-* 
-* macroExpression
-* compileTimeExpression
-* generationExpression
-* reflectionExpression
-* introspectionExpression
-* specializationExpression
-* 
-* The composition grammar remains responsible only for dispatch.
-* 
-* ============================================================================
-* EXPRESSION COMPOSITION CONTRACT
-* ============================================================================
-* 
-* "grammar/expressions/metaprogramming.g4" must consume the composition-level
-* "introspectionExpression" wrapper rather than importing this grammar directly
-* into the ordinary expression hierarchy.
-* 
-* There must be exactly one integration path.
-* 
-* This prevents duplicate alternatives and circular grammar dependencies.
-* 
-* ============================================================================
-* PARSER COMPOSITION CONTRACT
-* ============================================================================
-* 
-* "grammar/antlr/ZamaniParser.g4" remains the canonical parser composition
-* boundary.
-* 
-* It should compose the metaprogramming subsystem through its established
-* integration path.
-* 
-* This file must not become another parser root.
-* 
-* ============================================================================
-* LEXER COMPOSITION CONTRACT
-* ============================================================================
-* 
-* "grammar/lexer/keywords.g4" must add exactly:
-* 
-* INTROSPECT : 'introspect' ;
-* 
-* in its language/metaprogramming vocabulary.
-* 
-* "grammar/antlr/ZamaniLexer.g4" remains the canonical lexer entry point and
-* must expose that token through its existing lexical composition mechanism.
-* 
-* No lexer rule belongs in this file.
-* 
-* ============================================================================
-* AST / FRONTEND INTEGRATION
-* ============================================================================
-* 
-* The AST integration must add or reuse a domain-neutral representation for:
-* 
-* introspection request
-* 
-* without creating:
-* 
-* HardwareIntrospectionAST
-* QuantumIntrospectionAST
-* RuntimeIntrospectionAST
-* 
-* as separate domain AST systems.
-* 
-* The semantic request category may distinguish the scopes after parsing.
-* 
-* Source spans and provenance remain mandatory.
-* 
-* ============================================================================
-* SEMANTIC INTEGRATION
-* ============================================================================
-* 
-* Semantic analysis must consume the AST and:
-* 
-* resolve the subject;
-* validate the scope;
-* validate projections;
-* validate arguments;
-* determine phase;
-* determine effects;
-* determine capabilities;
-* determine resources;
-* classify portability;
-* protect implementation-private information;
-* determine result type;
-* preserve deterministic semantics where required.
-* 
-* No semantic behavior is embedded in this grammar.
-* 
-* ============================================================================
-* RESOURCE / CAPABILITY INTEGRATION
-* ============================================================================
-* 
-* Introspection must preserve the distinction:
-* 
-* requirement
-* capability
-* constraint
-* preference
-* hint
-* observation
-* 
-* An observed target capability is not automatically a program requirement.
-* 
-* An observed resource availability is not automatically a fixed source-level
-* resource allocation.
-* 
-* This distinction is essential to POCO-REAF.
-* 
-* ============================================================================
-* COMPILER INTEGRATION
-* ============================================================================
-* 
-* After parsing:
-* 
-* 1. Build canonical AST.
-* 2. Resolve names.
-* 3. Validate introspection scope.
-* 4. Validate type/arguments.
-* 5. Validate effects.
-* 6. Validate capabilities.
-* 7. Validate resource access.
-* 8. Determine portability.
-* 9. Evaluate only explicitly authorized introspection.
-* 10. Preserve provenance.
-* 11. Revalidate generated/specialized source if applicable.
-* 12. Lower surviving semantic values through the ordinary IR pipeline.
-* 
-* No parser result may directly enter a backend.
-* 
-* ============================================================================
-* RUNTIME INTEGRATION
-* ============================================================================
-* 
-* Runtime introspection is a downstream concern.
-* 
-* The runtime may consume a semantically validated introspection operation only
-* when the program's effect/capability contract authorizes it.
-* 
-* Runtime implementation must remain safe Rust:
-* 
-* Rust 1.97
-* Rust 1.97.1
-* Rust 2021
-* 
-* with no "unsafe".
-* 
-* This grammar itself contains no executable code.
-* 
-* ============================================================================
-* IR INTEGRATION
-* ============================================================================
-* 
-* Compile-time-only introspection may disappear after evaluation.
-* 
-* A surviving value is lowered using the ordinary canonical semantic/IR model.
-* 
-* There is no:
-* 
-* IntrospectionIR
-* ReflectionIR
-* HardwareIntrospectionIR
-* QuantumIntrospectionIR
-* 
-* Quantum-related values still follow the canonical:
-* 
-* quantum::ir
-* 
-* boundary.
-* 
-* ============================================================================
-* TARGET INTEGRATION
-* ============================================================================
-* 
-* Target-specific introspection is explicitly downstream.
-* 
-* The grammar does not know:
-* 
-* CPU model
-* GPU model
-* FPGA family
-* ASIC
-* QPU
-* vendor
-* physical topology
-* device count
-* memory capacity
-* accelerator identity.
-* 
-* The target layer determines which semantic observations are actually
-* available.
-* 
-* ============================================================================
-* SECURITY / TRUST INTEGRATION
-* ============================================================================
-* 
-* Introspection of target/runtime/deployment state can be sensitive.
-* 
-* Semantic/security layers must therefore be able to distinguish:
-* 
-* publicly observable information
-* capability-authorized information
-* privileged information
-* prohibited information.
-* 
-* The parser must remain unaware of the policy implementation.
-* 
-* ============================================================================
-* TOOLING INTEGRATION
-* ============================================================================
-* 
-* IDEs, formatters, language servers, documentation generators, and source-map
-* systems must be able to identify:
-* 
-* introspectionExpressionCore
-* introspectionRequest
-* introspectionProjection
-* 
-* without executing introspection.
-* 
-* Formatting must preserve semantics and source provenance.
-* 
-* ============================================================================
-* PERFORMANCE / HOSTILE INPUT CONTRACT
-* ============================================================================
-* 
-* This grammar avoids:
-* 
-* fixed-depth recursion;
-* enumerated selector lists;
-* enumerated resource lists;
-* enumerated hardware lists;
-* enumerated capability lists.
-* 
-* Repetition is represented structurally.
-* 
-* Parser/compiler resource controls belong outside language semantics.
-* 
-* A hostile-input mitigation must never be expressed as:
-* 
-* MAX_INTROSPECTION_DEPTH
-* 
-* in this grammar.
-* 
-* ============================================================================
-* SAFE-RUST CONTRACT
-* ============================================================================
-* 
-* The grammar contains:
-* 
-* - no embedded Rust actions;
-* - no semantic predicates;
-* - no filesystem access;
-* - no network access;
-* - no environment access;
-* - no hardware access;
-* - no runtime execution;
-* - no unsafe code.
-* 
-* Generated/compiler implementation must remain compatible with:
-* 
-* Rust 1.97
-* Rust 1.97.1
-* Rust 2021
-* 
-* and must not require Rust "unsafe".
-* 
-* ============================================================================
-* COMPLETION CRITERIA
-* ============================================================================
-* 
-* This file is complete when:
-* 
-* [x] Existing filenames are preserved.
-* [x] Introspection has one canonical parser boundary.
-* [x] Reflection remains owned by reflection.g4.
-* [x] Introspection does not duplicate reflection syntax.
-* [x] Introspection does not import the complete expression grammar.
-* [x] Qualified names use canonical name syntax.
-* [x] Types use canonical type syntax.
-* [x] Selectors remain open-world identifiers.
-* [x] Query arguments are structurally unbounded.
-* [x] Projection chains are structurally unbounded.
-* [x] No hardware limits are encoded.
-* [x] No quantum limits are encoded.
-* [x] No device IDs are encoded.
-* [x] No second AST is defined.
-* [x] No second IR is defined.
-* [x] No second quantum IR is defined.
-* [x] No runtime behavior is implemented in the grammar.
-* [x] No host inspection is implicit.
-* [x] Capability/effect authorization remains semantic.
-* [x] Resource availability remains downstream.
-* [x] Target realization remains downstream.
-* [x] Generated source re-enters normal validation.
-* [x] Quantum information ultimately respects quantum::ir.
-* [x] Parser behavior is deterministic.
-* [x] Source provenance is preserved by frontend integration.
-* [x] Positive tests are defined.
-* [x] Negative tests are defined.
-* [x] Boundary tests are defined.
-* [x] Scalability tests are defined.
-* [x] Compatibility requirements are defined.
-* [x] Security requirements are defined.
-* [x] Rust 1.97/1.97.1 safe-Rust requirements are defined.
-* 
-* ============================================================================
-* FINAL INVARIANT
-* ============================================================================
-* 
-* "introspectionExpressionCore" answers:
-* 
-* "What explicitly observable information has the program requested from
-*  its permitted semantic, target, resource, capability, deployment, or
-*  runtime context?"
-* 
-* It does NOT mean:
-* 
-* "the compiler may inspect anything it wants."
-* 
-* It does NOT mean:
-* 
-* "hardware details are now language semantics."
-* 
-* It does NOT mean:
-* 
-* "the program is tied to one machine."
-* 
-* It does NOT mean:
-* 
-* "the parser may access runtime state."
-* 
-* The language remains target-independent unless the program explicitly and
-* semantically requests target/environment-dependent information.
-* 
-* ============================================================================
-  */
+ * ============================================================================
+ * 22. AST CONTRACT
+ * ============================================================================
+ *
+ * The parser creates parse-tree structure only.
+ *
+ * The frontend must map the construct into the existing domain-neutral AST.
+ *
+ * Conceptual representation:
+ *
+ *     IntrospectionExpr
+ *     {
+ *         request,
+ *         projections,
+ *         source_span
+ *     }
+ *
+ * Request:
+ *
+ *     General
+ *     {
+ *         subject,
+ *         arguments
+ *     }
+ *
+ *     Type
+ *     {
+ *         type,
+ *         arguments
+ *     }
+ *
+ *     Target
+ *     {
+ *         subject,
+ *         arguments
+ *     }
+ *
+ *     Resource
+ *     {
+ *         subject,
+ *         arguments
+ *     }
+ *
+ *     Capability
+ *     {
+ *         subject,
+ *         arguments
+ *     }
+ *
+ *     Deployment
+ *     {
+ *         subject,
+ *         arguments
+ *     }
+ *
+ * Projection:
+ *
+ *     selector
+ *
+ * The actual Rust AST types remain owned by the frontend AST implementation.
+ *
+ * No Rust types are embedded in this grammar.
+ *
+ * ============================================================================
+ * 23. SOURCE-SPAN CONTRACT
+ * ============================================================================
+ *
+ * The frontend must preserve source spans for:
+ *
+ *     - the complete introspection expression;
+ *     - request category;
+ *     - subject;
+ *     - each argument;
+ *     - each selector;
+ *     - each argument value.
+ *
+ * This is required for:
+ *
+ *     diagnostics;
+ *     IDE tooling;
+ *     provenance;
+ *     generated-source tracking;
+ *     semantic error reporting;
+ *     reproducibility.
+ *
+ * ============================================================================
+ * 24. SEMANTIC CONTRACT
+ * ============================================================================
+ *
+ * Parsing an introspection expression does not establish that the request is
+ * semantically valid.
+ *
+ * Semantic analysis must determine:
+ *
+ *     - whether the subject exists;
+ *     - whether the subject is introspectable;
+ *     - whether the selected scope is legal;
+ *     - whether each argument is supported;
+ *     - whether each selector is supported;
+ *     - whether the information is observable;
+ *     - whether a capability is required;
+ *     - whether an effect is required;
+ *     - whether a policy permits the request;
+ *     - whether the request is compile-time or runtime;
+ *     - whether the result is deterministic;
+ *     - whether the result is portable;
+ *     - whether provenance must be recorded.
+ *
+ * Unknown selectors are therefore normally semantic errors, not grammar
+ * errors.
+ *
+ * ============================================================================
+ * 25. TYPE CONTRACT
+ * ============================================================================
+ *
+ * Introspection results must receive semantic types from the type system.
+ *
+ * This grammar does NOT define an:
+ *
+ *     IntrospectionType
+ *
+ * merely for convenience.
+ *
+ * Result typing may depend on:
+ *
+ *     - subject;
+ *     - selector;
+ *     - introspection scope;
+ *     - semantic provider;
+ *     - requested metadata;
+ *     - compile-time/runtime phase.
+ *
+ * The type system remains authoritative.
+ *
+ * ============================================================================
+ * 26. EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Introspection itself is syntactic intent.
+ *
+ * The semantic layer determines its effects.
+ *
+ * Possible effects include, where defined by the semantic system:
+ *
+ *     reflection
+ *     runtime observation
+ *     resource observation
+ *     environment observation
+ *     network observation
+ *     hardware observation
+ *
+ * No effect is granted merely by parsing this construct.
+ *
+ * ============================================================================
+ * 27. CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Introspection does not grant capabilities.
+ *
+ * For example:
+ *
+ *     introspect(resource(memory))
+ *
+ * does not grant memory access.
+ *
+ *     introspect(target(current))
+ *
+ * does not grant target-control authority.
+ *
+ *     introspect(deploy(environment))
+ *
+ * does not grant deployment-control authority.
+ *
+ * The capability subsystem decides what is permitted.
+ *
+ * ============================================================================
+ * 28. RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Introspection may observe resource information where the semantic contract
+ * permits it.
+ *
+ * It must never encode universal resource ceilings.
+ *
+ * Forbidden grammar-level concepts include:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *     MAX_INTROSPECTION_DEPTH
+ *     MAX_INTROSPECTION_RESULTS
+ *
+ * An implementation may impose resource-admission policies, but those are
+ * implementation/environment constraints rather than language semantics.
+ *
+ * ============================================================================
+ * 29. QUANTUM CONTRACT
+ * ============================================================================
+ *
+ * Introspection may request semantic information related to quantum execution,
+ * for example:
+ *
+ *     introspect(capability(quantum::measurement))
+ *
+ *     introspect(resource(quantum))
+ *
+ *     introspect(target(current)).availability
+ *
+ * The grammar MUST NOT expose or encode:
+ *
+ *     - physical qubit IDs;
+ *     - fixed QPU IDs;
+ *     - fixed topology sizes;
+ *     - fixed gate sets;
+ *     - calibration tables;
+ *     - routing algorithms;
+ *     - QEC implementations;
+ *     - ZQN implementation;
+ *     - hardware-specific instruction sets.
+ *
+ * Those remain downstream.
+ *
+ * The canonical quantum pipeline remains:
+ *
+ *     source
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic quantum model
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience / QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *       ->
+ *     target
+ *
+ * ============================================================================
+ * 30. HDL / HARDWARE CONTRACT
+ * ============================================================================
+ *
+ * Hardware and HDL information may be observable through semantic providers.
+ *
+ * Example:
+ *
+ *     introspect(target(current)).architecture
+ *
+ *     introspect(resource(memory)).capacity
+ *
+ *     introspect(capability(hardware::accelerator))
+ *
+ * The grammar remains independent of:
+ *
+ *     CPU width;
+ *     register width;
+ *     wire width;
+ *     FPGA family;
+ *     ASIC process;
+ *     GPU model;
+ *     accelerator model;
+ *     device count;
+ *     topology size.
+ *
+ * ============================================================================
+ * 31. DISTRIBUTED CONTRACT
+ * ============================================================================
+ *
+ * Distributed information must remain symbolic.
+ *
+ * For example:
+ *
+ *     introspect(resource(distributed))
+ *
+ *     introspect(target(current)).topology
+ *
+ * The grammar does not encode:
+ *
+ *     maximum node count;
+ *     fixed cluster size;
+ *     fixed network diameter;
+ *     fixed device count.
+ *
+ * Those are environmental facts.
+ *
+ * ============================================================================
+ * 32. PORTABILITY CONTRACT
+ * ============================================================================
+ *
+ * Introspection can legitimately make an operation target/context-sensitive.
+ *
+ * That fact MUST be represented semantically.
+ *
+ * The compiler must not silently treat:
+ *
+ *     introspect(target(current))
+ *
+ * as equivalent to portable source-level computation if its result depends on
+ * a particular target.
+ *
+ * Semantic analysis should therefore classify the result as appropriate:
+ *
+ *     portable;
+ *     context-dependent;
+ *     target-dependent;
+ *     runtime-dependent;
+ *     non-deterministic;
+ *     unavailable.
+ *
+ * This classification belongs outside the grammar.
+ *
+ * ============================================================================
+ * 33. POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * The presence of introspection does not invalidate POCO-REAF.
+ *
+ * The important distinction is:
+ *
+ *     program semantics
+ *
+ * versus:
+ *
+ *     environmental observation.
+ *
+ * A program can remain source-stable while the compiler/runtime supplies a
+ * different observation on a different target.
+ *
+ * Example:
+ *
+ *     introspect(resource(memory)).capacity
+ *
+ * may return different values on different machines without requiring source
+ * rewriting.
+ *
+ * However, if program correctness depends on the result, the semantic system
+ * must make that dependency explicit through contracts, policies, effects,
+ * requirements, or control flow.
+ *
+ * ============================================================================
+ * 34. DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Introspection may be deterministic or environment-dependent.
+ *
+ * The grammar does not decide which.
+ *
+ * Semantic analysis must record the relevant property.
+ *
+ * Reproducible builds/execution may therefore require:
+ *
+ *     - an explicit snapshot;
+ *     - an execution context;
+ *     - a capability;
+ *     - a policy;
+ *     - a recorded provenance source;
+ *     - a deterministic provider.
+ *
+ * This grammar does not impose any particular mechanism.
+ *
+ * ============================================================================
+ * 35. SECURITY CONTRACT
+ * ============================================================================
+ *
+ * Introspection must not become a covert information-disclosure mechanism.
+ *
+ * Semantic/security analysis must control access to:
+ *
+ *     - environment information;
+ *     - credentials;
+ *     - secrets;
+ *     - filesystem metadata;
+ *     - network metadata;
+ *     - hardware state;
+ *     - deployment state;
+ *     - security policy state;
+ *     - protected resource information.
+ *
+ * The parser cannot enforce those controls.
+ *
+ * Parsing success MUST NOT imply authorization.
+ *
+ * ============================================================================
+ * 36. PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * If an introspection result contributes to:
+ *
+ *     generated source;
+ *     compile-time decisions;
+ *     specialization;
+ *     optimization;
+ *     deployment;
+ *     runtime behavior;
+ *     model selection;
+ *     quantum compilation;
+ *     hardware selection;
+ *
+ * semantic/compiler infrastructure should preserve provenance identifying:
+ *
+ *     - what was inspected;
+ *     - which selector was requested;
+ *     - which provider supplied the result;
+ *     - when/under which phase it was observed;
+ *     - which policy authorized it;
+ *     - which transformation consumed it.
+ *
+ * This grammar only preserves the syntax required to establish that provenance
+ * later.
+ *
+ * ============================================================================
+ * 37. METAPROGRAMMING CONTRACT
+ * ============================================================================
+ *
+ * Introspection may be used by compile-time metaprograms only when semantic
+ * policy permits the requested observation.
+ *
+ * The pipeline remains:
+ *
+ *     parse
+ *       ->
+ *     AST
+ *       ->
+ *     semantic validation
+ *       ->
+ *     capability/effect/policy validation
+ *       ->
+ *     authorized introspection
+ *       ->
+ *     result validation
+ *       ->
+ *     metaprogram transformation
+ *       ->
+ *     generated source
+ *       ->
+ *     canonical frontend again
+ *
+ * Introspection MUST NOT bypass semantic validation simply because it occurs
+ * during compilation.
+ *
+ * ============================================================================
+ * 38. SOURCE GENERATION CONTRACT
+ * ============================================================================
+ *
+ * If introspection participates in source generation:
+ *
+ *     introspection
+ *          |
+ *          v
+ *     generated Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     canonical parser
+ *          |
+ *          v
+ *     canonical AST
+ *          |
+ *          v
+ *     semantic validation
+ *
+ * Generated source MUST NOT enter a backend directly.
+ *
+ * ============================================================================
+ * 39. IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces no IR.
+ *
+ * Introspection results may influence semantic analysis or metaprogramming,
+ * but any resulting program semantics must use the repository's canonical
+ * representations.
+ *
+ * Quantum constructs continue through:
+ *
+ *     quantum::ir
+ *
+ * There is no introspection-specific quantum IR.
+ *
+ * ============================================================================
+ * 40. COMPILER CONTRACT
+ * ============================================================================
+ *
+ * Compiler implementation is responsible for:
+ *
+ *     - resolving the introspection subject;
+ *     - validating scope;
+ *     - checking effects;
+ *     - checking capabilities;
+ *     - checking policies;
+ *     - obtaining observable information;
+ *     - typing results;
+ *     - recording provenance;
+ *     - preserving deterministic/reproducible behavior where required;
+ *     - rejecting unavailable or unauthorized observations.
+ *
+ * No compiler/backend behavior is embedded in this grammar.
+ *
+ * ============================================================================
+ * 41. RUNTIME CONTRACT
+ * ============================================================================
+ *
+ * Runtime introspection, where permitted, is implemented downstream.
+ *
+ * The grammar does not:
+ *
+ *     - access runtime memory;
+ *     - access runtime devices;
+ *     - access runtime topology;
+ *     - access runtime network state;
+ *     - access runtime credentials.
+ *
+ * Runtime access must pass through:
+ *
+ *     semantic authorization
+ *       ->
+ *     capability checking
+ *       ->
+ *     effect checking
+ *       ->
+ *     policy checking
+ *       ->
+ *     runtime provider
+ *
+ * ============================================================================
+ * 42. DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should be limited to syntactic failures such as:
+ *
+ *     - missing closing parenthesis;
+ *     - malformed argument;
+ *     - missing assignment;
+ *     - malformed projection;
+ *     - malformed subject;
+ *     - malformed qualified name.
+ *
+ * The following are NOT parser errors:
+ *
+ *     unknown subject;
+ *     unknown selector;
+ *     unavailable capability;
+ *     unavailable resource;
+ *     unauthorized observation;
+ *     target-dependent result;
+ *     non-deterministic result;
+ *     prohibited runtime observation.
+ *
+ * Those are semantic/policy/effect diagnostics.
+ *
+ * ============================================================================
+ * 43. ERROR LOCALITY
+ * ============================================================================
+ *
+ * The grammar deliberately keeps argument and projection boundaries explicit
+ * so diagnostics can point to the smallest meaningful source span.
+ *
+ * For example:
+ *
+ *     introspect(target(current).availability
+ *
+ * should fail at the missing closing delimiter rather than causing a broad
+ * failure elsewhere in the source program.
+ *
+ * ============================================================================
+ * 44. SCALABILITY
+ * ============================================================================
+ *
+ * The grammar contains no finite language-defined limits on:
+ *
+ *     - qualified-name depth;
+ *     - number of query arguments;
+ *     - number of projections;
+ *     - selector length;
+ *     - source program size;
+ *     - number of introspection expressions.
+ *
+ * Repetition uses grammar constructs such as:
+ *
+ *     *
+ *     +
+ *
+ * rather than hard-coded counts.
+ *
+ * Compiler implementation limits are resource-policy concerns, not language
+ * ceilings.
+ *
+ * ============================================================================
+ * 45. OPEN-WORLD EXTENSIBILITY
+ * ============================================================================
+ *
+ * New introspection domains should normally NOT require a new parser rule.
+ *
+ * For example, future semantic providers may introduce:
+ *
+ *     introspect(resource(...)).thermal
+ *     introspect(target(...)).architecture
+ *     introspect(capability(...)).version
+ *     introspect(deploy(...)).security
+ *
+ * without modifying this file.
+ *
+ * A new parser rule is justified only when a genuinely new syntactic category
+ * is required.
+ *
+ * A new semantic property alone is NOT sufficient justification.
+ *
+ * ============================================================================
+ * 46. FORBIDDEN HARD-CODING
+ * ============================================================================
+ *
+ * This grammar MUST NOT encode:
+ *
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *     MAX_NETWORK_SIZE
+ *     MAX_DEVICE_COUNT
+ *
+ * It MUST also not encode:
+ *
+ *     - vendor-specific device names;
+ *     - physical machine identifiers;
+ *     - fixed QPU identifiers;
+ *     - fixed GPU identifiers;
+ *     - fixed CPU identifiers;
+ *     - fixed topology sizes;
+ *     - fixed memory sizes;
+ *     - fixed register widths.
+ *
+ * ============================================================================
+ * 47. COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The canonical spelling:
+ *
+ *     introspect
+ *
+ * remains owned by the lexer.
+ *
+ * Existing parser integrations must consume:
+ *
+ *     introspectionExpressionCore
+ *
+ * rather than depending on private internal rules.
+ *
+ * Internal rule changes are permitted provided the public integration
+ * contract remains stable.
+ *
+ * If the language later introduces another introspection scope, compatibility
+ * requires:
+ *
+ *     specification update
+ *     grammar update
+ *     AST mapping
+ *     semantic mapping
+ *     diagnostics
+ *     tests
+ *     compatibility classification
+ *
+ * before the feature becomes stable.
+ *
+ * ============================================================================
+ * 48. TEST CONTRACT
+ * ============================================================================
+ *
+ * Positive tests MUST cover at least:
+ *
+ *     introspect(value)
+ *     introspect(module::value)
+ *     introspect(type(MyType))
+ *     introspect(target(current))
+ *     introspect(target(runtime))
+ *     introspect(resource(memory))
+ *     introspect(resource(quantum))
+ *     introspect(capability(quantum::measurement))
+ *     introspect(deploy(environment))
+ *     introspect(target(current)).availability
+ *     introspect(resource(memory)).capacity
+ *     introspect(capability(quantum::measurement)).version
+ *     introspect(target(current), profile = preferred).architecture
+ *
+ * where the final syntax is represented according to the argument contract
+ * implemented by the parser composition.
+ *
+ * IMPORTANT:
+ *
+ * For target/resource/capability/deployment requests, arguments are inside
+ * the scope parentheses.
+ *
+ * Example:
+ *
+ *     introspect(
+ *         target(
+ *             current,
+ *             profile = preferred
+ *         )
+ *     ).architecture
+ *
+ * ============================================================================
+ * 49. NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests MUST reject malformed syntax such as:
+ *
+ *     introspect()
+ *
+ *     introspect(target())
+ *
+ *     introspect(resource())
+ *
+ *     introspect(capability())
+ *
+ *     introspect(deploy())
+ *
+ *     introspect(target(current,))
+ *
+ *     introspect(target(current, profile))
+ *
+ *     introspect(target(current, = preferred))
+ *
+ *     introspect(target(current).availability)
+ *
+ * when the latter is being parsed as a request subject rather than a
+ * post-request projection.
+ *
+ * Semantic tests, separately, must reject:
+ *
+ *     unauthorized introspection;
+ *     unknown selectors;
+ *     unknown subjects;
+ *     unavailable resources;
+ *     unavailable capabilities;
+ *     prohibited environment access.
+ *
+ * ============================================================================
+ * 50. BOUNDARY TEST CONTRACT
+ * ============================================================================
+ *
+ * Boundary tests MUST combine introspection with:
+ *
+ *     reflection;
+ *     quotation;
+ *     source generation;
+ *     specialization;
+ *     compile-time execution;
+ *     contracts;
+ *     policies;
+ *     effects;
+ *     capabilities;
+ *     resources;
+ *     quantum semantics;
+ *     hardware semantics;
+ *     distributed semantics.
+ *
+ * The purpose is to ensure that introspection never bypasses the canonical
+ * semantic pipeline.
+ *
+ * ============================================================================
+ * 51. QUANTUM BOUNDARY TEST
+ * ============================================================================
+ *
+ * A representative semantic integration test should be able to express the
+ * intent of:
+ *
+ *     inspect whether a target exposes quantum measurement capability
+ *
+ * without encoding:
+ *
+ *     a fixed number of qubits;
+ *     a fixed QPU;
+ *     a fixed gate set;
+ *     a fixed topology;
+ *     a vendor-specific implementation.
+ *
+ * Example:
+ *
+ *     introspect(
+ *         capability(quantum::measurement)
+ *     ).availability
+ *
+ * The returned semantic information is consumed by capability/policy
+ * analysis, not directly by quantum routing.
+ *
+ * ============================================================================
+ * 52. HARDWARE BOUNDARY TEST
+ * ============================================================================
+ *
+ * A representative test should be able to query hardware characteristics
+ * without making those characteristics part of the universal grammar.
+ *
+ * Example:
+ *
+ *     introspect(
+ *         target(current)
+ *     ).architecture
+ *
+ * The architecture value is environmental information.
+ *
+ * It must not redefine Zamani's source grammar.
+ *
+ * ============================================================================
+ * 53. POCO-REAF ACCEPTANCE TEST
+ * ============================================================================
+ *
+ * The same source program must remain syntactically valid across:
+ *
+ *     tiny target;
+ *     embedded target;
+ *     CPU target;
+ *     multicore target;
+ *     GPU target;
+ *     FPGA target;
+ *     accelerator target;
+ *     QPU target;
+ *     simulator;
+ *     HPC target;
+ *     cluster;
+ *     distributed target;
+ *     cloud target;
+ *     future target.
+ *
+ * The observed introspection result may differ.
+ *
+ * That difference is environmental information, not a source-language
+ * rewrite.
+ *
+ * ============================================================================
+ * 54. SECURITY ACCEPTANCE
+ * ============================================================================
+ *
+ * The implementation MUST demonstrate that:
+ *
+ *     parser success
+ *
+ * does NOT imply:
+ *
+ *     authorization;
+ *     capability possession;
+ *     resource access;
+ *     hardware access;
+ *     filesystem access;
+ *     network access;
+ *     environment access.
+ *
+ * ============================================================================
+ * 55. DETERMINISM ACCEPTANCE
+ * ============================================================================
+ *
+ * The implementation must be able to distinguish:
+ *
+ *     deterministic semantic metadata
+ *
+ * from:
+ *
+ *     target-dependent observation;
+ *
+ *     runtime-dependent observation;
+ *
+ *     mutable environment observation.
+ *
+ * If an introspection result affects generated or compiled output, the
+ * compiler must preserve enough provenance to explain why that output was
+ * produced.
+ *
+ * ============================================================================
+ * 56. COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when all of the following are true:
+ *
+ *     [ ] It imports the canonical Names grammar.
+ *     [ ] It imports the canonical Type grammar.
+ *     [ ] It imports the canonical Literals grammar.
+ *     [ ] It consumes ZamaniLexer.
+ *     [ ] It defines exactly one introspection core.
+ *     [ ] It does not define lexer rules.
+ *     [ ] It does not duplicate reflection syntax.
+ *     [ ] It does not reference a nonexistent RUNTIME token.
+ *     [ ] It does not reference obsolete literal token names.
+ *     [ ] It does not define arbitrary expression recursion.
+ *     [ ] It does not define fixed resource limits.
+ *     [ ] It does not define vendor-specific hardware syntax.
+ *     [ ] It keeps selectors open-world.
+ *     [ ] It keeps semantic authorization downstream.
+ *     [ ] It preserves source spans through the AST contract.
+ *     [ ] It has a defined semantic contract.
+ *     [ ] It has an effect contract.
+ *     [ ] It has a capability contract.
+ *     [ ] It has a resource contract.
+ *     [ ] It has a policy contract.
+ *     [ ] It has a provenance contract.
+ *     [ ] It has a quantum boundary contract.
+ *     [ ] It has an HDL/hardware boundary contract.
+ *     [ ] It has a compiler boundary contract.
+ *     [ ] It has a runtime boundary contract.
+ *     [ ] It has positive tests.
+ *     [ ] It has negative tests.
+ *     [ ] It has boundary tests.
+ *     [ ] It has scalability tests.
+ *     [ ] It has determinism tests.
+ *     [ ] It has compatibility tests.
+ *
+ * ============================================================================
+ * 57. FINAL ARCHITECTURAL RULE
+ * ============================================================================
+ *
+ * Introspection describes WHAT INFORMATION THE PROGRAM EXPLICITLY REQUESTS.
+ *
+ * It does not define:
+ *
+ *     HOW A PARTICULAR MACHINE PROVIDES THAT INFORMATION.
+ *
+ * Therefore:
+ *
+ *     source
+ *       ->
+ *     introspection syntax
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     semantic validation
+ *       ->
+ *     authorized observation
+ *       ->
+ *     typed semantic value
+ *       ->
+ *     ordinary Zamani computation
+ *
+ * remains the canonical architecture.
+ *
+ * This preserves the fundamental Zamani principle:
+ *
+ *     Program Once
+ *          ->
+ *     Compile Once
+ *          ->
+ *     Run Everywhere
+ *          ->
+ *     Run Anywhere
+ *          ->
+ *     Forever
+ *
+ * while still allowing programs and metaprograms to explicitly reason about
+ * the environment in which they are compiled or executed.
+ *
+ * ============================================================================
+ */
