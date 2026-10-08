@@ -1,0 +1,3916 @@
+============================================================================
+
+Zamani Programming Language
+
+============================================================================
+
+File:
+
+grammar/OWNERSHIP.yaml
+
+Purpose:
+
+Canonical machine-readable ownership registry for grammar/.
+
+This file answers:
+
+"Which file owns which language concept?"
+
+It is intentionally separate from:
+
+MANIFEST.yaml       -> inventory + production gates
+
+DEPENDENCIES.yaml   -> dependency DAG
+
+STATUS.yaml         -> implementation/conformance status
+
+specification/      -> normative human language meaning
+
+spec/               -> machine-oriented semantic contracts
+
+Ownership is a semantic boundary, not merely a filesystem convention.
+
+============================================================================
+
+PRODUCTION PRINCIPLE
+
+============================================================================
+
+Every language concept MUST have exactly one canonical owner.
+
+A concept MAY be:
+
+declared by one grammar;
+
+composed by another grammar;
+
+consumed by many grammars;
+
+mapped to many AST/semantic/IR components;
+
+but it MUST NOT have two competing canonical owners.
+
+============================================================================
+
+POCO-REAF
+
+============================================================================
+
+Ownership MUST preserve:
+
+Program Once
+
+->
+
+Compile Once
+
+->
+
+Run Everywhere
+
+->
+
+Run Anywhere
+
+->
+
+Run Forever
+
+Grammar ownership therefore describes portable source meaning.
+
+It MUST NOT assign ownership of:
+
+physical CPU selection
+
+physical GPU selection
+
+FPGA selection
+
+ASIC selection
+
+QPU selection
+
+physical qubit allocation
+
+routing
+
+scheduling
+
+calibration
+
+target discovery
+
+hardware inventory
+
+runtime placement
+
+Those belong downstream.
+
+============================================================================
+
+SCALABILITY
+
+============================================================================
+
+This registry is open-ended.
+
+It MUST NOT encode universal finite implementation capacities.
+
+Forbidden ownership concepts include, but are not limited to:
+
+MAX_QUBITS
+
+MAX_CPUS
+
+MAX_CORES
+
+MAX_THREADS
+
+MAX_GPUS
+
+MAX_FPGAS
+
+MAX_ASICS
+
+MAX_QPUS
+
+MAX_NODES
+
+MAX_MEMORY
+
+MAX_STORAGE
+
+MAX_REGISTER_WIDTH
+
+MAX_VECTOR_WIDTH
+
+MAX_TENSOR_RANK
+
+MAX_TENSOR_DIMENSION
+
+MAX_NETWORK_SIZE
+
+MAX_DEVICE_COUNT
+
+MAX_ACCELERATOR_COUNT
+
+Equivalent renamed finite limits are equally forbidden.
+
+Resource requirements MAY instead be expressed symbolically, for example:
+
+requires qubits >= required_qubits
+
+requires memory >= required_memory
+
+requires capability("quantum.measurement")
+
+requires capability("gpu.compute")
+
+requires capability("tensor.compute")
+
+requires topology(required_topology)
+
+============================================================================
+
+RUST IMPLEMENTATION CONTRACT
+
+============================================================================
+
+Repository implementation baseline:
+
+Rust edition:       2021
+
+Minimum Rust:       1.97
+
+Preferred baseline: Rust 1.97.1 or later compatible stable Rust
+
+Safety:
+
+unsafe Rust is forbidden.
+
+This ownership registry therefore MUST NOT assign any grammar concept to an
+
+implementation that requires unsafe Rust.
+
+ANTLR grammar files themselves contain no Rust implementation.
+
+============================================================================
+
+ANTLR ARCHITECTURE
+
+============================================================================
+
+There is exactly one public lexer boundary:
+
+grammar/antlr/ZamaniLexer.g4
+
+There is exactly one public parser composition root:
+
+grammar/antlr/ZamaniParser.g4
+
+There is exactly one top-level grammar composition root:
+
+grammar/Zamani.g4
+
+Lexical vocabulary is owned below:
+
+grammar/lexer/
+
+Parser leaf concepts are owned by their respective domain/foundation files.
+
+============================================================================
+
+AUTHORITY
+
+============================================================================
+
+Ownership is subordinate to language authority:
+
+grammar/DESIGN.md
+
+|
+
+v
+
+grammar/specification/
+
+|
+
+v
+
+grammar/spec/
+
+|
+
+v
+
+grammar/OWNERSHIP.yaml
+
+|
+
+v
+
+modular grammar ownership
+
+|
+
+v
+
+grammar/antlr/
+
+|
+
+v
+
+grammar/Zamani.g4
+
+Historical or aspirational documentation MUST NOT create ownership merely
+
+by mentioning a concept.
+
+============================================================================
+
+MACHINE RULES
+
+============================================================================
+
+schema:
+version: "1.0"
+kind: "zamani-grammar-ownership"
+format: "yaml"
+repository: "Benwellonedge28/Zamani"
+root: "grammar/"
+language: "Zamani"
+
+ownership_rules:
+
+one_owner_per_symbol:
+severity: "error"
+rule: >
+Every canonical grammar symbol MUST have exactly one owner.
+
+one_owner_per_token:
+severity: "error"
+rule: >
+Every emitted lexical token MUST have exactly one lexical owner.
+
+one_owner_per_concept:
+severity: "error"
+rule: >
+Semantically equivalent concepts MUST NOT be independently owned by
+multiple files unless one is explicitly classified as compatibility,
+deprecated, historical, generated, or test-only.
+
+composition_is_not_ownership:
+severity: "error"
+rule: >
+A dispatcher/composition grammar MAY consume or import another grammar
+without becoming owner of the consumed symbols.
+
+specification_is_not_grammar_ownership:
+severity: "error"
+rule: >
+Documentation may define meaning but does not become an ANTLR symbol
+owner.
+
+implementation_is_not_grammar_ownership:
+severity: "error"
+rule: >
+Rust implementation files consume grammar contracts; they do not create
+competing source-language ownership.
+
+backend_is_not_grammar_ownership:
+severity: "error"
+rule: >
+Backend-specific implementation MUST NOT become owner of universal
+source syntax.
+
+target_independence:
+severity: "error"
+rule: >
+Universal ownership MUST NOT depend on a particular physical target.
+
+open_world:
+severity: "error"
+rule: >
+Extensible domains MUST use identifiers, registries, capabilities,
+dialects, metadata, and semantic contracts instead of finite grammar
+enumerations where the concept is inherently open-ended.
+
+frozen_interface:
+severity: "error"
+rule: >
+Once an owner is frozen, downstream additions MUST integrate through its
+declared exports and MUST NOT require semantic modification of the
+frozen owner merely to support a new target, backend, device, or dialect.
+
+dependency_direction:
+severity: "error"
+rule: >
+Ownership dependencies MUST follow the canonical dependency DAG declared
+by DEPENDENCIES.yaml.
+
+no_circular_ownership:
+severity: "error"
+rule: >
+Ownership MUST NOT create circular semantic authority.
+
+no_hidden_exports:
+severity: "error"
+rule: >
+A grammar MUST NOT expose a canonical symbol that is absent from its
+ownership contract.
+
+no_implicit_owner:
+severity: "error"
+rule: >
+A symbol without an explicit owner is an audit failure.
+
+============================================================================
+
+OWNERSHIP RECORD SCHEMA
+
+============================================================================
+
+record_schema:
+
+required:
+- "path"
+- "kind"
+- "status"
+- "authority"
+- "purpose"
+- "owns"
+- "does_not_own"
+- "imports"
+- "exports"
+- "consumed_by"
+- "ast_owner"
+- "semantic_owner"
+- "ir_owner"
+- "diagnostics_owner"
+- "test_owner"
+- "compatibility_owner"
+- "scalability_contract"
+- "poco_reaf_contract"
+- "freeze_requirements"
+
+path:
+type: "repository-relative"
+root: "grammar/"
+
+status:
+allowed:
+- "HISTORICAL"
+- "REJECTED"
+- "PROPOSED"
+- "PLANNED"
+- "EXPERIMENTAL"
+- "PARTIALLY_IMPLEMENTED"
+- "IMPLEMENTED"
+- "CONFORMANT"
+- "STABLE"
+- "DEPRECATED"
+- "QUARANTINED"
+
+kind:
+allowed:
+- "antlr_parser_root"
+- "antlr_lexer_root"
+- "antlr_dispatcher"
+- "antlr_leaf"
+- "lexical_registry"
+- "lexical_component"
+- "normative_specification"
+- "machine_specification"
+- "documentation"
+- "validation_contract"
+- "test"
+- "example"
+- "generated"
+- "historical"
+- "repository_artifact"
+- "quarantined_artifact"
+
+============================================================================
+
+ROOT OWNERSHIP
+
+============================================================================
+
+roots:
+
+grammar_root:
+path: "grammar/Zamani.g4"
+kind: "antlr_parser_root"
+authority: "composition-only"
+
+owns:
+  - "program"
+  - "sourceUnit"
+  - "top-level item dispatch"
+  - "universal expression dispatch where required"
+  - "universal type dispatch where required"
+  - "EOF"
+
+does_not_own:
+  - "tokens"
+  - "keywords"
+  - "operators"
+  - "punctuation"
+  - "domain-specific syntax"
+  - "types"
+  - "expressions"
+  - "statements"
+  - "quantum operations"
+  - "HDL constructs"
+  - "AI constructs"
+  - "resource realization"
+  - "hardware selection"
+  - "IR"
+  - "runtime"
+  - "backend"
+
+consumes:
+  - "antlr/ZamaniParser.g4"
+
+freeze_rule: >
+  This file is frozen only after every required subordinate dispatcher has
+  a stable ownership contract.
+
+parser_root:
+path: "grammar/antlr/ZamaniParser.g4"
+kind: "antlr_parser_root"
+authority: "canonical parser composition"
+
+owns:
+  - "canonical parser entry boundary"
+  - "source-unit parser composition"
+  - "universal declaration dispatch"
+  - "universal statement dispatch"
+  - "universal expression dispatch"
+  - "universal type dispatch"
+  - "cross-domain parser composition"
+
+does_not_own:
+  - "leaf syntax"
+  - "tokens"
+  - "lexer rules"
+  - "semantic meaning"
+  - "AST node definitions"
+  - "IR"
+  - "routing"
+  - "scheduling"
+  - "QEC"
+  - "ZQN"
+  - "HAL"
+  - "hardware realization"
+
+consumes:
+  - "core dispatchers"
+  - "declaration dispatcher"
+  - "statement dispatcher"
+  - "expression dispatcher"
+  - "type dispatcher"
+  - "domain dispatchers"
+
+freeze_rule: >
+  This root may be frozen only after all imported parser contracts are
+  dependency-complete.
+
+lexer_root:
+path: "grammar/antlr/ZamaniLexer.g4"
+kind: "antlr_lexer_root"
+authority: "canonical public lexer boundary"
+
+owns:
+  - "public ZamaniLexer boundary"
+  - "ANTLR lexer composition boundary"
+
+does_not_own:
+  - "individual tokens"
+  - "keyword vocabulary"
+  - "operators"
+  - "punctuation"
+  - "literal implementations"
+  - "identifier implementation"
+  - "parser rules"
+  - "semantic analysis"
+
+consumes:
+  - "lexer/lexer.g4"
+
+freeze_rule: >
+  This file MUST contain no competing lexical vocabulary.
+
+============================================================================
+
+LEXICAL OWNERSHIP
+
+============================================================================
+
+lexical:
+
+registry:
+path: "grammar/lexer/tokens.g4"
+kind: "lexical_registry"
+
+owns:
+  - "canonical token identity"
+  - "token names"
+  - "token categories"
+  - "token registration metadata"
+
+does_not_own:
+  - "semantic meaning"
+  - "AST nodes"
+  - "parser productions"
+  - "hardware realization"
+
+invariant: >
+  Every emitted token has exactly one registry identity.
+
+lexer_composition:
+path: "grammar/lexer/lexer.g4"
+kind: "lexical_component"
+
+owns:
+  - "lexical component composition"
+  - "canonical lexer grammar assembly"
+
+delegates:
+  - "tokens"
+  - "keywords"
+  - "operators"
+  - "punctuation"
+  - "identifiers"
+  - "literals"
+  - "comments"
+  - "annotations"
+  - "lexer diagnostics"
+
+keywords:
+path: "grammar/lexer/keywords.g4"
+owns:
+- "reserved-word lexical declarations"
+- "contextual-keyword lexical declarations where applicable"
+
+does_not_own:
+  - "keyword semantics"
+  - "parser production semantics"
+  - "application-specific vocabulary"
+
+operators:
+path: "grammar/lexer/operators.g4"
+owns:
+- "operator tokens"
+
+does_not_own:
+  - "operator precedence semantics"
+  - "expression AST"
+  - "domain-specific execution"
+
+punctuation:
+path: "grammar/lexer/punctuation.g4"
+owns:
+- "punctuation and delimiter tokens"
+
+identifiers:
+path: "grammar/lexer/identifiers.g4"
+owns:
+- "identifier lexical structure"
+
+does_not_own:
+  - "name resolution"
+  - "scope"
+  - "symbol tables"
+  - "type identity"
+
+literals:
+path: "grammar/lexer/literals.g4"
+owns:
+- "literal-family composition"
+
+numeric_literals:
+path: "grammar/lexer/numeric-literals.g4"
+owns:
+- "numeric literal lexical forms"
+
+does_not_own:
+  - "numeric target representation"
+  - "machine register width"
+  - "hardware numeric capacity"
+
+string_literals:
+path: "grammar/lexer/string-literals.g4"
+owns:
+- "string literal lexical forms"
+
+character_literals:
+path: "grammar/lexer/character-literals.g4"
+owns:
+- "character literal lexical forms"
+
+boolean_literals:
+path: "grammar/lexer/boolean-literals.g4"
+owns:
+- "boolean literal lexical forms"
+
+quantum_literals:
+path: "grammar/lexer/quantum-literals.g4"
+owns:
+- "quantum-specific literal syntax"
+
+does_not_own:
+  - "physical qubit allocation"
+  - "QPU selection"
+  - "quantum operation catalog"
+  - "quantum routing"
+  - "quantum scheduling"
+
+hardware_literals:
+path: "grammar/lexer/hardware-literals.g4"
+owns:
+- "source-level hardware/resource quantity notation"
+
+does_not_own:
+  - "hardware inventory"
+  - "target selection"
+  - "physical device limits"
+
+duration_literals:
+path: "grammar/lexer/duration-literals.g4"
+owns:
+- "duration literal syntax"
+
+size_literals:
+path: "grammar/lexer/size-literals.g4"
+owns:
+- "abstract size/resource quantity syntax"
+
+invariant: >
+  Size syntax MUST NOT impose universal memory/storage/device limits.
+
+annotations:
+path: "grammar/lexer/annotations.g4"
+owns:
+- "lexical annotation syntax"
+
+comments:
+path: "grammar/lexer/comments.g4"
+owns:
+- "comment syntax"
+
+errors:
+path: "grammar/lexer/lexer-errors.g4"
+owns:
+- "lexical error grammar boundaries"
+
+unicode:
+path: "grammar/lexer/unicode.g4"
+owns:
+- "Unicode lexical support"
+
+============================================================================
+
+CORE OWNERSHIP
+
+============================================================================
+
+core:
+
+dispatcher:
+path: "grammar/core/core.g4"
+owns:
+- "core grammar composition"
+
+program:
+path: "grammar/core/program.g4"
+owns:
+- "program-level structure"
+
+source_unit:
+path: "grammar/core/source-unit.g4"
+owns:
+- "source-unit structure"
+
+compilation_unit:
+path: "grammar/core/compilation-unit.g4"
+owns:
+- "compilation-unit syntax"
+
+names:
+path: "grammar/core/names.g4"
+owns:
+- "name syntax"
+
+qualified_names:
+path: "grammar/core/qualified-names.g4"
+owns:
+- "qualified-name syntax"
+
+identifiers:
+path: "grammar/core/identifiers.g4"
+owns:
+- "core identifier integration"
+
+note: >
+  Lexical identifier shape remains owned by lexer/identifiers.g4.
+  Core identifiers owns parser-level identifier composition only.
+
+paths:
+path: "grammar/core/paths.g4"
+owns:
+- "source/module path syntax"
+
+visibility:
+path: "grammar/core/visibility.g4"
+owns:
+- "visibility syntax"
+
+versioning:
+path: "grammar/core/versioning.g4"
+owns:
+- "source-level language/version declarations"
+
+requirements:
+path: "grammar/core/requirements.g4"
+owns:
+- "generic requirement composition"
+
+constraints:
+path: "grammar/core/constraints.g4"
+owns:
+- "generic constraint composition"
+
+capabilities:
+path: "grammar/core/capabilities.g4"
+owns:
+- "generic capability references"
+
+policies:
+path: "grammar/core/policies.g4"
+owns:
+- "generic policy references"
+
+hints:
+path: "grammar/core/hints.g4"
+owns:
+- "non-semantic optimization hint syntax"
+
+metadata:
+path: "grammar/core/metadata.g4"
+owns:
+- "generic metadata syntax"
+
+attributes:
+path: "grammar/core/attributes.g4"
+owns:
+- "attribute syntax"
+
+annotations:
+path: "grammar/core/annotations.g4"
+owns:
+- "parser-level annotation composition"
+
+note: >
+  Lexical annotation markers remain owned by lexer/annotations.g4.
+
+modifiers:
+path: "grammar/core/modifiers.g4"
+owns:
+- "generic modifier composition"
+
+pragmas:
+path: "grammar/core/pragmas.g4"
+owns:
+- "pragma syntax"
+
+blocks:
+path: "grammar/core/blocks.g4"
+owns:
+- "generic block syntax"
+
+punctuation:
+path: "grammar/core/punctuation.g4"
+owns:
+- "core parser-level punctuation composition"
+
+does_not_own:
+  - "token definitions"
+
+============================================================================
+
+MODULES / DECLARATIONS / FUNCTIONS
+
+============================================================================
+
+modules:
+directory: "grammar/modules/"
+owner_scope:
+- "module declarations"
+- "imports"
+- "exports"
+- "module namespaces"
+- "module composition"
+- "module visibility"
+- "module dependencies"
+does_not_own:
+- "lexical identifiers"
+- "type semantics"
+- "runtime package management"
+
+declarations:
+directory: "grammar/declarations/"
+owner_scope:
+- "declaration syntax"
+- "binding declarations"
+- "constant declarations"
+- "variable declarations"
+- "type declarations"
+- "function declarations"
+- "data declarations"
+- "domain declaration dispatch"
+does_not_own:
+- "lexical tokens"
+- "semantic type checking"
+- "IR"
+
+functions:
+directory: "grammar/functions/"
+owner_scope:
+- "function syntax"
+- "parameters"
+- "returns"
+- "generic function syntax"
+- "function constraints"
+- "calling syntax"
+- "function contracts"
+- "foreign function declarations"
+- "compile-time function syntax"
+does_not_own:
+- "calling convention realization"
+- "ABI implementation"
+- "machine calling sequence"
+- "backend code generation"
+
+============================================================================
+
+TYPE SYSTEM
+
+============================================================================
+
+types:
+
+dispatcher:
+path: "grammar/types/types.g4"
+owns:
+- "canonical type-expression composition"
+- "type-family dispatch"
+
+does_not_own:
+  - "individual specialized type-family semantics"
+
+primitive:
+path: "grammar/types/primitive.g4"
+owns:
+- "primitive type syntax"
+
+named:
+path: "grammar/types/named.g4"
+owns:
+- "named type syntax"
+
+generic:
+path: "grammar/types/generic.g4"
+owns:
+- "generic type syntax"
+
+bounds:
+path: "grammar/types/bounds.g4"
+owns:
+- "type bound syntax"
+
+constraints:
+path: "grammar/types/constraints.g4"
+owns:
+- "type constraint syntax"
+
+type_constraints:
+path: "grammar/types/type-constraints.g4"
+owns:
+- "advanced type-level constraint composition"
+
+function:
+path: "grammar/types/function.g4"
+owns:
+- "function type syntax"
+
+tuple:
+path: "grammar/types/tuple.g4"
+owns:
+- "tuple type syntax"
+
+array:
+path: "grammar/types/array.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "legacy array type ownership placeholder"
+
+conflict:
+  - "grammar/types/array-types.g4"
+
+required_resolution: >
+  Exactly one canonical array grammar MUST become STABLE. The other file
+  MUST be removed, renamed to a non-conflicting role, or explicitly
+  converted to a compatibility/historical artifact before freeze.
+
+array_types:
+path: "grammar/types/array-types.g4"
+status: "QUARANTINED_PENDING_PATH_CLEANUP"
+owns:
+- "array and slice source syntax candidate"
+
+conflict:
+  - "grammar/types/array.g4"
+
+required_resolution: >
+  The repository currently contains malformed path records involving this
+  filename. Those records MUST be repaired before this owner can become
+  STABLE.
+
+slice:
+path: "grammar/types/slice.g4"
+owns:
+- "slice-specific type syntax"
+
+map:
+path: "grammar/types/map.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "legacy map type ownership placeholder"
+
+conflict:
+  - "grammar/types/map-types.g4"
+
+map_types:
+path: "grammar/types/map-types.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "map type syntax candidate"
+
+conflict:
+  - "grammar/types/map.g4"
+
+option:
+path: "grammar/types/option.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "legacy option type ownership placeholder"
+
+conflict:
+  - "grammar/types/option-types.g4"
+  - "grammar/types/optional.g4"
+
+option_types:
+path: "grammar/types/option-types.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "option type syntax candidate"
+
+optional:
+path: "grammar/types/optional.g4"
+status: "QUARANTINED_PENDING_DUPLICATE_RESOLUTION"
+owns:
+- "optional type syntax candidate"
+
+required_resolution: >
+  Option and optional syntax MUST have exactly one canonical owner.
+
+result:
+path: "grammar/types/result.g4"
+owns:
+- "result type syntax"
+
+reference:
+path: "grammar/types/reference.g4"
+owns:
+- "reference type syntax"
+
+pointer:
+path: "grammar/types/pointer.g4"
+owns:
+- "pointer type syntax"
+
+linear:
+path: "grammar/types/linear.g4"
+owns:
+- "linear type syntax"
+
+affine:
+path: "grammar/types/affine.g4"
+owns:
+- "affine type syntax"
+
+temporal:
+path: "grammar/types/temporal.g4"
+owns:
+- "temporal type syntax"
+
+dependent:
+path: "grammar/types/dependent.g4"
+owns:
+- "dependent type syntax"
+
+pi:
+path: "grammar/types/dependent.g4"
+owns:
+- "Pi-type syntax"
+
+sigma:
+path: "grammar/types/dependent.g4"
+owns:
+- "Sigma-type syntax"
+
+identity:
+path: "grammar/types/dependent.g4"
+owns:
+- "identity-type syntax"
+
+hkt:
+path: "grammar/types/higher-kinded-types.g4"
+owns:
+- "higher-kinded type syntax"
+
+type_class:
+path: "grammar/types/type-class.g4"
+owns:
+- "type-class syntax"
+
+associated:
+path: "grammar/types/associated.g4"
+owns:
+- "associated-type syntax"
+
+associated_legacy_filename:
+path: "grammar/types/associated types.g4"
+status: "QUARANTINED_PENDING_PATH_CLEANUP"
+owns: []
+required_resolution: >
+Whitespace-containing filenames MUST NOT remain canonical grammar paths.
+Normalize or remove this artifact before freeze.
+
+functional_dependencies:
+path: "grammar/types/functional dependencies.g4"
+status: "QUARANTINED_PENDING_PATH_CLEANUP"
+owns: []
+required_resolution: >
+Normalize the filename to a repository-safe canonical path if the
+feature is retained.
+
+algebraic:
+path: "grammar/types/algebraic-types.g4"
+owns:
+- "algebraic type syntax"
+
+composite:
+path: "grammar/types/composite-types.g4"
+owns:
+- "composite type composition"
+
+union:
+path: "grammar/types/union.g4"
+owns:
+- "union type syntax"
+
+sum:
+path: "grammar/types/sum.g4"
+owns:
+- "sum type syntax"
+
+record:
+path: "grammar/types/record.g4"
+owns:
+- "record type syntax"
+
+user_defined:
+path: "grammar/types/user-defined-types.g4"
+owns:
+- "user-defined type declaration syntax"
+
+pattern:
+path: "grammar/types/pattern.g4"
+owns:
+- "type-level pattern integration"
+
+variance:
+path: "grammar/types/variance.g4"
+owns:
+- "variance syntax"
+
+type_families:
+path: "grammar/types/type-families.g4"
+owns:
+- "type-family syntax"
+
+type_providers:
+path: "grammar/types/type-providers.g4"
+owns:
+- "type-provider extension syntax"
+
+effectful:
+path: "grammar/types/effectful.g4"
+owns:
+- "effect-qualified type syntax"
+
+resource:
+path: "grammar/types/resource.g4"
+owns:
+- "resource-qualified type syntax"
+
+quantum:
+path: "grammar/types/quantum.g4"
+owns:
+- "source-level quantum type syntax"
+
+does_not_own:
+  - "physical qubit allocation"
+  - "QPU selection"
+  - "quantum routing"
+
+classical:
+path: "grammar/types/classical.g4"
+owns:
+- "classical-domain type extensions"
+
+must_reuse:
+  - "canonical type expression"
+  - "canonical primitive type model"
+
+hardware:
+path: "grammar/types/hardware.g4"
+owns:
+- "hardware-related source type syntax"
+
+does_not_own:
+  - "physical target selection"
+  - "hardware inventory"
+
+advanced_type_level_computation:
+path: "grammar/types/advanced-type-level-computation.g4"
+owns:
+- "advanced type-level computation syntax"
+
+============================================================================
+
+EXPRESSIONS
+
+============================================================================
+
+expressions:
+
+dispatcher:
+path: "grammar/expressions/expressions.g4"
+owns:
+- "canonical expression composition"
+- "expression-family dispatch"
+
+canonical_expression_families:
+arithmetic: "grammar/expressions/arithmetic.g4"
+arrays: "grammar/expressions/arrays.g4"
+assignment: "grammar/expressions/assignment.g4"
+async: "grammar/expressions/async.g4"
+binary: "grammar/expressions/binary.g4"
+bitwise: "grammar/expressions/bitwise.g4"
+blocks: "grammar/expressions/blocks.g4"
+calls: "grammar/expressions/calls.g4"
+comparison: "grammar/expressions/comparison.g4"
+comprehensions: "grammar/expressions/comprehensions.g4"
+conditionals: "grammar/expressions/conditionals.g4"
+compile_time: "grammar/expressions/compile-time.g4"
+effects: "grammar/expressions/effects.g4"
+evidence: "grammar/expressions/evidence.g4"
+guards: "grammar/expressions/guards.g4"
+identifiers: "grammar/expressions/identifiers.g4"
+indexing: "grammar/expressions/indexing.g4"
+literals: "grammar/expressions/literals.g4"
+logical: "grammar/expressions/logical.g4"
+maps: "grammar/expressions/maps.g4"
+match: "grammar/expressions/match.g4"
+member_access: "grammar/expressions/member-access.g4"
+metaprogramming: "grammar/expressions/metaprogramming.g4"
+patterns: "grammar/expressions/patterns.g4"
+policy: "grammar/expressions/policy.g4"
+postfix: "grammar/expressions/postfix.g4"
+provenance: "grammar/expressions/provenance.g4"
+quantum: "grammar/expressions/quantum.g4"
+query: "grammar/expressions/query.g4"
+range: "grammar/expressions/range.g4"
+reasoning: "grammar/expressions/reasoning.g4"
+shift: "grammar/expressions/shift.g4"
+simulation: "grammar/expressions/simulation.g4"
+tuples: "grammar/expressions/tuples.g4"
+unary: "grammar/expressions/unary.g4"
+uncertainty: "grammar/expressions/uncertainty.g4"
+
+duplicate_candidates:
+
+closure:
+  - "grammar/expressions/closure.g4"
+  - "grammar/expressions/closures.g4"
+
+lambda:
+  - "grammar/expressions/lambda.g4 "
+  - "grammar/expressions/lambdas.g4"
+
+range:
+  - "grammar/expressions/range.g4"
+  - "grammar/expressions/ranges.g4"
+
+duplicate_resolution_rule: >
+Similar names do not automatically mean identical semantics. However,
+before freeze every candidate pair MUST be classified as one of:
+canonical, compatibility, deprecated, historical, test-only, or removed.
+Two canonical owners for the same expression concept are forbidden.
+
+adaptive:
+path: "grammar/expressions/adaptive.g4"
+owns:
+- "adaptive expression syntax"
+
+security:
+  - "effects/adaptation"
+  - "policies/adaptation"
+  - "security"
+  - "provenance"
+
+invariant: >
+  Adaptive syntax MUST NOT imply unrestricted self-modifying execution.
+
+mind:
+path: "grammar/expressions/mind.g4"
+owns:
+- "mind/reasoning expression syntax only where normative"
+
+nested_mind:
+path: "grammar/expressions/nested-mind.g4"
+owns:
+- "nested reasoning/mind expression syntax only where normative"
+
+============================================================================
+
+STATEMENTS
+
+============================================================================
+
+statements:
+
+directory: "grammar/statements/"
+
+dispatcher:
+path: "grammar/statements/statements.g4"
+owns:
+- "canonical statement composition"
+
+core_control:
+owns:
+- "declaration-independent control-flow statement composition"
+
+adaptive:
+path: "grammar/statements/adapt.g4"
+owns:
+- "adapt statement syntax"
+
+required_semantic_guards:
+  - "policy"
+  - "capability"
+  - "effect"
+  - "resource"
+  - "authorization"
+  - "provenance"
+
+prohibited_meaning:
+  - "unrestricted self-modifying code"
+
+reasoning:
+path: "grammar/statements/reason.g4"
+owns:
+- "reasoning statement syntax"
+
+inference:
+path: "grammar/statements/infer.g4"
+owns:
+- "inference statement syntax"
+
+learning:
+path: "grammar/statements/learn.g4"
+owns:
+- "learning statement syntax"
+
+query:
+path: "grammar/statements/query.g4"
+owns:
+- "query statement syntax"
+
+retraction:
+path: "grammar/statements/retract.g4"
+owns:
+- "retraction statement syntax"
+
+explanation:
+path: "grammar/statements/explain.g4"
+owns:
+- "explanation statement syntax"
+
+============================================================================
+
+MEMORY
+
+============================================================================
+
+memory:
+directory: "grammar/memory/"
+
+owns:
+- "source-level ownership"
+- "borrowing"
+- "references"
+- "lifetimes"
+- "allocation intent"
+- "deallocation intent"
+- "regions"
+- "address-space abstractions"
+- "shared memory abstractions"
+- "distributed memory abstractions"
+- "accelerator memory abstractions"
+- "persistent memory abstractions"
+
+does_not_own:
+- "physical RAM capacity"
+- "VRAM capacity"
+- "device memory inventory"
+- "physical addresses"
+- "allocator implementation"
+- "runtime memory placement"
+
+============================================================================
+
+EFFECTS
+
+============================================================================
+
+effects:
+
+dispatcher:
+path: "grammar/effects/effects.g4"
+owns:
+- "canonical effect-system composition"
+
+declarations:
+path: "grammar/effects/effect-declarations.g4"
+owns:
+- "effect declaration syntax"
+
+sets:
+path: "grammar/effects/effect-sets.g4"
+owns:
+- "effect-set syntax"
+
+operations:
+path: "grammar/effects/effect-operations.g4"
+owns:
+- "effect operation syntax"
+
+handling:
+path: "grammar/effects/effect-handling.g4"
+owns:
+- "effect handler syntax"
+
+types:
+path: "grammar/effects/effect-types.g4"
+owns:
+- "effect-qualified type syntax"
+
+polymorphism:
+path: "grammar/effects/effect-polymorphism.g4"
+owns:
+- "effect polymorphism"
+
+composition:
+path: "grammar/effects/effect-composition.g4"
+owns:
+- "effect composition"
+
+custom:
+path: "grammar/effects/custom-effects.g4"
+owns:
+- "custom effect extension syntax"
+
+canonical_categories:
+io: "grammar/effects/io.g4"
+network: "grammar/effects/network.g4"
+mutation: "grammar/effects/mutation.g4"
+randomness: "grammar/effects/randomness.g4"
+native: "grammar/effects/native.g4"
+foreign: "grammar/effects/foreign.g4"
+distributed: "grammar/effects/distributed.g4"
+measurement: "grammar/effects/measurement.g4"
+quantum: "grammar/effects/quantum.g4"
+learning: "grammar/effects/learning.g4"
+adaptation: "grammar/effects/adaptation.g4"
+reflection: "grammar/effects/reflection.g4"
+code_generation: "grammar/effects/code_generation.g4 "
+simulation: "grammar/effects/simulation.g4"
+security: "grammar/effects/security.g4"
+hardware: "grammar/effects/hardware.g4"
+capabilities: "grammar/effects/capabilities.g4"
+
+malformed_paths:
+- "grammar/effects/code_generation.g4 "
+
+required_resolution: >
+Trailing-whitespace filenames MUST be normalized before freeze. Ownership
+becomes canonical only after the filesystem path itself is canonical.
+
+============================================================================
+
+RESOURCES
+
+============================================================================
+
+resources:
+
+dispatcher:
+path: "grammar/resources/resources.g4"
+owns:
+- "resource-system composition"
+
+resource:
+path: "grammar/resources/resource.g4"
+owns:
+- "resource identity syntax"
+
+expressions:
+path: "grammar/resources/resource-expressions.g4"
+owns:
+- "resource expression syntax"
+
+requirements:
+path: "grammar/resources/requirements.g4"
+owns:
+- "resource requirement syntax"
+
+capabilities:
+path: "grammar/resources/capabilities.g4"
+owns:
+- "capability requirement syntax"
+
+constraints:
+path: "grammar/resources/constraints.g4"
+owns:
+- "resource constraint syntax"
+
+preferences:
+path: "grammar/resources/preferences.g4"
+owns:
+- "resource preference syntax"
+
+hints:
+path: "grammar/resources/hints.g4"
+owns:
+- "resource optimization hint syntax"
+
+budgets:
+path: "grammar/resources/budgets.g4"
+owns:
+- "resource budget syntax"
+
+negotiation:
+path: "grammar/resources/negotiation.g4"
+owns:
+- "source-level resource negotiation intent"
+
+does_not_own:
+  - "runtime target discovery"
+  - "physical placement"
+  - "scheduler implementation"
+
+placement:
+path: "grammar/resources/placement.g4"
+owns:
+- "abstract placement intent"
+
+does_not_own:
+  - "physical placement algorithm"
+
+portability:
+path: "grammar/resources/portability.g4"
+owns:
+- "source-level portability requirements"
+
+scalability:
+path: "grammar/resources/scalability.g4"
+owns:
+- "source-level scalability constraints/preferences"
+
+performance:
+path: "grammar/resources/performance.g4"
+owns:
+- "performance requirement syntax"
+
+latency:
+path: "grammar/resources/latency.g4"
+owns:
+- "latency requirement syntax"
+
+energy:
+path: "grammar/resources/energy.g4"
+owns:
+- "energy requirement syntax"
+
+reliability:
+path: "grammar/resources/reliability.g4"
+owns:
+- "reliability requirement syntax"
+
+realization_boundary: >
+These grammars express resource intent. Compiler/runtime owns discovery,
+negotiation algorithms, realization, routing, scheduling, and physical
+placement.
+
+============================================================================
+
+POLICIES
+
+============================================================================
+
+policies:
+
+dispatcher:
+path: "grammar/policies/policies.g4"
+owns:
+- "policy-system composition"
+
+policy:
+path: "grammar/policies/policy.g4"
+owns:
+- "policy declaration/composition syntax"
+
+constitution:
+path: "grammar/policies/constitution.g4"
+owns:
+- "policy constitution syntax"
+
+scopes:
+path: "grammar/policies/scopes.g4"
+owns:
+- "policy scope syntax"
+
+permissions:
+path: "grammar/policies/permissions.g4"
+owns:
+- "permission policy syntax"
+
+prohibitions:
+path: "grammar/policies/prohibitions.g4"
+owns:
+- "prohibition policy syntax"
+
+requirements:
+path: "grammar/policies/requirements.g4"
+owns:
+- "policy requirement syntax"
+
+constraints:
+path: "grammar/policies/constraints.g4"
+owns:
+- "policy constraint syntax"
+
+preferences:
+path: "grammar/policies/preferences.g4"
+owns:
+- "policy preference syntax"
+
+fallbacks:
+path: "grammar/policies/fallbacks.g4"
+owns:
+- "fallback policy syntax"
+
+adaptation:
+path: "grammar/policies/adaptation.g4"
+owns:
+- "adaptation governance syntax"
+
+execution:
+path: "grammar/policies/execution.g4"
+owns:
+- "execution policy syntax"
+
+deployment:
+path: "grammar/policies/deployment.g4"
+owns:
+- "deployment policy syntax"
+
+resource:
+path: "grammar/policies/resource.g4"
+owns:
+- "resource governance syntax"
+
+security:
+path: "grammar/policies/security.g4"
+owns:
+- "security policy syntax"
+
+simulation:
+path: "grammar/policies/simulation.g4"
+owns:
+- "simulation governance syntax"
+
+provenance:
+path: "grammar/policies/provenance.g4"
+owns:
+- "policy provenance syntax"
+
+============================================================================
+
+VALIDATION / CONTRACTS
+
+============================================================================
+
+validation:
+
+dispatcher:
+path: "grammar/validation/validation.g4"
+owns:
+- "validationUnit"
+- "validationCase"
+- "validation orchestration"
+
+does_not_own:
+  - "source construct semantics"
+  - "type semantics"
+  - "effect semantics"
+  - "resource realization"
+
+assertions:
+path: "grammar/validation/assertions.g4"
+owns:
+- "validation-facing assertion grammar"
+
+assumptions:
+path: "grammar/validation/assumptions.g4"
+owns:
+- "validation-facing assumption grammar"
+
+contracts:
+path: "grammar/validation/contracts.g4"
+owns:
+- "contract validation composition"
+
+requires:
+path: "grammar/validation/requires.g4"
+owns:
+- "validation-facing requires construct"
+
+ensures:
+path: "grammar/validation/ensures.g4"
+owns:
+- "validation-facing ensures construct"
+
+invariants:
+path: "grammar/validation/invariants.g4"
+owns:
+- "validation-facing invariant construct"
+
+guarantees:
+path: "grammar/validation/guarantees.g4"
+owns:
+- "validation-facing guarantee construct"
+
+properties:
+path: "grammar/validation/properties.g4"
+owns:
+- "validation-facing property construct"
+
+preconditions:
+path: "grammar/validation/preconditions.g4"
+owns:
+- "validation-facing precondition construct"
+
+postconditions:
+path: "grammar/validation/postconditions.g4"
+owns:
+- "validation-facing postcondition construct"
+
+proofs:
+path: "grammar/validation/proofs.g4"
+owns:
+- "validation-facing proof construct"
+
+refinement:
+path: "grammar/validation/refinement.g4"
+owns:
+- "validation-facing refinement construct"
+
+evidence:
+path: "grammar/validation/evidence.g4"
+owns:
+- "validation-facing evidence validation"
+
+audit_contracts:
+hard_coding:
+- "grammar/validation/hard-coding.md"
+- "grammar/validation/hardcoding-audit.md"
+ambiguity:
+- "grammar/validation/ambiguity.md"
+- "grammar/validation/ambiguity-rules.md"
+semantic_boundaries:
+- "grammar/validation/semantic-boundaries.md"
+scalability:
+- "grammar/validation/scalability.md"
+- "grammar/validation/scalability-rules.md"
+ast:
+- "grammar/validation/ast-coverage.md"
+ir:
+- "grammar/validation/ir-coverage.md"
+portability:
+- "grammar/validation/portability.md"
+compatibility:
+- "grammar/validation/compatibility-rules.md"
+naming:
+- "grammar/validation/naming-rules.md"
+unreachable:
+- "grammar/validation/unreachable-rules.md"
+left_recursion:
+- "grammar/validation/left-recursion.md"
+
+============================================================================
+
+SECURITY
+
+============================================================================
+
+security:
+
+directory: "grammar/security/"
+
+owns:
+- "source-level security constructs"
+- "authorization syntax"
+- "capability security syntax"
+- "sandbox syntax"
+- "trust syntax"
+- "audit intent"
+- "privacy intent"
+- "security policy integration"
+
+does_not_own:
+- "actual authorization decision engine"
+- "secret storage implementation"
+- "key storage implementation"
+- "hardware security implementation"
+- "runtime sandbox implementation"
+
+safety_rule: >
+Grammar constructs MUST NOT provide a route around semantic validation,
+policy enforcement, capability checks, or sandboxing.
+
+============================================================================
+
+CLASSICAL COMPUTATION
+
+============================================================================
+
+classical:
+
+directory: "grammar/classical/"
+
+owns:
+- "classical computational domain syntax"
+- "numeric computation syntax"
+- "scientific computation syntax"
+- "linear algebra syntax"
+- "classical accelerator intent"
+
+must_reuse:
+- "types"
+- "expressions"
+- "functions"
+- "effects"
+- "resources"
+- "memory"
+- "concurrency"
+
+does_not_own:
+- "GPU physical selection"
+- "CPU physical selection"
+- "fixed register widths"
+- "fixed device counts"
+- "backend scheduling"
+
+============================================================================
+
+DATA
+
+============================================================================
+
+data:
+
+directory: "grammar/data/"
+
+owns:
+- "data structures beyond core types"
+- "datasets"
+- "schemas"
+- "collections"
+- "streams"
+- "data pipelines"
+- "query abstractions"
+- "serialization intent"
+- "data provenance"
+- "data uncertainty"
+
+external_formats:
+rule: >
+SQL, JSON, XML and similar formats MUST remain dialect/interoperability
+boundaries unless explicitly standardized as Zamani semantics.
+
+malformed_paths:
+- "grammar/data/tensors.g4 "
+
+required_resolution: >
+Normalize trailing-whitespace filename before freeze.
+
+============================================================================
+
+CONCURRENCY
+
+============================================================================
+
+concurrency:
+
+directory: "grammar/concurrency/"
+
+owns:
+- "source concurrency abstraction"
+- "tasks"
+- "futures"
+- "actors"
+- "channels"
+- "parallel intent"
+- "synchronization"
+
+does_not_own:
+- "physical thread count"
+- "CPU core count"
+- "GPU workgroup selection"
+- "distributed placement"
+
+realization_rule: >
+Source concurrency describes semantics. Compiler/runtime chooses an
+appropriate execution realization subject to requirements and policies.
+
+============================================================================
+
+DISTRIBUTED
+
+============================================================================
+
+distributed:
+
+directory: "grammar/distributed/"
+
+owns:
+- "distributed computation syntax"
+- "nodes as abstract participants"
+- "messages"
+- "channels"
+- "collectives"
+- "partitioning"
+- "replication intent"
+- "consistency intent"
+- "fault tolerance intent"
+- "remote execution intent"
+
+does_not_own:
+- "physical node inventory"
+- "cluster size"
+- "network topology realization"
+- "deployment placement"
+
+============================================================================
+
+NETWORKING
+
+============================================================================
+
+networking:
+
+directory: "grammar/networking/"
+
+owns:
+- "address abstractions"
+- "endpoints"
+- "channels"
+- "messages"
+- "requests"
+- "responses"
+- "services"
+- "protocol references"
+- "streaming"
+- "network capability requirements"
+
+does_not_own:
+- "physical network inventory"
+- "finite network size"
+- "routing implementation"
+- "deployment topology"
+
+============================================================================
+
+HARDWARE
+
+============================================================================
+
+hardware:
+
+directory: "grammar/hardware/"
+
+owns:
+- "abstract hardware intent"
+- "hardware capabilities"
+- "hardware resource classes"
+- "abstract topology requirements"
+- "timing requirements"
+- "power requirements"
+- "thermal requirements"
+- "reliability requirements"
+- "calibration requirements as source intent"
+- "accelerator intent"
+
+does_not_own:
+- "specific physical devices"
+- "physical device inventory"
+- "device discovery"
+- "placement implementation"
+- "routing implementation"
+- "scheduling implementation"
+- "calibration execution"
+
+============================================================================
+
+EXECUTION
+
+============================================================================
+
+execution:
+
+directory: "grammar/execution/"
+
+owns:
+- "execution intent"
+- "execution contexts"
+- "simulation intent"
+- "adaptive execution intent"
+- "parallel execution intent"
+- "distributed execution intent"
+- "checkpoint intent"
+- "recovery intent"
+- "resilience intent"
+- "profiling intent"
+- "tracing intent"
+- "execution lifecycle"
+
+does_not_own:
+- "runtime scheduler implementation"
+- "physical placement"
+- "device discovery"
+
+============================================================================
+
+COMPILATION
+
+============================================================================
+
+compile:
+
+directory: "grammar/compile/"
+
+owns:
+- "source-level compilation intent"
+- "target profiles"
+- "cross-compilation intent"
+- "optimization intent"
+- "specialization intent"
+- "conditional compilation"
+- "reproducibility declarations"
+- "artifact declarations"
+- "deployment intent"
+
+does_not_own:
+- "backend implementation"
+- "machine-code generation"
+- "physical target discovery"
+
+poco_reaf_rule: >
+Compilation syntax MUST refer to portable semantic artifacts and
+requirements rather than hard-coded physical-machine assumptions.
+
+============================================================================
+
+QUANTUM
+
+============================================================================
+
+quantum:
+
+dispatcher:
+path: "grammar/quantum/quantum.g4"
+owns:
+- "quantum-domain composition"
+
+does_not_own:
+  - "individual operation definitions"
+  - "physical routing"
+  - "QEC implementation"
+  - "ZQN"
+
+operations:
+path: "grammar/quantum/operations.g4"
+owns:
+- "generic quantum operation syntax"
+- "operationSpecifier composition"
+- "operation targets"
+- "operation controls"
+- "operation parameters"
+- "operation results"
+- "operation attributes"
+- "operation modifiers"
+
+architecture:
+  operation_specifier:
+    allowed:
+      - "builtin"
+      - "custom"
+      - "vendor"
+      - "parameterized"
+      - "dialect"
+      - "future"
+
+prohibited:
+  - "finite universal gate catalogue as grammar architecture"
+  - "physical qubit assignment"
+  - "vendor device selection"
+  - "coupling-map ownership"
+  - "routing"
+  - "scheduling"
+
+canonical_ir: "quantum::ir"
+
+gates:
+path: "grammar/quantum/gates.g4"
+owns:
+- "gate-oriented compatibility syntax"
+
+constraint: >
+  This file MUST NOT become the universal owner of all possible quantum
+  operations. Generic operation syntax remains owned by operations.g4.
+
+parameterized_operations:
+path: "grammar/quantum/parameterized-operations.g4"
+owns:
+- "parameterized operation syntax"
+
+controls:
+path: "grammar/quantum/controls.g4"
+owns:
+- "quantum control syntax"
+
+controlled_operations:
+path: "grammar/quantum/controlled-operations.g4"
+owns:
+- "controlled operation composition"
+
+adjoints:
+path: "grammar/quantum/adjoints.g4"
+owns:
+- "adjoint operation syntax"
+
+targets:
+path: "grammar/quantum/qubits.g4"
+owns:
+- "logical/source qubit reference syntax"
+
+logical_qubits:
+path: "grammar/quantum/logical-qubits.g4"
+owns:
+- "logical qubit syntax"
+
+physical_qubits:
+path: "grammar/quantum/physical-qubits.g4"
+owns:
+- "explicit physical-qubit reference syntax where language policy
+permits it"
+
+restriction: >
+  Explicit physical references reduce portability and MUST remain explicit
+  rather than becoming implicit defaults.
+
+measurement:
+path: "grammar/quantum/measurement.g4"
+owns:
+- "measurement syntax"
+
+reset:
+path: "grammar/quantum/reset.g4"
+owns:
+- "quantum reset syntax"
+
+states:
+path: "grammar/quantum/states.g4"
+owns:
+- "quantum state syntax"
+
+quantum_states:
+path: "grammar/quantum/quantum-states.g4"
+status: "REQUIRES_DUPLICATE_REVIEW"
+owns:
+- "quantum-state composition candidate"
+
+required_resolution: >
+  This file and states.g4 MUST be classified so only one canonical owner
+  exists for each state symbol.
+
+channels:
+path: "grammar/quantum/channels.g4"
+owns:
+- "quantum channel syntax"
+
+observables:
+path: "grammar/quantum/observables.g4"
+owns:
+- "observable syntax"
+
+dynamic_circuits:
+path: "grammar/quantum/dynamic-circuits.g4"
+owns:
+- "dynamic circuit syntax"
+
+dynamic_control:
+path: "grammar/quantum/dynamic-control.g4"
+owns:
+- "dynamic control syntax"
+
+mid_circuit_control:
+path: "grammar/quantum/mid-circuit-control.g4"
+owns:
+- "mid-circuit control syntax"
+
+classical_feedforward:
+path: "grammar/quantum/classical-feedforward.g4"
+owns:
+- "quantum-to-classical feed-forward syntax"
+
+error_correction:
+path: "grammar/quantum/error-correction.g4"
+owns:
+- "source-level quantum error-correction intent"
+
+does_not_own:
+  - "decoder implementation"
+  - "physical code realization"
+  - "QPU calibration"
+
+noise:
+path: "grammar/quantum/noise.g4"
+owns:
+- "quantum noise/source model syntax"
+
+resources:
+path: "grammar/quantum/quantum-resources.g4"
+owns:
+- "quantum-specific resource requirements"
+
+must_delegate_generic_resources_to:
+  - "grammar/resources/"
+
+capabilities:
+path: "grammar/quantum/quantum-capabilities.g4"
+owns:
+- "quantum capability names/references"
+
+must_delegate_capability_model_to:
+  - "grammar/resources/capabilities.g4"
+
+resource_requirements:
+path: "grammar/quantum/resource-requirements.g4"
+owns:
+- "quantum-specific resource requirement composition"
+
+provenance:
+path: "grammar/quantum/provenance.g4"
+owns:
+- "quantum provenance syntax"
+
+uncertainty:
+path: "grammar/quantum/uncertainty.g4"
+owns:
+- "quantum uncertainty syntax"
+
+pulse_intent:
+path: "grammar/quantum/pulse-intent.g4"
+owns:
+- "source-level pulse intent"
+
+does_not_own:
+  - "physical pulse generation"
+  - "device calibration"
+
+dialects:
+path: "grammar/quantum/quantum-dialects.g4"
+owns:
+- "quantum dialect references"
+
+interoperability:
+path: "grammar/quantum/interoperability.md"
+kind: "documentation"
+owns:
+- "quantum interoperability documentation"
+does_not_own:
+- "external format semantics"
+
+canonical_ir:
+owner: "src/ir/quantum or repository-defined quantum::ir implementation"
+grammar_owner: null
+rule: >
+No grammar file may create a competing quantum IR.
+
+============================================================================
+
+HDL
+
+============================================================================
+
+hdl:
+
+dispatcher:
+path: "grammar/hdl/hdl.g4"
+owns:
+- "HDL domain composition"
+
+modules:
+path: "grammar/hdl/hardware-modules.g4"
+owns:
+- "hardware module syntax"
+
+ports:
+path: "grammar/hdl/ports.g4"
+owns:
+- "port syntax"
+
+nets:
+path: "grammar/hdl/nets.g4"
+owns:
+- "net syntax"
+
+wires:
+path: "grammar/hdl/wires.g4"
+owns:
+- "wire syntax"
+
+signals:
+path: "grammar/hdl/signals.g4"
+owns:
+- "signal syntax"
+
+registers:
+path: "grammar/hdl/registers.g4"
+owns:
+- "register syntax"
+
+memories:
+path: "grammar/hdl/memories.g4"
+owns:
+- "hardware memory syntax"
+
+arrays:
+path: "grammar/hdl/arrays.g4"
+owns:
+- "HDL array syntax"
+
+combinational:
+path: "grammar/hdl/combinational.g4"
+owns:
+- "combinational process syntax"
+
+sequential:
+path: "grammar/hdl/sequential.g4"
+owns:
+- "sequential process syntax"
+
+clocks:
+path: "grammar/hdl/clocks.g4"
+owns:
+- "clock syntax"
+
+clocking:
+path: "grammar/hdl/clocking.g4"
+owns:
+- "clocking relationships"
+
+reset:
+path: "grammar/hdl/reset.g4"
+owns:
+- "reset syntax"
+
+timing:
+path: "grammar/hdl/timing.g4"
+owns:
+- "timing constraints"
+
+pipelines:
+path: "grammar/hdl/pipelines.g4"
+owns:
+- "pipeline intent"
+
+generate:
+path: "grammar/hdl/generate.g4"
+owns:
+- "hardware generation syntax"
+
+interfaces:
+path: "grammar/hdl/interfaces.g4"
+owns:
+- "hardware interface syntax"
+
+protocols:
+path: "grammar/hdl/protocols.g4"
+owns:
+- "hardware protocol syntax"
+
+state_machines:
+path: "grammar/hdl/state_machines.g4"
+owns:
+- "hardware state-machine syntax"
+
+parallelism:
+path: "grammar/hdl/parallelism.g4"
+owns:
+- "hardware parallelism intent"
+
+parameters:
+path: "grammar/hdl/parameters.g4"
+owns:
+- "hardware parameter syntax"
+
+physical_intent:
+path: "grammar/hdl/physical-intent.g4"
+owns:
+- "technology/physical implementation intent"
+
+restriction: >
+  Physical intent is explicit source intent and MUST NOT silently become a
+  universal hardware requirement.
+
+synthesis:
+path: "grammar/hdl/synthesis.g4"
+owns:
+- "synthesis intent syntax"
+
+verification:
+path: "grammar/hdl/verification.g4"
+owns:
+- "hardware verification syntax"
+
+assertions:
+path: "grammar/hdl/assertions.g4"
+owns:
+- "HDL assertion syntax"
+
+simulation:
+path: "grammar/hdl/simulation.g4"
+owns:
+- "HDL simulation intent"
+
+co_design:
+path: "grammar/hdl/co-design.g4"
+owns:
+- "hardware/software co-design syntax"
+
+hardware_generics:
+path: "grammar/hdl/hardware-generics.g4"
+owns:
+- "hardware generic parameters"
+
+hardware_dialects:
+path: "grammar/hdl/hardware-dialects.g4"
+owns:
+- "HDL dialect references"
+
+hardware_software_integration:
+path: "grammar/hdl/hardware-software-integration.g4"
+owns:
+- "hardware/software integration syntax"
+
+============================================================================
+
+HYBRID
+
+============================================================================
+
+hybrid:
+
+directory: "grammar/hybrid/"
+
+owns:
+- "cross-domain composition"
+- "classical/quantum interaction"
+- "quantum/classical feed-forward"
+- "host/device integration intent"
+- "accelerator integration intent"
+- "hybrid synchronization"
+- "hybrid resource declarations"
+
+does_not_own:
+- "classical semantics"
+- "quantum semantics"
+- "HDL semantics"
+- "physical device routing"
+
+invariant: >
+Hybrid grammars MUST compose existing domain contracts and MUST NOT create
+parallel definitions of classical, quantum, or hardware semantics.
+
+============================================================================
+
+AI / REASONING / LEARNING
+
+============================================================================
+
+ai:
+
+directory: "grammar/ai/"
+
+owns:
+- "inference syntax"
+- "deduction syntax"
+- "induction syntax"
+- "abduction syntax"
+- "reasoning syntax"
+- "learning syntax"
+- "model syntax"
+- "dataset syntax"
+- "training syntax"
+- "reinforcement syntax"
+- "probability syntax"
+- "uncertainty syntax"
+- "confidence syntax"
+- "evidence syntax"
+- "provenance syntax"
+- "decision syntax"
+- "planning syntax"
+- "agent syntax"
+- "multi-agent syntax"
+- "swarm syntax"
+- "neural-symbolic syntax"
+- "differentiable computation syntax"
+- "AI accelerator intent"
+
+must_reuse:
+- "types"
+- "expressions"
+- "functions"
+- "effects"
+- "resources"
+- "policies"
+- "provenance"
+- "concurrency"
+- "distributed"
+- "data"
+
+application_vocabulary_rule: >
+Application-specific concepts remain library, dialect, capability, policy,
+or package concerns unless the normative language specification explicitly
+reserves a universal construct.
+
+does_not_own:
+- "vendor model formats"
+- "specific AI accelerator inventory"
+- "GPU count"
+- "fixed tensor limits"
+- "application-specific business semantics"
+
+============================================================================
+
+DIALECTS
+
+============================================================================
+
+dialects:
+
+directory: "grammar/dialects/"
+
+owns:
+- "dialect declaration syntax"
+- "dialect identity"
+- "dialect namespace"
+- "dialect version references"
+- "dialect dependencies"
+- "dialect capabilities"
+- "dialect registration"
+- "dialect compatibility"
+- "dialect extension metadata"
+
+does_not_own:
+- "universal core syntax"
+- "backend implementation"
+- "external language semantics"
+
+open_world_rule: >
+New domains and vendor extensions SHOULD be represented as dialects when
+they do not belong to the universal core language.
+
+============================================================================
+
+INTEROPERABILITY
+
+============================================================================
+
+interoperability:
+
+directory: "grammar/interoperability/"
+
+owns:
+- "FFI syntax"
+- "ABI references"
+- "foreign function declarations"
+- "foreign type references"
+- "calling convention references"
+- "linkage"
+- "serialization boundaries"
+- "external format declarations"
+- "interop metadata"
+
+does_not_own:
+- "foreign language semantics"
+- "C/Rust/Python/etc. as Zamani core syntax"
+- "backend ABI implementation"
+
+malformed_paths:
+- "grammar/interoperability/interoperability.g4 "
+
+required_resolution: >
+Normalize the trailing-whitespace filename before freeze.
+
+external_language_rule: >
+External languages and formats remain interoperability/dialect boundaries
+unless explicitly incorporated into normative Zamani semantics.
+
+============================================================================
+
+MACROS
+
+============================================================================
+
+macros:
+
+directory: "grammar/macros/"
+
+owns:
+- "macro declaration syntax"
+- "macro parameters"
+- "macro invocation"
+- "macro expansion syntax"
+- "macro hygiene declarations"
+- "macro diagnostics metadata"
+
+does_not_own:
+- "semantic validation bypass"
+- "runtime self-modification"
+- "unsafe implementation"
+
+invariant: >
+Macro expansion MUST eventually pass through canonical parsing,
+validation, semantic analysis, and applicable policy/effect checks.
+
+============================================================================
+
+METAPROGRAMMING
+
+============================================================================
+
+metaprogramming:
+
+directory: "grammar/metaprogramming/"
+
+owns:
+- "quotation"
+- "unquotation"
+- "reflection syntax"
+- "introspection syntax"
+- "code-generation syntax"
+- "compile-time computation"
+- "specialization syntax"
+- "schema/type-level computation"
+
+required_controls:
+- "effects"
+- "capabilities"
+- "policies"
+- "sandbox"
+- "provenance"
+
+does_not_own:
+- "unrestricted runtime self-modification"
+- "backend code generation implementation"
+
+============================================================================
+
+COMPATIBILITY
+
+============================================================================
+
+compatibility:
+
+directory: "grammar/compatibility/"
+
+owns:
+- "source compatibility declarations"
+- "language version compatibility"
+- "grammar compatibility metadata"
+- "AST compatibility metadata"
+- "semantic compatibility metadata"
+- "IR compatibility metadata"
+- "dialect compatibility"
+- "migration declarations"
+- "deprecation declarations"
+- "feature compatibility"
+
+does_not_own:
+- "language semantics"
+- "compiler implementation"
+- "runtime implementation"
+
+invariant: >
+Compatibility MUST be based on canonical semantic meaning rather than
+filesystem layout or raw parser implementation details.
+
+============================================================================
+
+SPECIFICATION OWNERSHIP
+
+============================================================================
+
+specification:
+
+directory: "grammar/specification/"
+
+authority: "normative"
+
+owns:
+- "human-readable normative language meaning"
+- "language principles"
+- "language scope"
+- "language version"
+- "lexical specification"
+- "syntax specification"
+- "semantic specification"
+- "type-system specification"
+- "domain specification"
+- "execution model"
+- "compilation model"
+- "portability model"
+- "scalability model"
+- "POCO-REAF contract"
+- "compatibility policy"
+- "extensibility policy"
+- "reserved-space policy"
+
+special_cases:
+
+quantum_operations:
+  path: "grammar/specification/features/quantum-operations.yaml"
+  owns:
+    - "data-driven quantum operation registration contract"
+
+  does_not_own:
+    - "ANTLR operation enumeration"
+    - "physical gate catalog"
+
+historical_reference:
+  path: "grammar/Zamani-Grammar.md"
+  authority: "non-normative"
+  owns: []
+
+forbidden_competing_authority:
+- "grammar/Zamani-Grammar.md"
+- "grammar/README.md"
+- "grammar/grammar.md"
+
+============================================================================
+
+MACHINE SPECIFICATION
+
+============================================================================
+
+machine_specification:
+
+directory: "grammar/spec/"
+
+authority: "machine-contract"
+
+owns:
+- "machine-oriented language contracts"
+- "conformance schemas"
+- "semantic contract schemas"
+- "diagnostic contracts"
+- "versioning contracts"
+- "source-span contracts"
+- "resource contracts"
+- "effect contracts"
+- "portability contracts"
+
+does_not_own:
+- "human normative language authority"
+- "Rust implementation"
+
+============================================================================
+
+DOCUMENTATION
+
+============================================================================
+
+documentation:
+
+design:
+path: "grammar/DESIGN.md"
+authority: "architecture"
+
+readme:
+path: "grammar/README.md"
+authority: "navigation-only"
+owns: []
+
+historical:
+path: "grammar/Zamani-Grammar.md"
+authority: "historical/non-normative"
+owns: []
+
+derived_status:
+path: "grammar/grammar.md"
+authority: "derived"
+owns: []
+
+rule: >
+Documentation MUST NOT create a second grammar owner.
+
+============================================================================
+
+NON-GRAMMAR ARTIFACTS
+
+============================================================================
+
+The current repository contains directories under grammar/ that contain files
+
+that are not valid ANTLR grammar ownership units.
+
+They MUST NOT silently become part of the language grammar.
+
+============================================================================
+
+non_grammar_artifacts:
+
+filesystem:
+directory: "grammar/filesystem/"
+current_files:
+- "grammar/filesystem/file.g4"
+status: "QUARANTINED_PENDING_CLASSIFICATION"
+rule: >
+Classify this as a genuine grammar domain, move it into the appropriate
+owned domain, or mark it non-production. It MUST NOT be implicitly
+imported into the universal parser.
+
+mathematics:
+directory: "grammar/mathematics/"
+current_files:
+- "grammar/mathematics/mathematic.g4"
+status: "QUARANTINED_PENDING_CLASSIFICATION"
+rule: >
+Mathematics grammar must either be assigned a canonical domain owner or
+become a dialect/library boundary.
+
+nlp:
+directory: "grammar/nlp/"
+current_files:
+- "grammar/nlp/nlp.g4"
+status: "QUARANTINED_PENDING_CLASSIFICATION"
+rule: >
+NLP-specific syntax MUST NOT become universal core syntax without a
+normative specification and explicit ownership decision.
+
+reference:
+directory: "grammar/reference/"
+current_files:
+- "grammar/reference/mod.rs"
+status: "QUARANTINED_NON_ANTLR_ARTIFACT"
+rule: >
+Rust source does not belong inside the ANTLR grammar ownership tree.
+Move it to the Rust source tree or explicitly classify it as tooling
+metadata.
+
+tests:
+directory: "grammar/tests/"
+current_files:
+- "grammar/tests/mod.rs"
+status: "QUARANTINED_NON_ANTLR_ARTIFACT"
+rule: >
+Rust test modules MUST NOT be treated as grammar owners. Grammar tests
+belong to the conformance/test ownership layer.
+
+============================================================================
+
+SOURCE-LEVEL DOMAIN OWNERSHIP
+
+============================================================================
+
+domain_rules:
+
+one_language:
+rule: >
+Classical, quantum, HDL, hardware, AI, data, distributed, networking,
+accelerator, embedded, simulation, and future computation are domains of
+one Zamani language.
+
+shared_foundation:
+every_domain_must_reuse:
+- "core"
+- "types"
+- "expressions"
+- "functions"
+- "effects"
+- "resources"
+- "capabilities"
+- "policies"
+- "provenance"
+
+no_parallel_semantics:
+rule: >
+A domain MUST NOT define an incompatible duplicate of the universal type,
+effect, resource, capability, policy, provenance, or expression model.
+
+semantic_pipeline:
+- "source syntax"
+- "domain-neutral AST"
+- "structural validation"
+- "semantic analysis"
+- "canonical domain semantic representation"
+- "canonical domain IR"
+- "optimization"
+- "lowering"
+- "target negotiation"
+- "routing"
+- "scheduling"
+- "resilience"
+- "ZQN where applicable"
+- "HAL"
+- "target realization"
+
+============================================================================
+
+AST OWNERSHIP
+
+============================================================================
+
+ast:
+
+grammar_rule:
+owner: "src/ast/"
+grammar_role: "syntax only"
+
+invariant: >
+No grammar file may define a competing AST model.
+
+required_mapping:
+every_exported_parser_construct:
+- "AST node or explicit syntax-only classification"
+- "source span preservation"
+- "diagnostic mapping"
+- "semantic mapping"
+
+domain_rule: >
+Domain-specific AST information must remain representable inside the
+canonical domain-neutral AST architecture. Domain semantics are resolved
+after parsing.
+
+============================================================================
+
+SEMANTIC OWNERSHIP
+
+============================================================================
+
+semantic:
+
+owner: "repository semantic-analysis implementation"
+
+grammar_role:
+- "declare source syntax"
+- "preserve source intent"
+- "provide explicit resource/effect/capability/policy information"
+
+semantic_layer_owns:
+- "type checking"
+- "name resolution"
+- "effect checking"
+- "capability checking"
+- "resource feasibility"
+- "contract checking"
+- "policy evaluation"
+- "provenance validation"
+- "domain semantics"
+- "compatibility validation"
+
+grammar_must_not_own:
+- "target discovery"
+- "physical allocation"
+- "scheduling"
+- "routing"
+- "calibration"
+- "device selection"
+
+============================================================================
+
+IR OWNERSHIP
+
+============================================================================
+
+ir:
+
+grammar_ownership:
+rule: >
+Grammar files own no IR definitions.
+
+canonical_boundaries:
+classical:
+name: "Classical IR"
+owner: "repository canonical classical IR implementation"
+
+quantum:
+  name: "quantum::ir"
+  owner: "repository canonical quantum IR implementation"
+
+hdl:
+  name: "canonical HDL/Hardware semantic IR"
+  owner: "repository canonical hardware/HDL IR implementation"
+
+forbidden:
+- "QuantumGateIR defined inside grammar/"
+- "HardwareIR defined inside grammar/"
+- "AIIR defined inside grammar/"
+- "ResourceIR defined inside grammar/"
+- "parallel vendor-specific IR owned by grammar"
+
+============================================================================
+
+RUNTIME / BACKEND OWNERSHIP
+
+============================================================================
+
+runtime:
+
+grammar_ownership: null
+
+runtime_owns:
+- "target discovery"
+- "capability discovery"
+- "resource discovery"
+- "runtime scheduling"
+- "runtime routing where applicable"
+- "placement"
+- "device management"
+- "execution"
+- "recovery"
+- "resilience"
+
+backend:
+
+grammar_ownership: null
+
+backend_owns:
+- "optimization implementation"
+- "lowering"
+- "specialization"
+- "target code generation"
+- "target-specific routing"
+- "target-specific scheduling"
+- "target-specific realization"
+
+============================================================================
+
+DIAGNOSTIC OWNERSHIP
+
+============================================================================
+
+diagnostics:
+
+lexical:
+owner: "grammar/lexer/lexer-errors.g4"
+
+parser:
+owner: "parser/frontend diagnostic implementation"
+
+structural:
+owner: "grammar/validation/ + semantic validation"
+
+semantic:
+owner: "semantic-analysis implementation"
+
+resource:
+owner: "resource semantic/negotiation implementation"
+
+capability:
+owner: "capability validation/negotiation implementation"
+
+compatibility:
+owner: "grammar/compatibility/ + compatibility implementation"
+
+target:
+owner: "compiler/runtime"
+
+invariant: >
+A valid source program that cannot be realized on a particular target MUST
+be distinguishable from invalid source syntax.
+
+============================================================================
+
+TEST OWNERSHIP
+
+============================================================================
+
+tests:
+
+grammar:
+owner: "grammar/conformance/"
+required_future_structure:
+- "lexical/"
+- "syntax/"
+- "ast/"
+- "semantic/"
+- "types/"
+- "effects/"
+- "resources/"
+- "capabilities/"
+- "contracts/"
+- "policies/"
+- "classical/"
+- "quantum/"
+- "hdl/"
+- "hybrid/"
+- "ai/"
+- "distributed/"
+- "networking/"
+- "interoperability/"
+- "dialects/"
+- "portability/"
+- "scalability/"
+- "compatibility/"
+- "diagnostics/"
+
+generated_parser:
+owner: "repository parser test infrastructure"
+
+rust_frontend:
+owner: "repository tests/"
+
+invariant: >
+Every STABLE grammar export MUST have at least one positive test and
+applicable negative, ambiguity, source-span, semantic, and portability
+tests.
+
+============================================================================
+
+COMPATIBILITY OWNERSHIP
+
+============================================================================
+
+compatibility_contract:
+
+owner: "grammar/compatibility/"
+
+every_stable_owner_must_define:
+- "language version"
+- "grammar compatibility"
+- "AST compatibility"
+- "semantic compatibility"
+- "IR compatibility"
+- "dialect compatibility"
+- "deprecation behavior"
+- "migration behavior"
+
+invariant: >
+Refactoring grammar files MUST NOT itself create a language-version break
+when the accepted language and canonical semantics remain unchanged.
+
+============================================================================
+
+HARD-CODING AUDIT
+
+============================================================================
+
+hard_coding:
+
+global_owner: "grammar/validation/hardcoding-audit.md"
+
+forbidden_patterns:
+- "MAX_QUBITS"
+- "MAX_CPUS"
+- "MAX_CORES"
+- "MAX_THREADS"
+- "MAX_GPUS"
+- "MAX_FPGAS"
+- "MAX_ASICS"
+- "MAX_QPUS"
+- "MAX_NODES"
+- "MAX_MEMORY"
+- "MAX_STORAGE"
+- "MAX_REGISTER_WIDTH"
+- "MAX_VECTOR_WIDTH"
+- "MAX_TENSOR_RANK"
+- "MAX_NETWORK_SIZE"
+- "MAX_DEVICE_COUNT"
+- "MAX_ACCELERATOR_COUNT"
+
+semantic_equivalents:
+rule: >
+The validator MUST also detect equivalent fixed-capacity expressions
+even when the literal names above are not used.
+
+permitted:
+- "symbolic resource requirements"
+- "generic parameters"
+- "dependent values"
+- "abstract topology"
+- "capability requirements"
+- "explicit deployment constraints"
+
+============================================================================
+
+QUANTUM OWNERSHIP INVARIANTS
+
+============================================================================
+
+quantum_invariants:
+
+operation_model:
+canonical_owner: "grammar/quantum/operations.g4"
+
+model:
+  - "operationSpecifier"
+  - "targets"
+  - "controls"
+  - "parameters"
+  - "results"
+  - "attributes"
+  - "modifiers"
+
+operation_extensibility:
+rule: >
+Adding a new quantum operation MUST NOT require changing the universal
+grammar when the operation can be represented by the generic operation
+model and registered through the data-driven/dialect mechanism.
+
+physical_separation:
+logical_qubits:
+owner: "grammar/quantum/logical-qubits.g4"
+physical_qubits:
+owner: "grammar/quantum/physical-qubits.g4"
+allocation:
+owner: "compiler/runtime"
+routing:
+owner: "compiler/backend/runtime"
+calibration:
+owner: "runtime/backend"
+
+qec:
+source_intent_owner: "grammar/quantum/error-correction.g4"
+implementation_owner: "compiler/runtime/backend"
+grammar_must_not_own: "decoder implementation"
+
+zqn:
+grammar_owner: null
+owner: "compiler/runtime/backend"
+
+============================================================================
+
+HDL OWNERSHIP INVARIANTS
+
+============================================================================
+
+hdl_invariants:
+
+source_intent:
+owner: "grammar/hdl/"
+
+physical_realization:
+owner: "compiler/backend/toolchain"
+
+universal_limits:
+forbidden: true
+
+parameterization:
+rule: >
+Widths, dimensions, pipeline counts, resource counts, and similar
+quantities must remain parameterized or semantically constrained rather
+than fixed by grammar-wide constants.
+
+============================================================================
+
+ADAPTATION / REFLECTION / CODE GENERATION
+
+============================================================================
+
+controlled_dynamic_behavior:
+
+adaptation:
+syntax_owner:
+- "grammar/statements/adapt.g4"
+- "grammar/expressions/adaptive.g4"
+semantic_controls:
+- "grammar/effects/adaptation.g4"
+- "grammar/policies/adaptation.g4"
+- "grammar/security/"
+- "provenance"
+
+reflection:
+syntax_owner:
+- "grammar/metaprogramming/"
+- "grammar/effects/reflection.g4"
+controls:
+- "capability"
+- "policy"
+- "effect"
+- "sandbox"
+- "provenance"
+
+code_generation:
+syntax_owner:
+- "grammar/metaprogramming/"
+- "grammar/effects/code_generation.g4 "
+controls:
+- "capability"
+- "policy"
+- "effect"
+- "sandbox"
+- "provenance"
+
+invariant: >
+No controlled dynamic feature may bypass structural validation, semantic
+validation, security policy, capability checks, resource checks, or
+provenance requirements.
+
+============================================================================
+
+APPLICATION / LIBRARY BOUNDARY
+
+============================================================================
+
+application_boundary:
+
+rule: >
+Application-specific vocabulary is not automatically universal language
+syntax.
+
+preferred_extension_mechanisms:
+- "standard library"
+- "package"
+- "module"
+- "dialect"
+- "capability"
+- "policy"
+- "interoperability boundary"
+
+examples:
+rule: >
+Domain/application names should remain identifiers or registered
+extension vocabulary unless explicitly made normative by the language
+specification.
+
+============================================================================
+
+FILE-NAME / PATH NORMALIZATION
+
+============================================================================
+
+path_normalization:
+
+canonical_filename_rules:
+- "UTF-8"
+- "no trailing whitespace"
+- "no embedded newline"
+- "no embedded carriage return"
+- "no path containing source-code payload"
+- "no whitespace-only distinction between canonical concepts"
+- "lowercase kebab-case preferred for multiword grammar filenames"
+- "filename must describe one stable ownership concept"
+
+current_known_violations:
+- "grammar/data/tensors.g4 "
+- "grammar/effects/code_generation.g4 "
+- "grammar/expressions/lambda.g4 "
+- "grammar/interoperability/interoperability.g4 "
+- "grammar/validation/grammar-validation.md "
+- "grammar/types/associated types.g4"
+- "grammar/types/functional dependencies.g4"
+- "malformed embedded-content paths under grammar/types/array-types.g4"
+
+rule: >
+A path-normalization violation prevents STABLE ownership for the affected
+file until corrected.
+
+============================================================================
+
+DUPLICATE-CONCEPT POLICY
+
+============================================================================
+
+duplicate_concepts:
+
+expression_candidates:
+- "closure / closures"
+- "lambda / lambdas"
+- "range / ranges"
+
+type_candidates:
+- "array / array-types"
+- "map / map-types"
+- "option / option-types / optional"
+- "associated / associated types"
+- "functional dependencies / normalized equivalent"
+
+quantum_candidates:
+- "states / quantum-states"
+- "types / quantum-specific type extensions"
+- "gates / operations"
+
+rule: >
+A duplicate candidate is not automatically erroneous, but it MUST be
+explicitly classified before freeze.
+
+allowed_classifications:
+- "canonical"
+- "compatibility"
+- "deprecated"
+- "historical"
+- "test-only"
+- "generated"
+- "removed"
+- "quarantined"
+
+forbidden:
+- "two simultaneous canonical owners for the same symbol"
+
+============================================================================
+
+FREEZE CONTRACT
+
+============================================================================
+
+freeze:
+
+file_is_freezable_only_when:
+
+ownership:
+  - "every exported symbol has exactly one owner"
+  - "does_not_own boundary is explicit"
+  - "no competing owner exists"
+
+dependencies:
+  - "all imports are declared"
+  - "dependency DAG is acyclic"
+  - "all direct dependencies have stable contracts"
+
+parser:
+  - "ANTLR grammar composes successfully"
+  - "no accidental ambiguity"
+  - "no unintended left recursion"
+  - "no unreachable exported rule"
+
+lexical:
+  - "all tokens have unique ownership"
+  - "token vocabulary is canonical"
+
+ast:
+  - "AST mapping is complete"
+  - "source spans are preserved"
+
+semantics:
+  - "semantic mapping is complete"
+  - "types/effects/resources/capabilities/policies/provenance mappings are
+    explicit where applicable"
+
+ir:
+  - "applicable canonical IR mapping is declared"
+  - "no competing IR is introduced"
+
+diagnostics:
+  - "diagnostic ownership is declared"
+  - "negative cases are tested"
+
+compatibility:
+  - "compatibility owner is declared"
+  - "version/deprecation/migration behavior is known"
+
+scalability:
+  - "hard-coding audit passes"
+  - "no finite machine ceiling is introduced"
+  - "symbolic resource model remains open-ended"
+
+poco_reaf:
+  - "source meaning is target-independent"
+  - "target constraints are explicit"
+  - "fallback semantics are explicit where applicable"
+  - "target realization remains downstream"
+
+safety:
+  - "Rust integration requires no unsafe"
+  - "Rust baseline remains 1.97 or later"
+
+tests:
+  - "positive tests"
+  - "negative tests"
+  - "ambiguity tests"
+  - "AST tests"
+  - "semantic tests"
+  - "portability tests"
+  - "scalability tests where applicable"
+
+post_freeze_rule: >
+Adding a new downstream backend, hardware target, compiler optimization,
+QPU, GPU, FPGA, ASIC, cluster, runtime, dialect, or future execution
+environment MUST NOT require changing a frozen owner merely to represent
+the new target.
+
+============================================================================
+
+INTEGRATION WITH MANIFEST.yaml
+
+============================================================================
+
+manifest_integration:
+
+inventory_source:
+owner: "grammar/MANIFEST.yaml"
+
+ownership_source:
+owner: "grammar/OWNERSHIP.yaml"
+
+dependency_source:
+owner: "grammar/DEPENDENCIES.yaml"
+
+status_source:
+owner: "grammar/STATUS.yaml"
+
+contract_source:
+owner: "grammar/contracts/"
+
+required_consistency:
+- "every manifest grammar file has an ownership record or matches an
+explicitly declared directory ownership rule"
+- "every ownership path exists in the repository or is explicitly marked
+planned/quarantined"
+- "every exported symbol is represented in the ownership registry"
+- "every owner has a dependency record"
+- "every stable owner has status evidence"
+- "every quarantined path has a remediation record"
+
+inventory_revision:
+current_repository_grammar_file_count: 878
+previous_manifest_claim: 877
+correction_required: true
+
+rule: >
+The manifest count MUST be generated from the repository tree and MUST NOT
+be manually trusted when it disagrees with Git.
+
+============================================================================
+
+INTEGRATION WITH RUST FRONTEND
+
+============================================================================
+
+rust_integration:
+
+lexer:
+consumer: "src/lexer.rs"
+contract:
+- "lexer token identity must remain synchronized with canonical lexical
+ownership"
+- "no duplicate semantic token mapping"
+- "source spans preserved"
+
+parser:
+consumer: "src/parser.rs"
+contract:
+- "parser consumes canonical grammar meaning"
+- "parser must not create a competing grammar authority"
+
+ast:
+consumer: "src/ast/"
+contract:
+- "every stable grammar construct has an AST representation or explicit
+syntax-only classification"
+- "domain-neutral AST remains canonical"
+
+semantic:
+consumer: "src/semantic/ where present"
+contract:
+- "semantic interpretation remains downstream from grammar"
+
+ir:
+consumer: "src/ir/ where present"
+contract:
+- "grammar owns no IR"
+- "canonical IR boundaries remain outside grammar/"
+
+safety:
+rust_version: ">=1.97"
+edition: "2021"
+unsafe_allowed: false
+
+============================================================================
+
+CROSS-DOMAIN OWNERSHIP MATRIX
+
+============================================================================
+
+cross_domain_matrix:
+
+lexical:
+grammar_owner: "grammar/lexer/"
+ast_owner: "src/ast/"
+semantic_owner: "semantic implementation"
+ir_owner: null
+
+types:
+grammar_owner: "grammar/types/"
+ast_owner: "src/ast/"
+semantic_owner: "type system implementation"
+ir_owner: "canonical IR type representation"
+
+effects:
+grammar_owner: "grammar/effects/"
+ast_owner: "src/ast/"
+semantic_owner: "effect system"
+ir_owner: "canonical semantic/IR effect representation"
+
+resources:
+grammar_owner: "grammar/resources/"
+ast_owner: "src/ast/"
+semantic_owner: "resource analysis"
+ir_owner: "canonical semantic/IR resource representation"
+
+capabilities:
+grammar_owner: "grammar/resources/"
+ast_owner: "src/ast/"
+semantic_owner: "capability analysis"
+runtime_owner: "target capability discovery"
+
+policies:
+grammar_owner: "grammar/policies/"
+ast_owner: "src/ast/"
+semantic_owner: "policy analysis"
+runtime_owner: "policy enforcement"
+
+provenance:
+grammar_owner:
+- "grammar/expressions/provenance.g4"
+- "grammar/policies/provenance.g4"
+- "domain-specific provenance files where applicable"
+ast_owner: "src/ast/"
+semantic_owner: "provenance subsystem"
+
+classical:
+grammar_owner: "grammar/classical/"
+semantic_owner: "classical semantic subsystem"
+ir_owner: "Classical IR"
+
+quantum:
+grammar_owner: "grammar/quantum/"
+semantic_owner: "quantum semantic subsystem"
+ir_owner: "quantum::ir"
+
+hdl:
+grammar_owner: "grammar/hdl/"
+semantic_owner: "HDL/hardware semantic subsystem"
+ir_owner: "canonical HDL/Hardware IR"
+
+hybrid:
+grammar_owner: "grammar/hybrid/"
+semantic_owner: "hybrid semantic subsystem"
+ir_owner: "canonical domain IRs"
+
+ai:
+grammar_owner: "grammar/ai/"
+semantic_owner: "AI semantic subsystem"
+ir_owner: "canonical domain IRs"
+
+distributed:
+grammar_owner: "grammar/distributed/"
+semantic_owner: "distributed semantic subsystem"
+ir_owner: "canonical domain IRs"
+
+============================================================================
+
+SYMBOL REGISTRY REQUIREMENT
+
+============================================================================
+
+This file defines ownership classes and canonical owners.
+
+The detailed symbol-by-symbol registry belongs in:
+
+grammar/contracts/ownership.yaml
+
+The validator MUST generate/check that registry against actual ANTLR rules.
+
+============================================================================
+
+symbol_registry:
+
+detailed_authority:
+path: "grammar/contracts/ownership.yaml"
+
+required_fields:
+- "symbol"
+- "owner"
+- "kind"
+- "status"
+- "exports"
+- "consumers"
+- "ast_mapping"
+- "semantic_mapping"
+- "ir_mapping"
+
+uniqueness:
+key: "symbol"
+
+validation:
+duplicate_owner: "error"
+missing_owner: "error"
+missing_mapping: "error"
+stale_owner: "error"
+missing_file: "error"
+
+============================================================================
+
+DIRECTORY OWNERSHIP RULE
+
+============================================================================
+
+Every current grammar directory MUST either:
+
+1. have an explicit ownership section here;
+
+2. match a declared non-grammar artifact class;
+
+3. be explicitly marked planned/quarantined;
+
+4. be rejected as an invalid grammar directory.
+
+============================================================================
+
+directory_policy:
+
+required_top_level_domains:
+
+- "antlr"
+- "lexer"
+- "core"
+- "modules"
+- "declarations"
+- "types"
+- "memory"
+- "expressions"
+- "functions"
+- "statements"
+- "effects"
+- "resources"
+- "policies"
+- "security"
+- "validation"
+- "classical"
+- "data"
+- "concurrency"
+- "distributed"
+- "networking"
+- "hardware"
+- "execution"
+- "compile"
+- "quantum"
+- "hdl"
+- "hybrid"
+- "ai"
+- "interoperability"
+- "dialects"
+- "macros"
+- "metaprogramming"
+- "compatibility"
+- "specification"
+- "spec"
+- "tests"
+
+additional_current_directories_requiring_classification:
+- "filesystem"
+- "mathematics"
+- "nlp"
+- "reference"
+
+rule: >
+No unclassified top-level directory may participate in canonical parser
+composition.
+
+============================================================================
+
+PRODUCTION OWNERSHIP INVARIANTS
+
+============================================================================
+
+production_invariants:
+
+- «»
+  
+  There is exactly one canonical public lexer boundary.
+
+- «»
+  
+  There is exactly one canonical parser composition root.
+
+- «»
+  
+  There is exactly one canonical top-level grammar composition root.
+
+- «»
+  
+  Every token has one lexical owner.
+
+- «»
+  
+  Every parser symbol has one grammar owner.
+
+- «»
+  
+  Every semantic concept has one semantic owner.
+
+- «»
+  
+  Grammar ownership does not imply semantic ownership.
+
+- «»
+  
+  Grammar ownership does not imply runtime ownership.
+
+- «»
+  
+  Grammar ownership does not imply hardware ownership.
+
+- «»
+  
+  No grammar file owns physical target realization.
+
+- «»
+  
+  No grammar file owns a competing IR.
+
+- «»
+  
+  Quantum operations remain open-ended through the generic operation model.
+
+- «»
+  
+  Resource requirements remain symbolic and capability-driven.
+
+- «»
+  
+  Hardware limits remain environmental rather than universal language limits.
+
+- «»
+  
+  New hardware does not require rewriting stable source-language ownership.
+
+- «»
+  
+  New quantum operations do not require a new universal parser alternative
+  when representable through the generic operation model.
+
+- «»
+  
+  New domains can be introduced through dialects and semantic extensions
+  without destabilizing the core language.
+
+- «»
+  
+  Adaptation, reflection, and code generation remain policy/effect/capability
+  controlled.
+
+- «»
+  
+  Application-specific vocabulary does not automatically become universal
+  syntax.
+
+- «»
+  
+  Unsafe Rust is never required.
+
+- «»
+  
+  Rust 1.97 or later remains the implementation baseline.
+
+- «»
+  
+  A frozen grammar file is never reopened merely because a downstream target
+  was added.
+
+============================================================================
+
+FINAL FREEZE GATE
+
+============================================================================
+
+final_gate:
+
+ownership_is_production_ready_only_when:
+
+- "all 878 current repository grammar entries have been classified"
+- "manifest inventory is synchronized with Git"
+- "all malformed paths are repaired or quarantined"
+- "all duplicate concepts are explicitly resolved"
+- "all canonical symbols have one owner"
+- "all ownership records have dependency contracts"
+- "all stable exports have AST mappings"
+- "all stable exports have semantic mappings"
+- "all applicable exports have canonical IR mappings"
+- "all diagnostics have owners"
+- "all tests have owners"
+- "all compatibility contracts are defined"
+- "all hard-coding audits pass"
+- "all scalability audits pass"
+- "all POCO-REAF audits pass"
+- "ANTLR composition is deterministic"
+- "no competing lexer exists"
+- "no competing parser root exists"
+- "no competing AST exists"
+- "no competing semantic model exists"
+- "no competing IR is introduced"
+- "Rust 1.97+ integration is safe-only"
+- "no unresolved ownership cycle exists"
+- "no unclassified grammar directory participates in production"
+- "CI verifies this file against the repository tree"
+
+freeze_result:
+success_state: "OWNERSHIP_FROZEN"
+failure_state: "OWNERSHIP_AUDIT_REQUIRED"
+
+============================================================================
+
+END OF OWNERSHIP CONTRACT
+
+============================================================================
