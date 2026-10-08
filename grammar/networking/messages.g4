@@ -1,7 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
- * Production Networking Message Grammar
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
@@ -11,7 +10,7 @@
  *     Messages
  *
  * Status:
- *     Production-target canonical networking message grammar.
+ *     CANONICAL PRODUCTION NETWORKING MESSAGE GRAMMAR
  *
  * Language:
  *     Zamani
@@ -19,217 +18,359 @@
  * ANTLR:
  *     ANTLR4 parser grammar
  *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
+ * Rust implementation baseline:
+ *     Rust 1.97+
+ *     Rust 2021
  *     Safe Rust only
  *
  * ============================================================================
- * PURPOSE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * This grammar defines the SOURCE-LEVEL STRUCTURAL SYNTAX of logical
- * messages in Zamani.
+ * PURPOSE
+ * -------
  *
- * A message is a typed, named semantic value that may be exchanged between
- * logical computational entities.
+ * This file is the SINGLE CANONICAL SOURCE-LEVEL OWNER of logical message
+ * schema syntax in Zamani.
  *
- * A message may ultimately be realized through:
+ * A message is a typed logical value/schema that may participate in:
  *
- *     - a function boundary;
- *     - an in-process channel;
- *     - a task;
- *     - an actor;
- *     - shared memory;
+ *     - local computation;
+ *     - functions;
+ *     - tasks;
+ *     - actors;
+ *     - concurrency;
+ *     - distributed computation;
+ *     - networking;
  *     - IPC;
- *     - a distributed service;
- *     - a network;
- *     - a hardware communication fabric;
- *     - a classical/quantum boundary;
- *     - an accelerator;
- *     - a future computational substrate.
+ *     - shared-memory communication;
+ *     - accelerator communication;
+ *     - hardware communication;
+ *     - classical/quantum hybrid computation;
+ *     - AI/data pipelines;
+ *     - future computational substrates.
  *
  * This grammar describes the logical message.
  *
- * It does NOT prescribe how the message is transported, represented,
- * serialized, scheduled, encrypted, routed, stored, or executed.
+ * It does NOT define how the message is:
+ *
+ *     - allocated;
+ *     - copied;
+ *     - moved;
+ *     - serialized;
+ *     - compressed;
+ *     - encrypted;
+ *     - authenticated;
+ *     - routed;
+ *     - scheduled;
+ *     - replicated;
+ *     - transmitted;
+ *     - stored;
+ *     - placed;
+ *     - executed.
+ *
  *
  * ============================================================================
  * OWNERSHIP
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * THIS FILE OWNS
+ * --------------
  *
- *     - message declarations;
- *     - message schema structure;
- *     - message fields;
- *     - message field defaults;
- *     - message construction syntax;
- *     - message type references;
- *     - message argument syntax;
- *     - message schema attributes;
- *     - message declaration extension points.
+ *     messageConstruct
+ *     messageDeclaration
+ *     messageGenericParameters
+ *     messageGenericParameterList
+ *     messageGenericParameter
+ *     messageGenericParameterConstraint
+ *     messageMember
+ *     messageField
+ *     messageFieldInitializer
+ *     messageValue
+ *     messageTypeReference
+ *     messageArgumentList
+ *     optionalMessageArgumentList
+ *     messagePayload
+ *     messagePayloadList
+ *     optionalMessagePayloadList
+ *     messageFieldReference
+ *     messageTypeReferenceList
+ *     optionalMessageTypeReferenceList
+ *     messageFieldReferenceList
+ *     optionalMessageFieldReferenceList
  *
- * THIS FILE DOES NOT OWN:
  *
- *     - lexical syntax;
- *     - identifiers;
- *     - qualified names;
- *     - types;
- *     - general expressions;
- *     - functions;
- *     - modules;
- *     - channels;
- *     - endpoints;
- *     - network protocols;
- *     - services;
- *     - routing;
- *     - network topology;
- *     - placement;
- *     - scheduling;
- *     - serialization;
- *     - compression;
- *     - encryption;
- *     - authentication;
- *     - authorization;
- *     - identity;
- *     - replication;
- *     - consistency;
- *     - distributed fault tolerance;
- *     - runtime queues;
- *     - runtime transport;
- *     - hardware;
- *     - quantum topology;
- *     - quantum gates;
- *     - QEC;
- *     - ZQN;
- *     - resilience;
- *     - canonical IR.
+ * THIS FILE DOES NOT OWN
+ * ----------------------
+ *
+ *     lexical definitions
+ *     identifiers
+ *     qualified names
+ *     types
+ *     generic type-system semantics
+ *     expressions
+ *     functions
+ *     modules
+ *     concurrency
+ *     actors
+ *     channels
+ *     endpoints
+ *     sockets
+ *     protocols
+ *     routing
+ *     topology
+ *     service discovery
+ *     serialization
+ *     compression
+ *     encryption
+ *     authentication
+ *     authorization
+ *     identity
+ *     replication
+ *     consistency
+ *     fault tolerance
+ *     scheduling
+ *     placement
+ *     resource allocation
+ *     capability discovery
+ *     hardware selection
+ *     quantum operations
+ *     quantum topology
+ *     QEC
+ *     HDL implementation
+ *     classical IR
+ *     quantum::ir
+ *     ZQN
+ *     HAL
+ *     runtime behavior
+ *
  *
  * ============================================================================
- * ARCHITECTURAL POSITION
+ * SINGLE-AUTHORITY CONTRACT
+ * ============================================================================
+ *
+ * Logical message schema syntax has exactly ONE active canonical owner:
+ *
+ *     grammar/networking/messages.g4
+ *
+ * Distributed integration is provided by:
+ *
+ *     grammar/distributed/messages.g4
+ *
+ * The distributed adapter MUST delegate to this grammar.
+ *
+ * The historical:
+ *
+ *     grammar/distributed/messaging.g4
+ *
+ * MUST NOT remain an independent implementation of message schema syntax.
+ *
+ * It is outside the active distributed composition root and should be retired
+ * or converted into a compatibility/delegation layer.
+ *
+ *
+ * ============================================================================
+ * DEPENDENCY CONTRACT
+ * ============================================================================
+ *
+ * DEPENDS_ON:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
+ *     grammar/types/types.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/core/attributes.g4
+ *
+ * IMPORTS:
+ *
+ *     Names
+ *     Types
+ *     Expressions
+ *     Attributes
+ *
+ * EXPORTS:
+ *
+ *     messageConstruct
+ *     messageDeclaration
+ *     messageValue
+ *     messageTypeReference
+ *     messageArgumentList
+ *     optionalMessageArgumentList
+ *     messagePayload
+ *     messagePayloadList
+ *     optionalMessagePayloadList
+ *     messageFieldReference
+ *     messageTypeReferenceList
+ *     optionalMessageTypeReferenceList
+ *     messageFieldReferenceList
+ *     optionalMessageFieldReferenceList
+ *
+ * CONSUMED_BY:
+ *
+ *     grammar/networking/networking.g4
+ *     grammar/distributed/messages.g4
+ *     networking semantic analysis
+ *     distributed semantic analysis
+ *     message/schema AST construction
+ *     communication semantic analysis
+ *     channel semantic analysis
+ *
+ * AST_OWNER:
+ *
+ *     frontend AST subsystem
+ *
+ * SEMANTIC_OWNER:
+ *
+ *     networking/distributed semantic analysis
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic/IR subsystems
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/networking/
+ *     grammar/tests/distributed/
+ *     shared frontend conformance tests
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/networking.md
+ *     grammar/spec/distributed.md
+ *     applicable language specifications
+ *
+ *
+ * ============================================================================
+ * ARCHITECTURAL PIPELINE
  * ============================================================================
  *
  *     Zamani source
  *          |
  *          v
- *     ZamaniLexer
+ *     canonical ZamaniLexer
  *          |
  *          v
- *     parser
+ *     ANTLR parser
  *          |
  *          v
  *     Messages
  *          |
  *          v
- *     frontend AST
+ *     domain-neutral AST
  *          |
  *          +--> name resolution
  *          +--> type checking
  *          +--> schema validation
- *          +--> capability analysis
  *          +--> effect analysis
+ *          +--> capability analysis
  *          +--> resource analysis
- *          +--> security analysis
+ *          +--> contract analysis
+ *          +--> policy analysis
+ *          +--> provenance
  *          |
  *          v
- *     canonical semantic representation
+ *     semantic message model
  *          |
- *          +--> classical semantic IR
- *          +--> distributed semantic model
- *          +--> networking semantic model
- *          +--> data/schema model
- *          +--> quantum::ir where quantum semantics are actually involved
+ *          +--> classical semantics
+ *          +--> distributed semantics
+ *          +--> networking semantics
+ *          +--> data/schema semantics
+ *          +--> hybrid semantics
+ *          +--> quantum::ir when quantum semantics actually participate
+ *          +--> HDL/hardware semantics where applicable
  *          |
  *          v
  *     optimization / lowering
  *          |
  *          v
- *     routing / scheduling / placement
+ *     routing / placement / scheduling
  *          |
  *          v
- *     runtime / hardware realization
+ *     runtime / ZQN / HAL
  *
- * Messages MUST NOT directly construct or mutate an IR.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * A message declaration expresses WHAT information exists and may be
- * exchanged, not WHERE or HOW it is transported.
- *
- * Therefore this grammar intentionally contains no:
- *
- *     machine count;
- *     node count;
- *     process count;
- *     thread count;
- *     CPU count;
- *     GPU count;
- *     QPU count;
- *     FPGA count;
- *     memory capacity;
- *     network capacity;
- *     network address;
- *     network port;
- *     topology;
- *     provider;
- *     region;
- *     device identifier;
- *     transport;
- *     packet size;
- *     wire offset;
- *     serialization format.
- *
- * The same message schema can therefore be used on:
- *
- *     one machine;
- *     many machines;
- *     an embedded system;
- *     a cluster;
- *     a supercomputer;
- *     a cloud;
- *     a quantum/classical system;
- *     future computational substrates.
  *
  * ============================================================================
- * SCALABILITY
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * No finite source-language limits are imposed on:
+ * A message describes logical information.
  *
- *     - number of message declarations;
- *     - number of fields;
- *     - number of message arguments;
- *     - number of message types;
- *     - number of nested type structures;
- *     - number of modules;
- *     - number of communication participants;
- *     - payload size;
- *     - deployment size.
+ * It MUST NOT encode physical realization.
  *
- * Repetition is represented by ANTLR repetition operators.
+ * This grammar therefore contains no universal limits for:
  *
- * Actual limits arising from:
+ *     machines
+ *     nodes
+ *     processes
+ *     actors
+ *     tasks
+ *     threads
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     memory
+ *     storage
+ *     network size
+ *     bandwidth
+ *     topology
+ *     connections
+ *     participants
+ *
+ * There are deliberately no source-level capacity constants.
+ *
+ * The same message declaration can therefore participate in deployments
+ * ranging from a very small execution environment to very large available
+ * computational infrastructure, subject only to actual implementation,
+ * semantic, capability and resource feasibility.
+ *
+ *
+ * ============================================================================
+ * SCALABILITY CONTRACT
+ * ============================================================================
+ *
+ * All source-level collections are open-ended.
+ *
+ * The grammar uses:
+ *
+ *     *
+ *     +
+ *     ?
+ *
+ * where appropriate.
+ *
+ * No grammar rule establishes a universal maximum for:
+ *
+ *     message declarations
+ *     fields
+ *     arguments
+ *     payloads
+ *     message types
+ *     qualified-name depth
+ *     generic parameters
+ *
+ * Practical limits imposed by:
  *
  *     - available memory;
  *     - parser implementation;
- *     - compiler policy;
- *     - operating-system resources;
- *     - runtime resources;
- *     - deployment resources
+ *     - compiler configuration;
+ *     - operating system;
+ *     - runtime;
+ *     - deployment;
+ *     - target hardware
  *
- * remain implementation/resource constraints and MUST NOT become grammar
- * constants.
+ * are implementation/resource constraints rather than language-level limits.
+ *
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * OPEN-WORLD CONTRACT
  * ============================================================================
  *
- * This grammar intentionally does NOT enumerate communication operations.
+ * This grammar deliberately does NOT enumerate communication operations.
  *
- * It therefore does not reserve:
+ * The following remain ordinary names or constructs owned elsewhere:
  *
  *     send
  *     receive
@@ -240,292 +381,571 @@
  *     broadcast
  *     multicast
  *
- * as message-language primitives.
+ * Likewise, this grammar does not enumerate:
  *
- * Such operations belong to channels, protocols, services, distributed
- * execution, or user/library abstractions.
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     HTTP
+ *     MQTT
+ *     gRPC
+ *     MPI
+ *     RDMA
+ *     vendor transports
  *
- * A future communication model must not require modification of this grammar
- * merely because a new transport or communication operation is introduced.
+ * New transports, protocols, serialization formats, communication operations,
+ * vendors and deployment models must not require changes to this grammar merely
+ * because they introduce new implementations.
  *
- * ============================================================================
- * TYPE SYSTEM BOUNDARY
- * ============================================================================
- *
- * Message fields consume canonical `typeExpression`.
- *
- * This grammar therefore does NOT define:
- *
- *     Optional<T>
- *     List<T>
- *     Map<K,V>
- *     Result<T,E>
- *     tuple types
- *     quantum types
- *     hardware types
- *     resource types
- *     tensor types
- *
- * Those remain owned by the canonical type system.
- *
- * Optionality, multiplicity, resource semantics, quantum semantics, and
- * hardware semantics are therefore represented by the type system and
- * semantic layers rather than by a second messaging-specific type language.
  *
  * ============================================================================
- * EXPRESSION BOUNDARY
+ * LEXER CONTRACT
  * ============================================================================
  *
- * Message construction arguments and field defaults consume canonical
- * `expression`.
+ * This parser consumes the canonical Zamani lexer:
  *
- * This grammar does not redefine:
+ *     grammar/antlr/ZamaniLexer.g4
  *
- *     arithmetic;
- *     calls;
- *     indexing;
- *     conditionals;
- *     literals;
- *     operators;
- *     lambdas;
- *     compile-time expressions.
+ * The structural declaration keyword is:
+ *
+ *     MESSAGE
+ *
+ * supplied by the canonical lexical layer.
+ *
+ * No lexical rules are declared here.
+ *
+ * Message names, field names, schema names, payload names, protocol names and
+ * extension names remain canonical identifiers/qualified names.
+ *
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * IMPORTANT LEXER TOKEN ALIGNMENT
  * ============================================================================
  *
- * A message may contain a canonical quantum value if the type system permits
- * it.
+ * The canonical lexer defines:
+ *
+ *     LESS       : '<'
+ *     GREATER    : '>'
+ *     SEMICOLON  : ';'
+ *
+ * Therefore this grammar MUST use those exact token names.
+ *
+ * It MUST NOT use legacy aliases such as:
+ *
+ *     LT
+ *     GT
+ *     SEMI
+ *
+ * This keeps parser grammar and lexical authority synchronized.
+ *
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * Message fields consume:
+ *
+ *     typeExpression
+ *
+ * from the canonical type subsystem.
+ *
+ * This grammar does NOT define another type language.
+ *
+ * Consequently message fields may use any type supported by the canonical
+ * Zamani type system, including future types, generic types, classical types,
+ * quantum-related types, hardware-related types, tensor/data types, resource
+ * types, capability types and other registered type families.
+ *
+ * Whether a particular type is legal as a message field is a semantic
+ * question, not a parser question.
+ *
+ *
+ * ============================================================================
+ * GENERIC MESSAGE CONTRACT
+ * ============================================================================
+ *
+ * Generic message declarations provide source-level parameterization.
+ *
+ * Example:
+ *
+ *     message Envelope<T> {
+ *         payload: T;
+ *     }
+ *
+ * Generic parameters are syntax only.
+ *
+ * Generic substitution, bounds, unification, type checking and instantiation
+ * belong to the canonical type semantic system.
+ *
+ * This grammar does not introduce machine-resource parameters.
+ *
+ *
+ * ============================================================================
+ * EXPRESSION CONTRACT
+ * ============================================================================
+ *
+ * Message initializers, construction arguments and payloads consume the
+ * canonical:
+ *
+ *     expression
+ *
+ * grammar.
+ *
+ * This file does not redefine:
+ *
+ *     arithmetic
+ *     calls
+ *     indexing
+ *     operators
+ *     conditionals
+ *     lambdas
+ *     closures
+ *     patterns
+ *     reasoning
+ *     learning
+ *     uncertainty
+ *     metaprogramming
+ *     quantum expressions
+ *
+ * Those remain owned by their canonical expression/domain grammars.
+ *
+ *
+ * ============================================================================
+ * ATTRIBUTE CONTRACT
+ * ============================================================================
+ *
+ * Message declarations and fields may consume canonical attributes.
+ *
+ * Attribute syntax is owned by:
+ *
+ *     grammar/core/attributes.g4
+ *
+ * Attribute meaning is semantic.
+ *
+ * This allows message schemas to participate in:
+ *
+ *     contracts
+ *     policies
+ *     capabilities
+ *     resources
+ *     provenance
+ *     security
+ *     interoperability
+ *     dialect metadata
+ *     compatibility
+ *
+ * without creating message-specific copies of those systems.
+ *
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Message declaration syntax has no inherent runtime effect.
+ *
+ * Constructing a message value does not automatically imply:
+ *
+ *     network I/O
+ *     distributed execution
+ *     serialization
+ *     mutation
+ *     foreign execution
+ *     native execution
+ *
+ * A separate communication operation may introduce those effects.
+ *
+ * Effect classification belongs to semantic analysis.
+ *
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Message syntax itself does not select physical capabilities.
+ *
+ * A later communication operation may require capabilities such as:
+ *
+ *     network communication
+ *     distributed communication
+ *     shared memory
+ *     accelerator communication
+ *     quantum/classical communication
+ *
+ * Capability requirements are semantic data.
+ *
+ * This grammar does not discover, enumerate or select capabilities.
+ *
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Message syntax does not impose physical resource requirements.
+ *
+ * Resource requirements, when applicable, are represented through canonical
+ * resource/requirement mechanisms and interpreted after parsing.
+ *
+ * This file must not introduce:
+ *
+ *     payload-size ceilings
+ *     field-count ceilings
+ *     participant-count ceilings
+ *     network-size ceilings
+ *     memory ceilings
+ *     device ceilings
+ *
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Message declarations may participate in generic:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *     policy
+ *
+ * semantics through the canonical language validation/policy systems.
+ *
+ * This grammar does not create a message-specific contract or policy language.
+ *
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Source spans and declaration structure must remain available to the frontend
+ * so semantic analysis can attach provenance to:
+ *
+ *     schema definitions
+ *     field definitions
+ *     defaults
+ *     message constructions
+ *     transformations
+ *     generated representations
+ *     compatibility migrations
+ *     serialization/lowering decisions
+ *
+ * The grammar itself does not create provenance records.
+ *
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * A message may contain a canonical quantum-related value or type.
  *
  * This grammar does NOT define:
  *
- *     QubitId
- *     PhysicalQubitId
- *     LogicalQubitId
- *     GateKind
- *     QuantumState IR
- *     circuit IR
- *     topology
+ *     qubits
+ *     quantum operations
+ *     gates
+ *     measurement operations
+ *     circuit topology
  *     calibration
  *     QEC
- *     ZQN
- *     resilience.
+ *     QPU placement
  *
- * If message data participates in quantum computation, semantic lowering is
- * responsible for integrating the resulting operation/data semantics with
- * the canonical `quantum::ir`.
+ * If a message participates in quantum computation, downstream semantic
+ * analysis determines whether and how the corresponding operation/data enters:
  *
- * The grammar remains independent of physical quantum resources.
+ *     quantum::ir
+ *
+ * No physical quantum capacity is encoded here.
+ *
  *
  * ============================================================================
- * CLASSICAL / HDL / HARDWARE INTEGRATION
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Message fields use canonical types and expressions.
+ * A message may represent logical data crossing a hardware/software boundary.
  *
- * Consequently messages may participate in:
+ * This grammar does not define:
  *
- *     classical computation;
- *     quantum/classical computation;
- *     HDL control;
- *     hardware/software co-design;
- *     accelerator workflows;
- *     distributed computation;
- *     AI/data pipelines;
- *     embedded systems;
- *     scientific computing.
+ *     wires
+ *     ports
+ *     buses
+ *     physical addresses
+ *     register widths
+ *     device identifiers
+ *     clock domains
+ *     physical topology
  *
- * This file introduces no hardware-specific syntax.
+ * Those remain owned by HDL/hardware subsystems.
+ *
  *
  * ============================================================================
  * NETWORKING BOUNDARY
  * ============================================================================
  *
- * A message is NOT a packet.
+ * A message is not:
  *
- * A message does not contain:
+ *     a packet
+ *     an endpoint
+ *     a socket
+ *     a route
+ *     a transport
+ *     a network address
+ *     a network topology
  *
- *     IP address;
- *     port;
- *     socket;
- *     MAC address;
- *     route;
- *     transport;
- *     packet header;
- *     MTU;
- *     network topology.
+ * Those concerns belong to other networking grammars.
  *
- * Those belong to:
+ * A message can be referenced by:
  *
- *     networking/endpoints.g4
- *     networking/protocols.g4
- *     networking/channels.g4
- *     networking/services.g4
- *     networking/network-capabilities.g4
+ *     channels
+ *     requests
+ *     responses
+ *     services
+ *     streams
+ *     protocols
  *
- * and their semantic/runtime subsystems.
+ * without acquiring those constructs' physical semantics.
  *
- * ============================================================================
- * SERIALIZATION BOUNDARY
- * ============================================================================
- *
- * Message declarations are logical schemas.
- *
- * This grammar does NOT choose:
- *
- *     JSON;
- *     CBOR;
- *     protobuf;
- *     custom binary;
- *     textual encoding;
- *     zero-copy layout;
- *     ABI layout;
- *     packet layout.
- *
- * The same message schema may have many physical representations.
- *
- * Serialization belongs downstream, principally to the data/interoperability
- * layers.
  *
  * ============================================================================
- * SECURITY BOUNDARY
+ * DISTRIBUTED BOUNDARY
  * ============================================================================
  *
- * Security is not encoded as transport behavior here.
+ * Distributed messaging consumes this grammar through:
  *
- * Message declarations may carry generic language attributes, which semantic
- * analysis may interpret through the security subsystem.
+ *     grammar/distributed/messages.g4
  *
- * This grammar does not implement:
+ * That adapter owns distributed-specific names such as:
  *
- *     encryption;
- *     signatures;
- *     authentication;
- *     authorization;
- *     identity;
- *     trust;
- *     key management.
+ *     distributedMessageConstruct
+ *     distributedMessageDeclaration
+ *     distributedMessageValue
  *
- * ============================================================================
- * DISTRIBUTED-SYSTEM INTEGRATION
- * ============================================================================
+ * It MUST delegate to the canonical message rules rather than redefine them.
  *
- * This file becomes the canonical owner of MESSAGE SCHEMA SYNTAX.
- *
- * Existing:
- *
- *     grammar/distributed/messaging.g4
- *
- * MUST NOT remain a second independent message-schema grammar.
- *
- * It should become a compatibility/delegation grammar for distributed
- * constructs that consume the canonical rules from this file.
- *
- * Distributed semantics such as:
- *
- *     replication;
- *     consistency;
- *     delivery;
- *     retry;
- *     actor behavior;
- *     node placement;
- *     remote execution;
- *
- * remain outside this file.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no actions;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime callbacks;
- *     - no hardware discovery;
- *     - no randomness.
- *
- * Parsing is therefore a deterministic function of the token stream.
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * A message declaration should lower into an AST representation containing
- * at least:
+ * The frontend AST should preserve at least:
  *
- *     declaration attributes;
- *     qualified message name;
- *     ordered field declarations;
- *     field names;
- *     field type syntax;
- *     optional default expressions;
- *     source spans.
+ * MessageDeclaration:
  *
- * A message value should preserve:
+ *     attributes
+ *     qualified name
+ *     generic parameters
+ *     ordered members
+ *     source span
  *
- *     message type reference;
- *     ordered arguments;
- *     source spans.
+ * MessageField:
  *
- * The parser MUST NOT resolve:
+ *     attributes
+ *     name
+ *     type syntax
+ *     optional initializer
+ *     source span
  *
- *     names;
- *     types;
- *     transports;
- *     endpoints;
- *     devices;
- *     resources;
- *     capabilities.
+ * MessageValue:
  *
- * Those belong to later semantic phases.
+ *     message type reference
+ *     ordered arguments
+ *     source span
+ *
+ * Message references:
+ *
+ *     qualified name
+ *     source span
+ *
+ * The exact Rust AST type names belong to the frontend AST subsystem.
+ *
+ * This grammar MUST NOT depend on Rust implementation details.
+ *
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis is responsible for validating:
+ * Semantic analysis is responsible for:
  *
- *     - duplicate field names;
- *     - unresolved message references;
- *     - invalid field types;
- *     - invalid default values;
- *     - argument/type correspondence;
- *     - required/optional semantics;
- *     - recursive schema legality;
- *     - visibility;
- *     - module ownership;
- *     - capabilities;
- *     - effects;
- *     - resource requirements;
- *     - serialization compatibility;
- *     - security constraints.
+ *     - resolving message names;
+ *     - resolving field names;
+ *     - resolving types;
+ *     - validating generic parameters;
+ *     - validating generic constraints;
+ *     - detecting duplicate fields;
+ *     - checking default expressions;
+ *     - checking argument correspondence;
+ *     - checking argument types;
+ *     - checking recursive schemas;
+ *     - checking visibility;
+ *     - checking ownership;
+ *     - checking serialization legality;
+ *     - checking transfer/move semantics;
+ *     - checking capabilities;
+ *     - checking resources;
+ *     - checking effects;
+ *     - checking contracts;
+ *     - checking policies;
+ *     - preserving provenance;
+ *     - checking interoperability constraints.
  *
- * None of those checks should be implemented as parser actions.
+ * None of these checks are parser actions.
+ *
  *
  * ============================================================================
- * COMPATIBILITY
+ * DIAGNOSTICS CONTRACT
  * ============================================================================
  *
- * This grammar deliberately preserves the core source shape of the existing
- * distributed messaging grammar:
+ * Parser diagnostics should cover structural failures such as:
+ *
+ *     missing message name
+ *     missing field name
+ *     missing field type
+ *     missing colon
+ *     missing semicolon
+ *     malformed generic parameter list
+ *     malformed message argument list
+ *     malformed delimiters
+ *
+ * Semantic diagnostics belong downstream and include:
+ *
+ *     unknown message
+ *     duplicate field
+ *     invalid field type
+ *     invalid generic substitution
+ *     invalid default
+ *     incompatible argument
+ *     unsupported capability
+ *     unsatisfied resource requirement
+ *     invalid policy
+ *     invalid serialization
+ *
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no parser actions;
+ *     - no semantic predicates;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware discovery;
+ *     - no runtime callbacks;
+ *     - no randomness.
+ *
+ * Parsing depends only on:
+ *
+ *     token stream
+ *     grammar version
+ *     imported grammar versions
+ *     language compatibility configuration
+ *
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The canonical message declaration remains:
  *
  *     message Name {
  *         field: Type;
  *     }
  *
+ * Generic declarations are supported:
+ *
+ *     message Envelope<T> {
+ *         payload: T;
+ *     }
+ *
+ * Message construction remains:
+ *
+ *     Name(value)
+ *
  * and:
  *
- *     Name(value1, value2)
+ *     namespace::Name(value)
  *
- * Existing message syntax should therefore migrate without changing its
- * semantic meaning.
+ * A trailing declaration semicolon is accepted:
  *
- * Deprecated distributed-message rules should delegate to these canonical
- * rules rather than maintain duplicate definitions.
+ *     message Name {
+ *         field: Type;
+ *     };
  *
+ * This is intentionally compatible with other Zamani declaration grammars
+ * that permit an optional terminator after a braced declaration.
+ *
+ *
+ * ============================================================================
+ * IMPLEMENTATION SAFETY
+ * ============================================================================
+ *
+ * This grammar contains no embedded implementation code.
+ *
+ * The Rust frontend/parser integration must remain compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust
+ *
+ * The grammar itself performs no resource discovery, allocation or execution.
+ *
+ *
+ * ============================================================================
+ * PUBLIC RULES
+ * ============================================================================
+ *
+ * messageConstruct
+ *     Standalone message composition boundary.
+ *
+ * messageDeclaration
+ *     Canonical logical message schema declaration.
+ *
+ * messageValue
+ *     Canonical message construction boundary.
+ *
+ * messageTypeReference
+ *     Canonical message type/name reference.
+ *
+ * messageArgumentList
+ *     Canonical message argument boundary.
+ *
+ * messagePayload
+ *     Generic expression payload boundary.
+ *
+ * messageFieldReference
+ *     Canonical message-field reference boundary.
+ *
+ * messageTypeReferenceList
+ *     Open-ended message-type list.
+ *
+ * messageFieldReferenceList
+ *     Open-ended message-field list.
+ *
+ *
+ * ============================================================================
+ * PRIVATE / SUPPORT RULES
+ * ============================================================================
+ *
+ * The following rules support the public interface:
+ *
+ *     messageGenericParameters
+ *     messageGenericParameterList
+ *     messageGenericParameter
+ *     messageGenericParameterConstraint
+ *     messageMember
+ *     messageField
+ *     messageFieldInitializer
+ *     optionalMessageArgumentList
+ *     messagePayloadList
+ *     optionalMessagePayloadList
+ *     optionalMessageTypeReferenceList
+ *     optionalMessageFieldReferenceList
+ *
+ *
+ * ============================================================================
+ * GRAMMAR IMPLEMENTATION
  * ============================================================================
  */
 
@@ -538,17 +958,21 @@ options {
 import Names, Types, Expressions, Attributes;
 
 
-/* ============================================================================
- * PUBLIC ENTRY POINT
+/*
+ * ============================================================================
+ * PUBLIC MESSAGE COMPOSITION
  * ============================================================================
  *
- * This is the stable parser-composition boundary for networking messages.
+ * This boundary is intentionally useful to standalone message grammar tests
+ * and compatibility tooling.
  *
- * A higher-level networking grammar may consume:
+ * IMPORTANT:
  *
- *     messageConstruct
+ * Networking's top-level declaration boundary should normally consume
+ * `messageDeclaration`, not this mixed declaration/value boundary.
  *
- * without depending on implementation details of the individual productions.
+ * Message values remain available to distributed/communication/expression
+ * consumers through `messageValue`.
  */
 messageConstruct
     : messageDeclaration
@@ -556,21 +980,21 @@ messageConstruct
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MESSAGE DECLARATION
  * ============================================================================
  *
- * Canonical source form:
+ * Canonical forms:
  *
  *     message UserCreated {
  *         id: Identifier;
  *         name: String;
  *     }
  *
- * Attributes are delegated to the canonical attribute grammar.
- *
- * The message name is a qualified source name. Whether a qualified message
- * declaration is legal in a particular scope is a semantic/module concern.
+ *     message Envelope<T> {
+ *         payload: T;
+ *     };
  */
 messageDeclaration
     : attribute*
@@ -580,16 +1004,14 @@ messageDeclaration
       LBRACE
       messageMember*
       RBRACE
+      SEMICOLON?
     ;
 
 
-/* ============================================================================
- * MESSAGE GENERIC PARAMETERS
+/*
  * ============================================================================
- *
- * Generic message schemas are source-level abstractions.
- *
- * They do not represent machine resources.
+ * GENERIC MESSAGE PARAMETERS
+ * ============================================================================
  *
  * Example:
  *
@@ -597,22 +1019,22 @@ messageDeclaration
  *         payload: T;
  *     }
  *
- * Generic parameter validity and substitution are semantic/type-system
- * responsibilities.
- *
- * The rule is deliberately local so this grammar does not invent a second
- * generic type system.
+ * The syntax is intentionally small and delegates semantic interpretation to
+ * the canonical type system.
  */
 messageGenericParameters
-    : LT
+    : LESS
       messageGenericParameterList
-      GT
+      GREATER
     ;
 
 
 messageGenericParameterList
     : messageGenericParameter
-      (COMMA messageGenericParameter)*
+      (
+          COMMA
+          messageGenericParameter
+      )*
       COMMA?
     ;
 
@@ -629,17 +1051,14 @@ messageGenericParameterConstraint
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MESSAGE MEMBERS
  * ============================================================================
  *
- * The initial production surface deliberately contains fields only.
+ * Only schema fields are accepted.
  *
- * This prevents arbitrary executable statements from becoming legal inside a
- * message schema.
- *
- * Future schema members must be introduced deliberately and assigned explicit
- * ownership.
+ * Executable statements do not belong inside a message schema.
  */
 messageMember
     : attribute*
@@ -647,7 +1066,8 @@ messageMember
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MESSAGE FIELD
  * ============================================================================
  *
@@ -655,22 +1075,18 @@ messageMember
  *
  *     fieldName: FieldType;
  *
- * Optional defaults:
+ * Optional initializer:
  *
  *     fieldName: FieldType = expression;
  *
- * Optionality itself is represented by the canonical type system, for example:
- *
- *     fieldName: Option<T>;
- *
- * rather than a messaging-specific `optional` type construct.
+ * Optionality and collection semantics belong to the canonical type system.
  */
 messageField
     : identifier
       COLON
       typeExpression
       messageFieldInitializer?
-      SEMI
+      SEMICOLON
     ;
 
 
@@ -680,105 +1096,286 @@ messageFieldInitializer
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MESSAGE VALUE
  * ============================================================================
  *
- * Canonical positional construction:
+ * Canonical forms:
  *
  *     UserCreated(id, name)
  *
  *     events::UserCreated(id, name)
  *
- * This grammar does not decide whether constructing the value:
+ * This syntax intentionally resembles ordinary call syntax.
  *
- *     allocates;
- *     copies;
- *     serializes;
- *     sends;
- *     queues;
- *     encrypts;
- *     schedules;
- *     transmits.
+ * Semantic analysis MUST determine whether the referenced name denotes a
+ * message type.
  *
- * Those are downstream semantic/runtime concerns.
+ * This grammar therefore does not pretend that syntax alone proves the
+ * semantic category of the qualified name.
  */
 messageValue
     : messageTypeReference
       LPAREN
-      messageArgumentList?
+      optionalMessageArgumentList
       RPAREN
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * MESSAGE TYPE REFERENCE
  * ============================================================================
  *
- * A message type reference is a canonical qualified name.
- *
- * Semantic resolution determines whether the referenced declaration is
- * actually a message type.
+ * Message type names use the canonical qualified-name grammar.
  */
 messageTypeReference
     : qualifiedName
     ;
 
 
-/* ============================================================================
- * MESSAGE ARGUMENTS
+/*
+ * ============================================================================
+ * MESSAGE ARGUMENT LIST
  * ============================================================================
  *
- * No finite argument count is encoded.
+ * The canonical expression grammar already owns expression-list syntax.
  *
- * Every argument is delegated to the canonical expression grammar.
+ * This rule exists as the stable message-specific semantic boundary while
+ * delegating the actual list structure to `expressionList`.
  */
 messageArgumentList
+    : expressionList
+    ;
+
+
+optionalMessageArgumentList
+    : messageArgumentList?
+    ;
+
+
+/*
+ * ============================================================================
+ * MESSAGE PAYLOAD
+ * ============================================================================
+ *
+ * A payload is a canonical expression.
+ *
+ * It does not imply:
+ *
+ *     serialization
+ *     transmission
+ *     allocation
+ *     copying
+ *     ownership transfer
+ *     network I/O
+ */
+messagePayload
     : expression
-      (COMMA expression)*
+    ;
+
+
+messagePayloadList
+    : messagePayload
+      (
+          COMMA
+          messagePayload
+      )*
       COMMA?
     ;
 
 
-/* ============================================================================
+optionalMessagePayloadList
+    : messagePayloadList?
+    ;
+
+
+/*
+ * ============================================================================
  * MESSAGE FIELD REFERENCE
  * ============================================================================
  *
- * This is intentionally only a qualified name.
- *
- * Semantic analysis determines whether it denotes a field and whether the
- * reference is legal in its surrounding context.
+ * Semantic analysis determines whether the qualified name resolves to a
+ * message field in the relevant scope.
  */
 messageFieldReference
     : qualifiedName
     ;
 
 
-/* ============================================================================
+messageFieldReferenceList
+    : messageFieldReference
+      (
+          COMMA
+          messageFieldReference
+      )*
+      COMMA?
+    ;
+
+
+optionalMessageFieldReferenceList
+    : messageFieldReferenceList?
+    ;
+
+
+/*
+ * ============================================================================
  * MESSAGE TYPE REFERENCE LIST
  * ============================================================================
  *
- * Useful to networking/distributed consumers that need to declare a set of
- * accepted/related message types.
- *
- * The list has no artificial finite size.
+ * No finite cardinality is encoded.
  */
 messageTypeReferenceList
     : messageTypeReference
-      (COMMA messageTypeReference)*
+      (
+          COMMA
+          messageTypeReference
+      )*
       COMMA?
     ;
 
 
-/* ============================================================================
- * MESSAGE FIELD REFERENCE LIST
+optionalMessageTypeReferenceList
+    : messageTypeReferenceList?
+    ;
+
+
+/*
+ * ============================================================================
+ * END OF GRAMMAR
  * ============================================================================
  *
- * Reusable semantic boundary for consumers such as protocol/service/schema
- * analysis.
+ * COMPLETION CRITERIA
+ * -------------------
+ *
+ * [x] Single canonical networking message-schema owner.
+ *
+ * [x] Canonical ZamaniLexer consumed.
+ *
+ * [x] Canonical Names grammar consumed.
+ *
+ * [x] Canonical Types grammar consumed.
+ *
+ * [x] Canonical Expressions grammar consumed.
+ *
+ * [x] Canonical Attributes grammar consumed.
+ *
+ * [x] No duplicated lexical rules.
+ *
+ * [x] No duplicated type system.
+ *
+ * [x] No duplicated expression system.
+ *
+ * [x] No communication operation syntax.
+ *
+ * [x] No transport syntax.
+ *
+ * [x] No serialization syntax.
+ *
+ * [x] No routing syntax.
+ *
+ * [x] No topology syntax.
+ *
+ * [x] No endpoint syntax.
+ *
+ * [x] No socket syntax.
+ *
+ * [x] No actor syntax.
+ *
+ * [x] No scheduler syntax.
+ *
+ * [x] No hardware selection.
+ *
+ * [x] No quantum operation selection.
+ *
+ * [x] No physical resource ceilings.
+ *
+ * [x] No parser actions.
+ *
+ * [x] No semantic predicates.
+ *
+ * [x] No runtime behavior.
+ *
+ * [x] Open-ended declarations.
+ *
+ * [x] Open-ended fields.
+ *
+ * [x] Open-ended arguments.
+ *
+ * [x] Open-ended generic parameters.
+ *
+ * [x] Open-ended reference lists.
+ *
+ * [x] Correct canonical lexer punctuation names.
+ *
+ * [x] Generic messages preserved.
+ *
+ * [x] Message initializers preserved.
+ *
+ * [x] Message payload boundary available.
+ *
+ * [x] Distributed adapter compatibility preserved.
+ *
+ * [x] Quantum/classical data can flow through canonical types.
+ *
+ * [x] HDL/hardware data can flow through canonical types.
+ *
+ * [x] Effects/capabilities/resources remain downstream.
+ *
+ * [x] Contracts/policies remain shared language mechanisms.
+ *
+ * [x] Provenance remains downstream/frontend-owned.
+ *
+ * [x] Rust implementation remains compatible with Rust 1.97+.
+ *
+ * [x] Safe Rust integration remains sufficient.
+ *
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL INVARIANT
+ * ============================================================================
+ *
+ * This grammar defines WHAT a logical message is.
+ *
+ * It does not define WHERE the message executes or HOW it is realized.
+ *
+ * Therefore:
+ *
+ *     message schema
+ *          |
+ *          v
+ *     domain-neutral AST
+ *          |
+ *          +--> types
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> contracts
+ *          +--> policies
+ *          +--> provenance
+ *          |
+ *          v
+ *     semantic message model
+ *          |
+ *          +--> classical
+ *          +--> distributed
+ *          +--> networking
+ *          +--> hybrid
+ *          +--> HDL/hardware
+ *          +--> quantum::ir where applicable
+ *          |
+ *          v
+ *     target-independent optimization
+ *          |
+ *          v
+ *     lowering / routing / scheduling
+ *          |
+ *          v
+ *     target realization
+ *
+ * One logical message schema can therefore participate in any valid target
+ * realization supported by the rest of the Zamani compiler/runtime stack.
+ *
+ * ============================================================================
  */
-messageFieldReferenceList
-    : messageFieldReference
-      (COMMA messageFieldReference)*
-      COMMA?
-    ;
