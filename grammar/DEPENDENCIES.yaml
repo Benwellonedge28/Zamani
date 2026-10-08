@@ -1,3359 +1,3042 @@
-============================================================================
-
-Zamani Programming Language
-
-============================================================================
-
-File:
-
-grammar/DEPENDENCIES.yaml
-
-Purpose:
-
-Canonical machine-readable dependency contract for grammar/.
-
-This file defines:
-
-- the dependency DAG;
-
-- dependency direction;
-
-- composition-root boundaries;
-
-- subsystem ordering;
-
-- permitted cross-domain dependencies;
-
-- forbidden dependency edges;
-
-- Rust/frontend integration boundaries;
-
-- AST/semantic/IR dependency boundaries;
-
-- target-independence rules;
-
-- POCO-REAF rules;
-
-- scalability rules;
-
-- quarantine rules for unresolved duplicate/malformed artifacts;
-
-- freeze prerequisites.
-
-This file MUST remain independent of individual backend implementations.
-
-It does NOT define:
-
-- lexical token spelling;
-
-- semantic meaning;
-
-- AST structure;
-
-- IR structure;
-
-- runtime implementation;
-
-- target selection;
-
-- hardware inventory;
-
-- physical routing;
-
-- scheduling algorithms.
-
-Those responsibilities belong to their declared owners.
-
-Repository:
-
-Benwellonedge28/Zamani
-
-Root:
-
-grammar/
-
-Language:
-
-Zamani
-
-Architecture:
-
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
-
-Rust:
-
-Edition 2021
-
-Minimum supported version: 1.97
-
-Later compatible stable Rust versions are permitted.
-
-Safety:
-
-unsafe Rust is forbidden.
-
-============================================================================
+# =============================================================================
+# Zamani Programming Language
+# =============================================================================
+#
+# File:
+#   grammar/DEPENDENCIES.yaml
+#
+# Purpose:
+#   Canonical machine-readable dependency contract for grammar/.
+#
+# Authority:
+#   This file defines dependency direction, dependency layers, composition
+#   boundaries, dependency validation, freeze ordering, and integration
+#   contracts.
+#
+# It does NOT define:
+#   - lexical spelling;
+#   - complete syntax;
+#   - semantic meaning;
+#   - AST structure;
+#   - IR structure;
+#   - backend algorithms;
+#   - hardware inventory;
+#   - runtime implementation.
+#
+# Those responsibilities belong to their respective authorities.
+#
+# Repository:
+#   Benwellonedge28/Zamani
+#
+# Language:
+#   Zamani
+#
+# Rust:
+#   Edition: 2021
+#   Minimum supported version: 1.97
+#   Safety requirement: production Rust MUST remain safe Rust.
+#
+# Architecture:
+#   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+#
+# =============================================================================
 
 schema:
-version: "2.0"
-kind: "zamani-grammar-dependency-contract"
-format: "yaml"
-repository: "Benwellonedge28/Zamani"
-root: "grammar/"
-language: "Zamani"
+  version: "3.0"
+  kind: "zamani-grammar-dependency-contract"
+  format: "yaml"
+  schema_status: "NORMATIVE"
+  repository: "Benwellonedge28/Zamani"
+  root: "grammar/"
+  language: "Zamani"
 
-source_of_inventory:
-authority: "repository-git-tree"
-rule: >
-The actual repository tree is authoritative for file existence.
-This file MUST NOT hard-code a stale total file count.
+authority:
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "normative grammar architecture"
 
-dependency_contract_authority:
-path: "grammar/DEPENDENCIES.yaml"
-scope:
-- "dependency direction"
-- "dependency layers"
-- "composition boundaries"
-- "freeze ordering"
-- "forbidden dependency edges"
-- "dependency validation"
+  language_specification:
+    path: "grammar/specification/"
+    role: "normative language meaning"
 
-ownership_authority:
-path: "grammar/OWNERSHIP.yaml"
+  machine_contracts:
+    path: "grammar/spec/"
+    role: "machine-oriented language contracts"
 
-manifest_authority:
-path: "grammar/MANIFEST.yaml"
+  manifest:
+    path: "grammar/MANIFEST.yaml"
+    role: "repository grammar inventory"
 
-architecture_authority:
-path: "grammar/DESIGN.md"
+  ownership:
+    path: "grammar/OWNERSHIP.yaml"
+    role: "symbol ownership"
 
-normative_language_authority:
-path: "grammar/specification/"
+  dependencies:
+    path: "grammar/DEPENDENCIES.yaml"
+    role: "dependency architecture"
 
-machine_contract_authority:
-path: "grammar/spec/"
+  status:
+    path: "grammar/STATUS.yaml"
+    role: "implementation and conformance status"
 
-============================================================================
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    role: "historical and extended reference"
+    normative: false
 
-GLOBAL STATUS
+  derived_reference:
+    path: "grammar/grammar.md"
+    role: "derived implementation/conformance reference"
+    normative: false
 
-============================================================================
+# =============================================================================
+# 1. GLOBAL INVARIANTS
+# =============================================================================
 
-status:
-state: "AUDIT_REQUIRED"
-freeze_allowed: false
+invariants:
 
-reason:
-- "The dependency DAG must be validated against the complete repository tree."
-- "Every imported grammar must resolve to an existing grammar."
-- "Every exported rule must have exactly one owner."
-- "Every composition root must be acyclic."
-- "Known duplicate conceptual files require canonical ownership."
-- "Known malformed or non-canonical repository artifacts must not participate in production composition."
-- "AST, semantic, IR, diagnostics, compatibility, and test dependencies must be closed before STABLE status."
-
-stable_requires:
-- "dependency graph is acyclic"
-- "all production imports resolve"
-- "all production dependency edges are explicitly classified"
-- "all cross-layer edges obey the layer rules"
-- "all composition roots have one canonical owner"
-- "all quarantined artifacts are excluded from production imports"
-- "all AST mappings resolve"
-- "all semantic mappings resolve"
-- "all applicable IR mappings resolve"
-- "all diagnostics mappings resolve"
-- "all compatibility mappings resolve"
-- "all required conformance tests pass"
-- "hard-coding audit passes"
-- "scalability audit passes"
-- "POCO-REAF audit passes"
-- "safe-Rust audit passes"
-
-============================================================================
-
-AUTHORITY AND DEPENDENCY DIRECTION
-
-============================================================================
-
-authority_direction:
-
-normative_architecture:
-path: "grammar/DESIGN.md"
-depends_on: []
-role: "architectural authority"
-
-normative_specification:
-path: "grammar/specification/"
-depends_on:
-- "grammar/DESIGN.md"
-role: "language meaning"
-
-machine_contracts:
-path: "grammar/spec/"
-depends_on:
-- "grammar/DESIGN.md"
-- "grammar/specification/"
-role: "machine-oriented language contracts"
-
-ownership:
-path: "grammar/OWNERSHIP.yaml"
-depends_on:
-- "grammar/DESIGN.md"
-- "grammar/specification/"
-- "grammar/spec/"
-role: "symbol ownership"
-
-dependencies:
-path: "grammar/DEPENDENCIES.yaml"
-depends_on:
-- "grammar/DESIGN.md"
-- "grammar/specification/"
-- "grammar/spec/"
-- "grammar/OWNERSHIP.yaml"
-role: "dependency graph"
-
-status:
-path: "grammar/STATUS.yaml"
-depends_on:
-- "grammar/MANIFEST.yaml"
-- "grammar/OWNERSHIP.yaml"
-- "grammar/DEPENDENCIES.yaml"
-role: "implementation/conformance status"
-
-historical_reference:
-path: "grammar/Zamani-Grammar.md"
-role: "non-normative historical/extended reference"
-dependency_authority: false
-
-derived_conformance_reference:
-path: "grammar/grammar.md"
-role: "derived implementation/conformance reference"
-dependency_authority: false
-
-============================================================================
-
-DEPENDENCY MODEL
-
-============================================================================
-
-dependency_model:
-
-principle: >
-Dependencies represent consumption of stable contracts. A dependency
-MUST NOT imply ownership transfer.
-
-dependency_types:
-
-grammar_import:
-  meaning: "ANTLR grammar composition/import"
-  allowed: true
-  must_resolve: true
-
-lexical_contract:
-  meaning: "consumption of canonical lexical vocabulary"
-  allowed: true
-  owner: "grammar/lexer/"
-
-syntax_contract:
-  meaning: "consumption of parser syntax"
-  allowed: true
-
-ast_contract:
-  meaning: "mapping into domain-neutral AST"
-  allowed: true
-  owner: "src/ast/"
-
-semantic_contract:
-  meaning: "consumption of validated semantic meaning"
-  allowed: true
-  owner: "semantic implementation"
-
-ir_contract:
-  meaning: "mapping into canonical IR"
-  allowed: true
-  owner: "src/ir/"
-
-diagnostic_contract:
-  meaning: "diagnostic identity and source mapping"
-  allowed: true
-
-compatibility_contract:
-  meaning: "language/version compatibility"
-  allowed: true
-
-test_contract:
-  meaning: "conformance verification"
-  allowed: true
-
-documentation_reference:
-  meaning: "non-executable documentation reference"
-  allowed: true
-
-ownership_rule: >
-A dependency NEVER makes the dependent file an owner of the dependency's
-symbols.
-
-interface_rule: >
-Frozen files may only be depended upon through their declared stable
-exports and contracts.
-
-implementation_rule: >
-Grammar files MUST NOT depend directly on backend implementation details.
-
-============================================================================
-
-CANONICAL PIPELINE
-
-============================================================================
-
-canonical_pipeline:
-
-- id: "P00"
-  stage: "source"
-  owner: "grammar/"
-  consumes: "Zamani source text"
-  produces: "source characters"
-
-- id: "P01"
-  stage: "lexical contracts"
-  owner: "grammar/lexer/"
-  depends_on:
-  
-  - "P00"
-    produces:
-  - "canonical token vocabulary"
-  - "lexical classifications"
-
-- id: "P02"
-  stage: "ANTLR lexer boundary"
-  owner: "grammar/antlr/ZamaniLexer.g4"
-  depends_on:
-  
-  - "P01"
-    produces:
-  - "tokens"
-
-- id: "P03"
-  stage: "ANTLR parser composition"
-  owner: "grammar/antlr/ZamaniParser.g4"
-  depends_on:
-  
-  - "P02"
-  - "grammar/core/"
-  - "grammar/types/"
-  - "grammar/expressions/"
-  - "grammar/declarations/"
-  - "grammar/statements/"
-  - "grammar/functions/"
-  - "domain composition roots"
-    produces:
-  - "parse tree"
-
-- id: "P04"
-  stage: "domain-neutral AST"
-  owner: "src/ast/"
-  depends_on:
-  
-  - "P03"
-    produces:
-  - "AST"
-
-- id: "P05"
-  stage: "structural validation"
-  owner: "grammar/validation/ + semantic implementation"
-  depends_on:
-  
-  - "P04"
-    produces:
-  - "validated AST"
-
-- id: "P06"
-  stage: "type validation"
-  owner: "grammar/types/ + semantic implementation"
-  depends_on:
-  
-  - "P05"
-
-- id: "P07"
-  stage: "effect validation"
-  owner: "grammar/effects/ + semantic implementation"
-  depends_on:
-  
-  - "P05"
-  - "P06"
-
-- id: "P08"
-  stage: "resource/capability validation"
-  owner: "grammar/resources/ + semantic implementation"
-  depends_on:
-  
-  - "P05"
-  - "P06"
-  - "P07"
-
-- id: "P09"
-  stage: "contract/policy validation"
-  owner: "grammar/validation/ + grammar/policies/ + grammar/security/"
-  depends_on:
-  
-  - "P06"
-  - "P07"
-  - "P08"
-
-- id: "P10"
-  stage: "provenance/evidence"
-  owner: "semantic implementation"
-  depends_on:
-  
-  - "P04"
-  - "P09"
-
-- id: "P11"
-  stage: "domain semantics"
-  owner: "domain semantic implementations"
-  depends_on:
-  
-  - "P06"
-  - "P07"
-  - "P08"
-  - "P09"
-  - "P10"
-
-- id: "P12"
-  stage: "canonical IR"
-  owner: "src/ir/"
-  depends_on:
-  
-  - "P11"
-
-- id: "P13"
-  stage: "quantum canonical IR"
-  owner: "quantum::ir"
-  depends_on:
-  
-  - "P11"
+  single_architecture_authority:
     rule: >
-    Quantum syntax MUST converge through the canonical quantum IR boundary
-    and MUST NOT create a competing source-specific quantum IR.
+      grammar/DESIGN.md is the sole architectural authority for grammar/.
+      Other documents may refine or implement that architecture but MUST NOT
+      establish a competing architecture.
 
-- id: "P14"
-  stage: "optimization"
-  owner: "compiler/backend"
-  depends_on:
-  
-  - "P12"
-  - "P13"
+  normative_language_authority:
+    rule: >
+      Normative language meaning is defined under grammar/specification/.
+      A grammar file MUST NOT silently redefine semantic meaning that belongs
+      to the specification.
 
-- id: "P15"
-  stage: "lowering"
-  owner: "compiler/backend"
-  depends_on:
-  
-  - "P14"
+  machine_contract_authority:
+    rule: >
+      Machine-readable contracts belong under grammar/spec/. They MUST agree
+      with grammar/specification/ and MUST NOT silently contradict it.
 
-- id: "P16"
-  stage: "target negotiation"
-  owner: "compiler/runtime"
-  depends_on:
-  
-  - "P15"
-  - "resource requirements"
-  - "capability requirements"
-  - "policies"
+  single_lexer_boundary:
+    rule: >
+      grammar/antlr/ZamaniLexer.g4 is the public ANTLR lexer boundary.
+      grammar/lexer/ owns lexical contracts and registries. Individual parser
+      grammars MUST NOT create competing lexer vocabularies.
 
-- id: "P17"
-  stage: "routing and scheduling"
-  owner: "compiler/backend/runtime"
-  depends_on:
-  
-  - "P16"
+  single_parser_boundary:
+    rule: >
+      grammar/antlr/ZamaniParser.g4 is the public parser composition boundary.
+      Domain grammars provide owned productions through explicit composition
+      contracts.
 
-- id: "P18"
-  stage: "resilience and recovery"
-  owner: "compiler/runtime"
-  depends_on:
-  
-  - "P17"
+  single_root:
+    rule: >
+      grammar/Zamani.g4 is the final combined ANTLR composition root. It MUST
+      compose the public lexer/parser boundaries and MUST NOT independently
+      compose every domain.
 
-- id: "P19"
-  stage: "ZQN"
-  owner: "compiler/backend/runtime"
-  depends_on:
-  
-  - "P18"
+  one_symbol_one_owner:
+    rule: >
+      Every exported grammar symbol MUST have exactly one canonical owner.
+      Dependencies consume symbols but never transfer ownership.
 
-- id: "P20"
-  stage: "HAL"
-  owner: "target/runtime integration"
-  depends_on:
-  
-  - "P19"
+  no_duplicate_public_exports:
+    rule: >
+      Two production grammar files MUST NOT export the same public rule unless
+      one is explicitly designated as an alias or composition adapter by
+      grammar/OWNERSHIP.yaml.
 
-============================================================================
+  no_backend_dependency_from_grammar:
+    rule: >
+      Production grammar MUST NOT depend on backend implementation details,
+      physical device implementations, scheduling algorithms, routing
+      algorithms, calibration data, or runtime state.
 
-DEPENDENCY LAYERS
+  no_target_capacity_in_language_contract:
+    rule: >
+      Language architecture MUST NOT define universal physical capacity
+      ceilings. Available capacity belongs to the target realization.
 
-============================================================================
+  symbolic_scalability:
+    rule: >
+      Resource requirements MUST be expressible symbolically and parametrically.
+      Source syntax MUST NOT require knowledge of a target's finite capacity.
 
-A production dependency MUST move downward through this architecture.
+  semantic_preservation:
+    rule: >
+      Changing target realization MUST NOT require changing the semantic
+      definition of the portable program merely because target resources differ.
 
-A lower layer MUST NOT import an upper layer.
+  acyclic_dependency_graph:
+    rule: >
+      The production dependency graph MUST be acyclic after composition
+      aliases and test-only dependencies are removed.
 
-============================================================================
+  deterministic_composition:
+    rule: >
+      Grammar composition MUST be deterministic. Import order MUST NOT produce
+      different language meaning.
+
+  safe_rust:
+    rule: >
+      The Zamani Rust implementation MUST use safe Rust. Production compiler
+      code MUST NOT require unsafe blocks, unsafe traits, or unsafe
+      implementations.
+
+  tests_do_not_become_dependencies:
+    rule: >
+      Tests, examples, golden files, conformance fixtures, and generated
+      artifacts MAY depend on production grammar, but production grammar MUST
+      NOT depend on tests or generated output.
+
+# =============================================================================
+# 2. DEPENDENCY KINDS
+# =============================================================================
+
+dependency_kinds:
+
+  grammar_import:
+    description: "ANTLR grammar composition/import."
+    production_allowed: true
+    must_resolve: true
+
+  lexical_contract:
+    description: "Consumption of the canonical lexical vocabulary."
+    production_allowed: true
+    owner: "grammar/lexer/"
+
+  syntax_contract:
+    description: "Consumption of stable parser syntax."
+    production_allowed: true
+
+  ast_contract:
+    description: "Mapping from parsed structure into the domain-neutral AST."
+    production_allowed: true
+    implementation_owner: "src/ast/"
+
+  semantic_contract:
+    description: "Consumption of validated semantic meaning."
+    production_allowed: true
+    implementation_owner: "semantic implementation"
+
+  effect_contract:
+    description: "Consumption of the universal effect model."
+    production_allowed: true
+
+  capability_contract:
+    description: "Consumption of target capability declarations."
+    production_allowed: true
+
+  resource_contract:
+    description: "Consumption of symbolic resource requirements."
+    production_allowed: true
+
+  policy_contract:
+    description: "Consumption of policy constraints and decisions."
+    production_allowed: true
+
+  provenance_contract:
+    description: "Consumption or production of provenance metadata."
+    production_allowed: true
+
+  ir_contract:
+    description: "Mapping into canonical or explicitly owned domain IR."
+    production_allowed: true
+    implementation_owner: "src/ir/"
+
+  diagnostic_contract:
+    description: "Stable diagnostic categories and source mapping."
+    production_allowed: true
+
+  compatibility_contract:
+    description: "Language, grammar, AST, semantic, IR, artifact, or dialect compatibility."
+    production_allowed: true
+
+  test_contract:
+    description: "Conformance verification."
+    production_allowed: true
+
+  documentation_reference:
+    description: "Non-executable documentation relationship."
+    production_allowed: true
+
+# =============================================================================
+# 3. DEPENDENCY DIRECTION
+# =============================================================================
+
+dependency_direction:
+
+  principle: >
+    A dependency consumes a stable contract. It does not transfer ownership.
+    Dependencies MUST move from foundational contracts toward consumers.
+
+  forbidden_reverse_dependency:
+    - "consumer -> provider implementation internals"
+    - "grammar -> runtime"
+    - "grammar -> hardware implementation"
+    - "grammar -> target inventory"
+    - "grammar -> scheduler implementation"
+    - "grammar -> router implementation"
+    - "grammar -> calibration implementation"
+    - "grammar -> QEC implementation"
+    - "grammar -> device driver"
+    - "grammar -> generated parser output"
+    - "production grammar -> tests"
+
+  permitted_downstream_flow:
+    - "source"
+    - "lexical contracts"
+    - "lexer boundary"
+    - "foundation syntax"
+    - "types and memory"
+    - "expressions"
+    - "functions"
+    - "statements"
+    - "effects/resources/policies/security"
+    - "computational domains"
+    - "extensions and interoperability"
+    - "compatibility"
+    - "parser composition"
+    - "root composition"
+    - "frontend AST"
+    - "semantic validation"
+    - "canonical IR"
+    - "optimization"
+    - "lowering"
+    - "target negotiation"
+    - "routing and scheduling"
+    - "resilience"
+    - "ZQN"
+    - "HAL"
+    - "runtime"
+
+# =============================================================================
+# 4. ARCHITECTURAL LAYERS
+# =============================================================================
 
 layers:
 
-L00_authority:
-paths:
-- "grammar/DESIGN.md"
-- "grammar/specification/"
-- "grammar/spec/"
-may_depend_on: []
-may_be_depended_on_by:
-- "all grammar contracts"
+  L00_authority:
+    purpose: "Normative architecture and language meaning."
+    paths:
+      - "grammar/DESIGN.md"
+      - "grammar/specification/"
+      - "grammar/spec/"
+    may_depend_on: []
+    may_be_depended_on_by:
+      - "all production contracts"
+      - "validation tooling"
+      - "freeze tooling"
 
-L01_registry:
-paths:
-- "grammar/MANIFEST.yaml"
-- "grammar/OWNERSHIP.yaml"
-- "grammar/DEPENDENCIES.yaml"
-- "grammar/STATUS.yaml"
-- "grammar/contracts/"
-may_depend_on:
-- "L00_authority"
-may_be_depended_on_by:
-- "validation tooling"
-- "CI"
-- "freeze tooling"
+  L01_registry:
+    purpose: "Machine-readable repository inventories and ownership contracts."
+    paths:
+      - "grammar/MANIFEST.yaml"
+      - "grammar/OWNERSHIP.yaml"
+      - "grammar/DEPENDENCIES.yaml"
+      - "grammar/STATUS.yaml"
+      - "grammar/contracts/"
+    may_depend_on:
+      - "L00_authority"
+    may_be_depended_on_by:
+      - "validation tooling"
+      - "CI"
+      - "freeze tooling"
+      - "conformance tooling"
 
-L02_lexical:
-paths:
-- "grammar/lexer/"
-may_depend_on:
-- "L00_authority"
-may_be_depended_on_by:
-- "L03_core"
-- "L04_types"
-- "L05_expressions"
-- "L06_declarations"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_domains"
+  L02_lexical:
+    purpose: "Canonical lexical vocabulary and lexical composition."
+    paths:
+      - "grammar/lexer/"
+    may_depend_on:
+      - "L00_authority"
+    may_be_depended_on_by:
+      - "L03_lexer_boundary"
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L03_antlr_lexer:
-paths:
-- "grammar/antlr/ZamaniLexer.g4"
-may_depend_on:
-- "L02_lexical"
-may_be_depended_on_by:
-- "L04_antlr_parser"
+  L03_lexer_boundary:
+    purpose: "Public ANTLR lexer composition boundary."
+    paths:
+      - "grammar/antlr/ZamaniLexer.g4"
+    may_depend_on:
+      - "L02_lexical"
+    may_be_depended_on_by:
+      - "L13_parser_boundary"
+      - "L14_root"
 
-L04_foundation:
-paths:
-- "grammar/core/"
-- "grammar/modules/"
-- "grammar/declarations/"
-may_depend_on:
-- "L02_lexical"
-may_be_depended_on_by:
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_domains"
+  L04_foundation:
+    purpose: "Universal names, paths, program structure, modules and declarations."
+    paths:
+      - "grammar/core/"
+      - "grammar/modules/"
+      - "grammar/declarations/"
+    may_depend_on:
+      - "L02_lexical"
+    may_be_depended_on_by:
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L05_types:
-paths:
-- "grammar/types/"
-- "grammar/memory/"
-may_depend_on:
-- "L02_lexical"
-- "L04_foundation"
-may_be_depended_on_by:
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_domains"
+  L05_types:
+    purpose: "Universal type and memory semantics."
+    paths:
+      - "grammar/types/"
+      - "grammar/memory/"
+    may_depend_on:
+      - "L02_lexical"
+      - "L04_foundation"
+    may_be_depended_on_by:
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L06_expressions:
-paths:
-- "grammar/expressions/"
-may_depend_on:
-- "L02_lexical"
-- "L04_foundation"
-- "L05_types"
-may_be_depended_on_by:
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_domains"
+  L06_expressions:
+    purpose: "Universal expression algebra."
+    paths:
+      - "grammar/expressions/"
+    may_depend_on:
+      - "L02_lexical"
+      - "L04_foundation"
+      - "L05_types"
+    may_be_depended_on_by:
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L07_functions:
-paths:
-- "grammar/functions/"
-may_depend_on:
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-may_be_depended_on_by:
-- "L08_statements"
-- "L10_domains"
+  L07_functions:
+    purpose: "Functions, parameters, generics, calls, closures and callable constructs."
+    paths:
+      - "grammar/functions/"
+    may_depend_on:
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+    may_be_depended_on_by:
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L08_statements:
-paths:
-- "grammar/statements/"
-may_depend_on:
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-may_be_depended_on_by:
-- "L09_control_plane"
-- "L10_domains"
+  L08_statements:
+    purpose: "Universal statement and control-flow syntax."
+    paths:
+      - "grammar/statements/"
+    may_depend_on:
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+    may_be_depended_on_by:
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
 
-L09_control_plane:
-paths:
-- "grammar/effects/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/security/"
-- "grammar/validation/"
-may_depend_on:
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-may_be_depended_on_by:
-- "L10_domains"
-- "L11_realization_intent"
+  L09_control_plane:
+    purpose: >
+      Shared semantic-control syntax for effects, resources, policies,
+      security and validation.
+    paths:
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/security/"
+      - "grammar/validation/"
+    may_depend_on:
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+    may_be_depended_on_by:
+      - "L10_domains"
+      - "L11_extensions"
+      - "L12_compatibility"
+      - "L13_parser_boundary"
 
-L10_computational_domains:
-paths:
-- "grammar/classical/"
-- "grammar/data/"
-- "grammar/concurrency/"
-- "grammar/distributed/"
-- "grammar/networking/"
-- "grammar/hardware/"
-- "grammar/execution/"
-- "grammar/compile/"
-- "grammar/quantum/"
-- "grammar/hdl/"
-- "grammar/hybrid/"
-- "grammar/ai/"
-- "grammar/nano/"
-- "grammar/mathematics/"
-- "grammar/nlp/"
-- "grammar/filesystem/"
-may_depend_on:
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-may_be_depended_on_by:
-- "L11_extensions"
+  L10_domains:
+    purpose: "Computational domain syntax."
+    paths:
+      - "grammar/classical/"
+      - "grammar/data/"
+      - "grammar/concurrency/"
+      - "grammar/distributed/"
+      - "grammar/networking/"
+      - "grammar/hardware/"
+      - "grammar/execution/"
+      - "grammar/compile/"
+      - "grammar/quantum/"
+      - "grammar/hdl/"
+      - "grammar/hybrid/"
+      - "grammar/ai/"
+      - "grammar/nano/"
+    may_depend_on:
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+    may_be_depended_on_by:
+      - "L11_extensions"
+      - "L12_compatibility"
+      - "L13_parser_boundary"
 
-L11_extensions:
-paths:
-- "grammar/interoperability/"
-- "grammar/dialects/"
-- "grammar/macros/"
-- "grammar/metaprogramming/"
-may_depend_on:
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_computational_domains"
-may_be_depended_on_by:
-- "L12_compatibility"
-- "L13_parser_root"
+  L11_extensions:
+    purpose: "Dialect, interoperability, macro and metaprogramming extensions."
+    paths:
+      - "grammar/interoperability/"
+      - "grammar/dialects/"
+      - "grammar/macros/"
+      - "grammar/metaprogramming/"
+    may_depend_on:
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+    may_be_depended_on_by:
+      - "L12_compatibility"
+      - "L13_parser_boundary"
 
-L12_compatibility:
-paths:
-- "grammar/compatibility/"
-may_depend_on:
-- "L00_authority"
-- "L01_registry"
-- "L02_lexical"
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_computational_domains"
-- "L11_extensions"
-may_be_depended_on_by:
-- "L13_parser_root"
+  L12_compatibility:
+    purpose: "Versioning and compatibility contracts."
+    paths:
+      - "grammar/compatibility/"
+    may_depend_on:
+      - "L00_authority"
+      - "L01_registry"
+      - "L02_lexical"
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
+    may_be_depended_on_by:
+      - "L13_parser_boundary"
+      - "L14_root"
+      - "conformance tooling"
 
-L13_antlr_parser:
-paths:
-- "grammar/antlr/ZamaniParser.g4"
-may_depend_on:
-- "L03_antlr_lexer"
-- "L04_foundation"
-- "L05_types"
-- "L06_expressions"
-- "L07_functions"
-- "L08_statements"
-- "L09_control_plane"
-- "L10_computational_domains"
-- "L11_extensions"
-- "L12_compatibility"
-may_be_depended_on_by:
-- "L14_root"
+  L13_parser_boundary:
+    purpose: "Public ANTLR parser composition boundary."
+    paths:
+      - "grammar/antlr/ZamaniParser.g4"
+    may_depend_on:
+      - "L03_lexer_boundary"
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
+      - "L12_compatibility"
+    may_be_depended_on_by:
+      - "L14_root"
 
-L14_root:
-paths:
-- "grammar/Zamani.g4"
-may_depend_on:
-- "L03_antlr_lexer"
-- "L13_antlr_parser"
-may_be_depended_on_by:
-- "ANTLR generation"
-- "Rust frontend"
+  L14_root:
+    purpose: "Final combined grammar."
+    paths:
+      - "grammar/Zamani.g4"
+    may_depend_on:
+      - "L03_lexer_boundary"
+      - "L13_parser_boundary"
+    may_be_depended_on_by:
+      - "ANTLR generation"
+      - "frontend conformance"
 
-L15_tests:
-paths:
-- "grammar/tests/"
-- "grammar/conformance/"
-- "grammar/golden/"
-- "grammar/examples/"
-may_depend_on:
-- "all production layers"
-may_not_be_dependencies_of:
-- "any production grammar"
+  L15_conformance:
+    purpose: "Tests, examples and golden expectations."
+    paths:
+      - "grammar/tests/"
+      - "grammar/conformance/"
+      - "grammar/golden/"
+      - "grammar/examples/"
+    may_depend_on:
+      - "L00_authority"
+      - "L01_registry"
+      - "L02_lexical"
+      - "L03_lexer_boundary"
+      - "L04_foundation"
+      - "L05_types"
+      - "L06_expressions"
+      - "L07_functions"
+      - "L08_statements"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L11_extensions"
+      - "L12_compatibility"
+      - "L13_parser_boundary"
+      - "L14_root"
+    production_dependency_allowed: false
 
-L16_implementation:
-paths:
-- "src/lexer.rs"
-- "src/parser.rs"
-- "src/ast/"
-- "src/semantic/"
-- "src/ir/"
-- "src/quantum/"
-- "src/compile/"
-may_depend_on:
-- "production grammar contracts"
-grammar_may_not_depend_on:
-- "implementation internals"
+  L16_frontend_implementation:
+    purpose: "Rust frontend implementation."
+    paths:
+      - "src/lexer.rs"
+      - "src/parser.rs"
+      - "src/ast/"
+    may_depend_on:
+      - "L00_authority"
+      - "L02_lexical"
+      - "L13_parser_boundary"
+      - "L14_root"
+      - "L15_conformance"
+    grammar_may_depend_on: false
 
-============================================================================
+  L17_semantic_implementation:
+    purpose: "Validated semantic implementation."
+    paths:
+      - "src/semantic/"
+    may_depend_on:
+      - "L16_frontend_implementation"
+      - "L09_control_plane"
+      - "L10_domains"
+      - "L12_compatibility"
+    grammar_may_depend_on: false
 
-CANONICAL COMPOSITION ROOTS
+  L18_ir_implementation:
+    purpose: "Canonical and domain IR implementation."
+    paths:
+      - "src/ir/"
+      - "src/quantum/ir/"
+    may_depend_on:
+      - "L17_semantic_implementation"
+      - "L12_compatibility"
+    grammar_may_depend_on: false
 
-============================================================================
+  L19_realization:
+    purpose: "Optimization, lowering, routing, scheduling, resilience and target realization."
+    paths:
+      - "src/compiler/"
+      - "src/compile/"
+      - "src/quantum/optimization/"
+      - "src/quantum/scheduling/"
+      - "src/quantum/qec/"
+      - "src/quantum/zqn/"
+      - "runtime/"
+      - "hal/"
+    may_depend_on:
+      - "L18_ir_implementation"
+      - "L09_control_plane"
+      - "L12_compatibility"
+    grammar_may_depend_on: false
 
-A composition root may compose children but MUST NOT duplicate their rules.
+# =============================================================================
+# 5. CANONICAL PIPELINE
+# =============================================================================
 
-============================================================================
+pipeline:
+
+  - id: "P00"
+    stage: "source"
+    input: "Zamani source text"
+    output: "source characters"
+
+  - id: "P01"
+    stage: "lexical_contracts"
+    owner: "grammar/lexer/"
+    depends_on:
+      - "P00"
+    output:
+      - "canonical token vocabulary"
+      - "lexical classifications"
+
+  - id: "P02"
+    stage: "antlr_lexer"
+    owner: "grammar/antlr/ZamaniLexer.g4"
+    depends_on:
+      - "P01"
+    output:
+      - "tokens"
+
+  - id: "P03"
+    stage: "antlr_parser"
+    owner: "grammar/antlr/ZamaniParser.g4"
+    depends_on:
+      - "P02"
+      - "foundation"
+      - "types"
+      - "expressions"
+      - "functions"
+      - "statements"
+      - "control_plane"
+      - "domains"
+      - "extensions"
+      - "compatibility"
+    output:
+      - "parse tree"
+
+  - id: "P04"
+    stage: "combined_root"
+    owner: "grammar/Zamani.g4"
+    depends_on:
+      - "P02"
+      - "P03"
+    output:
+      - "complete source parse"
+
+  - id: "P05"
+    stage: "domain_neutral_ast"
+    owner: "src/ast/"
+    depends_on:
+      - "P04"
+    output:
+      - "AST"
+
+  - id: "P06"
+    stage: "structural_validation"
+    owner: "grammar/validation/ + semantic implementation"
+    depends_on:
+      - "P05"
+
+  - id: "P07"
+    stage: "type_validation"
+    owner: "type semantic implementation"
+    depends_on:
+      - "P06"
+
+  - id: "P08"
+    stage: "effect_validation"
+    owner: "effect semantic implementation"
+    depends_on:
+      - "P06"
+      - "P07"
+
+  - id: "P09"
+    stage: "resource_capability_validation"
+    owner: "resource/capability semantic implementation"
+    depends_on:
+      - "P06"
+      - "P07"
+      - "P08"
+
+  - id: "P10"
+    stage: "contract_policy_validation"
+    owner: "contract/policy/security validation"
+    depends_on:
+      - "P07"
+      - "P08"
+      - "P09"
+
+  - id: "P11"
+    stage: "provenance_evidence"
+    owner: "semantic implementation"
+    depends_on:
+      - "P05"
+      - "P10"
+
+  - id: "P12"
+    stage: "domain_semantics"
+    owner: "domain semantic implementations"
+    depends_on:
+      - "P07"
+      - "P08"
+      - "P09"
+      - "P10"
+      - "P11"
+
+  - id: "P13"
+    stage: "canonical_ir"
+    owner: "src/ir/"
+    depends_on:
+      - "P12"
+
+  - id: "P14"
+    stage: "quantum_ir"
+    owner: "src/quantum/ir/"
+    depends_on:
+      - "P12"
+    invariant: >
+      Quantum source semantics MUST converge through quantum::ir. Grammar
+      MUST NOT define a competing source-specific quantum IR.
+
+  - id: "P15"
+    stage: "optimization"
+    owner: "compiler/backend"
+    depends_on:
+      - "P13"
+      - "P14"
+
+  - id: "P16"
+    stage: "lowering"
+    owner: "compiler/backend"
+    depends_on:
+      - "P15"
+
+  - id: "P17"
+    stage: "target_negotiation"
+    owner: "compiler/runtime"
+    depends_on:
+      - "P16"
+      - "resource requirements"
+      - "capability requirements"
+      - "policies"
+
+  - id: "P18"
+    stage: "routing_and_scheduling"
+    owner: "compiler/backend/runtime"
+    depends_on:
+      - "P17"
+
+  - id: "P19"
+    stage: "resilience"
+    owner: "compiler/runtime"
+    depends_on:
+      - "P18"
+
+  - id: "P20"
+    stage: "zqn"
+    owner: "quantum/compiler/runtime"
+    depends_on:
+      - "P19"
+
+  - id: "P21"
+    stage: "hal"
+    owner: "target/runtime integration"
+    depends_on:
+      - "P20"
+
+# =============================================================================
+# 6. CANONICAL COMPOSITION ROOTS
+# =============================================================================
 
 composition_roots:
 
-lexer:
-path: "grammar/antlr/ZamaniLexer.g4"
-owns:
-- "public lexer boundary"
-imports:
-- "grammar/lexer/lexer.g4"
-does_not_own:
-- "individual token definitions"
+  lexer:
+    path: "grammar/antlr/ZamaniLexer.g4"
+    grammar_type: "lexer grammar"
+    owns:
+      - "public lexer boundary"
+    imports:
+      - "grammar/lexer/lexer.g4"
+    does_not_own:
+      - "individual token registry entries"
+      - "parser rules"
+      - "semantic rules"
+      - "hardware discovery"
 
-parser:
-path: "grammar/antlr/ZamaniParser.g4"
-owns:
-- "public parser composition boundary"
-imports:
-- "foundation dispatch"
-- "type dispatch"
-- "expression dispatch"
-- "declaration dispatch"
-- "function dispatch"
-- "statement dispatch"
-- "control-plane dispatch"
-- "domain dispatch"
-- "extension dispatch"
-does_not_own:
-- "leaf grammar semantics"
+  parser:
+    path: "grammar/antlr/ZamaniParser.g4"
+    grammar_type: "parser grammar"
+    owns:
+      - "public parser composition boundary"
+      - "universal parser dispatch"
+    imports:
+      - "foundation dispatch"
+      - "type dispatch"
+      - "expression dispatch"
+      - "declaration dispatch"
+      - "function dispatch"
+      - "statement dispatch"
+      - "control-plane dispatch"
+      - "domain dispatch"
+      - "extension dispatch"
+    does_not_own:
+      - "leaf domain semantics"
+      - "token definitions"
+      - "AST implementation"
+      - "IR implementation"
 
-root:
-path: "grammar/Zamani.g4"
-owns:
-- "top-level composition"
-- "program dispatch"
-- "EOF"
-imports:
-- "grammar/antlr/ZamaniParser.g4"
-does_not_own:
-- "tokens"
-- "individual parser productions"
-- "domain semantics"
-- "hardware limits"
-- "IR"
+  root:
+    path: "grammar/Zamani.g4"
+    grammar_type: "combined grammar"
+    owns:
+      - "top-level program entry"
+      - "complete-input EOF enforcement"
+    imports:
+      - "grammar/antlr/ZamaniParser.g4"
+      - "grammar/antlr/ZamaniLexer.g4"
+    does_not_own:
+      - "tokens"
+      - "domain parser productions"
+      - "semantic validation"
+      - "hardware realization"
+      - "IR"
+      - "runtime"
 
-============================================================================
-
-LEXICAL DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 7. LEXICAL DEPENDENCIES
+# =============================================================================
 
 lexical:
 
-canonical_token_registry:
-owner: "grammar/lexer/tokens.g4"
-consumers:
-- "all parser grammars"
-- "grammar/antlr/ZamaniLexer.g4"
-rule: >
-Parser grammars MUST consume the canonical vocabulary and MUST NOT
-redeclare lexer tokens.
+  token_registry:
+    owner: "grammar/lexer/tokens.g4"
+    depends_on: []
+    exports:
+      - "canonical token vocabulary"
+    consumers:
+      - "grammar/lexer/"
+      - "grammar/antlr/ZamaniLexer.g4"
+      - "parser grammars"
+    invariants:
+      - "one token spelling has one canonical owner"
+      - "duplicate token aliases require explicit compatibility justification"
+      - "contextual keywords remain distinguishable from reserved keywords"
 
-lexer_composition:
-owner: "grammar/lexer/lexer.g4"
-depends_on:
-- "grammar/lexer/tokens.g4"
-- "grammar/lexer/keywords.g4"
-- "grammar/lexer/operators.g4"
-- "grammar/lexer/punctuation.g4"
-- "grammar/lexer/literals.g4"
-- "grammar/lexer/identifiers.g4"
-- "grammar/lexer/comments.g4"
-- "grammar/lexer/annotations.g4"
-- "grammar/lexer/unicode.g4"
-- "grammar/lexer/lexer-errors.g4"
+  lexer_composition:
+    owner: "grammar/lexer/lexer.g4"
+    depends_on:
+      - "grammar/lexer/tokens.g4"
+      - "grammar/lexer/keywords.g4"
+      - "grammar/lexer/operators.g4"
+      - "grammar/lexer/punctuation.g4"
+      - "grammar/lexer/literals.g4"
+      - "grammar/lexer/identifiers.g4"
+      - "grammar/lexer/comments.g4"
+      - "grammar/lexer/annotations.g4"
+      - "grammar/lexer/unicode.g4"
+      - "grammar/lexer/lexer-errors.g4"
 
-lexical_components:
-token_registry:
-path: "grammar/lexer/tokens.g4"
-depends_on: []
+  literal_composition:
+    owner: "grammar/lexer/literals.g4"
+    depends_on:
+      - "grammar/lexer/numeric-literals.g4"
+      - "grammar/lexer/string-literals.g4"
+      - "grammar/lexer/character-literals.g4"
+      - "grammar/lexer/boolean-literals.g4"
+      - "grammar/lexer/duration-literals.g4"
+      - "grammar/lexer/size-literals.g4"
+      - "grammar/lexer/quantum-literals.g4"
+      - "grammar/lexer/hardware-literals.g4"
 
-identifiers:
-  path: "grammar/lexer/identifiers.g4"
-  depends_on:
-    - "grammar/lexer/tokens.g4"
+  lexical_forbidden:
+    - "parser grammar defining lexer rules"
+    - "domain grammar defining token rules"
+    - "Rust lexer silently accepting undeclared language tokens"
+    - "ANTLR lexer silently accepting undeclared language tokens"
+    - "backend-specific token vocabulary in the core lexer"
 
-keywords:
-  path: "grammar/lexer/keywords.g4"
-  depends_on:
-    - "grammar/lexer/tokens.g4"
-
-operators:
-  path: "grammar/lexer/operators.g4"
-  depends_on:
-    - "grammar/lexer/tokens.g4"
-
-punctuation:
-  path: "grammar/lexer/punctuation.g4"
-  depends_on:
-    - "grammar/lexer/tokens.g4"
-
-literals:
-  path: "grammar/lexer/literals.g4"
-  depends_on:
-    - "grammar/lexer/tokens.g4"
-    - "grammar/lexer/numeric-literals.g4"
-    - "grammar/lexer/string-literals.g4"
-    - "grammar/lexer/character-literals.g4"
-    - "grammar/lexer/boolean-literals.g4"
-    - "grammar/lexer/duration-literals.g4"
-    - "grammar/lexer/size-literals.g4"
-    - "grammar/lexer/quantum-literals.g4"
-    - "grammar/lexer/hardware-literals.g4"
-
-lexical_rule:
-forbidden:
-- "parser grammar defining token rules"
-- "domain grammar defining token rules"
-- "Rust lexer silently accepting tokens absent from the lexical contract"
-- "ANTLR lexer silently accepting tokens absent from the lexical contract"
-
-============================================================================
-
-FOUNDATION DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 8. FOUNDATION DEPENDENCIES
+# =============================================================================
 
 foundation:
 
-core:
-path: "grammar/core/"
-depends_on:
-- "grammar/lexer/"
-may_define:
-- "program"
-- "sourceUnit"
-- "compilationUnit"
-- "names"
-- "qualified names"
-- "paths"
-- "visibility"
-- "attributes"
-- "annotations"
-- "modifiers"
-- "requirements"
-- "constraints"
-- "capabilities"
-- "policies"
-- "hints"
-- "versioning"
-- "blocks"
-must_not_depend_on:
-- "quantum implementation"
-- "specific GPU"
-- "specific QPU"
-- "specific FPGA"
-- "backend IR"
+  core:
+    path: "grammar/core/"
+    depends_on:
+      - "grammar/lexer/"
+    owns:
+      - "program structure"
+      - "source units"
+      - "compilation units"
+      - "names"
+      - "qualified names"
+      - "paths"
+      - "visibility"
+      - "attributes"
+      - "annotations"
+      - "modifiers"
+      - "requirements"
+      - "constraints"
+      - "capability references"
+      - "policy references"
+      - "hints"
+      - "version references"
+      - "universal blocks"
+    must_not_depend_on:
+      - "specific hardware"
+      - "specific QPU"
+      - "specific GPU"
+      - "backend IR"
+      - "runtime state"
 
-modules:
-path: "grammar/modules/"
-depends_on:
-- "grammar/core/"
-may_be_depended_on_by:
-- "declarations"
-- "functions"
-- "all domains"
+  modules:
+    path: "grammar/modules/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/lexer/"
+    exports:
+      - "module declarations"
+      - "module paths"
+      - "imports"
+      - "exports"
+      - "source dependencies"
+    special_rule: >
+      Module dependency syntax describes source-level dependencies. It MUST
+      NOT become a direct dependency on a physical target or backend.
 
-declarations:
-path: "grammar/declarations/"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-may_be_depended_on_by:
-- "statements"
-- "domains"
+  declarations:
+    path: "grammar/declarations/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+    may_consume:
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/specification/"
+    special_rule: >
+      Declaration syntax MUST remain domain-neutral unless a declaration is
+      explicitly owned by a domain grammar.
 
-============================================================================
-
-TYPE DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 9. TYPE AND MEMORY DEPENDENCIES
+# =============================================================================
 
 types:
 
-root:
-path: "grammar/types/types.g4"
-role: "canonical type composition"
-depends_on:
-- "grammar/core/"
-- "grammar/lexer/"
-consumes:
-- "type-level expressions"
-- "names"
-- "constraints"
-- "capabilities"
-exports:
-- "canonical type expression entry point"
-
-type_categories:
-primitive:
-path: "grammar/types/primitive.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/lexer/"
-
-named:
-  path: "grammar/types/named.g4"
-  depends_on:
-    - "grammar/core/"
-    - "grammar/modules/"
-
-generic:
-  path: "grammar/types/generic.g4"
-  depends_on:
-    - "grammar/types/named.g4"
-    - "grammar/types/bounds.g4"
-    - "grammar/types/constraints.g4"
-
-arrays:
-  canonical:
-    path: "grammar/types/array-types.g4"
-    status: "canonical"
+  type_system:
+    path: "grammar/types/"
     depends_on:
-      - "grammar/types/types.g4"
+      - "grammar/core/"
+      - "grammar/lexer/"
+    exports:
+      - "type syntax"
+      - "generic types"
+      - "bounds"
+      - "constraints"
+      - "associated types"
+      - "linear types"
+      - "affine types"
+      - "resource types"
+      - "quantum types"
+      - "hardware intent types"
+    must_not_depend_on:
+      - "physical register width"
+      - "physical memory capacity"
+      - "vendor type identifiers"
+      - "backend instruction types"
+
+  memory:
+    path: "grammar/memory/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
       - "grammar/expressions/"
-    rule: >
-      Array cardinality remains symbolic/type-level. It MUST NOT create
-      physical capacity semantics.
+    exports:
+      - "ownership"
+      - "borrowing"
+      - "references"
+      - "lifetimes"
+      - "regions"
+      - "address-space intent"
+      - "memory placement intent"
+    invariant: >
+      Source memory semantics MUST remain distinct from physical memory
+      capacity and address layout.
 
-  aliases_or_duplicates:
-    - "grammar/types/array.g4"
-
-maps:
-  canonical:
-    path: "grammar/types/map-types.g4"
-    status: "canonical"
-  aliases_or_duplicates:
-    - "grammar/types/map.g4"
-
-options:
-  canonical:
-    path: "grammar/types/option-types.g4"
-    status: "canonical"
-  aliases_or_duplicates:
-    - "grammar/types/option.g4"
-
-references:
-  path: "grammar/types/reference.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/memory/"
-
-pointers:
-  path: "grammar/types/pointer.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/memory/"
-
-linear:
-  path: "grammar/types/linear.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/memory/"
-
-affine:
-  path: "grammar/types/affine.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/memory/"
-
-resource:
-  path: "grammar/types/resource.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/resources/"
-
-quantum:
-  path: "grammar/types/quantum.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/quantum/"
-  rule: >
-    Source-level quantum types may depend on quantum semantic contracts,
-    but physical resource assignment remains downstream.
-
-hardware:
-  path: "grammar/types/hardware.g4"
-  depends_on:
-    - "grammar/types/types.g4"
-    - "grammar/hardware/"
-  rule: >
-    Hardware types describe portable intent and capability contracts, not
-    a fixed physical machine.
-
-type_dependency_rule:
-forbidden:
-- "types -> vendor backend"
-- "types -> physical device inventory"
-- "types -> fixed machine capacity"
-- "types -> runtime scheduling"
-
-============================================================================
-
-MEMORY DEPENDENCIES
-
-============================================================================
-
-memory:
-
-root:
-path: "grammar/memory/memory.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/effects/"
-- "grammar/resources/"
-
-allowed_subsystems:
-- "ownership"
-- "borrowing"
-- "references"
-- "lifetimes"
-- "allocation"
-- "deallocation"
-- "regions"
-- "address spaces"
-- "shared memory"
-- "distributed memory"
-- "accelerator memory"
-- "quantum memory"
-- "persistent memory"
-- "temporal memory"
-- "provenance"
-
-forbidden:
-- "physical RAM ceiling"
-- "fixed register width"
-- "fixed accelerator memory"
-- "fixed QPU memory"
-
-============================================================================
-
-EXPRESSION DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 10. EXPRESSION DEPENDENCIES
+# =============================================================================
 
 expressions:
 
-root:
-path: "grammar/expressions/expressions.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/lexer/"
-- "grammar/memory/"
+  root:
+    path: "grammar/expressions/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/lexer/"
+    exports:
+      - "literal expressions"
+      - "name expressions"
+      - "path expressions"
+      - "unary expressions"
+      - "binary expressions"
+      - "assignment expressions"
+      - "call expressions"
+      - "member expressions"
+      - "index expressions"
+      - "range expressions"
+      - "tuple expressions"
+      - "array expressions"
+      - "map expressions"
+      - "lambda expressions"
+      - "closure expressions"
+      - "block expressions"
+      - "conditional expressions"
+      - "match expressions"
+      - "query expressions"
+      - "domain extension expressions"
 
-canonical_categories:
-- "assignment"
-- "conditional"
-- "range"
-- "unary"
-- "postfix"
-- "literal"
-- "array"
-- "map"
-- "tuple"
-- "lambda"
-- "closure"
-- "comprehension"
-- "pattern"
-- "guard"
-- "match"
-- "quantum"
-- "reasoning"
-- "knowledge"
-- "uncertainty"
-- "query"
-- "policy"
-- "effect"
-- "compile-time"
-- "metaprogramming"
-- "block"
+  duplicate_rule:
+    rule: >
+      Conceptually duplicate files such as singular/plural variants MUST be
+      resolved through grammar/OWNERSHIP.yaml. Only one file may own the
+      canonical public rule. Non-canonical files MUST be aliases, migration
+      artifacts, or quarantined.
 
-duplicate_resolution:
-closure:
-canonical:
-- "grammar/expressions/closures.g4"
-legacy:
-- "grammar/expressions/closure.g4"
-rule: >
-Only one file may export the canonical closure syntax. The legacy
-file MUST either become a compatibility adapter, be retired, or be
-quarantined. It MUST NOT be independently imported by the production
-composition.
-
-lambda:
-  canonical:
-    - "grammar/expressions/lambdas.g4"
-  legacy:
-    - "grammar/expressions/lambda.g4"
-  rule: >
-    Only one canonical lambda owner is permitted.
-
-range:
-  canonical:
-    - "grammar/expressions/ranges.g4"
-  legacy:
-    - "grammar/expressions/range.g4"
-  rule: >
-    Only one canonical range owner is permitted unless the two files have
-    formally distinct syntax contracts.
-
-============================================================================
-
-FUNCTION DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 11. FUNCTION DEPENDENCIES
+# =============================================================================
 
 functions:
 
-root:
-path: "grammar/functions/functions.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/memory/"
-- "grammar/effects/"
+  root:
+    path: "grammar/functions/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+    may_consume:
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+    exports:
+      - "functions"
+      - "parameters"
+      - "returns"
+      - "generic parameters"
+      - "bounds"
+      - "contracts"
+      - "closures"
+      - "lambdas"
+      - "foreign callable declarations"
+      - "compile-time callable declarations"
+    invariant: >
+      Functions MUST use the common type/effect/resource/policy model rather
+      than domain-specific parallel function systems.
 
-specialized:
-generics:
-path: "grammar/functions/generics.g4"
-depends_on:
-- "grammar/types/generic.g4"
-- "grammar/types/bounds.g4"
-
-contracts:
-  path: "grammar/functions/contracts.g4"
-  depends_on:
-    - "grammar/policies/"
-    - "grammar/validation/"
-
-foreign_functions:
-  path: "grammar/functions/foreign-functions.g4"
-  depends_on:
-    - "grammar/interoperability/"
-    - "grammar/effects/foreign.g4"
-
-async:
-  path: "grammar/functions/async.g4"
-  depends_on:
-    - "grammar/concurrency/"
-    - "grammar/effects/"
-
-============================================================================
-
-STATEMENT DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 12. STATEMENT DEPENDENCIES
+# =============================================================================
 
 statements:
 
-root:
-path: "grammar/statements/statements.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/functions/"
-- "grammar/declarations/"
+  root:
+    path: "grammar/statements/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+    may_consume:
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/security/"
+    exports:
+      - "control flow"
+      - "declarations used as statements"
+      - "contracts"
+      - "resource statements"
+      - "policy statements"
+      - "query statements"
+      - "reasoning statements"
+      - "learning statements"
+      - "controlled adaptation statements"
+      - "simulation statements"
+    adaptation_rule: >
+      Adaptation syntax MUST NOT imply unrestricted self-modifying execution.
+      Its semantic validation MUST involve applicable effects, capabilities,
+      resources, policies, authorization, contracts, and provenance.
 
-control_flow:
-path: "grammar/statements/control-flow.g4"
-depends_on:
-- "grammar/expressions/"
-- "grammar/types/"
-
-reasoning:
-canonical:
-path: "grammar/statements/reason.g4"
-may_compose:
-- "grammar/statements/infer.g4"
-- "grammar/statements/deduce.g4"
-- "grammar/statements/abduction.g4"
-rule: >
-Reasoning statements share the common statement model. Individual
-reasoning constructs MUST NOT become independent language roots.
-
-adaptation:
-path: "grammar/statements/adapt.g4"
-depends_on:
-- "grammar/policies/"
-- "grammar/resources/"
-- "grammar/effects/adaptation.g4"
-- "grammar/security/"
-- "grammar/validation/"
-mandatory_contract:
-- "authorization"
-- "capability"
-- "effect"
-- "resource"
-- "policy"
-- "provenance"
-- "diagnostics"
-
-forbidden:
-  - "unrestricted self-modifying source"
-  - "implicit code mutation without policy"
-  - "implicit code generation without effect declaration"
-
-============================================================================
-
-EFFECT DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 13. EFFECT DEPENDENCIES
+# =============================================================================
 
 effects:
 
-root:
-path: "grammar/effects/effects.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
+  root:
+    path: "grammar/effects/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/statements/"
+    exports:
+      - "effect declarations"
+      - "effect references"
+      - "effect composition"
+      - "effect constraints"
+    extensibility:
+      rule: >
+        New effect categories MUST be extensible without rewriting the
+        universal dependency architecture.
 
-specialized_effects:
-adaptation:
-path: "grammar/effects/adaptation.g4"
-depends_on:
-- "grammar/effects/"
-- "grammar/policies/"
-- "grammar/resources/"
+    known_effect_categories:
+      - "io"
+      - "network"
+      - "mutation"
+      - "randomness"
+      - "native"
+      - "foreign"
+      - "distributed"
+      - "measurement"
+      - "quantum"
+      - "learning"
+      - "adaptation"
+      - "reflection"
+      - "code_generation"
+      - "simulation"
 
-code_generation:
-  path: "grammar/effects/code_generation.g4"
-  depends_on:
-    - "grammar/effects/"
-    - "grammar/security/"
-    - "grammar/metaprogramming/"
+    invariant: >
+      Effects describe semantic consequences. They MUST NOT directly select
+      hardware or implement runtime behavior.
 
-distributed:
-  path: "grammar/effects/distributed.g4"
-  depends_on:
-    - "grammar/distributed/"
-
-foreign:
-  path: "grammar/effects/foreign.g4"
-  depends_on:
-    - "grammar/interoperability/"
-
-hardware:
-  path: "grammar/effects/hardware.g4"
-  depends_on:
-    - "grammar/hardware/"
-    - "grammar/resources/"
-
-learning:
-  path: "grammar/effects/learning.g4"
-  depends_on:
-    - "grammar/ai/"
-    - "grammar/resources/"
-
-measurement:
-  path: "grammar/effects/measurement.g4"
-  depends_on:
-    - "grammar/quantum/"
-    - "grammar/effects/"
-
-mutation:
-  path: "grammar/effects/mutation.g4"
-  depends_on:
-    - "grammar/types/"
-    - "grammar/memory/"
-    - "grammar/policies/"
-
-network:
-  path: "grammar/effects/network.g4"
-  depends_on:
-    - "grammar/networking/"
-
-quantum:
-  path: "grammar/effects/quantum.g4"
-  depends_on:
-    - "grammar/quantum/"
-
-reflection:
-  path: "grammar/effects/reflection.g4"
-  depends_on:
-    - "grammar/metaprogramming/"
-    - "grammar/security/"
-
-security:
-  path: "grammar/effects/security.g4"
-  depends_on:
-    - "grammar/security/"
-
-simulation:
-  path: "grammar/effects/simulation.g4"
-  depends_on:
-    - "grammar/execution/"
-
-============================================================================
-
-RESOURCE DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 14. RESOURCE DEPENDENCIES
+# =============================================================================
 
 resources:
 
-root:
-path: "grammar/resources/resources.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
+  root:
+    path: "grammar/resources/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/statements/"
+    exports:
+      - "resource declarations"
+      - "requirements"
+      - "constraints"
+      - "preferences"
+      - "hints"
+      - "budgets"
+      - "capabilities"
+      - "negotiation"
+      - "scalability expressions"
+      - "resource provenance"
 
-dependency_order:
-- "grammar/resources/resource-expressions.g4"
-- "grammar/resources/capabilities.g4"
-- "grammar/resources/requirements.g4"
-- "grammar/resources/constraints.g4"
-- "grammar/resources/budgets.g4"
-- "grammar/resources/preferences.g4"
-- "grammar/resources/hints.g4"
-- "grammar/resources/negotiation.g4"
-- "grammar/resources/scalability.g4"
-- "grammar/resources/portability.g4"
-- "grammar/resources/performance.g4"
-- "grammar/resources/latency.g4"
-- "grammar/resources/energy.g4"
-- "grammar/resources/reliability.g4"
-- "grammar/resources/placement.g4"
-- "grammar/resources/resource.g4"
-- "grammar/resources/resources.g4"
+  resource_expression:
+    owner: "grammar/resources/resource-expressions.g4"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+    invariant: >
+      Resource expressions MUST be symbolic and dynamically extensible.
 
-semantic_separation:
-requirement:
-means: "must be satisfiable"
-constraint:
-means: "candidate realization is restricted"
-preference:
-means: "candidate realization is ranked"
-hint:
-means: "optimization guidance only"
-capability:
-means: "realization feature"
-resource:
-means: "logical/physical quantity"
-negotiation:
-means: "matching program requirements against realization capabilities"
+  requirements:
+    owner: "grammar/resources/requirements.g4"
+    depends_on:
+      - "grammar/resources/resource-expressions.g4"
+      - "grammar/core/capabilities.g4"
+    examples:
+      - "requires qubits >= required_qubits"
+      - "requires memory >= required_memory"
+      - "requires capability(\"quantum.measurement\")"
+      - "requires capability(\"gpu.compute\")"
+      - "requires capability(\"tensor.compute\")"
+      - "requires topology(required_topology)"
 
-canonical_examples:
-- 'requires qubits >= required_qubits'
-- 'requires memory >= required_memory'
-- 'requires capability("quantum.measurement")'
-- 'requires capability("gpu.compute")'
-- 'requires capability("tensor.compute")'
-- 'requires topology(required_topology)'
+  constraints:
+    owner: "grammar/resources/constraints.g4"
+    depends_on:
+      - "grammar/resources/resource-expressions.g4"
 
-forbidden:
-- "physical device enumeration in universal syntax"
-- "fixed target inventory"
-- "universal finite resource ceilings"
+  preferences:
+    owner: "grammar/resources/preferences.g4"
+    depends_on:
+      - "grammar/resources/resource-expressions.g4"
+      - "grammar/resources/capabilities.g4"
 
-============================================================================
+  hints:
+    owner: "grammar/resources/hints.g4"
+    depends_on:
+      - "grammar/resources/resource-expressions.g4"
+    invariant: >
+      Hints MUST NOT alter semantic correctness.
 
-POLICY DEPENDENCIES
+  negotiation:
+    owner: "grammar/resources/negotiation.g4"
+    depends_on:
+      - "grammar/resources/requirements.g4"
+      - "grammar/resources/constraints.g4"
+      - "grammar/resources/preferences.g4"
+      - "grammar/resources/capabilities.g4"
+      - "grammar/policies/"
 
-============================================================================
+  scalability:
+    owner: "grammar/resources/scalability.g4"
+    depends_on:
+      - "grammar/resources/resource-expressions.g4"
+      - "grammar/types/"
+      - "grammar/expressions/"
+    invariant: >
+      Scalability syntax MUST describe symbolic growth and realization intent,
+      never a universal implementation ceiling.
+
+  forbidden_capacity_dependencies:
+    patterns:
+      - "MAX_QUBITS"
+      - "MAX_CPUS"
+      - "MAX_CORES"
+      - "MAX_THREADS"
+      - "MAX_GPUS"
+      - "MAX_FPGAS"
+      - "MAX_ASICS"
+      - "MAX_QPUS"
+      - "MAX_NODES"
+      - "MAX_MEMORY"
+      - "MAX_STORAGE"
+      - "MAX_REGISTER_WIDTH"
+      - "MAX_VECTOR_WIDTH"
+      - "MAX_TENSOR_RANK"
+      - "MAX_TENSOR_DIMENSION"
+      - "MAX_NETWORK_SIZE"
+      - "MAX_DEVICE_COUNT"
+      - "MAX_ACCELERATOR_COUNT"
+      - "MAX_AGENT_COUNT"
+    enforcement: "validation tooling MUST detect these and equivalent patterns"
+
+# =============================================================================
+# 15. POLICY AND SECURITY DEPENDENCIES
+# =============================================================================
 
 policies:
 
-root:
-path: "grammar/policies/policies.g4"
-depends_on:
-- "grammar/core/"
-- "grammar/resources/"
-- "grammar/effects/"
-- "grammar/security/"
+  root:
+    path: "grammar/policies/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/statements/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+    exports:
+      - "policy declarations"
+      - "allow rules"
+      - "forbid rules"
+      - "authorization intent"
+      - "fallback policies"
+      - "adaptation policies"
+      - "deployment policies"
+    invariant: >
+      Policies constrain realization and execution but MUST NOT redefine
+      universal syntax or physical target state.
 
-dependency_order:
-- "grammar/policies/constitution.g4"
-- "grammar/policies/scopes.g4"
-- "grammar/policies/requirements.g4"
-- "grammar/policies/constraints.g4"
-- "grammar/policies/permissions.g4"
-- "grammar/policies/prohibitions.g4"
-- "grammar/policies/preferences.g4"
-- "grammar/policies/fallbacks.g4"
-- "grammar/policies/adaptation.g4"
-- "grammar/policies/execution.g4"
-- "grammar/policies/resource.g4"
-- "grammar/policies/security.g4"
-- "grammar/policies/deployment.g4"
-- "grammar/policies/simulation.g4"
-- "grammar/policies/provenance.g4"
-- "grammar/policies/policy.g4"
-- "grammar/policies/policies.g4"
+security:
 
-adaptation_rule:
-path: "grammar/policies/adaptation.g4"
-depends_on:
-- "grammar/effects/adaptation.g4"
-- "grammar/resources/"
-- "grammar/security/"
-- "grammar/specification/poco-reaf.md"
+  root:
+    path: "grammar/security/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+    exports:
+      - "security declarations"
+      - "authorization intent"
+      - "sandbox intent"
+      - "trust requirements"
+      - "audit intent"
+      - "cryptographic intent"
+    invariant: >
+      Security grammar declares intent and constraints. It MUST NOT implement
+      privileged operations in the parser.
 
-invariant: >
-  Adaptation may select among explicitly permitted semantic realizations,
-  but it MUST NOT silently change the program's declared meaning,
-  security policy, resource obligations, or provenance requirements.
-
-============================================================================
-
-VALIDATION DEPENDENCIES
-
-============================================================================
-
-validation:
-
-root:
-path: "grammar/validation/validation.g4"
-depends_on:
-- "grammar/OWNERSHIP.yaml"
-- "grammar/DEPENDENCIES.yaml"
-- "grammar/MANIFEST.yaml"
-
-static_dependency_checks:
-- "duplicate ownership"
-- "duplicate exports"
-- "unresolved imports"
-- "dependency cycles"
-- "forbidden layer edges"
-- "root importing leaf in reverse direction"
-- "test-to-production imports"
-- "implementation-to-grammar ownership inversion"
-- "backend-to-grammar ownership inversion"
-
-grammar_checks:
-- "left recursion"
-- "unreachable rules"
-- "ambiguous alternatives"
-- "duplicate rule names"
-- "duplicate token names"
-- "duplicate token spellings"
-- "missing token vocabulary"
-- "missing source-span mapping"
-
-architecture_checks:
-- "domain leakage"
-- "hardware-specific universal syntax"
-- "vendor-specific universal syntax"
-- "competing IR definitions"
-- "competing semantic models"
-
-scalability_checks:
-- "finite hardware capacity constants"
-- "finite domain enumerations where open-world identity is required"
-- "fixed device inventories"
-- "fixed tensor ceilings"
-- "fixed network ceilings"
-
-============================================================================
-
-COMPUTATIONAL DOMAIN DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 16. COMPUTATIONAL DOMAIN DEPENDENCIES
+# =============================================================================
 
 domains:
 
-classical:
-path: "grammar/classical/"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/functions/"
-- "grammar/effects/"
-- "grammar/resources/"
-- "grammar/memory/"
-may_not_depend_on:
-- "vendor backend"
-- "physical hardware inventory"
+  common_dependency_contract:
+    every_domain_must_depend_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/statements/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+    every_domain_must_provide:
+      - "syntax owner"
+      - "AST mapping"
+      - "semantic mapping"
+      - "applicable IR mapping"
+      - "diagnostic mapping"
+      - "compatibility status"
+      - "conformance tests"
+      - "hard-coding audit"
+      - "scalability audit"
 
-data:
-path: "grammar/data/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/resources/"
-- "grammar/provenance/"
-external_formats:
-rule: >
-SQL, JSON, XML, and other external formats are dialect/interoperability
-concerns and MUST NOT become universal core grammar dependencies.
+  classical:
+    path: "grammar/classical/"
+    depends_on:
+      - "common_dependency_contract"
+    must_not_own:
+      - "universal quantum syntax"
+      - "hardware-specific register widths"
+      - "target-specific CPU counts"
 
-concurrency:
-path: "grammar/concurrency/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/functions/"
-- "grammar/effects/"
-- "grammar/resources/"
-rule: >
-Source concurrency expresses computational intent. Physical thread,
-process, GPU-workgroup, accelerator-work-item, or cluster placement
-remains downstream.
+  data:
+    path: "grammar/data/"
+    depends_on:
+      - "common_dependency_contract"
+    may_integrate_with:
+      - "grammar/interoperability/"
+      - "grammar/dialects/"
+    invariant: >
+      External data formats remain dialect/interoperability concerns unless
+      their construct is part of the universal language semantics.
 
-distributed:
-path: "grammar/distributed/"
-depends_on:
-- "grammar/concurrency/"
-- "grammar/networking/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/security/"
-forbidden:
-- "fixed node counts"
-- "fixed cluster sizes"
-- "fixed network sizes"
+  concurrency:
+    path: "grammar/concurrency/"
+    depends_on:
+      - "common_dependency_contract"
+    exports:
+      - "tasks"
+      - "futures"
+      - "actors"
+      - "parallel intent"
+      - "synchronization"
+      - "coordination"
+    invariant: >
+      Source concurrency semantics MUST NOT require a fixed number of
+      execution units.
 
-networking:
-path: "grammar/networking/"
-depends_on:
-- "grammar/types/"
-- "grammar/effects/"
-- "grammar/security/"
-- "grammar/resources/"
-forbidden:
-- "fixed address universe"
-- "fixed endpoint count"
-- "fixed network topology size"
+  distributed:
+    path: "grammar/distributed/"
+    depends_on:
+      - "grammar/concurrency/"
+      - "common_dependency_contract"
+    invariant: >
+      Distributed syntax MUST NOT define a universal node or network count.
 
-hardware:
-path: "grammar/hardware/"
-depends_on:
-- "grammar/types/"
-- "grammar/resources/"
-- "grammar/effects/"
-- "grammar/policies/"
-role: "hardware intent and capability contracts"
-forbidden:
-- "physical hardware discovery"
-- "vendor inventory"
-- "fixed capacity limits"
+  networking:
+    path: "grammar/networking/"
+    depends_on:
+      - "grammar/distributed/"
+      - "common_dependency_contract"
+    invariant: >
+      Networking syntax MUST remain independent of a finite topology.
 
-execution:
-path: "grammar/execution/"
-depends_on:
-- "grammar/concurrency/"
-- "grammar/distributed/"
-- "grammar/hardware/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/effects/"
-owns:
-- "execution intent"
-- "adaptation intent"
-- "simulation intent"
-- "checkpointing intent"
-- "recovery intent"
-- "resilience intent"
-does_not_own:
-- "runtime implementation"
-- "physical scheduling algorithm"
+  hardware:
+    path: "grammar/hardware/"
+    depends_on:
+      - "common_dependency_contract"
+    exports:
+      - "hardware intent"
+      - "capabilities"
+      - "abstract resources"
+      - "abstract topology"
+      - "timing intent"
+      - "memory intent"
+      - "placement intent"
+    must_not_own:
+      - "device discovery"
+      - "calibration"
+      - "driver implementation"
+      - "physical device inventory"
 
-compile:
-path: "grammar/compile/"
-depends_on:
-- "grammar/execution/"
-- "grammar/hardware/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/compatibility/"
-- "grammar/interoperability/"
-owns:
-- "source-level compilation intent"
-- "target-independent artifact intent"
-- "reproducibility intent"
-- "cross-compilation intent"
-- "specialization intent"
-does_not_own:
-- "backend implementation"
-- "machine code generation implementation"
+  execution:
+    path: "grammar/execution/"
+    depends_on:
+      - "grammar/concurrency/"
+      - "grammar/distributed/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "common_dependency_contract"
+    exports:
+      - "execution context"
+      - "simulation intent"
+      - "adaptive execution intent"
+      - "checkpoint intent"
+      - "recovery intent"
+      - "dispatch intent"
+    invariant: >
+      Execution syntax describes intent. Runtime state and algorithms remain
+      outside grammar.
+
+  compile:
+    path: "grammar/compile/"
+    depends_on:
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/compatibility/"
+      - "common_dependency_contract"
+    exports:
+      - "compilation intent"
+      - "specialization intent"
+      - "optimization intent"
+      - "reproducibility intent"
+      - "artifact intent"
+      - "target-selection intent"
+    invariant: >
+      Compilation syntax MUST NOT require a particular target unless the
+      source explicitly requests target-specific behavior.
+
+# =============================================================================
+# 17. QUANTUM DEPENDENCIES
+# =============================================================================
 
 quantum:
-path: "grammar/quantum/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/functions/"
-- "grammar/effects/"
-- "grammar/resources/"
-- "grammar/hardware/"
-- "grammar/execution/"
-- "grammar/policies/"
-canonical_ir:
-name: "quantum::ir"
-owner: "quantum compiler/IR implementation"
-forbidden:
-- "vendor-specific IR as universal syntax"
-- "physical qubit allocation in grammar"
-- "fixed QPU capacity"
-- "fixed operation universe when metadata/dialect identity is sufficient"
 
-operation_model:
-  owner: "grammar/quantum/operations.g4"
-  dependencies:
-    - "grammar/quantum/parameters.g4"
-    - "grammar/quantum/controls.g4"
-    - "grammar/quantum/states.g4"
-    - "grammar/quantum/measurement.g4"
-    - "grammar/quantum/quantum-resources.g4"
-  rule: >
-    Quantum operations use open-world operation identity. Built-in,
-    custom, vendor, parameterized, and dialect operations MUST converge
-    through one semantic operation model.
+  root:
+    path: "grammar/quantum/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/statements/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/hardware/"
+      - "grammar/execution/"
+    exports:
+      - "quantum source syntax"
+      - "operation specifications"
+      - "targets"
+      - "controls"
+      - "parameters"
+      - "states"
+      - "measurements"
+      - "observables"
+      - "channels"
+      - "dynamic circuits"
+      - "logical resources"
+      - "physical realization intent"
+      - "error-correction intent"
+      - "noise intent"
+      - "pulse intent"
+
+  operations:
+    owner: "grammar/quantum/operations.g4"
+    depends_on:
+      - "grammar/quantum/"
+      - "grammar/expressions/"
+      - "grammar/core/attributes.g4"
+    invariant: >
+      Quantum operations MUST use a data-driven operation specification.
+      The grammar MUST NOT require a permanently enumerated list of every
+      possible operation.
+
+  operation_specifier:
+    owner: "grammar/quantum/operation-specifier.g4"
+    allowed_kinds:
+      - "builtin"
+      - "custom"
+      - "vendor"
+      - "parameterized"
+      - "dialect"
+      - "future"
+    invariant: >
+      Adding a new quantum operation MUST be possible through a registered
+      semantic/dialect extension without redesigning the universal parser.
+
+  quantum_ir_boundary:
+    syntax_owner: "grammar/quantum/"
+    semantic_owner: "src/quantum/"
+    ir_owner: "src/quantum/ir/"
+    canonical_name: "quantum::ir"
+    rule: >
+      Quantum grammar MUST NOT depend on individual quantum backend IR
+      structures.
+
+  error_correction:
+    path: "grammar/quantum/"
+    depends_on:
+      - "grammar/resources/"
+      - "grammar/effects/"
+      - "grammar/policies/"
+    downstream:
+      - "src/quantum/qec/"
+      - "src/quantum/scheduling/"
+      - "src/quantum/zqn/"
+    invariant: >
+      Source QEC intent MUST NOT hard-code a universal physical code,
+      hardware size, decoder implementation, or fixed realization.
+
+  physical_realization:
+    forbidden_dependencies:
+      - "specific physical qubit identifier"
+      - "specific QPU inventory"
+      - "specific calibration database"
+      - "specific vendor instruction set"
+      - "fixed hardware topology"
+
+# =============================================================================
+# 18. HDL DEPENDENCIES
+# =============================================================================
 
 hdl:
-path: "grammar/hdl/"
-depends_on:
-- "grammar/types/"
-- "grammar/memory/"
-- "grammar/hardware/"
-- "grammar/resources/"
-- "grammar/effects/"
-- "grammar/policies/"
-- "grammar/execution/"
-forbidden:
-- "universal fixed bus widths"
-- "universal fixed register counts"
-- "universal fixed clock counts"
-- "universal fixed lane counts"
-rule: >
-HDL expresses hardware intent. Physical synthesis, placement, routing,
-timing closure, technology mapping, and device selection remain
-downstream.
+
+  root:
+    path: "grammar/hdl/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/statements/"
+      - "grammar/resources/"
+      - "grammar/hardware/"
+      - "grammar/effects/"
+    exports:
+      - "HDL modules"
+      - "ports"
+      - "signals"
+      - "nets"
+      - "registers"
+      - "memories"
+      - "clocking"
+      - "reset"
+      - "timing"
+      - "pipelines"
+      - "state machines"
+      - "verification intent"
+      - "synthesis intent"
+      - "physical intent"
+
+  invariant:
+    rule: >
+      HDL syntax expresses hardware intent but MUST NOT impose universal bus
+      widths, register counts, clock counts, pipeline depths, memory sizes,
+      device counts, or topology limits.
+
+  downstream:
+    semantic_model: "hardware semantic implementation"
+    ir: "canonical hardware/HDL IR"
+    synthesis: "backend/synthesis implementation"
+    target: "HAL/hardware integration"
+
+# =============================================================================
+# 19. HYBRID DEPENDENCIES
+# =============================================================================
 
 hybrid:
-path: "grammar/hybrid/"
-depends_on:
-- "grammar/classical/"
-- "grammar/quantum/"
-- "grammar/hdl/"
-- "grammar/hardware/"
-- "grammar/execution/"
-- "grammar/resources/"
-- "grammar/effects/"
-rule: >
-Hybrid grammar composes already-defined domain semantics. It MUST NOT
-redefine classical, quantum, or HDL semantics.
+
+  root:
+    path: "grammar/hybrid/"
+    depends_on:
+      - "grammar/classical/"
+      - "grammar/quantum/"
+      - "grammar/hdl/"
+      - "grammar/hardware/"
+      - "grammar/execution/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+    exports:
+      - "classical-quantum boundaries"
+      - "host-device boundaries"
+      - "feed-forward"
+      - "synchronization"
+      - "shared data intent"
+      - "hybrid resource requirements"
+    invariant: >
+      Hybrid grammar MUST compose already-owned domain constructs rather than
+      redefining classical, quantum, HDL, or hardware semantics.
+
+# =============================================================================
+# 20. AI AND REASONING DEPENDENCIES
+# =============================================================================
 
 ai:
-path: "grammar/ai/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/functions/"
-- "grammar/data/"
-- "grammar/concurrency/"
-- "grammar/distributed/"
-- "grammar/effects/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/security/"
-rule: >
-AI constructs consume common language semantics. They MUST NOT establish
-a separate type, effect, resource, policy, or provenance universe.
 
-nano:
-path: "grammar/nano/"
-depends_on:
-- "grammar/types/"
-- "grammar/data/"
-- "grammar/quantum/"
-- "grammar/hardware/"
-- "grammar/resources/"
-- "grammar/policies/"
-rule: >
-Nano-scale constructs remain source-level domain semantics and do not
-imply physical device selection.
+  root:
+    path: "grammar/ai/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/statements/"
+      - "grammar/data/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/concurrency/"
+      - "grammar/distributed/"
+    exports:
+      - "inference"
+      - "deduction"
+      - "reasoning"
+      - "learning"
+      - "adaptation intent"
+      - "evidence"
+      - "provenance"
+      - "uncertainty"
+      - "probability"
+      - "confidence"
+      - "model intent"
+      - "training intent"
+      - "planning"
+      - "decision intent"
+      - "neural-symbolic composition"
+      - "agent intent"
 
-mathematics:
-path: "grammar/mathematics/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-rule: >
-Mathematical syntax MUST remain reusable across classical, quantum, AI,
-data, and HDL domains.
+  invariant:
+    rule: >
+      AI constructs MUST use the universal type/effect/resource/capability/
+      policy/provenance architecture.
 
-nlp:
-path: "grammar/nlp/"
-depends_on:
-- "grammar/ai/"
-- "grammar/data/"
-- "grammar/types/"
-- "grammar/resources/"
+  forbidden_core_domain_leakage:
+    rule: >
+      Application-specific concepts MUST NOT become universal core grammar
+      merely because an application uses AI. Such functionality belongs in
+      libraries, registered dialects, capabilities, policies, or applications.
 
-filesystem:
-path: "grammar/filesystem/"
-depends_on:
-- "grammar/types/"
-- "grammar/effects/"
-- "grammar/security/"
-- "grammar/policies/"
-- "grammar/resources/"
-
-============================================================================
-
-EXTENSION DEPENDENCIES
-
-============================================================================
-
-extensions:
+# =============================================================================
+# 21. INTEROPERABILITY AND DIALECT DEPENDENCIES
+# =============================================================================
 
 interoperability:
-path: "grammar/interoperability/"
-depends_on:
-- "grammar/types/"
-- "grammar/functions/"
-- "grammar/effects/"
-- "grammar/security/"
-- "grammar/compile/"
-owns:
-- "FFI"
-- "ABI"
-- "foreign types"
-- "foreign functions"
-- "linkage"
-- "calling conventions"
-- "external representations"
-rule: >
-An external language or representation remains an interoperability
-boundary unless explicitly registered as a Zamani dialect.
 
-dialects:
-path: "grammar/dialects/"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/compatibility/"
-- "grammar/interoperability/"
-- "grammar/resources/"
-- "grammar/capabilities/"
-owns:
-- "dialect identity"
-- "dialect registration"
-- "dialect version"
-- "dialect compatibility"
-- "dialect extension points"
-rule: >
-New open-ended syntax families MUST prefer dialect registration over
-modifying the universal core grammar.
+  root:
+    path: "grammar/interoperability/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/effects/"
+      - "grammar/security/"
+      - "grammar/compatibility/"
+    exports:
+      - "FFI declarations"
+      - "ABI declarations"
+      - "foreign types"
+      - "calling conventions"
+      - "linkage intent"
+      - "serialization"
+      - "external system interfaces"
+    invariant: >
+      Supporting an external language or format MUST NOT make that language
+      a second Zamani language authority.
+
+  dialects:
+    path: "grammar/dialects/"
+    depends_on:
+      - "grammar/interoperability/"
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/compatibility/"
+    exports:
+      - "dialect identity"
+      - "namespace"
+      - "version"
+      - "dependencies"
+      - "capabilities"
+      - "syntax extension"
+      - "semantic mapping"
+      - "registration"
+      - "compatibility"
+    invariant: >
+      A dialect MUST declare how its constructs map into the common semantic
+      model. A dialect MUST NOT silently redefine core semantics.
+
+# =============================================================================
+# 22. MACRO AND METAPROGRAMMING DEPENDENCIES
+# =============================================================================
 
 macros:
-path: "grammar/macros/"
-depends_on:
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/statements/"
-- "grammar/validation/"
-- "grammar/security/"
-rule: >
-Macro expansion MUST NOT bypass lexical, syntactic, semantic, security,
-effect, resource, policy, or provenance validation.
+
+  root:
+    path: "grammar/macros/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/statements/"
+      - "grammar/compatibility/"
+    exports:
+      - "macro declarations"
+      - "macro parameters"
+      - "macro invocation"
+      - "expansion intent"
+      - "hygiene metadata"
+    invariant: >
+      Macro expansion MUST remain subject to normal semantic validation.
 
 metaprogramming:
-path: "grammar/metaprogramming/"
-depends_on:
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/macros/"
-- "grammar/effects/"
-- "grammar/security/"
-- "grammar/policies/"
-- "grammar/compile/"
-rule: >
-Reflection and code generation MUST remain controlled by declared
-effects, capabilities, policies, authorization, and provenance.
 
-============================================================================
+  root:
+    path: "grammar/metaprogramming/"
+    depends_on:
+      - "grammar/core/"
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/macros/"
+      - "grammar/effects/"
+      - "grammar/policies/"
+      - "grammar/security/"
+    exports:
+      - "quotation"
+      - "unquotation"
+      - "reflection intent"
+      - "introspection"
+      - "generation"
+      - "compile-time computation"
+      - "specialization"
+    invariant: >
+      Reflection and generation MUST remain governed by applicable effects,
+      capabilities, policies, security rules, and provenance.
 
-COMPATIBILITY DEPENDENCIES
-
-============================================================================
+# =============================================================================
+# 23. COMPATIBILITY DEPENDENCIES
+# =============================================================================
 
 compatibility:
 
-path: "grammar/compatibility/"
+  root:
+    path: "grammar/compatibility/"
+    depends_on:
+      - "grammar/DESIGN.md"
+      - "grammar/specification/"
+      - "grammar/MANIFEST.yaml"
+      - "grammar/OWNERSHIP.yaml"
+      - "grammar/DEPENDENCIES.yaml"
+    exports:
+      - "language version compatibility"
+      - "grammar compatibility"
+      - "lexer compatibility"
+      - "AST compatibility"
+      - "semantic compatibility"
+      - "IR compatibility"
+      - "artifact compatibility"
+      - "dialect compatibility"
+      - "deprecation policy"
+      - "migration policy"
 
-depends_on:
-- "grammar/specification/language-version.md"
-- "grammar/specification/compatibility.md"
-- "grammar/specification/compilation-model.md"
-- "grammar/specification/poco-reaf.md"
-- "grammar/lexer/"
-- "grammar/core/"
-- "grammar/types/"
-- "grammar/expressions/"
-- "grammar/statements/"
-- "grammar/compile/"
-- "grammar/dialects/"
-- "grammar/interoperability/"
+  invariant:
+    rule: >
+      Compatibility metadata MUST NOT become a backdoor for changing the
+      meaning of existing stable constructs.
 
-tracks:
-- "language version"
-- "grammar version"
-- "lexer version"
-- "AST version"
-- "semantic version"
-- "IR version"
-- "dialect version"
-- "target compatibility"
-- "feature gates"
-- "deprecations"
-- "migration"
-
-freeze_rule: >
-A grammar change that affects an exported production, token, AST mapping,
-semantic contract, or IR mapping MUST have an explicit compatibility
-consequence before it can become STABLE.
-
-============================================================================
-
-SPECIFICATION DEPENDENCIES
-
-============================================================================
-
-specification:
-
-human_normative:
-path: "grammar/specification/"
-dependency_direction:
-- "language principles"
-- "language scope"
-- "language version"
-- "lexical model"
-- "syntax model"
-- "semantic model"
-- "type model"
-- "execution model"
-- "compilation model"
-- "portability"
-- "scalability"
-- "POCO-REAF"
-- "extensibility"
-- "compatibility"
-
-machine_contracts:
-path: "grammar/spec/"
-depends_on:
-- "grammar/specification/"
-
-forbidden:
-- "specification importing generated parser code"
-- "specification importing backend implementation"
-- "specification depending on physical target inventory"
-
-============================================================================
-
-RUST FRONTEND DEPENDENCIES
-
-============================================================================
-
-rust_frontend:
-
-baseline:
-edition: "2021"
-minimum_version: "1.97"
-later_stable_versions: true
-unsafe_allowed: false
+# =============================================================================
+# 24. FRONTEND INTEGRATION
+# =============================================================================
 
 frontend:
 
-lexer:
-  path: "src/lexer.rs"
-  consumes:
-    - "grammar/lexer/"
-    - "grammar/antlr/ZamaniLexer.g4"
-  must_not_define:
-    - "competing language token vocabulary"
+  lexer:
+    grammar_contract:
+      - "grammar/lexer/"
+      - "grammar/antlr/ZamaniLexer.g4"
+    implementation:
+      - "src/lexer.rs"
+    invariant: >
+      The Rust lexer and ANTLR lexer MUST agree on the canonical lexical
+      contract. Neither implementation may silently introduce independent
+      language tokens.
 
-parser:
-  path: "src/parser.rs"
-  consumes:
-    - "grammar/antlr/ZamaniParser.g4"
-    - "grammar/Zamani.g4"
-  must_not_define:
-    - "competing parser grammar"
+  parser:
+    grammar_contract:
+      - "grammar/antlr/ZamaniParser.g4"
+      - "grammar/Zamani.g4"
+    implementation:
+      - "src/parser.rs"
+    invariant: >
+      Parser implementation behavior MUST be covered by shared conformance
+      tests.
 
-ast:
-  path: "src/ast/"
-  consumes:
-    - "parser output"
-    - "grammar AST mappings"
-  owns:
-    - "domain-neutral AST implementation"
+  ast:
+    implementation:
+      - "src/ast/"
+    consumes:
+      - "parse tree"
+    produces:
+      - "domain-neutral AST"
+    invariant: >
+      Grammar files MUST NOT depend on AST implementation internals.
+      Grammar-to-AST mappings are recorded separately in ownership/mapping
+      contracts.
+
+# =============================================================================
+# 25. SEMANTIC INTEGRATION
+# =============================================================================
 
 semantic:
-  path: "src/semantic/"
-  consumes:
-    - "src/ast/"
-    - "grammar/specification/"
-    - "grammar/spec/"
-    - "grammar semantic mappings"
-  owns:
-    - "semantic validation implementation"
+
+  validation:
+    consumes:
+      - "AST"
+      - "types"
+      - "effects"
+      - "resources"
+      - "capabilities"
+      - "contracts"
+      - "policies"
+      - "provenance"
+    produces:
+      - "validated semantic program"
+
+  domain_models:
+    classical:
+      grammar: "grammar/classical/"
+      semantic_owner: "classical semantic implementation"
+      ir_owner: "canonical classical IR"
+
+    quantum:
+      grammar: "grammar/quantum/"
+      semantic_owner: "quantum semantic implementation"
+      ir_owner: "src/quantum/ir/"
+
+    hdl:
+      grammar: "grammar/hdl/"
+      semantic_owner: "hardware/HDL semantic implementation"
+      ir_owner: "canonical hardware/HDL IR"
+
+    hybrid:
+      grammar: "grammar/hybrid/"
+      semantic_owner: "hybrid semantic implementation"
+      ir_owner: "canonical hybrid/domain IR"
+
+    ai:
+      grammar: "grammar/ai/"
+      semantic_owner: "AI semantic implementation"
+      ir_owner: "canonical semantic/domain IR"
+
+# =============================================================================
+# 26. IR INTEGRATION
+# =============================================================================
 
 ir:
-  path: "src/ir/"
-  consumes:
-    - "semantic model"
-  owns:
-    - "canonical target-independent IR implementation"
 
-quantum:
-  path: "src/quantum/"
-  consumes:
-    - "quantum semantic model"
-    - "quantum::ir contract"
-  owns:
-    - "quantum frontend/backend integration"
-
-compile:
-  path: "src/compile/"
-  consumes:
-    - "canonical IR"
-    - "compatibility contracts"
-    - "resource/capability contracts"
-  owns:
-    - "compiler integration"
-
-============================================================================
-
-AST / SEMANTIC / IR BOUNDARY
-
-============================================================================
-
-downstream_contracts:
-
-ast:
-owner: "src/ast/"
-grammar_rule: >
-Grammar produces source structure. It MUST NOT require a target-specific
-AST representation.
-
-semantic:
-owner: "src/semantic/"
-grammar_rule: >
-Grammar constructs may declare semantic obligations, but semantic
-validity is established downstream.
-
-canonical_ir:
-owner: "src/ir/"
-grammar_rule: >
-Grammar MUST NOT define a competing IR.
-
-quantum_ir:
-owner: "quantum::ir"
-grammar_rule: >
-Quantum syntax and semantics MUST converge through quantum::ir.
-
-hardware_ir:
-owner: "hardware/compiler backend"
-grammar_rule: >
-Hardware syntax MUST remain target-independent until lowering.
-
-diagnostics:
-owner: "diagnostic implementation"
-grammar_rule: >
-Every production construct requiring semantic validation must map to a
-stable diagnostic category.
-
-provenance:
-owner: "semantic/provenance implementation"
-grammar_rule: >
-Provenance must survive syntax-to-AST-to-semantic-to-IR transformations
-where required by the specification.
-
-============================================================================
-
-FORBIDDEN DEPENDENCY EDGES
-
-============================================================================
-
-forbidden_edges:
-
-- from: "grammar/"
-  to: "vendor-specific backend"
-  reason: "breaks target independence"
-
-- from: "grammar/"
-  to: "physical hardware inventory"
-  reason: "hardware discovery is downstream"
-
-- from: "grammar/"
-  to: "runtime scheduling implementation"
-  reason: "scheduling is realization"
-
-- from: "grammar/"
-  to: "physical routing implementation"
-  reason: "routing is realization"
-
-- from: "grammar/"
-  to: "calibration database"
-  reason: "calibration is target/runtime state"
-
-- from: "grammar/"
-  to: "physical qubit identifiers"
-  reason: "physical allocation is downstream"
-
-- from: "lexer/"
-  to: "parser/"
-  reason: "lexical layer must remain below parser"
-
-- from: "types/"
-  to: "runtime scheduler"
-  reason: "types describe meaning"
-
-- from: "expressions/"
-  to: "vendor backend"
-  reason: "expressions are target-independent"
-
-- from: "quantum/"
-  to: "specific QPU implementation"
-  reason: "quantum grammar is target-independent"
-
-- from: "hdl/"
-  to: "specific FPGA/ASIC implementation"
-  reason: "HDL expresses portable hardware intent"
-
-- from: "ai/"
-  to: "specific accelerator implementation"
-  reason: "AI semantics must remain target-independent"
-
-- from: "tests/"
-  to: "production grammar"
-  reason: "tests consume production contracts"
-
-- from: "generated/"
-  to: "authoritative source grammar"
-  reason: "generated artifacts cannot become source authority"
-
-- from: "backend/"
-  to: "grammar ownership"
-  reason: "backend does not own source syntax"
-
-============================================================================
-
-CYCLE PREVENTION
-
-============================================================================
-
-cycle_rules:
-
-general:
-severity: "error"
-rule: >
-The production grammar dependency graph MUST be a directed acyclic graph.
-
-forbidden_cycles:
-
-parser_root:
-  forbidden:
-    - "ZamaniParser -> ZamaniParser"
-    - "ZamaniParser -> Zamani.g4 -> ZamaniParser"
-
-statements:
-  forbidden:
-    - "Statements -> Expressions -> Statements"
-
-expressions:
-  forbidden:
-    - "Expressions -> Statements -> Expressions"
-
-effects:
-  forbidden:
-    - "Effects -> specialized effect -> Effects"
-
-resources:
-  forbidden:
-    - "Resources -> resource leaf -> Resources"
-
-policies:
-  forbidden:
-    - "Policies -> policy leaf -> Policies"
-
-quantum:
-  forbidden:
-    - "Quantum -> quantum leaf -> Quantum"
-
-hdl:
-  forbidden:
-    - "HDL -> HDL leaf -> HDL"
-
-hardware:
-  forbidden:
-    - "Hardware -> hardware leaf -> Hardware"
-
-domains:
-  forbidden:
-    - "domain A -> domain B -> domain A"
-  exception:
-    condition: >
-      A shared lower-level contract may be extracted into a lower layer.
-    requirement: >
-      The domain roots themselves MUST NOT form a semantic ownership cycle.
-
-============================================================================
-
-DOMAIN CROSS-DEPENDENCY RULES
-
-============================================================================
-
-cross_domain:
-
-allowed_shared_foundations:
-- "core"
-- "modules"
-- "types"
-- "memory"
-- "expressions"
-- "functions"
-- "effects"
-- "resources"
-- "policies"
-- "security"
-- "validation"
-- "compatibility"
-
-domain_to_domain_rule: >
-A domain may consume another domain's exported semantic contract when
-necessary, but MUST NOT duplicate the consumed domain's source syntax.
-
-classical_quantum:
-allowed: true
-direction: "hybrid boundary"
-owner: "grammar/hybrid/"
-
-quantum_hdl:
-allowed: true
-direction: "hybrid boundary"
-owner: "grammar/hybrid/"
-
-classical_hdl:
-allowed: true
-direction: "hybrid boundary"
-owner: "grammar/hybrid/"
-
-ai_data:
-allowed: true
-direction: "AI consumes common data semantics"
-owner: "grammar/ai/"
-
-ai_quantum:
-allowed: true
-direction: "domain integration"
-owner: "grammar/hybrid/ + grammar/ai/"
-
-distributed_networking:
-allowed: true
-direction: "distributed consumes networking contracts"
-
-hardware_execution:
-allowed: true
-direction: "execution consumes hardware capability contracts"
-
-quantum_hardware:
-allowed: true
-direction: "quantum consumes hardware/resource capability contracts"
-
-forbidden:
-- "domain root redefining another domain's canonical syntax"
-- "domain root importing parser root"
-- "domain root importing runtime implementation"
-
-============================================================================
-
-QUANTUM DEPENDENCY CONTRACT
-
-============================================================================
-
-quantum:
-
-canonical_direction:
-- "lexer"
-- "core/types/expressions"
-- "quantum syntax"
-- "domain-neutral AST"
-- "quantum semantic model"
-- "quantum::ir"
-- "optimization/lowering"
-- "routing/scheduling"
-- "ZQN"
-- "HAL"
-
-operation_dependencies:
-
-operations:
-  path: "grammar/quantum/operations.g4"
-  depends_on:
-    - "grammar/quantum/parameters.g4"
-    - "grammar/quantum/controls.g4"
-    - "grammar/quantum/states.g4"
-    - "grammar/quantum/measurement.g4"
-    - "grammar/quantum/quantum-resources.g4"
-    - "grammar/core/attributes.g4"
-    - "grammar/effects/quantum.g4"
-
-operation_specifier:
-  semantic_variants:
-    - "builtin"
-    - "custom"
-    - "vendor"
-    - "parameterized"
-    - "dialect"
-    - "future"
-  rule: >
-    Adding a new operation MUST NOT require modification of the universal
-    operation grammar when the operation can be represented by the
-    existing open-world operation contract.
-
-resource_dependencies:
-- "grammar/resources/"
-- "grammar/hardware/"
-- "grammar/policies/"
-- "grammar/effects/"
-
-forbidden:
-- "physical qubit numbering in universal grammar"
-- "fixed QPU capacity"
-- "fixed gate count"
-- "fixed circuit depth ceiling"
-- "vendor-specific mandatory syntax"
-
-============================================================================
-
-HDL DEPENDENCY CONTRACT
-
-============================================================================
-
-hdl:
-
-direction:
-- "core"
-- "types"
-- "memory"
-- "resources"
-- "hardware"
-- "effects"
-- "execution"
-- "HDL syntax"
-- "AST"
-- "semantic hardware model"
-- "hardware/HDL IR"
-- "synthesis/lowering"
-
-specialized_dependencies:
-modules:
-path: "grammar/hdl/hardware-modules.g4"
-depends_on:
-- "grammar/types/"
-- "grammar/hardware/"
-
-ports:
-  path: "grammar/hdl/ports.g4"
-  depends_on:
-    - "grammar/types/"
-    - "grammar/hdl/interfaces.g4"
-
-signals:
-  path: "grammar/hdl/signals.g4"
-  depends_on:
-    - "grammar/types/"
-    - "grammar/hdl/nets.g4"
-
-clocks:
-  path: "grammar/hdl/clocks.g4"
-  depends_on:
-    - "grammar/hdl/clocking.g4"
-    - "grammar/resources/"
-
-timing:
-  path: "grammar/hdl/timing.g4"
-  depends_on:
-    - "grammar/resources/"
-    - "grammar/hdl/clocking.g4"
-
-forbidden:
-- "fixed universal register count"
-- "fixed universal bus width"
-- "fixed universal lane count"
-- "specific fabrication technology as core syntax"
-
-============================================================================
-
-POCO-REAF DEPENDENCY CONTRACT
-
-============================================================================
+  canonical_boundary:
+    owner: "src/ir/"
+    consumes:
+      - "validated semantic program"
+    produces:
+      - "canonical target-independent IR"
+
+  quantum:
+    owner: "src/quantum/ir/"
+    canonical_name: "quantum::ir"
+    consumes:
+      - "validated quantum semantics"
+    must_not_consume:
+      - "raw parser tree"
+      - "vendor-specific grammar"
+    must_not_be_owned_by:
+      - "grammar/quantum/"
+      - "grammar/Zamani.g4"
+
+  domain_specific_ir:
+    rule: >
+      Domain-specific IRs MAY exist after semantic validation for optimization
+      or lowering. They MUST NOT replace the canonical semantic boundary.
+
+# =============================================================================
+# 27. REALIZATION DEPENDENCIES
+# =============================================================================
+
+realization:
+
+  optimization:
+    consumes:
+      - "canonical IR"
+      - "quantum::ir"
+      - "optimization policies"
+    grammar_dependency_allowed: false
+
+  lowering:
+    consumes:
+      - "optimized IR"
+      - "target capabilities"
+      - "target resources"
+      - "policies"
+    grammar_dependency_allowed: false
+
+  negotiation:
+    consumes:
+      - "requirements"
+      - "constraints"
+      - "preferences"
+      - "capabilities"
+      - "available resources"
+      - "policies"
+    grammar_dependency_allowed: false
+
+  routing:
+    consumes:
+      - "canonical operations"
+      - "topology"
+      - "resources"
+      - "dependencies"
+      - "target capabilities"
+    grammar_dependency_allowed: false
+
+  scheduling:
+    consumes:
+      - "operations"
+      - "dependencies"
+      - "timing"
+      - "resources"
+      - "target capabilities"
+    grammar_dependency_allowed: false
+
+  resilience:
+    consumes:
+      - "semantic identity"
+      - "provenance"
+      - "checkpoint intent"
+      - "recovery policy"
+      - "resource requirements"
+    grammar_dependency_allowed: false
+
+  hal:
+    consumes:
+      - "realized target description"
+      - "lowered artifact"
+      - "runtime requirements"
+    grammar_dependency_allowed: false
+
+# =============================================================================
+# 28. POCO-REAF DEPENDENCY CONTRACT
+# =============================================================================
 
 poco_reaf:
 
-semantic_identity:
-required_fields:
-- "language_version"
-- "grammar_version"
-- "feature_set"
-- "dialect_versions"
-- "AST_version"
-- "semantic_version"
-- "IR_version"
-- "resource_requirements"
-- "capability_requirements"
-- "constraints"
-- "preferences"
-- "policies"
-- "effects"
-- "provenance"
-- "reproducibility_metadata"
+  source_semantics:
+    must_be_independent_of:
+      - "specific CPU"
+      - "specific GPU"
+      - "specific FPGA"
+      - "specific ASIC"
+      - "specific QPU"
+      - "specific machine"
+      - "specific cluster size"
+      - "specific network size"
 
-compile_once:
-dependency:
-- "grammar/compile/"
-- "grammar/compatibility/"
-- "grammar/specification/compilation-model.md"
-meaning: >
-Compilation produces a target-independent semantic artifact or equivalent
-stable representation. It MUST NOT imply that one physical machine-code
-binary is universally executable on every future architecture.
+  portable_artifact:
+    should_contain:
+      - "language version"
+      - "feature set"
+      - "AST/semantic identity"
+      - "IR version"
+      - "dialect versions"
+      - "resource requirements"
+      - "capability requirements"
+      - "constraints"
+      - "preferences"
+      - "policies"
+      - "effects"
+      - "provenance"
+      - "reproducibility metadata"
 
-run_everywhere:
-dependency:
-- "grammar/resources/"
-- "grammar/hardware/"
-- "grammar/execution/"
-- "grammar/compile/"
-realization:
-- "discover"
-- "match requirements"
-- "apply constraints"
-- "rank preferences"
-- "select realization"
-- "lower"
-- "route"
-- "schedule"
-- "execute"
+  realization:
+    sequence:
+      - "discover"
+      - "validate requirements"
+      - "evaluate capabilities"
+      - "evaluate constraints"
+      - "apply policies"
+      - "rank preferences"
+      - "select realization"
+      - "specialize"
+      - "lower"
+      - "route"
+      - "schedule"
+      - "execute"
 
-run_anywhere:
-dependency:
-- "grammar/policies/"
-- "grammar/resources/"
-- "grammar/compile/"
-rule: >
-Fallback is allowed only when explicitly permitted and semantically
-valid. Silent semantic substitution is forbidden.
+  failure_rule:
+    rule: >
+      If a target cannot satisfy required semantics, the implementation MUST
+      reject the realization or select an explicitly permitted alternative.
+      It MUST NOT silently change program meaning.
 
-run_forever:
-dependency:
-- "grammar/compatibility/"
-- "grammar/specification/language-version.md"
-- "grammar/specification/compatibility.md"
-- "grammar/specification/poco-reaf.md"
-required:
-- "versioned syntax"
-- "versioned AST"
-- "versioned semantic model"
-- "versioned IR"
-- "dialect compatibility"
-- "migration rules"
-- "reproducibility"
+  fallback_rule:
+    rule: >
+      Fallbacks MUST be explicitly authorized and semantically defined.
 
-============================================================================
-
-SCALABILITY CONTRACT
-
-============================================================================
+# =============================================================================
+# 29. SCALABILITY CONTRACT
+# =============================================================================
 
 scalability:
 
-principle: >
-Dependency structure MUST remain valid regardless of the size of the
-program, data, machine, cluster, network, quantum system, or hardware
-realization.
+  principle: >
+    The grammar expresses open-ended computation. Physical feasibility is
+    determined by resources available to a particular realization.
 
-permitted:
-- "symbolic quantities"
-- "generic parameters"
-- "dependent values"
-- "resource requirements"
-- "capability requirements"
-- "abstract topology"
-- "constraints"
-- "preferences"
-- "budgets"
-- "availability requirements"
+  prohibited:
+    - "language-wide maximum qubit count"
+    - "language-wide maximum CPU count"
+    - "language-wide maximum GPU count"
+    - "language-wide maximum FPGA count"
+    - "language-wide maximum node count"
+    - "language-wide maximum memory capacity"
+    - "language-wide maximum thread count"
+    - "language-wide maximum register width"
+    - "language-wide maximum tensor rank"
+    - "language-wide maximum network size"
+    - "language-wide maximum device count"
 
-forbidden_capacity_dependencies:
-- "MAX_QUBITS"
-- "MAX_CPUS"
-- "MAX_CORES"
-- "MAX_THREADS"
-- "MAX_GPUS"
-- "MAX_FPGAS"
-- "MAX_ASICS"
-- "MAX_QPUS"
-- "MAX_NODES"
-- "MAX_MEMORY"
-- "MAX_STORAGE"
-- "MAX_REGISTER_WIDTH"
-- "MAX_VECTOR_WIDTH"
-- "MAX_TENSOR_RANK"
-- "MAX_TENSOR_DIMENSION"
-- "MAX_NETWORK_SIZE"
-- "MAX_DEVICE_COUNT"
-- "MAX_ACCELERATOR_COUNT"
+  permitted:
+    - "symbolic dimensions"
+    - "runtime dimensions"
+    - "generic parameters"
+    - "resource expressions"
+    - "capability expressions"
+    - "topology requirements"
+    - "resource negotiation"
+    - "target specialization"
+    - "implementation diagnostics"
 
-equivalent_limit_rule: >
-Renaming a forbidden finite capacity does not make it valid. Dependency
-contracts MUST reject equivalent hard-coded capacity semantics.
+  implementation_limit_rule:
+    rule: >
+      A real implementation may have practical limits. Such a limit MUST be
+      an implementation constraint, MUST NOT become language semantics, MUST
+      be diagnosable, and MUST be removable or extendable without changing
+      the language's semantic model.
 
-============================================================================
-
-KNOWN DUPLICATE / LEGACY CONCEPTS
-
-============================================================================
-
-These entries MUST NOT be simultaneously imported as independent canonical
-
-grammar authorities.
-
-The dependency graph remains production-valid only when exactly one canonical
-
-path is active.
-
-============================================================================
-
-duplicate_resolution:
-
-expressions:
-
-closure:
-  canonical: "grammar/expressions/closures.g4"
-  legacy: "grammar/expressions/closure.g4"
-  production_rule:
-    - "canonical may be imported"
-    - "legacy may not be independently imported"
-    - "legacy may become compatibility adapter"
-    - "legacy may be retired after migration"
-
-lambda:
-  canonical: "grammar/expressions/lambdas.g4"
-  legacy: "grammar/expressions/lambda.g4"
-  production_rule:
-    - "canonical may be imported"
-    - "legacy may not be independently imported"
-
-range:
-  canonical: "grammar/expressions/ranges.g4"
-  legacy: "grammar/expressions/range.g4"
-  production_rule:
-    - "canonical may be imported"
-    - "legacy may not be independently imported"
-
-types:
-
-array:
-  canonical: "grammar/types/array-types.g4"
-  legacy:
-    - "grammar/types/array.g4"
-  production_rule:
-    - "canonical owner only"
-    - "legacy path must be adapter, deprecated, or quarantined"
-
-map:
-  canonical: "grammar/types/map-types.g4"
-  legacy:
-    - "grammar/types/map.g4"
-  production_rule:
-    - "canonical owner only"
-
-option:
-  canonical: "grammar/types/option-types.g4"
-  legacy:
-    - "grammar/types/option.g4"
-  production_rule:
-    - "canonical owner only"
-
-associated_types:
-  canonical: "grammar/types/associated.g4"
-  legacy:
-    - "grammar/types/associated types.g4"
-  production_rule:
-    - "whitespace-containing path MUST NOT be imported by production grammar"
-    - "canonical normalized filename is required"
-
-functional_dependencies:
-  canonical: "grammar/types/functional-dependencies.g4"
-  production_rule:
-    - "whitespace-containing or malformed variants MUST NOT be imported"
-
-rule:
-severity: "error"
-message: >
-A duplicate conceptual file may exist during migration, but it MUST NOT
-create a second production dependency path or second semantic owner.
-
-============================================================================
-
-QUARANTINE POLICY
-
-============================================================================
-
-quarantine:
-
-purpose: >
-Repository artifacts that cannot safely participate in the canonical
-dependency DAG remain visible for migration/audit but are excluded from
-production composition.
-
-categories:
-
-malformed_path:
-  examples:
-    - "paths containing unintended whitespace"
-    - "paths containing control characters"
-    - "paths containing duplicated content markers"
-    - "paths whose filename does not match the canonical registry"
-  production_import_allowed: false
-
-duplicate_concept:
-  examples:
-    - "closure.g4 when closures.g4 is canonical"
-    - "lambda.g4 when lambdas.g4 is canonical"
-    - "array.g4 when array-types.g4 is canonical"
-    - "map.g4 when map-types.g4 is canonical"
-    - "option.g4 when option-types.g4 is canonical"
-  production_import_allowed: false
-
-historical:
-  production_import_allowed: false
-
-generated:
-  production_import_allowed: false
-  exception: >
-    Generated parser artifacts may be consumed by build tooling, but
-    generated output MUST NOT become grammar source authority.
-
-quarantine_rule: >
-Quarantined files MUST have no incoming production dependency edge except
-from migration tooling, compatibility tooling, validation tooling, or
-historical documentation.
-
-============================================================================
-
-TEST DEPENDENCIES
-
-============================================================================
-
-tests:
-
-principle: >
-Tests consume production contracts. Production grammars MUST NOT depend
-upon test grammars or test implementations.
-
-layers:
-
-lexical:
-  path: "grammar/conformance/lexical/"
-  depends_on:
-    - "grammar/lexer/"
-
-syntax:
-  path: "grammar/conformance/syntax/"
-  depends_on:
-    - "grammar/antlr/ZamaniParser.g4"
-    - "grammar/Zamani.g4"
-
-ast:
-  path: "grammar/conformance/ast/"
-  depends_on:
-    - "src/ast/"
-    - "grammar/"
-
-semantic:
-  path: "grammar/conformance/semantic/"
-  depends_on:
-    - "src/semantic/"
-    - "grammar/spec/"
-
-types:
-  path: "grammar/conformance/types/"
-  depends_on:
-    - "grammar/types/"
-
-effects:
-  path: "grammar/conformance/effects/"
-  depends_on:
-    - "grammar/effects/"
-
-resources:
-  path: "grammar/conformance/resources/"
-  depends_on:
-    - "grammar/resources/"
-
-policies:
-  path: "grammar/conformance/policies/"
-  depends_on:
-    - "grammar/policies/"
-
-classical:
-  path: "grammar/conformance/classical/"
-  depends_on:
-    - "grammar/classical/"
-
-quantum:
-  path: "grammar/conformance/quantum/"
-  depends_on:
-    - "grammar/quantum/"
-
-hdl:
-  path: "grammar/conformance/hdl/"
-  depends_on:
-    - "grammar/hdl/"
-
-hybrid:
-  path: "grammar/conformance/hybrid/"
-  depends_on:
-    - "grammar/hybrid/"
-
-portability:
-  path: "grammar/conformance/portability/"
-  depends_on:
-    - "grammar/resources/"
-    - "grammar/hardware/"
-    - "grammar/compile/"
-    - "grammar/execution/"
-
-scalability:
-  path: "grammar/conformance/scalability/"
-  depends_on:
-    - "grammar/resources/"
-    - "grammar/compile/"
-    - "grammar/execution/"
-    - "grammar/compatibility/"
-
-compatibility:
-  path: "grammar/conformance/compatibility/"
-  depends_on:
-    - "grammar/compatibility/"
+# =============================================================================
+# 30. DIAGNOSTIC DEPENDENCIES
+# =============================================================================
 
 diagnostics:
-  path: "grammar/conformance/diagnostics/"
-  depends_on:
-    - "grammar/validation/"
-    - "grammar/spec/diagnostics.md"
 
-forbidden:
-- "production grammar importing test fixtures"
-- "production grammar importing golden files"
-- "production grammar importing examples"
+  layers:
+    - "lexical"
+    - "syntax"
+    - "structure"
+    - "name"
+    - "type"
+    - "effect"
+    - "contract"
+    - "policy"
+    - "capability"
+    - "resource"
+    - "semantic"
+    - "IR"
+    - "lowering"
+    - "target"
+    - "runtime"
 
-============================================================================
+  invariant:
+    rule: >
+      A dependency failure MUST identify the appropriate architectural layer.
+      Resource infeasibility MUST NOT be reported as a syntax error, and
+      unavailable target capabilities MUST NOT be disguised as invalid source.
 
-EXAMPLES AND GOLDEN DEPENDENCIES
+  source_mapping:
+    required:
+      - "file"
+      - "span"
+      - "diagnostic identity"
+      - "severity"
+      - "layer"
+      - "message"
 
-============================================================================
+# =============================================================================
+# 31. PROVENANCE DEPENDENCIES
+# =============================================================================
 
-examples:
+provenance:
 
-path: "grammar/examples/"
-consumers:
-- "grammar/conformance/"
-- "CI"
-- "documentation"
+  owner:
+    semantic: "semantic implementation"
+    artifact: "compiler/artifact implementation"
 
-production_dependency: false
+  consumers:
+    - "AI reasoning"
+    - "resource negotiation"
+    - "target selection"
+    - "quantum routing"
+    - "optimization"
+    - "HDL synthesis"
+    - "security"
+    - "adaptation"
+    - "simulation"
+    - "diagnostics"
 
-required_categories:
-- "minimal"
-- "classical"
-- "quantum"
-- "hdl"
-- "hybrid"
-- "ai"
-- "distributed"
-- "networking"
-- "accelerator"
-- "resource-aware"
-- "policy-aware"
-- "adaptive"
-- "poco-reaf"
+  invariant: >
+    Grammar may declare provenance-bearing constructs but MUST NOT require an
+    unlimited in-memory history.
 
-golden:
+# =============================================================================
+# 32. TEST AND CONFORMANCE DEPENDENCIES
+# =============================================================================
 
-path: "grammar/golden/"
-production_dependency: false
+testing:
 
-categories:
-- "lexer"
-- "parser"
-- "ast"
-- "semantic"
-- "diagnostics"
+  production_grammar_may_depend_on_tests: false
 
-rule: >
-Golden outputs verify production behavior. They are never source authority.
+  test_layers:
+    - "lexical"
+    - "parser"
+    - "AST"
+    - "structural validation"
+    - "types"
+    - "effects"
+    - "resources"
+    - "capabilities"
+    - "contracts"
+    - "policies"
+    - "security"
+    - "classical"
+    - "quantum"
+    - "HDL"
+    - "hybrid"
+    - "AI"
+    - "data"
+    - "concurrency"
+    - "distributed"
+    - "networking"
+    - "hardware"
+    - "execution"
+    - "compilation"
+    - "interoperability"
+    - "dialects"
+    - "macros"
+    - "metaprogramming"
+    - "compatibility"
+    - "diagnostics"
+    - "portability"
+    - "scalability"
+    - "determinism"
+    - "fuzzing"
+    - "negative cases"
 
-============================================================================
+  required_mapping:
+    every_production_file:
+      must_have:
+        - "positive conformance coverage"
+        - "negative conformance coverage where applicable"
+        - "boundary coverage where applicable"
+        - "ownership record"
+        - "dependency record"
 
-GENERATED ARTIFACT RULES
+  scalability_tests:
+    rule: >
+      Tests MAY use finite practical bounds for CI execution. Those bounds
+      MUST belong to the test harness and MUST NOT be encoded as language
+      capacity limits.
 
-============================================================================
+# =============================================================================
+# 33. GENERATED ARTIFACT DEPENDENCIES
+# =============================================================================
 
-generated:
+generated_artifacts:
 
-principle: >
-Generated parser or documentation artifacts are outputs of authoritative
-sources and cannot become dependency roots.
+  rule: >
+    Generated files are outputs, never authorities.
 
-generated_may_depend_on:
-- "grammar/"
+  allowed_consumers:
+    - "tooling"
+    - "tests"
+    - "build system"
 
-grammar_may_depend_on_generated: false
+  forbidden:
+    - "generated parser becoming grammar authority"
+    - "generated lexer becoming token authority"
+    - "generated documentation becoming specification authority"
 
-generated_must_record:
-- "source revision"
-- "grammar version"
-- "tool version"
-- "generation mode"
+  regeneration_rule:
+    rule: >
+      Generated output MUST be reproducible from authoritative repository
+      inputs.
 
-reproducibility:
-required: true
+# =============================================================================
+# 34. DUPLICATE AND MALFORMED ARTIFACT POLICY
+# =============================================================================
 
-============================================================================
+artifact_hygiene:
 
-FILE-LEVEL CONTRACT
+  duplicate_concept_rule:
+    rule: >
+      Similar filenames do not automatically imply duplicate semantics.
+      Every apparent duplicate MUST be classified as canonical, alias,
+      compatibility artifact, historical artifact, experimental artifact,
+      or quarantine candidate.
 
-============================================================================
+  known_patterns_requiring_audit:
+    - "closure.g4 vs closures.g4"
+    - "lambda.g4 vs lambdas.g4"
+    - "map.g4 vs map-types.g4"
+    - "option.g4 vs option-types.g4"
+    - "array.g4 vs array-types.g4"
 
-Every production grammar file participates in this dependency model through
+  malformed_filename_rule:
+    rule: >
+      Files whose names contain unintended whitespace, inconsistent casing,
+      generated suffixes, or ambiguous naming MUST be explicitly classified
+      before production freeze.
 
-the following fields, whether recorded directly in the file or in the
+  quarantine:
+    path: "grammar/quarantine/"
+    allowed_contents:
+      - "historical grammar artifacts"
+      - "malformed artifacts"
+      - "superseded grammar fragments"
+      - "unresolved duplicate candidates"
+    production_import_allowed: false
+    parser_composition_allowed: false
 
-machine-readable contract registry.
+  important_existing_candidate:
+    path: "grammar/types/functional dependencies.g4"
+    status: "MUST_BE_EXPLICITLY_CLASSIFIED"
+    rule: >
+      The path contains whitespace and MUST be explicitly classified as
+      canonical, renamed, migrated, or quarantined before final freeze.
+      It MUST NOT be silently assumed to be production-stable.
 
-============================================================================
+# =============================================================================
+# 35. MODULE DEPENDENCY SPECIAL CASE
+# =============================================================================
 
-file_dependency_contract:
+module_dependencies:
 
-required:
+  source_dependency_syntax:
+    path: "grammar/modules/dependencies.g4"
+    layer: "L04_foundation"
+    meaning: >
+      Declares source-level module dependencies and dependency requirements.
+    must_not_be_confused_with:
+      - "grammar/DEPENDENCIES.yaml"
+      - "ANTLR import dependency graph"
+      - "compiler backend dependency graph"
 
-- "path"
-- "owner"
-- "kind"
-- "status"
-- "imports"
-- "exports"
-- "depends_on"
-- "consumed_by"
-- "ast_owner"
-- "semantic_owner"
-- "ir_owner"
-- "diagnostics_owner"
-- "compatibility_owner"
-- "test_owner"
-- "scalability_contract"
-- "poco_reaf_contract"
-- "hard_coding_audit"
-- "freeze_criteria"
+  distinction:
+    grammar_dependency_contract:
+      path: "grammar/DEPENDENCIES.yaml"
+      meaning: "architecture of grammar files"
 
-import_rule: >
-Every import MUST identify an existing canonical grammar or an explicitly
-registered external contract.
+    source_module_dependency:
+      path: "grammar/modules/dependencies.g4"
+      meaning: "dependencies declared by Zamani programs"
 
-export_rule: >
-Every exported parser rule MUST have exactly one owner.
+# =============================================================================
+# 36. OWNERSHIP INTEGRATION
+# =============================================================================
 
-transitive_dependency_rule: >
-A file inherits the stability requirements of all transitive dependencies.
+ownership_integration:
 
-downstream_rule: >
-Downstream additions MUST use declared exports. They MUST NOT require
-upstream semantic modification merely to add a new target, device,
-algorithm family, or dialect.
+  authority:
+    path: "grammar/OWNERSHIP.yaml"
 
-freeze_rule: >
-A file is not freeze-ready until all direct dependencies are frozen or
-explicitly designated stable interfaces.
+  dependency_rule: >
+    Every production dependency MUST be resolvable to an ownership record.
 
-============================================================================
+  required_fields:
+    - "path"
+    - "owner"
+    - "kind"
+    - "exports"
+    - "imports"
+    - "status"
 
-FREEZE ORDER
+  validation:
+    duplicate_owner:
+      severity: "error"
 
-============================================================================
+    missing_owner:
+      severity: "error"
 
-This is dependency order, not alphabetical order.
+    missing_export_owner:
+      severity: "error"
 
-============================================================================
+    dependency_on_unowned_symbol:
+      severity: "error"
+
+# =============================================================================
+# 37. MANIFEST INTEGRATION
+# =============================================================================
+
+manifest_integration:
+
+  authority:
+    path: "grammar/MANIFEST.yaml"
+
+  rule: >
+    DEPENDENCIES.yaml MUST NOT become a stale file inventory. The actual
+    repository tree plus MANIFEST.yaml determines file existence and metadata.
+
+  validation:
+    dependency_path_not_in_manifest:
+      severity: "error"
+      except:
+        - "directory patterns"
+        - "external implementation paths explicitly declared"
+        - "generated paths"
+        - "quarantine paths"
+
+    missing_dependency_contract:
+      severity: "error"
+
+# =============================================================================
+# 38. STATUS INTEGRATION
+# =============================================================================
+
+status_integration:
+
+  authority:
+    path: "grammar/STATUS.yaml"
+
+  stable_dependency_rule:
+    rule: >
+      A production file MUST NOT be marked STABLE if any required production
+      dependency is not itself stable or explicitly frozen under the
+      compatibility policy.
+
+  allowed_statuses:
+    - "STABLE"
+    - "IMPLEMENTED"
+    - "PARTIALLY_IMPLEMENTED"
+    - "EXPERIMENTAL"
+    - "PROPOSED"
+    - "PLANNED"
+    - "DEPRECATED"
+    - "HISTORICAL"
+    - "REJECTED"
+    - "QUARANTINED"
+
+# =============================================================================
+# 39. FREEZE ORDER
+# =============================================================================
 
 freeze_order:
 
-stage_00:
-name: "inventory-and-authority"
-paths:
-- "grammar/MANIFEST.yaml"
-- "grammar/OWNERSHIP.yaml"
-- "grammar/DEPENDENCIES.yaml"
-- "grammar/STATUS.yaml"
-- "grammar/DESIGN.md"
-- "grammar/specification/"
-- "grammar/spec/"
+  principle: >
+    A file can be frozen only after all semantic dependencies required by its
+    contract are frozen or explicitly versioned.
 
-stage_01:
-name: "lexical-foundation"
-paths:
-- "grammar/lexer/"
-- "grammar/antlr/ZamaniLexer.g4"
+  stages:
 
-stage_02:
-name: "core-and-modules"
-paths:
-- "grammar/core/"
-- "grammar/modules/"
-- "grammar/declarations/"
+    - id: "FREEZE_00"
+      name: "inventory_and_contracts"
+      paths:
+        - "grammar/MANIFEST.yaml"
+        - "grammar/OWNERSHIP.yaml"
+        - "grammar/DEPENDENCIES.yaml"
+        - "grammar/STATUS.yaml"
+        - "grammar/contracts/"
+      prerequisites:
+        - "repository tree audit"
+        - "duplicate audit"
+        - "malformed artifact audit"
 
-stage_03:
-name: "types-and-memory"
-paths:
-- "grammar/types/"
-- "grammar/memory/"
+    - id: "FREEZE_01"
+      name: "architecture_and_specification"
+      paths:
+        - "grammar/DESIGN.md"
+        - "grammar/specification/"
+        - "grammar/spec/"
 
-stage_04:
-name: "expressions"
-paths:
-- "grammar/expressions/"
+    - id: "FREEZE_02"
+      name: "lexical"
+      paths:
+        - "grammar/lexer/"
+        - "grammar/antlr/ZamaniLexer.g4"
 
-stage_05:
-name: "functions-and-statements"
-paths:
-- "grammar/functions/"
-- "grammar/statements/"
+    - id: "FREEZE_03"
+      name: "foundation"
+      paths:
+        - "grammar/core/"
+        - "grammar/modules/"
+        - "grammar/declarations/"
 
-stage_06:
-name: "semantic-control-plane"
-paths:
-- "grammar/effects/"
-- "grammar/resources/"
-- "grammar/policies/"
-- "grammar/security/"
-- "grammar/validation/"
+    - id: "FREEZE_04"
+      name: "types_and_memory"
+      paths:
+        - "grammar/types/"
+        - "grammar/memory/"
 
-stage_07:
-name: "classical-and-data"
-paths:
-- "grammar/classical/"
-- "grammar/data/"
-- "grammar/mathematics/"
+    - id: "FREEZE_05"
+      name: "expressions"
+      paths:
+        - "grammar/expressions/"
 
-stage_08:
-name: "concurrency-distribution-networking"
-paths:
-- "grammar/concurrency/"
-- "grammar/distributed/"
-- "grammar/networking/"
+    - id: "FREEZE_06"
+      name: "functions_and_statements"
+      paths:
+        - "grammar/functions/"
+        - "grammar/statements/"
 
-stage_09:
-name: "hardware-execution-compilation"
-paths:
-- "grammar/hardware/"
-- "grammar/execution/"
-- "grammar/compile/"
+    - id: "FREEZE_07"
+      name: "semantic_control_plane"
+      paths:
+        - "grammar/effects/"
+        - "grammar/resources/"
+        - "grammar/policies/"
+        - "grammar/security/"
+        - "grammar/validation/"
 
-stage_10:
-name: "quantum"
-paths:
-- "grammar/quantum/"
+    - id: "FREEZE_08"
+      name: "classical_and_data"
+      paths:
+        - "grammar/classical/"
+        - "grammar/data/"
 
-stage_11:
-name: "hdl"
-paths:
-- "grammar/hdl/"
+    - id: "FREEZE_09"
+      name: "concurrency_distribution_networking"
+      paths:
+        - "grammar/concurrency/"
+        - "grammar/distributed/"
+        - "grammar/networking/"
 
-stage_12:
-name: "hybrid"
-paths:
-- "grammar/hybrid/"
+    - id: "FREEZE_10"
+      name: "hardware_execution_compilation"
+      paths:
+        - "grammar/hardware/"
+        - "grammar/execution/"
+        - "grammar/compile/"
 
-stage_13:
-name: "ai-and-specialized-domains"
-paths:
-- "grammar/ai/"
-- "grammar/nano/"
-- "grammar/nlp/"
-- "grammar/filesystem/"
+    - id: "FREEZE_11"
+      name: "quantum"
+      paths:
+        - "grammar/quantum/"
 
-stage_14:
-name: "interoperability-and-dialects"
-paths:
-- "grammar/interoperability/"
-- "grammar/dialects/"
+    - id: "FREEZE_12"
+      name: "hdl"
+      paths:
+        - "grammar/hdl/"
 
-stage_15:
-name: "macros-and-metaprogramming"
-paths:
-- "grammar/macros/"
-- "grammar/metaprogramming/"
+    - id: "FREEZE_13"
+      name: "hybrid"
+      paths:
+        - "grammar/hybrid/"
 
-stage_16:
-name: "compatibility"
-paths:
-- "grammar/compatibility/"
+    - id: "FREEZE_14"
+      name: "AI_and_reasoning"
+      paths:
+        - "grammar/ai/"
 
-stage_17:
-name: "parser-root"
-paths:
-- "grammar/antlr/ZamaniParser.g4"
+    - id: "FREEZE_15"
+      name: "interoperability_and_dialects"
+      paths:
+        - "grammar/interoperability/"
+        - "grammar/dialects/"
 
-stage_18:
-name: "top-level-root"
-paths:
-- "grammar/Zamani.g4"
+    - id: "FREEZE_16"
+      name: "macros_and_metaprogramming"
+      paths:
+        - "grammar/macros/"
+        - "grammar/metaprogramming/"
 
-stage_19:
-name: "freeze-validation"
-paths:
-- "grammar/conformance/"
-- "grammar/golden/"
-- "grammar/examples/"
-- "grammar/tests/"
+    - id: "FREEZE_17"
+      name: "compatibility"
+      paths:
+        - "grammar/compatibility/"
 
-============================================================================
+    - id: "FREEZE_18"
+      name: "parser_composition"
+      paths:
+        - "grammar/antlr/ZamaniParser.g4"
 
-FREEZE GATE
+    - id: "FREEZE_19"
+      name: "root_composition"
+      paths:
+        - "grammar/Zamani.g4"
 
-============================================================================
+    - id: "FREEZE_20"
+      name: "full_conformance"
+      paths:
+        - "grammar/tests/"
+        - "grammar/conformance/"
+        - "grammar/golden/"
+        - "grammar/examples/"
 
-freeze_gate:
+# =============================================================================
+# 40. FILE FREEZE CONTRACT
+# =============================================================================
 
-required_checks:
+file_freeze_contract:
 
-dependency_graph:
-  - "all imports resolve"
-  - "no production cycle"
-  - "no duplicate canonical owner"
-  - "no forbidden reverse dependency"
-  - "no dependency on quarantined artifact"
+  required_before_freeze:
+    - "file exists"
+    - "file has one canonical owner"
+    - "all imports resolve"
+    - "all exported symbols are classified"
+    - "all dependencies are declared"
+    - "dependency direction is valid"
+    - "no production cycle exists"
+    - "AST mapping exists where applicable"
+    - "semantic mapping exists where applicable"
+    - "IR mapping exists where applicable"
+    - "diagnostic mapping exists where applicable"
+    - "compatibility status exists"
+    - "conformance tests exist"
+    - "hard-coding audit passes"
+    - "scalability audit passes"
+    - "POCO-REAF audit passes"
+    - "safe-Rust boundary is respected"
+    - "no unresolved duplicate ownership exists"
+    - "no downstream implementation requires semantic re-edit merely because another backend is added"
 
-lexical:
-  - "one token vocabulary"
-  - "one public lexer boundary"
-  - "no parser-defined token"
-  - "no undocumented token"
+  freeze_result:
+    meaning: >
+      A frozen file exposes a stable contract. Downstream files may consume
+      that contract without requiring the frozen file to be modified merely
+      because a new target, backend, domain implementation, or realization
+      strategy is introduced.
 
-syntax:
-  - "one parser composition root"
-  - "one top-level grammar composition root"
-  - "no duplicate parser rule ownership"
-  - "no unresolved ambiguity"
-  - "no unreachable production"
-  - "no accidental left recursion"
+# =============================================================================
+# 41. VALIDATION RULES
+# =============================================================================
 
-semantic:
-  - "AST mapping exists"
-  - "semantic mapping exists"
-  - "effects mapping exists where applicable"
-  - "resource mapping exists where applicable"
-  - "capability mapping exists where applicable"
-  - "policy mapping exists where applicable"
-  - "provenance mapping exists where applicable"
+validation:
 
-ir:
-  - "canonical IR mapping exists"
-  - "quantum constructs converge on quantum::ir"
-  - "no competing domain IR is introduced"
+  path_resolution:
+    error_if:
+      - "production dependency path does not exist"
+      - "ANTLR import does not resolve"
+      - "declared owner path does not exist"
 
-portability:
-  - "no physical target dependency in universal syntax"
-  - "no fixed hardware capacity"
-  - "symbolic resource requirements supported"
-  - "capability negotiation supported"
-  - "abstract topology supported"
-  - "fallback semantics explicit"
+  cycle_detection:
+    algorithm_requirement: >
+      CI MUST construct the production dependency graph and reject every cycle.
 
-compatibility:
-  - "language version defined"
-  - "grammar version defined"
-  - "AST version defined"
-  - "semantic version defined"
-  - "IR version defined"
-  - "dialect version defined"
-  - "migration policy defined"
+  duplicate_export_detection:
+    rule: >
+      Every exported public grammar rule MUST map to exactly one canonical
+      owner.
 
-implementation:
-  - "Rust 1.97 or later supported"
-  - "Rust edition 2021"
-  - "unsafe Rust forbidden"
-  - "frontend mappings validated"
-  - "generated parser integration validated"
+  orphan_detection:
+    rule: >
+      A production grammar file not reachable from a canonical composition root
+      MUST be classified as intentionally unused, experimental, historical,
+      quarantined, or an integration defect.
 
-tests:
-  - "lexical tests pass"
-  - "parser tests pass"
-  - "AST tests pass"
-  - "semantic tests pass"
-  - "negative tests pass"
-  - "diagnostic tests pass"
-  - "portability tests pass"
-  - "scalability tests pass"
-  - "compatibility tests pass"
+  reverse_dependency_detection:
+    rule: >
+      CI MUST reject dependencies from a lower architectural layer into a
+      higher layer.
 
-============================================================================
+  backend_leak_detection:
+    rule: >
+      CI SHOULD detect references from grammar/ to backend implementation
+      identifiers, physical device identifiers, calibration structures,
+      scheduler internals, router internals, or runtime state.
 
-HARD-CODING AUDIT
+  capacity_detection:
+    rule: >
+      CI MUST detect known capacity constants and SHOULD detect semantically
+      equivalent hard-coded capacity patterns.
 
-============================================================================
+  duplicate_file_detection:
+    rule: >
+      CI SHOULD detect filename and public-rule similarity and require explicit
+      classification.
 
-hard_coding_audit:
+  generated_file_detection:
+    rule: >
+      Generated output MUST NOT be accepted as an authoritative grammar source.
 
-dependency_graph_must_reject:
+# =============================================================================
+# 42. RUST INTEGRATION CONTRACT
+# =============================================================================
 
-capacity_constants:
-  - "MAX_QUBITS"
-  - "MAX_CPUS"
-  - "MAX_CORES"
-  - "MAX_THREADS"
-  - "MAX_GPUS"
-  - "MAX_FPGAS"
-  - "MAX_ASICS"
-  - "MAX_QPUS"
-  - "MAX_NODES"
-  - "MAX_MEMORY"
-  - "MAX_STORAGE"
-  - "MAX_REGISTER_WIDTH"
-  - "MAX_VECTOR_WIDTH"
-  - "MAX_TENSOR_RANK"
-  - "MAX_TENSOR_DIMENSION"
-  - "MAX_NETWORK_SIZE"
-  - "MAX_DEVICE_COUNT"
-  - "MAX_ACCELERATOR_COUNT"
+rust:
 
-disguised_limits:
-  rule: >
-    Any equivalent fixed finite implementation ceiling is prohibited even
-    if it uses a different name.
+  edition: "2021"
 
-dependency_graph_must_allow:
+  minimum_version: "1.97"
 
-symbolic:
-  - "N"
-  - "required_memory"
-  - "required_qubits"
-  - "required_capacity"
-  - "required_topology"
+  safety:
+    unsafe_allowed: false
+    unsafe_blocks_allowed: false
+    unsafe_traits_allowed: false
+    unsafe_impls_allowed: false
 
-capability:
-  - 'capability("quantum.measurement")'
-  - 'capability("gpu.compute")'
-  - 'capability("tensor.compute")'
+  frontend_paths:
+    lexer:
+      - "src/lexer.rs"
+    parser:
+      - "src/parser.rs"
+    ast:
+      - "src/ast/"
 
-constraints:
-  - "requires"
-  - "prefer"
-  - "constrain"
-  - "allow"
-  - "forbid"
+  semantic_paths:
+    - "src/semantic/"
 
-============================================================================
+  ir_paths:
+    - "src/ir/"
+    - "src/quantum/ir/"
 
-OPEN-WORLD EXTENSIBILITY
+  compiler_paths:
+    - "src/compiler/"
+    - "src/compile/"
 
-============================================================================
+  integration_rule:
+    rule: >
+      Rust implementation details are downstream consumers of grammar
+      contracts. grammar/ MUST NOT acquire dependencies on Rust implementation
+      internals.
 
-open_world:
+  implementation_limit_rule:
+    rule: >
+      Rust implementation guards MAY exist for genuine implementation safety,
+      memory protection, parser protection, or resource exhaustion prevention.
+      Such guards MUST NOT be represented as language-wide semantic limits.
 
-principle: >
-Concepts whose universe is inherently extensible MUST use names,
-namespaces, registries, metadata, dialects, capabilities, or semantic
-contracts rather than finite grammar enumeration.
+  deterministic_data_rule:
+    rule: >
+      Where dependency or semantic ordering is observable, implementations
+      SHOULD use deterministic collections or explicitly defined ordering.
 
-applies_to:
-- "quantum operations"
-- "effects"
-- "capabilities"
-- "resources"
-- "dialects"
-- "vendors"
-- "devices"
-- "accelerators"
-- "protocols"
-- "AI model families"
-- "hardware technologies"
-- "future computational domains"
+# =============================================================================
+# 43. SECURITY INTEGRATION
+# =============================================================================
 
-exception:
-condition: >
-A finite grammar enumeration is allowed only when the language semantics
-themselves define a genuinely closed set.
+security:
 
-requirement:
-  - "document why the set is closed"
-  - "assign one owner"
-  - "define compatibility behavior"
-  - "provide negative tests"
+  grammar_boundary:
+    rule: >
+      Parsing MUST NOT execute privileged operations, inspect hardware, access
+      secrets, contact networks, or execute arbitrary external programs.
 
-============================================================================
+  compile_time_execution:
+    rule: >
+      Compile-time execution, when supported, MUST remain subject to explicit
+      effects, capabilities, policies, sandboxing, provenance, and resource
+      validation.
 
-TARGET-INDEPENDENCE
+  external_systems:
+    rule: >
+      External systems MUST be accessed through explicitly owned safe
+      interfaces. Grammar dependency contracts MUST NOT require unsafe Rust.
 
-============================================================================
+# =============================================================================
+# 44. TARGET-INDEPENDENCE CONTRACT
+# =============================================================================
 
 target_independence:
 
-grammar_may_express:
-- "execution intent"
-- "resource requirements"
-- "capability requirements"
-- "abstract topology"
-- "constraints"
-- "preferences"
-- "policies"
-- "effects"
-- "contracts"
-- "provenance"
-- "fallback intent"
+  grammar_must_not_depend_on:
+    - "CPU model"
+    - "GPU model"
+    - "FPGA family"
+    - "ASIC model"
+    - "QPU model"
+    - "physical qubit identifier"
+    - "physical memory address"
+    - "device inventory"
+    - "vendor calibration database"
+    - "runtime scheduling state"
+    - "current cluster size"
+    - "current network topology"
 
-grammar_must_not_decide:
-- "physical CPU selection"
-- "physical GPU selection"
-- "physical FPGA selection"
-- "physical ASIC selection"
-- "physical QPU selection"
-- "physical qubit assignment"
-- "physical memory placement"
-- "routing algorithm"
-- "schedule"
-- "calibration"
-- "target discovery"
+  grammar_may_describe:
+    - "required capability"
+    - "required resource"
+    - "resource constraint"
+    - "resource preference"
+    - "abstract topology"
+    - "execution intent"
+    - "placement intent"
+    - "policy"
+    - "fallback intent"
+    - "resilience intent"
 
-dependency_rule: >
-Any grammar dependency that requires one of the forbidden decisions above
-is an architecture violation and MUST be moved downstream.
+# =============================================================================
+# 45. DOMAIN EXTENSION CONTRACT
+# =============================================================================
 
-============================================================================
+future_domain:
 
-ERROR HANDLING
+  rule: >
+    A future computational domain MUST be integrable without modifying the
+    universal dependency architecture merely because the domain is new.
 
-============================================================================
+  required_extension_contract:
+    - "domain identity"
+    - "grammar owner"
+    - "imports"
+    - "exports"
+    - "AST mapping"
+    - "semantic mapping"
+    - "effects"
+    - "resources"
+    - "capabilities"
+    - "policies"
+    - "IR mapping"
+    - "diagnostics"
+    - "compatibility"
+    - "conformance tests"
 
-errors:
+  forbidden_strategy:
+    - "copy the core language into a second grammar"
+    - "create a competing lexer"
+    - "create a competing parser root"
+    - "create a competing universal AST"
+    - "create an unregistered IR"
+    - "add physical capacity constants to core grammar"
 
-unresolved_dependency:
-severity: "error"
-action: "block freeze"
+# =============================================================================
+# 46. CONFORMANCE REQUIREMENTS
+# =============================================================================
 
-dependency_cycle:
-severity: "error"
-action: "block parser generation"
+conformance:
 
-duplicate_owner:
-severity: "error"
-action: "block freeze"
+  architecture:
+    - "one architectural authority"
+    - "one normative language specification"
+    - "one machine-contract layer"
+    - "one lexer boundary"
+    - "one parser boundary"
+    - "one combined root"
+    - "one ownership record per public symbol"
+    - "acyclic production dependency graph"
 
-duplicate_rule:
-severity: "error"
-action: "block parser generation"
+  portability:
+    - "target-independent semantics"
+    - "symbolic resource requirements"
+    - "capability negotiation"
+    - "explicit constraints"
+    - "explicit preferences"
+    - "explicit fallback semantics"
+    - "no accidental target dependence"
 
-duplicate_token:
-severity: "error"
-action: "block lexer generation"
+  scalability:
+    - "no universal hardware capacity ceiling"
+    - "parameterized resource expressions"
+    - "dynamic collection semantics"
+    - "target-driven realization"
+    - "implementation limits remain implementation limits"
 
-forbidden_target_dependency:
-severity: "error"
-action: "block conformance"
+  semantic:
+    - "types"
+    - "effects"
+    - "resources"
+    - "capabilities"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "diagnostics"
 
-hardcoded_capacity:
-severity: "error"
-action: "block production"
+  domains:
+    - "classical"
+    - "quantum"
+    - "HDL"
+    - "hybrid"
+    - "AI"
+    - "data"
+    - "concurrency"
+    - "distributed"
+    - "networking"
+    - "hardware"
+    - "execution"
+    - "compilation"
+    - "interoperability"
+    - "dialects"
+    - "metaprogramming"
 
-missing_ast_mapping:
-severity: "error"
-action: "block STABLE"
+  implementation:
+    - "Rust 2021"
+    - "Rust 1.97 or later"
+    - "safe Rust"
+    - "deterministic parser behavior"
+    - "diagnostic source mapping"
 
-missing_semantic_mapping:
-severity: "error"
-action: "block STABLE"
+# =============================================================================
+# 47. PRODUCTION READINESS GATE
+# =============================================================================
 
-missing_ir_mapping:
-severity: "error"
-action: "block STABLE when IR is applicable"
+production_ready_requires:
 
-missing_compatibility_contract:
-severity: "error"
-action: "block STABLE"
+  authority:
+    - "DESIGN.md is authoritative"
+    - "specification/ is normative"
+    - "spec/ is machine-contract authoritative"
+    - "historical references are non-normative"
 
-quarantined_import:
-severity: "error"
-action: "block production parser generation"
+  ownership:
+    - "every public symbol has one owner"
+    - "every production file has one owner"
+    - "no unresolved duplicate ownership"
 
-============================================================================
+  dependencies:
+    - "all production imports resolve"
+    - "dependency graph is acyclic"
+    - "no forbidden reverse dependency"
+    - "no backend dependency from grammar"
 
-COMPLETION CRITERIA
+  lexical:
+    - "canonical token registry"
+    - "canonical lexer composition"
+    - "Rust lexer conformance"
 
-============================================================================
+  parser:
+    - "canonical parser composition"
+    - "root parser integration"
+    - "complete-input EOF enforcement"
+
+  semantic:
+    - "AST mapping"
+    - "type mapping"
+    - "effect mapping"
+    - "resource mapping"
+    - "capability mapping"
+    - "contract mapping"
+    - "policy mapping"
+    - "provenance mapping"
+
+  IR:
+    - "canonical IR mapping"
+    - "quantum::ir mapping"
+    - "no competing universal IR"
+
+  portability:
+    - "no physical capacity in universal grammar"
+    - "symbolic requirements"
+    - "capability negotiation"
+    - "explicit fallback"
+
+  scalability:
+    - "no fixed language capacity"
+    - "parameterized dimensions"
+    - "target resource driven realization"
+    - "scalability tests"
+
+  safety:
+    - "safe Rust"
+    - "no unsafe implementation requirement"
+    - "no hidden execution during parsing"
+
+  compatibility:
+    - "language version"
+    - "grammar version"
+    - "AST version"
+    - "semantic version"
+    - "IR version"
+    - "dialect version"
+    - "migration policy"
+
+  testing:
+    - "positive tests"
+    - "negative tests"
+    - "boundary tests"
+    - "cross-domain tests"
+    - "determinism tests"
+    - "scalability tests"
+    - "fuzzing"
+    - "compatibility tests"
+    - "golden tests"
+
+# =============================================================================
+# 48. FREEZE PRINCIPLE
+# =============================================================================
+
+freeze_principle:
+
+  rule: >
+    A grammar file is frozen only when every dependency required by its public
+    contract is stable, every consumer-facing export is explicitly defined,
+    and no downstream implementation detail is required to complete the file.
+
+  permanent_invariant: >
+    Adding a new CPU, GPU, FPGA, ASIC, accelerator, QPU, simulator, cluster,
+    topology, network, execution environment, AI model, data representation,
+    quantum operation, HDL realization, or future computational target MUST
+    NOT require modifying a frozen universal grammar file merely to represent
+    the new target.
+
+  permitted_future_changes:
+    - "new dialect registration"
+    - "new domain extension"
+    - "new capability registration"
+    - "new resource kind"
+    - "new backend"
+    - "new lowering"
+    - "new target adapter"
+    - "new library"
+    - "new implementation"
+    - "versioned language evolution"
+
+  prohibited_future_changes:
+    - "adding a machine-size ceiling"
+    - "enumerating all future hardware in core grammar"
+    - "creating a second lexer"
+    - "creating a second parser root"
+    - "creating a competing universal AST"
+    - "creating a competing universal IR"
+    - "making backend internals grammar dependencies"
+
+# =============================================================================
+# 49. FINAL DEPENDENCY EQUATION
+# =============================================================================
+
+architectural_equation:
+
+  source_side:
+    expression: >
+      Source Syntax
+      -> Types
+      -> Effects
+      -> Resources
+      -> Capabilities
+      -> Contracts
+      -> Policies
+      -> Provenance
+      -> Domain Semantics
+      -> Canonical IR
+
+  realization_side:
+    expression: >
+      Canonical IR
+      -> Optimization
+      -> Target Capability Discovery
+      -> Resource Negotiation
+      -> Specialization
+      -> Lowering
+      -> Routing
+      -> Scheduling
+      -> Resilience
+      -> ZQN
+      -> HAL
+      -> Target Execution
+
+  invariant: >
+    The source side defines portable meaning. The realization side determines
+    how that meaning is implemented using the resources actually available.
+
+# =============================================================================
+# 50. COMPLETION CRITERIA FOR THIS FILE
+# =============================================================================
 
 completion:
 
-dependency_file_is_complete_when:
+  this_file_is_complete_when:
+    - "the file is valid YAML"
+    - "the schema is machine-readable"
+    - "dependency direction is explicit"
+    - "layers are explicit"
+    - "composition roots are explicit"
+    - "production/test boundaries are explicit"
+    - "ANTLR boundaries are explicit"
+    - "Rust/frontend boundaries are explicit"
+    - "AST boundary is explicit"
+    - "semantic boundary is explicit"
+    - "canonical IR boundary is explicit"
+    - "quantum::ir boundary is explicit"
+    - "resource/capability dependencies are explicit"
+    - "POCO-REAF dependency rules are explicit"
+    - "scalability rules are explicit"
+    - "hard-coding prohibitions are explicit"
+    - "duplicate/malformed artifact handling is explicit"
+    - "freeze order is explicit"
+    - "validation rules are explicit"
+    - "production readiness gates are explicit"
+    - "no fixed repository file count is encoded"
+    - "no finite machine capacity is encoded"
+    - "no backend implementation is made a grammar dependency"
+    - "no test artifact is made a production dependency"
 
-- "every production subsystem has an explicit dependency layer"
-- "all composition roots are identified"
-- "all canonical root dependencies are declared"
-- "all forbidden dependency directions are declared"
-- "all known duplicate concepts have canonical resolution"
-- "quarantined artifacts cannot enter production imports"
-- "AST boundary is defined"
-- "semantic boundary is defined"
-- "IR boundary is defined"
-- "quantum::ir boundary is defined"
-- "Rust frontend boundary is defined"
-- "safe-Rust requirement is defined"
-- "POCO-REAF dependencies are defined"
-- "scalability dependencies are defined"
-- "compatibility dependencies are defined"
-- "test dependency direction is defined"
-- "generated-artifact direction is defined"
-- "freeze order is defined"
-- "CI validation rules are defined"
+  freeze_status:
+    current: "READY_FOR_DEPENDENCY-CONTRACT_VALIDATION"
+    grammar_directory_status: "NOT_YET_FROZEN"
+    reason: >
+      This contract can be frozen as the dependency authority only after CI
+      validates it against the complete repository tree, MANIFEST.yaml,
+      OWNERSHIP.yaml, actual ANTLR imports, actual public exports, and the
+      Rust frontend integration.
 
-file_can_be_frozen_when:
-
-- "the repository tree has been reconciled against this contract"
-- "every production import resolves"
-- "every production edge belongs to an allowed layer"
-- "no production cycle exists"
-- "duplicate authorities are eliminated or quarantined"
-- "all required downstream mappings exist"
-- "all applicable tests pass"
-- "the dependency DAG remains unchanged under backend-only additions"
-
-downstream_stability_guarantee: >
-Once this dependency contract and the corresponding ownership contracts
-are frozen, adding a new compiler backend, CPU family, GPU family, FPGA,
-ASIC, accelerator, QPU, simulator, cluster, network topology, deployment
-environment, or future computational target MUST NOT require reopening a
-frozen grammar dependency merely because the new target exists.
-
-============================================================================
-
-FINAL ARCHITECTURAL INVARIANT
-
-============================================================================
-
-final_invariant:
-
-dependency_equation: >
-Source syntax
--> lexical contract
--> parser contract
--> domain-neutral AST
--> structural validation
--> types/effects/resources/capabilities/contracts/policies/provenance
--> semantic model
--> canonical IR
--> target-independent optimization/lowering
--> capability/resource negotiation
--> realization
--> routing/scheduling/resilience
--> ZQN
--> HAL
--> target
-
-mandatory_rule: >
-No dependency in grammar/ may collapse the distinction between portable
-program meaning and physical realization.
-
-scalability_rule: >
-The dependency graph is open-ended. Program size, resource size, machine
-size, quantum-system size, network size, cluster size, tensor dimensions,
-and hardware capacity are environmental or symbolic properties, not
-universal grammar ceilings.
-
-POCO_REAF_rule: >
-A frozen grammar dependency must remain valid when the same source
-semantics are realized on a tiny target, a larger target, an accelerator,
-a quantum target, an HDL target, an HPC system, a distributed system, or a
-future target, provided the target satisfies the declared semantic
-requirements and policies.
-
-freeze_rule: >
-Dependency structure is considered production-ready only when it is closed
-under downstream implementation growth without requiring semantic
-back-editing of frozen grammar files.
-
-============================================================================
-
-END OF FILE
-
-============================================================================
+# =============================================================================
+# END OF FILE
+# =============================================================================
