@@ -1,0 +1,3312 @@
+# =============================================================================
+# Zamani Programming Language
+# =============================================================================
+#
+# FILE
+#   grammar/contracts/compatibility.yaml
+#
+# PURPOSE
+#   Canonical machine-checkable compatibility contract for grammar/.
+#
+# STATUS
+#   NORMATIVE
+#   PRODUCTION_READY
+#
+# AUTHORITY
+#   This file is the machine-readable authority for cross-layer compatibility
+#   relationships inside grammar/.
+#
+#   It does NOT replace:
+#
+#     grammar/DESIGN.md
+#       -> overall grammar architecture
+#
+#     grammar/specification/
+#       -> normative language meaning
+#
+#     grammar/spec/
+#       -> normative machine-oriented language contracts
+#
+#   It operationalizes their compatibility requirements.
+#
+# HUMAN COMPATIBILITY VIEW
+#   grammar/compatibility/compatibility-matrix.md
+#
+#   The matrix document is a human-readable projection of this contract.
+#   It MUST NOT contain compatibility relationships that contradict this file.
+#
+# IMPLEMENTATION BASELINE
+#   Rust edition: 2021
+#   Minimum Rust: 1.97.1
+#   Rust safety: safe Rust only
+#   unsafe Rust: forbidden
+#
+# ARCHITECTURAL OBJECTIVE
+#   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+#
+# SCALABILITY
+#   Open-world.
+#   No universal finite machine-capacity ceiling.
+#   Actual execution remains bounded by available resources and implementation
+#   capacity.
+#
+# =============================================================================
+
+schema:
+  id: "zamani-grammar-compatibility-contract"
+  version: "1.0.0"
+  format: "YAML"
+  status: "NORMATIVE"
+  stability: "STABLE"
+  canonical_file: "grammar/contracts/compatibility.yaml"
+  machine_readable: true
+  human_projection: "grammar/compatibility/compatibility-matrix.md"
+
+repository:
+  name: "Benwellonedge28/Zamani"
+  root: "grammar/"
+  language: "Zamani"
+
+implementation_baseline:
+  rust:
+    edition: "2021"
+    minimum_version: "1.97.1"
+    safe_only: true
+    unsafe_allowed: false
+
+  parser:
+    technology: "ANTLR4"
+    public_parser_boundary: "grammar/antlr/ZamaniParser.g4"
+
+  lexer:
+    technology: "ANTLR4"
+    public_lexer_boundary: "grammar/antlr/ZamaniLexer.g4"
+
+  rust_frontend:
+    lexer: "src/lexer.rs"
+    parser: "src/parser.rs"
+    ast: "src/ast/"
+    frontend_ast: "src/frontend/ast/"
+
+  quantum_ir:
+    canonical_boundary: "quantum::ir"
+
+# =============================================================================
+# 1. AUTHORITY MODEL
+# =============================================================================
+
+authority:
+
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "overall grammar architecture and architectural invariants"
+    authority: "normative"
+
+  language_specification:
+    path: "grammar/specification/"
+    role: "normative language meaning"
+    authority: "normative"
+
+  machine_specification:
+    path: "grammar/spec/"
+    role: "machine-oriented normative contracts"
+    authority: "normative"
+
+  language_version:
+    path: "grammar/specification/language-version.md"
+    role: "language-version semantics"
+    authority: "normative"
+
+  cross_layer_versioning:
+    path: "grammar/spec/versioning.md"
+    role: "cross-layer versioning model"
+    authority: "normative"
+
+  compatibility_semantics:
+    path: "grammar/spec/compatibility.md"
+    role: "general compatibility semantics"
+    authority: "normative"
+
+  canonical_contract:
+    path: "grammar/contracts/compatibility.yaml"
+    role: "machine-checkable compatibility relationships"
+    authority: "canonical_machine"
+
+  human_matrix:
+    path: "grammar/compatibility/compatibility-matrix.md"
+    role: "human-readable compatibility projection"
+    authority: "derived_non_authoritative"
+
+  version_policy:
+    path: "grammar/compatibility/versions.md"
+    role: "version policy and compatibility rules"
+    authority: "normative_supporting"
+
+  migration_policy:
+    path: "grammar/compatibility/migrations.md"
+    role: "migration procedures"
+    authority: "normative_supporting"
+
+  deprecation_policy:
+    path: "grammar/compatibility/deprecated.md"
+    role: "deprecation lifecycle"
+    authority: "normative_supporting"
+
+  reserved_policy:
+    path: "grammar/compatibility/reserved.md"
+    role: "reserved syntax and identifier policy"
+    authority: "normative_supporting"
+
+  feature_gates:
+    path: "grammar/compatibility/feature-gates.md"
+    role: "feature availability and lifecycle gating"
+    authority: "normative_supporting"
+
+  grammar_version:
+    path: "grammar/compatibility/grammar-version.md"
+    role: "grammar contract versioning"
+    authority: "normative_supporting"
+
+  ast_version:
+    path: "grammar/compatibility/AST-version.md"
+    role: "AST contract versioning"
+    authority: "normative_supporting"
+
+  semantic_version:
+    path: "grammar/compatibility/semantic-version.md"
+    role: "semantic contract versioning"
+    authority: "normative_supporting"
+
+  ir_version:
+    path: "grammar/compatibility/ir-version.md"
+    role: "IR contract versioning"
+    authority: "normative_supporting"
+
+  dialect_version:
+    path: "grammar/compatibility/dialect-version.md"
+    role: "dialect versioning"
+    authority: "normative_supporting"
+
+  target_compatibility:
+    path: "grammar/compatibility/target-compatibility-version.md"
+    role: "target compatibility"
+    authority: "normative_supporting"
+
+  frontend_conformance:
+    path: "grammar/compatibility/frontend-conformance.md"
+    role: "source-to-frontend conformance"
+    authority: "normative_supporting"
+
+  ast_conformance:
+    path: "grammar/compatibility/ast-conformance.md"
+    role: "AST boundary conformance"
+    authority: "normative_supporting"
+
+  ir_conformance:
+    path: "grammar/compatibility/ir-conformance.md"
+    role: "semantic-to-IR conformance"
+    authority: "normative_supporting"
+
+  dialect_compatibility:
+    path: "grammar/compatibility/dialect-compatibility.md"
+    role: "dialect compatibility"
+    authority: "normative_supporting"
+
+  repository_manifest:
+    path: "grammar/MANIFEST.yaml"
+    role: "repository inventory"
+    authority: "supporting"
+
+  repository_status:
+    path: "grammar/STATUS.yaml"
+    role: "feature lifecycle status"
+    authority: "supporting"
+
+  ownership:
+    path: "grammar/contracts/ownership.yaml"
+    role: "symbol/file ownership"
+    authority: "canonical_related"
+
+  dependencies:
+    path: "grammar/contracts/dependencies.yaml"
+    role: "dependency relationships"
+    authority: "canonical_related"
+
+  exports:
+    path: "grammar/contracts/exports.yaml"
+    role: "public interfaces and exports"
+    authority: "canonical_related"
+
+  ast_mappings:
+    path: "grammar/contracts/ast-mappings.yaml"
+    role: "source-to-AST mappings"
+    authority: "canonical_related"
+
+  semantic_mappings:
+    path: "grammar/contracts/semantic-mappings.yaml"
+    role: "AST-to-semantic mappings"
+    authority: "canonical_related"
+
+  ir_mappings:
+    path: "grammar/contracts/ir-mappings.yaml"
+    role: "semantic-to-IR mappings"
+    authority: "canonical_related"
+
+  diagnostics:
+    path: "grammar/contracts/diagnostics.yaml"
+    role: "diagnostic compatibility"
+    authority: "canonical_related"
+
+  feature_status:
+    path: "grammar/contracts/feature-status.yaml"
+    role: "feature lifecycle"
+    authority: "canonical_related"
+
+  freeze:
+    path: "grammar/FREEZE.md"
+    role: "freeze procedure"
+    authority: "normative_procedure"
+
+  conformance:
+    path: "grammar/CONFORMANCE.md"
+    role: "production conformance"
+    authority: "normative_procedure"
+
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    role: "historical and extended reference"
+    authority: "non_normative"
+
+  implementation_reference:
+    path: "grammar/grammar.md"
+    role: "implementation/conformance reporting"
+    authority: "derived_non_authoritative"
+
+# =============================================================================
+# 2. CORE COMPATIBILITY INVARIANTS
+# =============================================================================
+
+invariants:
+
+  meaning_preservation:
+    severity: "error"
+    rule: >
+      A compatibility-preserving change MUST NOT silently change the specified
+      meaning of valid existing Zamani source.
+
+  explicit_breaking_change:
+    severity: "error"
+    rule: >
+      Every intentionally breaking change MUST be explicitly versioned,
+      classified, documented, diagnosed, tested, and migrated where practical.
+
+  no_silent_reinterpretation:
+    severity: "error"
+    rule: >
+      An implementation MUST NOT silently reinterpret source written for one
+      incompatible language contract as another language contract.
+
+  deterministic_resolution:
+    severity: "error"
+    rule: >
+      Compatibility resolution MUST be deterministic and MUST NOT depend on
+      filesystem ordering, wall-clock time, target availability, random state,
+      or mutable runtime state.
+
+  one_machine_authority:
+    severity: "error"
+    rule: >
+      This file is the canonical machine-readable cross-layer compatibility
+      relationship authority.
+
+  derived_human_matrix:
+    severity: "error"
+    rule: >
+      grammar/compatibility/compatibility-matrix.md MUST be consistent with
+      this file and MUST NOT define contradictory compatibility relationships.
+
+  no_backend_semantic_leak:
+    severity: "error"
+    rule: >
+      Backend, device, scheduler, routing, calibration, or runtime changes MUST
+      NOT alter language compatibility unless they intentionally change a
+      normative language or semantic contract.
+
+  no_hardware_version_language:
+    severity: "error"
+    rule: >
+      Hardware generations MUST NOT become language versions.
+
+  no_capacity_versioning:
+    severity: "error"
+    rule: >
+      Resource capacity MUST NOT be encoded as a language compatibility ceiling.
+
+  open_world:
+    severity: "error"
+    rule: >
+      New computational targets, resources, capabilities, devices, topologies,
+      operations, and dialects MUST be integrable without redefining stable
+      universal semantics solely because they are new.
+
+# =============================================================================
+# 3. COMPATIBILITY DIMENSIONS
+# =============================================================================
+
+dimensions:
+
+  - id: "language"
+    name: "Language"
+    owner: "grammar/specification/language-version.md"
+    stable_identity: "zamani.language"
+    compatibility_unit: "language_version"
+
+  - id: "lexical"
+    name: "Lexical"
+    owner: "grammar/lexer/"
+    stable_identity: "zamani.lexical"
+    compatibility_unit: "lexer_contract_version"
+
+  - id: "grammar"
+    name: "Grammar"
+    owner: "grammar/compatibility/grammar-version.md"
+    stable_identity: "zamani.grammar"
+    compatibility_unit: "grammar_contract_version"
+
+  - id: "parser"
+    name: "Parser"
+    owner: "grammar/antlr/ZamaniParser.g4"
+    stable_identity: "zamani.parser"
+    compatibility_unit: "parser_contract_version"
+
+  - id: "ast"
+    name: "AST"
+    owner: "grammar/compatibility/AST-version.md"
+    stable_identity: "zamani.ast"
+    compatibility_unit: "ast_contract_version"
+
+  - id: "module"
+    name: "Module"
+    owner: "grammar/modules/"
+    stable_identity: "zamani.module"
+    compatibility_unit: "module_contract_version"
+
+  - id: "type"
+    name: "Type"
+    owner: "grammar/types/"
+    stable_identity: "zamani.type"
+    compatibility_unit: "type_contract_version"
+
+  - id: "effect"
+    name: "Effect"
+    owner: "grammar/effects/"
+    stable_identity: "zamani.effect"
+    compatibility_unit: "effect_contract_version"
+
+  - id: "capability"
+    name: "Capability"
+    owner: "grammar/resources/"
+    stable_identity: "zamani.capability"
+    compatibility_unit: "capability_contract_version"
+
+  - id: "resource"
+    name: "Resource"
+    owner: "grammar/resources/"
+    stable_identity: "zamani.resource"
+    compatibility_unit: "resource_contract_version"
+
+  - id: "contract"
+    name: "Contract"
+    owner: "grammar/contracts/"
+    stable_identity: "zamani.contract"
+    compatibility_unit: "contract_contract_version"
+
+  - id: "policy"
+    name: "Policy"
+    owner: "grammar/policies/"
+    stable_identity: "zamani.policy"
+    compatibility_unit: "policy_contract_version"
+
+  - id: "semantic"
+    name: "Semantic"
+    owner: "grammar/spec/compatibility.md"
+    stable_identity: "zamani.semantic"
+    compatibility_unit: "semantic_contract_version"
+
+  - id: "classical_ir"
+    name: "Classical IR"
+    owner: "canonical classical IR implementation"
+    stable_identity: "zamani.ir.classical"
+    compatibility_unit: "classical_ir_version"
+
+  - id: "quantum_ir"
+    name: "Quantum IR"
+    owner: "quantum::ir"
+    stable_identity: "zamani.ir.quantum"
+    compatibility_unit: "quantum_ir_version"
+
+  - id: "hdl_ir"
+    name: "HDL/Hardware IR"
+    owner: "canonical HDL/Hardware IR implementation"
+    stable_identity: "zamani.ir.hdl"
+    compatibility_unit: "hdl_ir_version"
+
+  - id: "dialect"
+    name: "Dialect"
+    owner: "grammar/dialects/"
+    stable_identity: "zamani.dialect"
+    compatibility_unit: "dialect_version"
+
+  - id: "artifact"
+    name: "Compilation Artifact"
+    owner: "grammar/compile/"
+    stable_identity: "zamani.artifact"
+    compatibility_unit: "artifact_format_version"
+
+  - id: "abi"
+    name: "ABI"
+    owner: "grammar/interoperability/"
+    stable_identity: "zamani.abi"
+    compatibility_unit: "abi_version"
+
+  - id: "runtime"
+    name: "Runtime"
+    owner: "runtime implementation"
+    stable_identity: "zamani.runtime"
+    compatibility_unit: "runtime_contract_version"
+
+  - id: "target"
+    name: "Target"
+    owner: "grammar/compatibility/target-compatibility-version.md"
+    stable_identity: "zamani.target"
+    compatibility_unit: "target_compatibility_contract"
+
+# =============================================================================
+# 4. VERSIONING SCHEME
+# =============================================================================
+
+versioning:
+
+  language:
+    scheme: "semver"
+    format: "MAJOR.MINOR.PATCH"
+    examples:
+      - "1.0.0"
+      - "1.1.0"
+      - "1.1.1"
+      - "2.0.0"
+
+  contract:
+    scheme: "semver"
+    rule: >
+      Machine contracts MUST use explicit version identities. A contract
+      version MUST NOT be inferred from a filename, Git commit, Rust version,
+      compiler binary version, or filesystem timestamp.
+
+  implementation:
+    scheme: "independent"
+    rule: >
+      Compiler, runtime, tooling, and Rust implementation versions are
+      independent from the Zamani language version.
+
+  rust:
+    independent_from_language: true
+
+  target:
+    independent_from_language: true
+
+  hardware:
+    independent_from_language: true
+
+  dialect:
+    independent_from_language: true
+
+# =============================================================================
+# 5. VERSION CHANGE CLASSIFICATION
+# =============================================================================
+
+change_classification:
+
+  patch:
+    meaning:
+      - "compatible correction"
+      - "diagnostic correction"
+      - "documentation correction"
+      - "implementation correction preserving semantics"
+      - "conformance correction preserving semantics"
+    forbidden:
+      - "semantic incompatibility"
+      - "syntax removal"
+      - "changed operator precedence"
+      - "changed type meaning"
+
+  minor:
+    meaning:
+      - "backward-compatible feature addition"
+      - "new non-conflicting syntax"
+      - "new optional semantic capability"
+      - "new extensible capability"
+      - "new dialect capability"
+    requirements:
+      - "existing stable meaning preserved"
+      - "existing stable programs remain valid where promised"
+      - "new syntax does not silently capture existing identifiers"
+
+  major:
+    meaning:
+      - "intentional incompatible language change"
+      - "removal of stable syntax"
+      - "incompatible semantic change"
+      - "incompatible type-system change"
+      - "incompatible effect change"
+      - "incompatible ownership change"
+      - "incompatible evaluation change"
+      - "incompatible stable module behavior"
+    requirements:
+      - "explicit migration"
+      - "diagnostics"
+      - "compatibility metadata"
+      - "conformance tests"
+
+  target_only:
+    meaning:
+      - "new hardware"
+      - "new backend"
+      - "new runtime"
+      - "new accelerator"
+      - "new QPU"
+      - "new FPGA"
+      - "new ASIC"
+      - "new topology"
+    language_version_change: false
+
+# =============================================================================
+# 6. COMPATIBILITY RELATION TYPES
+# =============================================================================
+
+relationship_kinds:
+
+  source_compatible:
+    preserves: "source meaning"
+
+  lexical_compatible:
+    preserves: "tokenization behavior required by the language contract"
+
+  syntax_compatible:
+    preserves: "parse structure and accepted source"
+
+  ast_compatible:
+    preserves: "required AST semantic information"
+
+  semantic_compatible:
+    preserves: "program meaning"
+
+  type_compatible:
+    preserves: "type meaning and required type properties"
+
+  effect_compatible:
+    preserves: "effect semantics"
+
+  resource_compatible:
+    preserves: "resource requirements and constraints"
+
+  capability_compatible:
+    preserves: "capability requirements"
+
+  policy_compatible:
+    preserves: "policy meaning"
+
+  contract_compatible:
+    preserves: "contract obligations"
+
+  ir_compatible:
+    preserves: "canonical IR meaning required by the contract"
+
+  artifact_compatible:
+    preserves: "artifact interpretation"
+
+  abi_compatible:
+    preserves: "foreign calling/data interface"
+
+  runtime_compatible:
+    preserves: "runtime contract"
+
+  target_compatible:
+    preserves: "ability to realize the specified program without semantic change"
+
+  dialect_compatible:
+    preserves: "registered dialect meaning"
+
+  migration_compatible:
+    means: "automatic or documented transformation exists"
+
+  observationally_compatible:
+    means: >
+      Observable behavior required by the applicable language contract remains
+      equivalent.
+
+  not_compatible:
+    means: >
+      The two contracts MUST NOT be treated as interchangeable.
+
+# =============================================================================
+# 7. COMPATIBILITY STRENGTH
+# =============================================================================
+
+compatibility_strength:
+
+  exact:
+    value: 1
+    meaning: >
+      Consumer can use the producer contract without transformation.
+
+  compatible:
+    value: 2
+    meaning: >
+      Consumer can use the producer contract under the declared compatibility
+      rules.
+
+  migratable:
+    value: 3
+    meaning: >
+      Producer and consumer are not directly interchangeable, but an explicit
+      migration can produce a valid consumer representation.
+
+  conditional:
+    value: 4
+    meaning: >
+      Compatibility depends on explicitly declared feature, dialect, policy,
+      capability, or environment conditions.
+
+  incompatible:
+    value: 5
+    meaning: >
+      Direct use is prohibited.
+
+# =============================================================================
+# 8. DEFAULT COMPATIBILITY RULES
+# =============================================================================
+
+default_rules:
+
+  source_to_lexer:
+    relationship: "lexical_compatible"
+    rule: >
+      A source program is compatible with a lexer contract only when all tokens
+      required by the source language version are recognized according to the
+      same lexical specification.
+
+  lexer_to_parser:
+    relationship: "syntax_compatible"
+    rule: >
+      Lexer and parser contracts MUST agree on token identity, token spelling,
+      contextual keyword behavior, literals, operators, and punctuation.
+
+  parser_to_ast:
+    relationship: "ast_compatible"
+    rule: >
+      Parser evolution MUST preserve all meaning-bearing source information
+      required by the AST contract.
+
+  ast_to_semantic:
+    relationship: "semantic_compatible"
+    rule: >
+      AST compatibility requires preservation of every source distinction
+      required to establish semantic meaning.
+
+  semantic_to_ir:
+    relationship: "ir_compatible"
+    rule: >
+      IR lowering MUST preserve the semantic contract of the source program.
+
+  semantic_to_target:
+    relationship: "target_compatible"
+    rule: >
+      Target compatibility exists only when the target can realize the
+      validated semantic program without violating mandatory semantics.
+
+  dialect_to_semantic:
+    relationship: "dialect_compatible"
+    rule: >
+      Dialects MUST map into the common semantic model and MUST NOT create a
+      competing language authority.
+
+  artifact_to_runtime:
+    relationship: "runtime_compatible"
+    rule: >
+      A runtime may consume an artifact only when the artifact contract is
+      explicitly supported.
+
+# =============================================================================
+# 9. CROSS-LAYER COMPATIBILITY GRAPH
+# =============================================================================
+
+compatibility_graph:
+
+  canonical_flow:
+    - "language"
+    - "lexical"
+    - "grammar"
+    - "parser"
+    - "ast"
+    - "module"
+    - "type"
+    - "effect"
+    - "capability"
+    - "resource"
+    - "contract"
+    - "policy"
+    - "semantic"
+    - "classical_ir"
+    - "quantum_ir"
+    - "hdl_ir"
+    - "artifact"
+    - "abi"
+    - "runtime"
+    - "target"
+
+  required_direction:
+    source:
+      - "language"
+      - "lexical"
+      - "grammar"
+      - "parser"
+      - "ast"
+
+    semantic:
+      - "module"
+      - "type"
+      - "effect"
+      - "capability"
+      - "resource"
+      - "contract"
+      - "policy"
+      - "semantic"
+
+    realization:
+      - "classical_ir"
+      - "quantum_ir"
+      - "hdl_ir"
+      - "artifact"
+      - "abi"
+      - "runtime"
+      - "target"
+
+  forbidden_direction:
+    - "target -> language"
+    - "runtime_state -> language"
+    - "hardware_capacity -> language"
+    - "physical_device -> AST"
+    - "physical_device -> canonical_semantics"
+    - "vendor_instruction -> universal_grammar"
+    - "scheduler_slot -> canonical_IR"
+    - "calibration_state -> source_syntax"
+
+# =============================================================================
+# 10. LANGUAGE COMPATIBILITY
+# =============================================================================
+
+language_compatibility:
+
+  identity:
+    id: "compat.language"
+    dimension: "language"
+
+  rules:
+
+    stable_source:
+      when: "same_major_version"
+      compatibility: "source_compatible"
+      requirement: >
+        Stable source MUST preserve meaning unless an explicitly documented
+        exception applies.
+
+    patch:
+      compatibility: "source_compatible"
+
+    minor:
+      compatibility: "source_compatible"
+      exceptions:
+        - "new feature explicitly requires opt-in"
+        - "dialect-specific behavior"
+
+    major:
+      compatibility: "conditional"
+      migration_required: true
+
+  unsupported_version:
+    action: "diagnostic"
+    silent_fallback: false
+    diagnostic_identity: "compat.language.unsupported_version"
+
+# =============================================================================
+# 11. LEXER COMPATIBILITY
+# =============================================================================
+
+lexer_compatibility:
+
+  owner: "grammar/lexer/"
+  public_boundary: "grammar/antlr/ZamaniLexer.g4"
+
+  compatibility_sensitive:
+
+    - "token identity"
+    - "token spelling"
+    - "keyword status"
+    - "contextual keyword behavior"
+    - "identifier rules"
+    - "literal rules"
+    - "escape rules"
+    - "Unicode rules"
+    - "operator spelling"
+    - "punctuation"
+    - "comment behavior"
+
+  keyword_addition:
+    preferred:
+      - "contextual keyword"
+      - "feature gate"
+      - "versioned keyword"
+    requirement: >
+      Adding a keyword MUST NOT silently break valid stable identifiers unless
+      the compatibility contract explicitly permits the break.
+
+  token_identity:
+    rule: >
+      Token identity MUST remain stable for the lifetime of a stable lexical
+      contract.
+
+  duplicate_tokens:
+    forbidden: true
+    examples_to_audit:
+      - "Question"
+      - "QuestionMark"
+      - "Ampersand"
+      - "BitAnd"
+
+  hardware_specific_tokens:
+    forbidden: true
+
+  capacity_tokens:
+    forbidden: true
+
+# =============================================================================
+# 12. GRAMMAR COMPATIBILITY
+# =============================================================================
+
+grammar_compatibility:
+
+  owner: "grammar/compatibility/grammar-version.md"
+  composition_root: "grammar/Zamani.g4"
+
+  compatibility_sensitive:
+
+    - "rule names"
+    - "alternative structure"
+    - "precedence"
+    - "associativity"
+    - "accepted token sequences"
+    - "ambiguity behavior"
+    - "optional/required constructs"
+    - "source interpretation"
+
+  root_rule:
+    rule: >
+      grammar/Zamani.g4 MUST remain a composition root and MUST NOT become a
+      competing semantic specification.
+
+  domain_rule:
+    rule: >
+      Domain grammar changes MUST remain inside their owned domain contracts.
+
+  duplicate_rules:
+    forbidden: true
+
+  accidental_parse_change:
+    requires:
+      - "compatibility classification"
+      - "conformance test"
+      - "version impact assessment"
+
+# =============================================================================
+# 13. AST COMPATIBILITY
+# =============================================================================
+
+ast_compatibility:
+
+  owner: "grammar/compatibility/AST-version.md"
+  mapping_contract: "grammar/contracts/ast-mappings.yaml"
+
+  invariant:
+    rule: >
+      AST evolution MUST preserve all semantic information required by the
+      source language contract.
+
+  compatible_changes:
+
+    - "add optional metadata"
+    - "add non-semantic source location information"
+    - "add derived information that does not change identity"
+    - "internal representation optimization invisible to consumers"
+
+  incompatible_changes:
+
+    - "remove meaning-bearing field"
+    - "change field semantics"
+    - "change discriminant meaning"
+    - "change required field to incompatible type"
+    - "collapse semantically distinct nodes"
+    - "change source construct interpretation"
+
+  source_span:
+    required: true
+
+  physical_target_data:
+    forbidden_in_domain_neutral_ast:
+      - "physical_device_id"
+      - "physical_cpu_id"
+      - "physical_gpu_id"
+      - "physical_fpga_id"
+      - "physical_asic_id"
+      - "physical_qpu_id"
+      - "physical_qubit_assignment"
+      - "scheduler_slot"
+      - "calibration_handle"
+      - "live_resource_count"
+
+  target_independence: true
+
+# =============================================================================
+# 14. TYPE COMPATIBILITY
+# =============================================================================
+
+type_compatibility:
+
+  owner: "grammar/types/"
+
+  compatible_if:
+
+    - "type identity preserved"
+    - "generic constraints preserved"
+    - "bounds preserved"
+    - "ownership properties preserved"
+    - "linearity/affinity preserved"
+    - "resource properties preserved"
+
+  breaking_if:
+
+    - "existing values become invalid"
+    - "existing operations change meaning"
+    - "variance changes incompatibly"
+    - "ownership changes incompatibly"
+    - "implicit conversion changes meaning"
+
+  symbolic_dimensions:
+    required: true
+
+  symbolic_widths:
+    required: true
+
+  symbolic_ranks:
+    required: true
+
+  physical_capacity_limits:
+    forbidden: true
+
+# =============================================================================
+# 15. EFFECT COMPATIBILITY
+# =============================================================================
+
+effect_compatibility:
+
+  owner: "grammar/effects/"
+
+  stable_effect_identity:
+    required: true
+
+  compatible:
+    - "effect metadata clarification"
+    - "implementation optimization preserving effect semantics"
+
+  incompatible:
+    - "new observable effect"
+    - "effect removal that changes observable behavior"
+    - "effect reordering that changes observable behavior"
+    - "effect permission expansion that violates policy"
+
+  effect_categories:
+    - "io"
+    - "network"
+    - "mutation"
+    - "randomness"
+    - "native"
+    - "foreign"
+    - "distributed"
+    - "measurement"
+    - "quantum"
+    - "learning"
+    - "adaptation"
+    - "reflection"
+    - "code_generation"
+    - "simulation"
+
+  new_effect:
+    registration_required: true
+    compatibility_review_required: true
+
+# =============================================================================
+# 16. RESOURCE COMPATIBILITY
+# =============================================================================
+
+resource_compatibility:
+
+  owner: "grammar/resources/"
+
+  semantic_model: "symbolic-resource-semantics"
+
+  compatible_resource_forms:
+
+    - "requirements"
+    - "constraints"
+    - "preferences"
+    - "budgets"
+    - "capability predicates"
+    - "symbolic quantities"
+    - "runtime quantities"
+    - "derived quantities"
+
+  examples:
+
+    - "requires qubits >= required_qubits"
+    - "requires memory >= required_memory"
+    - "requires capability(\"quantum.measurement\")"
+    - "requires capability(\"gpu.compute\")"
+    - "requires capability(\"tensor.compute\")"
+    - "requires topology(required_topology)"
+
+  forbidden_universal_limits:
+
+    - "MAX_QUBITS"
+    - "MAX_CPUS"
+    - "MAX_CORES"
+    - "MAX_THREADS"
+    - "MAX_GPUS"
+    - "MAX_FPGAS"
+    - "MAX_ASICS"
+    - "MAX_QPUS"
+    - "MAX_NODES"
+    - "MAX_MEMORY"
+    - "MAX_STORAGE"
+    - "MAX_REGISTER_WIDTH"
+    - "MAX_VECTOR_WIDTH"
+    - "MAX_TENSOR_RANK"
+    - "MAX_TENSOR_DIMENSION"
+    - "MAX_NETWORK_SIZE"
+    - "MAX_DEVICE_COUNT"
+    - "MAX_ACCELERATOR_COUNT"
+
+  compatibility_rule:
+    rule: >
+      A target failing a resource requirement is target/resource incompatibility,
+      not language incompatibility.
+
+  implementation_limits:
+    rule: >
+      Finite compiler or runtime representation limits MUST be diagnosed as
+      implementation limits and MUST NOT become language-level ceilings.
+
+# =============================================================================
+# 17. CAPABILITY COMPATIBILITY
+# =============================================================================
+
+capability_compatibility:
+
+  owner: "grammar/resources/"
+
+  identity:
+    format: "extensible.namespaced.identifier"
+
+  closed_world:
+    forbidden: true
+
+  vendor_namespaces:
+    allowed: true
+
+  universal_redefinition:
+    forbidden: true
+
+  preservation:
+    rule: >
+      Capability requirements MUST survive semantic lowering unless a
+      transformation proves that the requirement has been eliminated.
+
+  examples:
+
+    - "quantum.measurement"
+    - "gpu.compute"
+    - "tensor.compute"
+    - "distributed.execution"
+    - "persistent.storage"
+
+  target_selection:
+    grammar_ownership: false
+    semantic_ownership: false
+    realization_ownership: true
+
+# =============================================================================
+# 18. CONTRACT COMPATIBILITY
+# =============================================================================
+
+contract_compatibility:
+
+  owner: "grammar/contracts/"
+
+  kinds:
+
+    - "requires"
+    - "ensures"
+    - "invariant"
+    - "assume"
+    - "guarantee"
+    - "property"
+    - "assertion"
+
+  preservation:
+    rule: >
+      Lowering MUST preserve contract obligations whose validity or
+      observability extends beyond source analysis.
+
+  compile_time_discharge:
+    allowed: true
+    requirements:
+      - "validated"
+      - "diagnosable"
+      - "evidence retained when required"
+
+  runtime_discharge:
+    allowed: true
+    requirement:
+      - "semantic equivalence"
+
+  failed_mandatory_contract:
+    successful_lowering: false
+
+# =============================================================================
+# 19. POLICY COMPATIBILITY
+# =============================================================================
+
+policy_compatibility:
+
+  owner: "grammar/policies/"
+
+  kinds:
+
+    - "authorization"
+    - "security"
+    - "resource"
+    - "execution"
+    - "adaptation"
+    - "simulation"
+    - "deployment"
+    - "fallback"
+    - "target-selection"
+
+  precedence:
+
+    semantic_correctness: 1
+    mandatory_requirements: 2
+    mandatory_constraints: 3
+    mandatory_policies: 4
+    capabilities: 5
+    resources: 6
+    preferences: 7
+    optimization_hints: 8
+
+  invariant:
+    rule: >
+      A preference or optimization hint MUST NOT override semantic correctness,
+      mandatory requirements, mandatory constraints, or prohibitions.
+
+  policy_change:
+    compatibility_review_required: true
+
+# =============================================================================
+# 20. SEMANTIC COMPATIBILITY
+# =============================================================================
+
+semantic_compatibility:
+
+  owner: "grammar/spec/compatibility.md"
+
+  meaning:
+    stable_identity: "zamani.semantic"
+
+  compatibility_requires:
+
+    - "same source meaning"
+    - "same required type meaning"
+    - "same required effect meaning"
+    - "same required capability meaning"
+    - "same resource obligations"
+    - "same mandatory contracts"
+    - "same mandatory policy semantics"
+    - "same observable behavior where specified"
+
+  breaking_changes:
+
+    - "evaluation order change"
+    - "name resolution change"
+    - "type meaning change"
+    - "ownership change"
+    - "effect meaning change"
+    - "resource meaning change"
+    - "capability meaning change"
+    - "quantum measurement meaning change"
+    - "classical numerical meaning change"
+    - "concurrency meaning change"
+    - "module resolution change"
+
+  semantic_target_independence: true
+
+# =============================================================================
+# 21. CLASSICAL IR COMPATIBILITY
+# =============================================================================
+
+classical_ir_compatibility:
+
+  canonical_boundary: "Classical IR"
+  owner: "canonical classical IR implementation"
+
+  source_of_truth:
+    mapping_contract: "grammar/contracts/ir-mappings.yaml"
+    version_policy: "grammar/compatibility/ir-version.md"
+
+  preservation:
+
+    - "value semantics"
+    - "type semantics"
+    - "effects"
+    - "resource obligations"
+    - "contracts"
+    - "policies"
+    - "provenance"
+
+  physical_information:
+    forbidden_in_canonical_boundary:
+      - "physical_device_id"
+      - "physical_register_id"
+      - "scheduler_slot"
+      - "live_memory_address"
+      - "vendor_instruction"
+
+  target_lowering:
+    allowed: true
+    compatibility_requirement: >
+      Target-specific lowering MUST preserve canonical semantic meaning.
+
+# =============================================================================
+# 22. QUANTUM IR COMPATIBILITY
+# =============================================================================
+
+quantum_ir_compatibility:
+
+  canonical_boundary: "quantum::ir"
+  owner: "quantum::ir"
+  source_contract: "grammar/contracts/ir-mappings.yaml"
+  version_contract: "grammar/compatibility/ir-version.md"
+
+  invariant:
+    rule: >
+      Quantum source semantics MUST converge through quantum::ir before
+      target-specific quantum realization.
+
+  preservation:
+
+    - "logical operation identity"
+    - "operand identity"
+    - "parameter semantics"
+    - "measurement semantics"
+    - "control semantics"
+    - "classical feed-forward semantics"
+    - "effects"
+    - "capabilities"
+    - "resource requirements"
+    - "contracts"
+    - "policies"
+    - "provenance"
+
+  extensibility:
+    operation_enumeration_closed_world: false
+    new_operations:
+      mechanism:
+        - "builtin registration"
+        - "custom operation"
+        - "dialect registration"
+        - "parameterized operation"
+        - "vendor extension"
+      language_core_change_required: false
+
+  physical_mapping:
+    forbidden_in_canonical_semantics:
+      - "physical_qubit_assignment"
+      - "device_specific_calibration"
+      - "scheduler_slot"
+      - "vendor_instruction"
+
+  physical_mapping_owner:
+    - "routing"
+    - "scheduling"
+    - "HAL"
+    - "backend"
+
+  serialization:
+    implementation_reference:
+      - "src/quantum/ir/serialization/compatibility.rs"
+    rule: >
+      Serialized quantum IR MUST carry authoritative version identity and MUST
+      reject incompatible versions rather than silently reinterpret them.
+
+  compatibility_loss:
+    rule: >
+      Any compatibility operation that may discard semantic information MUST
+      require an explicitly declared loss policy and MUST be diagnosable.
+
+# =============================================================================
+# 23. HDL/HARDWARE IR COMPATIBILITY
+# =============================================================================
+
+hdl_ir_compatibility:
+
+  canonical_boundary: "HDL/Hardware IR"
+  owner: "canonical HDL/Hardware IR implementation"
+
+  preservation:
+
+    - "module semantics"
+    - "port semantics"
+    - "signal semantics"
+    - "clock semantics"
+    - "reset semantics"
+    - "timing constraints"
+    - "state semantics"
+    - "verification obligations"
+    - "resource intent"
+
+  forbidden_universal_assumptions:
+
+    - "fixed bus width"
+    - "fixed register width"
+    - "fixed clock count"
+    - "fixed memory size"
+    - "fixed pipeline depth"
+    - "fixed device count"
+
+  parameterization:
+    required: true
+
+  physical_synthesis:
+    downstream: true
+
+# =============================================================================
+# 24. DIALECT COMPATIBILITY
+# =============================================================================
+
+dialect_compatibility:
+
+  owner: "grammar/dialects/"
+  supporting_specification: "grammar/compatibility/dialect-version.md"
+
+  required_identity:
+
+    - "dialect_id"
+    - "version"
+    - "namespace"
+    - "language_compatibility"
+    - "semantic_mapping"
+    - "capabilities"
+    - "dependencies"
+
+  rules:
+
+    common_semantic_model:
+      required: true
+
+    separate_language:
+      forbidden: true
+
+    silent_core_override:
+      forbidden: true
+
+    vendor_extension:
+      allowed: true
+      requirement: >
+        Vendor-specific syntax and semantics MUST remain explicitly namespaced
+        and MUST NOT redefine universal semantic identities.
+
+  external_formats:
+    examples:
+      - "SQL"
+      - "JSON"
+      - "XML"
+      - "OpenQASM"
+      - "QIR"
+      - "Verilog"
+      - "VHDL"
+      - "SystemVerilog"
+      - "C"
+      - "C++"
+      - "Rust"
+      - "Python"
+      - "WASM"
+      - "assembly"
+
+    rule: >
+      External formats are interoperability/dialect boundaries and MUST NOT
+      automatically become universal Zamani core syntax.
+
+# =============================================================================
+# 25. ARTIFACT COMPATIBILITY
+# =============================================================================
+
+artifact_compatibility:
+
+  owner: "grammar/compile/"
+  relevant_contracts:
+    - "grammar/compile/artifacts.g4"
+    - "grammar/compile/reproducibility.g4"
+
+  artifact_identity:
+    required:
+
+      - "language_version"
+      - "grammar_contract_version"
+      - "ast_contract_version"
+      - "semantic_contract_version"
+      - "ir_contract_versions"
+      - "dialect_versions"
+      - "feature_set"
+      - "resource_requirements"
+      - "capability_requirements"
+      - "constraints"
+      - "policies"
+      - "provenance"
+      - "reproducibility_metadata"
+
+  target_independent_artifact:
+    preferred: true
+
+  semantic_artifact:
+    rule: >
+      A portable compilation artifact MUST preserve target-independent
+      semantic information required for later realization.
+
+  executable_artifact:
+    rule: >
+      A target-specific executable MUST identify its target compatibility
+      contract and MUST NOT be represented as universally target-independent.
+
+  unknown_artifact_version:
+    action: "reject_or_explicit_migration"
+    silent_interpretation: false
+
+# =============================================================================
+# 26. ABI COMPATIBILITY
+# =============================================================================
+
+abi_compatibility:
+
+  owner: "grammar/interoperability/"
+
+  scope:
+    - "calling convention"
+    - "data representation"
+    - "symbol linkage"
+    - "foreign type mapping"
+    - "serialization"
+    - "binary interface"
+
+  independence:
+    language_semantics: true
+    target_realization: true
+
+  rule:
+    abi_compatibility_does_not_imply:
+      - "language compatibility"
+      - "semantic compatibility"
+      - "runtime compatibility"
+      - "target compatibility"
+
+  safety:
+    rust:
+      unsafe_allowed: false
+
+  foreign_boundary:
+    requirement: >
+      Foreign integration MUST expose a validated safe boundary to the
+      production Rust implementation.
+
+# =============================================================================
+# 27. RUNTIME COMPATIBILITY
+# =============================================================================
+
+runtime_compatibility:
+
+  owner: "runtime implementation"
+
+  requirement:
+    rule: >
+      Runtime compatibility exists only when the runtime supports the artifact,
+      semantic, IR, policy, capability, and target contracts required by the
+      program.
+
+  runtime_state:
+    language_authority: false
+
+  live_hardware_state:
+    language_authority: false
+
+  runtime_adaptation:
+    allowed: true
+    semantic_invariant: >
+      Runtime adaptation MUST NOT silently change source semantics.
+
+# =============================================================================
+# 28. TARGET COMPATIBILITY
+# =============================================================================
+
+target_compatibility:
+
+  owner: "grammar/compatibility/target-compatibility-version.md"
+
+  target_examples:
+
+    - "CPU"
+    - "multicore CPU"
+    - "GPU"
+    - "FPGA"
+    - "ASIC"
+    - "accelerator"
+    - "QPU"
+    - "simulator"
+    - "embedded"
+    - "HPC"
+    - "cluster"
+    - "distributed"
+    - "cloud"
+    - "future computational target"
+
+  target_compatibility_requires:
+
+    - "supported semantic operations"
+    - "required capabilities"
+    - "required resources"
+    - "required topology"
+    - "required effects"
+    - "required policies"
+    - "required contracts"
+
+  failure_classification:
+
+    missing_capability: "capability_incompatible"
+    insufficient_resource: "resource_incompatible"
+    unsupported_operation: "semantic_lowering_incompatible"
+    policy_denied: "policy_incompatible"
+    unsupported_dialect: "dialect_incompatible"
+    unsupported_ir: "ir_incompatible"
+    runtime_mismatch: "runtime_incompatible"
+
+  language_version_change_due_to_target:
+    default: false
+
+# =============================================================================
+# 29. RESOURCE-SCALE COMPATIBILITY
+# =============================================================================
+
+scale_compatibility:
+
+  principle: "open_world"
+
+  supported_scale_model:
+
+    - "tiny"
+    - "small"
+    - "medium"
+    - "large"
+    - "very_large"
+    - "massively_parallel"
+    - "distributed"
+    - "heterogeneous"
+    - "future"
+
+  source_program:
+    rewrite_required_when_scale_changes: false
+
+  semantic_meaning:
+    scale_dependent: false
+
+  physical_realization:
+    scale_dependent: true
+
+  language_limits:
+    universal_capacity_limit: false
+
+  prohibited_scale_limits:
+
+    - "maximum qubits"
+    - "maximum CPUs"
+    - "maximum GPUs"
+    - "maximum FPGAs"
+    - "maximum ASICs"
+    - "maximum nodes"
+    - "maximum memory"
+    - "maximum threads"
+    - "maximum register width"
+    - "maximum tensor rank"
+    - "maximum network size"
+    - "maximum devices"
+
+  actual_resource_exhaustion:
+    classification: "environment_or_implementation_limit"
+    language_break: false
+
+# =============================================================================
+# 30. POCO-REAF COMPATIBILITY
+# =============================================================================
+
+poco_reaf:
+
+  name: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
+
+  source_rewrite_for_target:
+    forbidden_when_only_realization_changes: true
+
+  source_rewrite_for_semantic_change:
+    allowed: true
+    requirement: "explicit language evolution"
+
+  compile_once_meaning:
+    definition: >
+      A target-independent semantic compilation artifact may be compiled once
+      and subsequently realized for compatible targets without changing the
+      source-level program meaning.
+
+  run_everywhere:
+    definition: >
+      A program may run on every target that satisfies its semantic,
+      capability, resource, policy, effect, contract, and execution
+      requirements.
+
+  run_anywhere:
+    definition: >
+      A program may run on any compatible realization selected through the
+      declared capability/resource/policy model.
+
+  run_forever:
+    definition: >
+      Program meaning remains recoverable across future compatible language,
+      compiler, IR, runtime, and target evolution through explicit versioning,
+      compatibility rules, migration, and reproducibility.
+
+  incompatible_target:
+    silent_approximation: false
+    silent_semantic_change: false
+
+  fallback:
+    explicit_required: true
+    allowed_outcomes:
+      - "ACCEPT"
+      - "DEGRADED_ACCEPT"
+      - "RETRY"
+      - "RECOVER"
+      - "ESCALATE"
+      - "REJECT"
+
+  fallback_semantics:
+    requirement: >
+      A fallback MUST be explicitly authorized and MUST preserve the semantic
+      guarantees declared by the program and applicable policy.
+
+# =============================================================================
+# 31. DETERMINISM AND REPRODUCIBILITY
+# =============================================================================
+
+reproducibility:
+
+  owner:
+    - "grammar/compile/reproducibility.g4"
+    - "grammar/compatibility/versions.md"
+
+  deterministic_version_resolution:
+    required: true
+
+  deterministic_compatibility_resolution:
+    required: true
+
+  reproducibility_metadata:
+    required_when_requested:
+
+      - "language_version"
+      - "grammar_version"
+      - "semantic_version"
+      - "IR_versions"
+      - "dialect_versions"
+      - "feature_set"
+      - "compiler_contract"
+      - "optimization_profile"
+      - "resource_constraints"
+      - "capability_constraints"
+      - "policy_context"
+      - "provenance"
+
+  physical_environment:
+    rule: >
+      Physical environment information may be recorded when required for
+      reproducibility but MUST NOT become a universal language limit.
+
+  nondeterminism:
+    explicit_only: true
+
+# =============================================================================
+# 32. FEATURE LIFECYCLE COMPATIBILITY
+# =============================================================================
+
+feature_lifecycle:
+
+  statuses:
+
+    PROPOSED:
+      stable_compatibility: false
+      production_use: false
+
+    DESIGNED:
+      stable_compatibility: false
+      production_use: false
+
+    EXPERIMENTAL:
+      stable_compatibility: false
+      production_use: "opt_in"
+
+    IMPLEMENTED:
+      stable_compatibility: false
+      production_use: "implementation_supported"
+
+    STABLE:
+      stable_compatibility: true
+      production_use: true
+
+    DEPRECATED:
+      stable_compatibility: "legacy"
+      production_use: "discouraged"
+
+    REMOVED:
+      stable_compatibility: false
+      production_use: false
+
+    HISTORICAL:
+      stable_compatibility: false
+      production_use: false
+
+    REJECTED:
+      stable_compatibility: false
+      production_use: false
+
+  promotion_to_stable_requires:
+
+    - "specification complete"
+    - "grammar complete"
+    - "AST mapping complete"
+    - "semantic mapping complete"
+    - "IR mapping complete where applicable"
+    - "diagnostics complete"
+    - "compatibility classification complete"
+    - "migration behavior defined"
+    - "tests complete"
+    - "scalability audit passed"
+    - "hard-coding audit passed"
+    - "POCO-REAF audit passed"
+    - "Rust integration validated"
+    - "safe Rust requirement satisfied"
+
+# =============================================================================
+# 33. DEPRECATION COMPATIBILITY
+# =============================================================================
+
+deprecation:
+
+  owner: "grammar/compatibility/deprecated.md"
+
+  required_metadata:
+
+    - "feature_id"
+    - "introduced_version"
+    - "deprecated_version"
+    - "replacement"
+    - "diagnostic"
+    - "migration"
+    - "planned_removal_policy"
+
+  rule:
+    >
+      A deprecated stable feature MUST NOT become a new dependency of another
+      stable feature.
+
+  removal:
+    requires:
+      - "major version or explicitly authorized compatibility transition"
+      - "migration guidance"
+      - "conformance update"
+      - "diagnostic transition"
+
+# =============================================================================
+# 34. RESERVED SYNTAX COMPATIBILITY
+# =============================================================================
+
+reserved:
+
+  owner: "grammar/compatibility/reserved.md"
+
+  purpose:
+    rule: >
+      Reserved identifiers and syntax protect future extensibility without
+      prematurely assigning semantic meaning.
+
+  reservation:
+    does_not_mean:
+      - "implemented feature"
+      - "stable feature"
+      - "semantic commitment"
+
+  compatibility:
+    new_reserved_identifier:
+      risk: "source compatibility"
+      mitigation:
+        - "contextual keyword"
+        - "namespace qualification"
+        - "version gate"
+        - "explicit migration"
+
+# =============================================================================
+# 35. FEATURE GATE COMPATIBILITY
+# =============================================================================
+
+feature_gates:
+
+  owner: "grammar/compatibility/feature-gates.md"
+
+  gate_identity:
+    required: true
+
+  gate_properties:
+
+    - "feature_id"
+    - "minimum_language_version"
+    - "status"
+    - "enabled_by_default"
+    - "dialect_requirement"
+    - "compatibility_class"
+    - "migration_policy"
+
+  rule:
+    >
+      A feature gate MUST NOT silently change the meaning of existing stable
+      source.
+
+# =============================================================================
+# 36. MIGRATION CONTRACT
+# =============================================================================
+
+migration:
+
+  owner: "grammar/compatibility/migrations.md"
+
+  migration_record:
+
+    required:
+
+      - "migration_id"
+      - "from_contract"
+      - "to_contract"
+      - "scope"
+      - "compatibility_class"
+      - "automatic_possible"
+      - "diagnostic"
+      - "semantic_preservation"
+      - "tests"
+
+  semantic_preservation:
+    required: true
+
+  automatic_migration:
+    allowed: true
+
+  manual_migration:
+    allowed: true
+
+  lossy_migration:
+    allowed: true
+    requirements:
+      - "explicitly classified"
+      - "user-visible diagnostic"
+      - "policy authorization"
+      - "semantic information loss documented"
+
+  silent_loss:
+    forbidden: true
+
+# =============================================================================
+# 37. COMPATIBILITY ALIASES
+# =============================================================================
+
+aliases:
+
+  allowed: true
+
+  requirements:
+
+    - "canonical target identity"
+    - "source version range"
+    - "target version range"
+    - "deprecation state"
+    - "migration behavior"
+    - "diagnostic behavior"
+
+  semantic_alias:
+    rule: >
+      An alias MUST resolve to exactly one canonical semantic identity.
+
+  competing_identity:
+    forbidden: true
+
+# =============================================================================
+# 38. SOURCE COMPATIBILITY VS TARGET COMPATIBILITY
+# =============================================================================
+
+separation:
+
+  source_compatibility:
+    concerns:
+      - "language"
+      - "lexer"
+      - "grammar"
+      - "AST"
+      - "semantic model"
+
+  target_compatibility:
+    concerns:
+      - "capabilities"
+      - "resources"
+      - "topology"
+      - "IR support"
+      - "lowering"
+      - "runtime"
+      - "HAL"
+
+  invariant:
+    >
+      Target incompatibility MUST NOT be reported as source incompatibility
+      when the source language contract remains valid.
+
+# =============================================================================
+# 39. HARD-CODING AUDIT
+# =============================================================================
+
+hard_coding_audit:
+
+  required: true
+
+  forbidden_categories:
+
+    universal_machine_capacity:
+      - "MAX_QUBITS"
+      - "MAX_CPUS"
+      - "MAX_CORES"
+      - "MAX_THREADS"
+      - "MAX_GPUS"
+      - "MAX_FPGAS"
+      - "MAX_ASICS"
+      - "MAX_QPUS"
+      - "MAX_NODES"
+      - "MAX_MEMORY"
+      - "MAX_STORAGE"
+      - "MAX_REGISTER_WIDTH"
+      - "MAX_VECTOR_WIDTH"
+      - "MAX_TENSOR_RANK"
+      - "MAX_TENSOR_DIMENSION"
+      - "MAX_NETWORK_SIZE"
+      - "MAX_DEVICE_COUNT"
+      - "MAX_ACCELERATOR_COUNT"
+
+  disguised_limits:
+    rule: >
+      Renaming a prohibited capacity constant does not make it compatible.
+
+  target_specific_capacity:
+    forbidden_in:
+      - "language specification"
+      - "universal grammar"
+      - "domain-neutral AST"
+      - "canonical semantic model"
+      - "canonical target-independent IR"
+
+  allowed:
+    - "program-defined constants"
+    - "symbolic resource requirements"
+    - "target-provided capabilities"
+    - "runtime-provided resource quantities"
+    - "implementation diagnostics"
+
+# =============================================================================
+# 40. PHYSICAL REALIZATION COMPATIBILITY
+# =============================================================================
+
+physical_realization:
+
+  downstream_only:
+
+    - "hardware discovery"
+    - "device selection"
+    - "physical placement"
+    - "routing"
+    - "scheduling"
+    - "calibration"
+    - "QEC implementation"
+    - "ZQN"
+    - "HAL"
+    - "runtime telemetry"
+
+  compatibility_rule:
+    >
+      Changes to physical realization are compatible with frozen language
+      semantics when the realization preserves the declared semantic contract.
+
+  new_hardware:
+    language_change_required: false
+
+  new_qpu:
+    language_change_required: false
+
+  new_gpu:
+    language_change_required: false
+
+  new_fpga:
+    language_change_required: false
+
+  new_asic:
+    language_change_required: false
+
+  new_accelerator:
+    language_change_required: false
+
+# =============================================================================
+# 41. PROVENANCE COMPATIBILITY
+# =============================================================================
+
+provenance:
+
+  owner:
+    - "grammar/contracts/semantic-mappings.yaml"
+    - "grammar/contracts/ir-mappings.yaml"
+
+  required_for:
+
+    - "adaptation"
+    - "reflection"
+    - "code generation"
+    - "learning"
+    - "foreign integration"
+    - "semantic transformation"
+    - "target selection where required"
+    - "resource negotiation where required"
+
+  preservation_relations:
+
+    - "derived_from"
+    - "generated_by"
+    - "transformed_by"
+    - "verified_by"
+    - "supported_by"
+    - "decided_by"
+    - "specialized_from"
+    - "lowered_from"
+
+  compatibility_rule:
+    >
+      Compatibility-preserving transformations MUST preserve provenance
+      relationships required by the applicable semantic contract.
+
+  storage:
+    unlimited_history_required: false
+
+# =============================================================================
+# 42. DIAGNOSTIC COMPATIBILITY
+# =============================================================================
+
+diagnostics:
+
+  owner: "grammar/contracts/diagnostics.yaml"
+
+  every_compatibility_failure:
+    required_fields:
+
+      - "diagnostic_identity"
+      - "compatibility_dimension"
+      - "source_location_when_available"
+      - "producer_contract"
+      - "consumer_contract"
+      - "reason"
+      - "migration_available"
+      - "severity"
+
+  required_distinctions:
+
+    unsupported_language:
+      identity: "compat.language.unsupported"
+
+    lexical_mismatch:
+      identity: "compat.lexical.mismatch"
+
+    grammar_mismatch:
+      identity: "compat.grammar.mismatch"
+
+    ast_mismatch:
+      identity: "compat.ast.mismatch"
+
+    semantic_mismatch:
+      identity: "compat.semantic.mismatch"
+
+    type_mismatch:
+      identity: "compat.type.mismatch"
+
+    effect_mismatch:
+      identity: "compat.effect.mismatch"
+
+    capability_mismatch:
+      identity: "compat.capability.mismatch"
+
+    resource_mismatch:
+      identity: "compat.resource.mismatch"
+
+    policy_mismatch:
+      identity: "compat.policy.mismatch"
+
+    ir_mismatch:
+      identity: "compat.ir.mismatch"
+
+    dialect_mismatch:
+      identity: "compat.dialect.mismatch"
+
+    artifact_mismatch:
+      identity: "compat.artifact.mismatch"
+
+    abi_mismatch:
+      identity: "compat.abi.mismatch"
+
+    runtime_mismatch:
+      identity: "compat.runtime.mismatch"
+
+    target_mismatch:
+      identity: "compat.target.mismatch"
+
+  generic_error:
+    forbidden_when_specific_diagnostic_exists: true
+
+# =============================================================================
+# 43. OWNERSHIP INTEGRATION
+# =============================================================================
+
+ownership_integration:
+
+  owner_contract:
+    path: "grammar/contracts/ownership.yaml"
+
+  rule:
+    >
+      Compatibility records MUST reference canonical owners. Compatibility
+      metadata MUST NOT transfer ownership of grammar, AST, semantic, or IR
+      concepts.
+
+  duplicate_owner:
+    compatibility_status: "invalid"
+
+  unresolved_owner:
+    compatibility_status: "invalid"
+
+# =============================================================================
+# 44. DEPENDENCY INTEGRATION
+# =============================================================================
+
+dependency_integration:
+
+  dependency_contract:
+    path: "grammar/contracts/dependencies.yaml"
+
+  rule:
+    >
+      Compatibility dependencies MUST follow the canonical dependency DAG.
+
+  cycles:
+    forbidden: true
+
+  downstream_to_upstream_mutation:
+    forbidden: true
+
+  stable_dependency:
+    requirement: >
+      A stable consumer MUST depend only on a stable contract or an explicitly
+      versioned compatible contract.
+
+# =============================================================================
+# 45. EXPORT INTEGRATION
+# =============================================================================
+
+export_integration:
+
+  export_contract:
+    path: "grammar/contracts/exports.yaml"
+
+  rule:
+    >
+      A public export MUST have a compatibility identity before it may become
+      stable.
+
+  compatibility_required_for:
+    - "grammar_rule"
+    - "parser_entry"
+    - "lexer_token"
+    - "type_constructor"
+    - "expression_constructor"
+    - "statement_constructor"
+    - "declaration_constructor"
+    - "effect_constructor"
+    - "resource_constructor"
+    - "capability_constructor"
+    - "policy_constructor"
+    - "contract_constructor"
+    - "provenance_constructor"
+    - "domain_constructor"
+    - "dialect_boundary"
+
+# =============================================================================
+# 46. AST MAPPING INTEGRATION
+# =============================================================================
+
+ast_mapping_integration:
+
+  contract:
+    path: "grammar/contracts/ast-mappings.yaml"
+
+  rule:
+    >
+      Every stable syntax construct MUST have a stable AST compatibility
+      identity where an AST mapping is required.
+
+  required_trace:
+
+    - "source construct"
+    - "grammar owner"
+    - "AST identity"
+    - "semantic identity"
+    - "compatibility identity"
+
+  missing_mapping:
+    stable_feature_allowed: false
+
+# =============================================================================
+# 47. SEMANTIC MAPPING INTEGRATION
+# =============================================================================
+
+semantic_mapping_integration:
+
+  contract:
+    path: "grammar/contracts/semantic-mappings.yaml"
+
+  rule:
+    >
+      Every stable semantic construct MUST identify its compatibility identity
+      and preservation obligations.
+
+  required_trace:
+
+    - "grammar"
+    - "AST"
+    - "semantic identity"
+    - "effects"
+    - "capabilities"
+    - "resources"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "IR"
+
+# =============================================================================
+# 48. IR MAPPING INTEGRATION
+# =============================================================================
+
+ir_mapping_integration:
+
+  contract:
+    path: "grammar/contracts/ir-mappings.yaml"
+
+  required_boundaries:
+
+    classical:
+      boundary: "Classical IR"
+
+    quantum:
+      boundary: "quantum::ir"
+
+    hdl:
+      boundary: "HDL/Hardware IR"
+
+  rule:
+    >
+      Canonical IR compatibility MUST be evaluated independently from source
+      syntax compatibility.
+
+  physical_lowering:
+    rule: >
+      Physical lowering MUST NOT mutate canonical semantic compatibility.
+
+# =============================================================================
+# 49. MANIFEST INTEGRATION
+# =============================================================================
+
+manifest_integration:
+
+  inventory:
+    path: "grammar/MANIFEST.yaml"
+
+  every_compatibility_owned_file:
+    required_manifest_entry: true
+
+  compatibility_contract:
+    required_manifest_entry: true
+
+  generated_projection:
+    must_be_marked_generated: true
+
+# =============================================================================
+# 50. STATUS INTEGRATION
+# =============================================================================
+
+status_integration:
+
+  status:
+    path: "grammar/STATUS.yaml"
+
+  stable_feature:
+    required:
+      - "compatibility status"
+      - "version identity"
+
+  partial_feature:
+    stable_compatibility: false
+
+  experimental_feature:
+    stable_compatibility: false
+
+  historical_feature:
+    active_dependency_allowed: false
+
+# =============================================================================
+# 51. FREEZE INTEGRATION
+# =============================================================================
+
+freeze_integration:
+
+  procedure:
+    path: "grammar/FREEZE.md"
+
+  compatibility_freeze_requires:
+
+    - "all dimensions identified"
+    - "all stable contracts versioned"
+    - "all relationships declared"
+    - "all breaking changes classified"
+    - "all migrations declared"
+    - "all deprecated features classified"
+    - "all aliases resolved"
+    - "all compatibility diagnostics defined"
+    - "all dependency relationships valid"
+    - "all ownership relationships valid"
+    - "hard-coding audit passed"
+    - "scalability audit passed"
+    - "POCO-REAF audit passed"
+    - "conformance tests passed"
+    - "Rust 1.97.1+ validation passed"
+    - "unsafe audit passed"
+
+  frozen_contract:
+    modification_policy:
+      compatible_correction: "patch_revalidation"
+      compatible_extension: "minor_revalidation"
+      breaking_change: "major_version_required"
+
+# =============================================================================
+# 52. HUMAN MATRIX INTEGRATION
+# =============================================================================
+
+human_matrix:
+
+  path: "grammar/compatibility/compatibility-matrix.md"
+
+  role: "derived human-readable projection"
+
+  source_of_truth:
+    machine: "grammar/contracts/compatibility.yaml"
+
+  requirements:
+
+    - "must reflect this file"
+    - "must not contradict this file"
+    - "must not invent compatibility relationships"
+    - "must identify itself as derived"
+    - "must preserve version identities"
+
+  authority:
+    normative_machine: false
+    normative_language: false
+
+  regeneration:
+    preferred: true
+
+  drift:
+    blocking: true
+
+# =============================================================================
+# 53. RELATED COMPATIBILITY DOCUMENTS
+# =============================================================================
+
+related_documents:
+
+  language:
+    - "grammar/specification/language-version.md"
+    - "grammar/compatibility/language-version.md"
+    - "grammar/compatibility/versions.md"
+
+  grammar:
+    - "grammar/compatibility/grammar-version.md"
+
+  ast:
+    - "grammar/compatibility/AST-version.md"
+    - "grammar/compatibility/ast-conformance.md"
+
+  semantic:
+    - "grammar/compatibility/semantic-version.md"
+
+  ir:
+    - "grammar/compatibility/ir-version.md"
+    - "grammar/compatibility/ir-conformance.md"
+
+  dialect:
+    - "grammar/compatibility/dialect-version.md"
+    - "grammar/compatibility/dialect-compatibility.md"
+
+  target:
+    - "grammar/compatibility/target-compatibility-version.md"
+
+  migration:
+    - "grammar/compatibility/migrations.md"
+
+  deprecation:
+    - "grammar/compatibility/deprecated.md"
+
+  feature_gates:
+    - "grammar/compatibility/feature-gates.md"
+
+  reserved:
+    - "grammar/compatibility/reserved.md"
+
+  frontend:
+    - "grammar/compatibility/frontend-conformance.md"
+
+# =============================================================================
+# 54. COMPATIBILITY DECISION PROCEDURE
+# =============================================================================
+
+decision_procedure:
+
+  ordered_steps:
+
+    - id: 1
+      name: "resolve_language_version"
+      action: >
+        Determine the effective language version deterministically.
+
+    - id: 2
+      name: "resolve_contract_versions"
+      action: >
+        Resolve lexer, grammar, AST, semantic, IR, dialect, artifact, runtime,
+        and target compatibility contracts.
+
+    - id: 3
+      name: "validate_source"
+      action: >
+        Verify source compatibility with the requested language contract.
+
+    - id: 4
+      name: "validate_frontend"
+      action: >
+        Verify lexer/parser/AST compatibility.
+
+    - id: 5
+      name: "validate_semantics"
+      action: >
+        Verify type, effect, capability, resource, contract, policy, and
+        semantic compatibility.
+
+    - id: 6
+      name: "validate_ir"
+      action: >
+        Verify compatibility with the required canonical IR.
+
+    - id: 7
+      name: "validate_dialect"
+      action: >
+        Verify all dialect contracts.
+
+    - id: 8
+      name: "validate_artifact"
+      action: >
+        Verify compilation artifact compatibility.
+
+    - id: 9
+      name: "negotiate_target"
+      action: >
+        Match semantic requirements against target capabilities and resources.
+
+    - id: 10
+      name: "validate_policy"
+      action: >
+        Verify target and execution decisions against applicable policies.
+
+    - id: 11
+      name: "select_realization"
+      action: >
+        Select a semantically valid realization.
+
+    - id: 12
+      name: "record_provenance"
+      action: >
+        Record required compatibility and realization decisions.
+
+    - id: 13
+      name: "emit_diagnostic_or_accept"
+      action: >
+        Produce an explicit compatibility decision.
+
+  possible_results:
+
+    - "ACCEPT"
+    - "DEGRADED_ACCEPT"
+    - "RETRY"
+    - "RECOVER"
+    - "ESCALATE"
+    - "REJECT"
+
+# =============================================================================
+# 55. COMPATIBILITY RESULT MODEL
+# =============================================================================
+
+result_model:
+
+  record:
+
+    required:
+
+      - "producer_identity"
+      - "producer_version"
+      - "consumer_identity"
+      - "consumer_version"
+      - "dimension"
+      - "relationship"
+      - "strength"
+      - "conditions"
+      - "migration"
+      - "diagnostic"
+      - "provenance"
+
+  deterministic: true
+
+  semantic_change:
+    must_be_explicit: true
+
+  silent_fallback:
+    forbidden: true
+
+# =============================================================================
+# 56. COMPATIBILITY MATRIX DATA MODEL
+# =============================================================================
+
+matrix_record:
+
+  required:
+
+    - "producer"
+    - "producer_version"
+    - "consumer"
+    - "consumer_version"
+    - "relationship"
+    - "strength"
+    - "conditions"
+    - "migration"
+    - "status"
+
+  producer:
+    examples:
+      - "language"
+      - "grammar"
+      - "lexer"
+      - "AST"
+      - "semantic"
+      - "Classical IR"
+      - "quantum::ir"
+      - "HDL/Hardware IR"
+      - "dialect"
+      - "artifact"
+      - "ABI"
+      - "runtime"
+      - "target"
+
+  consumer:
+    rule: >
+      Consumer identities MUST refer to registered compatibility dimensions or
+      explicitly registered extension identities.
+
+# =============================================================================
+# 57. COMPATIBILITY CONDITIONS
+# =============================================================================
+
+conditions:
+
+  allowed:
+
+    - "language_version"
+    - "feature_gate"
+    - "dialect_version"
+    - "contract_version"
+    - "capability"
+    - "resource_requirement"
+    - "resource_constraint"
+    - "policy"
+    - "effect"
+    - "target_capability"
+    - "target_resource"
+    - "runtime_version"
+    - "artifact_version"
+
+  forbidden:
+
+    - "filesystem_order"
+    - "wall_clock"
+    - "random_state"
+    - "undocumented_environment_variable"
+    - "physical_device_accident"
+    - "hidden_capacity_constant"
+
+# =============================================================================
+# 58. COMPATIBILITY EXTENSION MODEL
+# =============================================================================
+
+extensions:
+
+  new_dimension:
+    allowed: true
+    requirements:
+
+      - "stable identity"
+      - "owner"
+      - "versioning"
+      - "compatibility relationships"
+      - "diagnostics"
+      - "tests"
+      - "migration policy"
+      - "scalability audit"
+      - "POCO-REAF audit"
+
+  new_target:
+    language_change_required: false
+
+  new_hardware:
+    language_change_required: false
+
+  new_quantum_operation:
+    language_change_required: false
+    exception: >
+      Only if the operation requires a genuinely new universal semantic
+      construct that cannot be represented by the existing extensible quantum
+      operation model.
+
+  new_dialect:
+    language_change_required: false
+
+  new_capability:
+    language_change_required: false
+
+  new_resource_kind:
+    language_change_required: false
+
+# =============================================================================
+# 59. OPEN-WORLD COMPATIBILITY
+# =============================================================================
+
+open_world:
+
+  principle:
+    >
+      The compatibility system MUST remain extensible. It MUST NOT require a
+      finite enumeration of all future machines, resources, devices,
+      accelerators, quantum processors, topologies, operations, or computational
+      domains.
+
+  extensible_identities:
+    required: true
+
+  namespaced_extensions:
+    required: true
+
+  closed_world_device_list:
+    forbidden: true
+
+  closed_world_capability_list:
+    forbidden: true
+
+  closed_world_operation_list:
+    forbidden: true
+
+  closed_world_resource_list:
+    forbidden: true
+
+# =============================================================================
+# 60. "INFINITY" INTERPRETATION
+# =============================================================================
+
+infinity:
+
+  meaning:
+    >
+      "Infinity" means that the language compatibility architecture introduces
+      no artificial finite universal ceiling on computation scale, resource
+      count, resource quantity, topology size, tensor dimensions, qubit count,
+      device count, program scale, or future computational substrate.
+
+  physical_execution:
+    finite: true
+
+  actual_constraints:
+    sources:
+
+      - "available target resources"
+      - "target capabilities"
+      - "implementation representation capacity"
+      - "physical constraints"
+      - "declared program constraints"
+      - "declared policies"
+      - "runtime availability"
+
+  rule:
+    >
+      An actual finite constraint MUST NOT be promoted into a universal language
+      compatibility limit.
+
+# =============================================================================
+# 61. RUST COMPATIBILITY
+# =============================================================================
+
+rust_compatibility:
+
+  language_implementation:
+    minimum: "1.97.1"
+    edition: "2021"
+
+  safe_rust:
+    required: true
+
+  unsafe:
+    allowed: false
+
+  compatibility_rule:
+    >
+      A Rust toolchain upgrade MUST NOT silently change Zamani language
+      semantics.
+
+  generated_parser:
+    rule: >
+      Changes in parser-generation behavior require grammar conformance
+      validation.
+
+  dependency_upgrade:
+    rule: >
+      Dependency upgrades that affect parsing, AST representation, serialization,
+      compatibility, or semantics require conformance revalidation.
+
+  required_validation:
+
+    - "cargo check"
+    - "cargo test"
+    - "cargo clippy"
+
+  implementation_limit:
+    >
+      Rust implementation limits are implementation constraints and MUST NOT
+      become Zamani language compatibility ceilings.
+
+# =============================================================================
+# 62. UNSAFE-CODE INTEGRATION
+# =============================================================================
+
+unsafe_policy:
+
+  absolute:
+    unsafe_rust: false
+
+  applies_to:
+
+    - "lexer"
+    - "parser"
+    - "AST"
+    - "semantic analysis"
+    - "compatibility checker"
+    - "migration tooling"
+    - "grammar validators"
+    - "grammar generators"
+    - "IR compatibility tooling"
+    - "conformance tooling"
+
+  external_interoperability:
+    rule: >
+      External systems requiring unsafe implementation details MUST NOT make
+      unsafe Rust a requirement of the Zamani language or its core compatibility
+      implementation.
+
+# =============================================================================
+# 63. COMPATIBILITY TEST CONTRACT
+# =============================================================================
+
+tests:
+
+  root: "grammar/tests/compatibility/"
+
+  required_categories:
+
+    - "language"
+    - "lexer"
+    - "grammar"
+    - "parser"
+    - "AST"
+    - "module"
+    - "type"
+    - "effect"
+    - "capability"
+    - "resource"
+    - "contract"
+    - "policy"
+    - "semantic"
+    - "Classical IR"
+    - "quantum::ir"
+    - "HDL/Hardware IR"
+    - "dialect"
+    - "artifact"
+    - "ABI"
+    - "runtime"
+    - "target"
+    - "migration"
+    - "deprecation"
+    - "feature-gates"
+    - "reserved"
+    - "diagnostics"
+    - "determinism"
+    - "reproducibility"
+    - "scalability"
+    - "POCO-REAF"
+
+  required_test_classes:
+
+    positive:
+      required: true
+
+    negative:
+      required: true
+
+    boundary:
+      required: true
+
+    migration:
+      required: true
+
+    regression:
+      required: true
+
+    deterministic:
+      required: true
+
+    scalability:
+      required: true
+
+    cross_layer:
+      required: true
+
+  target_scaling:
+    same_source_semantics:
+      required: true
+
+  prohibited_test_interpretation:
+    >
+      A test fixture's finite resource capacity MUST NOT be interpreted as a
+      language-level maximum.
+
+# =============================================================================
+# 64. COMPATIBILITY AUDIT
+# =============================================================================
+
+audit:
+
+  required_before_stable:
+
+    ownership:
+      required: true
+      contract: "grammar/contracts/ownership.yaml"
+
+    dependencies:
+      required: true
+      contract: "grammar/contracts/dependencies.yaml"
+
+    exports:
+      required: true
+      contract: "grammar/contracts/exports.yaml"
+
+    ast:
+      required: true
+      contract: "grammar/contracts/ast-mappings.yaml"
+
+    semantic:
+      required: true
+      contract: "grammar/contracts/semantic-mappings.yaml"
+
+    ir:
+      required: true
+      contract: "grammar/contracts/ir-mappings.yaml"
+
+    diagnostics:
+      required: true
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    feature_status:
+      required: true
+      contract: "grammar/contracts/feature-status.yaml"
+
+    compatibility:
+      required: true
+      contract: "grammar/contracts/compatibility.yaml"
+
+  structural:
+
+    duplicate_identity: "error"
+    duplicate_owner: "error"
+    unresolved_dependency: "error"
+    dependency_cycle: "error"
+    missing_version: "error"
+    missing_migration_for_breaking_change: "error"
+    missing_diagnostic: "error"
+    compatibility_matrix_drift: "error"
+    hidden_alias: "error"
+    hidden_breaking_change: "error"
+
+  portability:
+
+    hardware_constant: "error"
+    vendor_lock_in: "error"
+    physical_identity_in_domain_neutral_ast: "error"
+    physical_identity_in_canonical_semantics: "error"
+
+  scalability:
+
+    finite_language_capacity: "error"
+    fixed_qubit_ceiling: "error"
+    fixed_cpu_ceiling: "error"
+    fixed_gpu_ceiling: "error"
+    fixed_memory_ceiling: "error"
+    fixed_tensor_ceiling: "error"
+    fixed_network_ceiling: "error"
+    fixed_device_ceiling: "error"
+
+# =============================================================================
+# 65. CONFORMANCE GATES
+# =============================================================================
+
+conformance_gates:
+
+  gate_1_authority:
+    requires:
+      - "authority hierarchy consistent"
+      - "no competing machine authority"
+
+  gate_2_version:
+    requires:
+      - "all stable identities versioned"
+      - "version resolution deterministic"
+
+  gate_3_source:
+    requires:
+      - "source compatibility validated"
+
+  gate_4_frontend:
+    requires:
+      - "lexer compatibility"
+      - "grammar compatibility"
+      - "parser compatibility"
+      - "AST compatibility"
+
+  gate_5_semantic:
+    requires:
+      - "type compatibility"
+      - "effect compatibility"
+      - "capability compatibility"
+      - "resource compatibility"
+      - "contract compatibility"
+      - "policy compatibility"
+      - "semantic compatibility"
+
+  gate_6_ir:
+    requires:
+      - "Classical IR compatibility"
+      - "quantum::ir compatibility"
+      - "HDL/Hardware IR compatibility"
+
+  gate_7_extensions:
+    requires:
+      - "dialect compatibility"
+      - "feature-gate compatibility"
+      - "migration compatibility"
+
+  gate_8_artifacts:
+    requires:
+      - "artifact compatibility"
+      - "reproducibility metadata"
+
+  gate_9_target:
+    requires:
+      - "capability negotiation"
+      - "resource negotiation"
+      - "policy validation"
+      - "target compatibility"
+
+  gate_10_scalability:
+    requires:
+      - "no universal capacity ceiling"
+      - "symbolic resource model"
+      - "open-world extension"
+
+  gate_11_safety:
+    requires:
+      - "Rust >= 1.97.1"
+      - "Rust 2021"
+      - "unsafe forbidden"
+
+  gate_12_tests:
+    requires:
+      - "positive tests"
+      - "negative tests"
+      - "migration tests"
+      - "cross-layer tests"
+      - "scalability tests"
+      - "determinism tests"
+      - "POCO-REAF tests"
+
+# =============================================================================
+# 66. FREEZE READINESS
+# =============================================================================
+
+freeze_readiness:
+
+  file_is_freeze_ready_only_when:
+
+    - "schema valid"
+    - "authority references resolve"
+    - "all compatibility dimensions have stable identities"
+    - "all cross-layer relationships are explicit"
+    - "language versioning is defined"
+    - "grammar versioning is defined"
+    - "AST versioning is defined"
+    - "semantic versioning is defined"
+    - "IR versioning is defined"
+    - "dialect versioning is defined"
+    - "artifact compatibility is defined"
+    - "target compatibility is defined"
+    - "migration is defined"
+    - "deprecation is defined"
+    - "feature gates are defined"
+    - "reserved syntax policy is defined"
+    - "diagnostics are defined"
+    - "ownership integration is defined"
+    - "dependency integration is defined"
+    - "export integration is defined"
+    - "AST integration is defined"
+    - "semantic integration is defined"
+    - "IR integration is defined"
+    - "manifest integration is defined"
+    - "status integration is defined"
+    - "freeze integration is defined"
+    - "hard-coding audit is defined"
+    - "scalability audit is defined"
+    - "POCO-REAF contract is defined"
+    - "safe Rust requirement is defined"
+    - "compatibility tests are defined"
+    - "human matrix derivation is defined"
+
+  blocking_conditions:
+
+    - "duplicate compatibility identity"
+    - "unresolved authority"
+    - "contradictory authority"
+    - "missing version"
+    - "missing migration for breaking change"
+    - "silent semantic reinterpretation"
+    - "hard-coded universal capacity"
+    - "target-specific semantic leakage"
+    - "unresolved IR boundary"
+    - "missing quantum::ir compatibility"
+    - "unsafe Rust requirement"
+    - "missing diagnostic"
+    - "missing conformance test"
+    - "matrix drift"
+
+# =============================================================================
+# 67. NO-DOWNSTREAM-RE-EDIT CONTRACT
+# =============================================================================
+
+no_downstream_reedit:
+
+  purpose:
+    >
+      This contract ensures that once compatibility.yaml is frozen, adding or
+      changing downstream implementations does not require rewriting this file
+      merely to accommodate new realizations.
+
+  frozen_contract_must_absorb:
+
+    - "new CPU implementations"
+    - "new GPU implementations"
+    - "new FPGA implementations"
+    - "new ASIC implementations"
+    - "new accelerators"
+    - "new QPUs"
+    - "new simulators"
+    - "new HPC systems"
+    - "new cluster implementations"
+    - "new runtime implementations"
+    - "new routing algorithms"
+    - "new scheduling algorithms"
+    - "new calibration systems"
+    - "new HAL implementations"
+
+  requires_version_change_only_when:
+
+    - "language meaning changes"
+    - "stable compatibility meaning changes"
+    - "stable AST contract changes"
+    - "stable semantic contract changes"
+    - "canonical IR contract changes"
+    - "dialect compatibility contract changes"
+    - "artifact compatibility contract changes"
+
+  implementation_change_without_contract_change:
+    compatibility_contract_edit_required: false
+
+# =============================================================================
+# 68. FINAL ARCHITECTURAL INVARIANT
+# =============================================================================
+
+final_invariant:
+
+  statement: >
+    A Zamani compatibility contract is production-ready only when a valid
+    program can be traced from language version through lexical, grammatical,
+    parser, AST, type, effect, capability, resource, contract, policy,
+    semantic, canonical IR, artifact, runtime, and target contracts without
+    ambiguity or silent semantic change.
+
+  portability:
+    >
+      The source program expresses portable meaning. The environment supplies
+      capabilities and resources. Compilation and runtime determine realization.
+
+  scalability:
+    >
+      The compatibility architecture introduces no artificial finite universal
+      ceiling on computation scale. Actual execution is constrained only by
+      declared requirements, available resources, target capabilities,
+      implementation capacity, physical reality, and explicit policy.
+
+  quantum:
+    >
+      Quantum semantics use quantum::ir as the canonical quantum IR boundary.
+
+  classical:
+    >
+      Classical semantics use the canonical Classical IR boundary.
+
+  hdl:
+    >
+      HDL/hardware semantics use the canonical HDL/Hardware IR boundary.
+
+  dialects:
+    >
+      Dialects extend the language through explicit compatibility contracts and
+      common semantic mappings rather than creating competing languages.
+
+  safety:
+    >
+      The production Rust implementation remains Rust 2021, Rust 1.97.1 or
+      later, and safe Rust only. unsafe Rust is forbidden.
+
+  future:
+    >
+      New computational domains, hardware, devices, accelerators, resources,
+      capabilities, topologies, and implementations must be able to integrate
+      without modifying frozen language semantics merely because the
+      realization is new.
+
+# =============================================================================
+# 69. FINAL FREEZE STATEMENT
+# =============================================================================
+
+freeze_statement:
+
+  status: "PRODUCTION_READY_WHEN_VALIDATED"
+
+  contract_role:
+    >
+      This file is the canonical machine-checkable compatibility integration
+      contract for grammar/.
+
+  required_relationship:
+    >
+      grammar/compatibility/compatibility-matrix.md is a human-readable
+      projection of this file and must remain synchronized with it.
+
+  final_rule:
+    >
+      No compatibility claim is valid merely because source parses. Compatibility
+      requires preservation of the applicable contract at every required layer.
+
+  final_poco_reaf_rule:
+    >
+      Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever is achieved by
+      preserving portable program meaning through explicit versioned contracts,
+      target-independent semantic representation, capability/resource
+      negotiation, explicit fallback, migration, provenance, reproducibility,
+      and target-specific realization.
+
+  final_scalability_rule:
+    >
+      No finite machine capacity is a universal Zamani language compatibility
+      limit.
+
+  final_safety_rule:
+    >
+      Production Rust MUST remain safe Rust with no unsafe code.
+
+# =============================================================================
+# END OF FILE
+# =============================================================================
