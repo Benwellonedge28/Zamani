@@ -3,106 +3,120 @@
  * Zamani Universal Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/security/provenance.g4
+ * FILE
+ * ----
+ * grammar/security/provenance.g4
  *
- * Status:
- *     PRODUCTION SECURITY-DOMAIN LEAF GRAMMAR
+ * GRAMMAR
+ * -------
+ * SecurityProvenance
  *
- * Grammar:
- *     SecurityProvenance
+ * STATUS
+ * ------
+ * PRODUCTION SECURITY-DOMAIN LEAF GRAMMAR
  *
- * Purpose:
- *     Define SOURCE-LEVEL SECURITY PROVENANCE syntax.
+ * PURPOSE
+ * -------
+ * Defines source-level SECURITY CONSTRAINTS, REQUIREMENTS, CLAIMS,
+ * EVIDENCE REFERENCES, ATTESTATION REFERENCES, VERIFICATION INTENT,
+ * AUDIT INTENT, DISCLOSURE/RETENTION SECURITY INTENT, and security-specific
+ * provenance metadata.
  *
- * IMPORTANT:
+ * GENERAL PROVENANCE AUTHORITY
+ * ----------------------------
+ * General provenance and lineage remain owned by:
  *
  *     grammar/data/provenance.g4
+ *     grammar/expressions/provenance.g4
+ *     grammar/compile/provenance.g4
  *
- * remains the canonical owner of GENERAL DATA PROVENANCE / LINEAGE.
+ * This file MUST NOT become a second universal provenance grammar.
  *
- * This file does NOT duplicate general provenance declarations.
- *
- * This file owns the SECURITY interpretation of provenance:
- *
- *     - provenance evidence requirements;
- *     - provenance integrity requirements;
- *     - provenance authenticity requirements;
- *     - provenance attestation requirements;
- *     - provenance verification requirements;
- *     - provenance audit requirements;
- *     - provenance disclosure restrictions;
- *     - provenance retention/security requirements;
- *     - provenance trust requirements;
- *     - provenance security classifications;
- *     - provenance security properties;
- *     - provenance claims;
- *     - provenance evidence references;
- *     - provenance verification policies;
- *     - provenance security metadata;
- *
- * It expresses SECURITY INTENT only.
+ * SECURITY PROVENANCE ROLE
+ * ------------------------
+ * This file expresses how provenance participates in security semantics.
  *
  * It does NOT:
  *
  *     - authenticate;
  *     - authorize;
- *     - verify signatures;
+ *     - evaluate trust;
+ *     - verify evidence;
  *     - calculate hashes;
+ *     - verify signatures;
  *     - access credentials;
- *     - access secret material;
- *     - contact an identity provider;
- *     - contact a trust service;
- *     - inspect hardware;
- *     - discover devices;
- *     - select a backend;
+ *     - access secrets;
+ *     - discover hardware;
+ *     - discover resources;
+ *     - select targets;
  *     - execute audit operations;
- *     - store audit records;
+ *     - persist provenance;
  *     - implement a provenance database;
  *     - implement a ledger;
- *     - implement blockchain;
  *     - implement cryptography;
  *     - implement attestation;
  *     - implement secure boot;
  *     - implement TPM/HSM/TEE functionality;
- *     - define quantum::ir;
+ *     - implement privacy enforcement;
+ *     - implement authorization;
+ *     - implement policy evaluation;
+ *     - define a competing IR;
+ *     - define quantum operations;
  *     - define QEC;
  *     - define ZQN;
- *     - perform routing;
- *     - perform scheduling;
- *     - perform optimization;
- *     - perform resilience;
+ *     - route;
+ *     - schedule;
+ *     - optimize;
  *     - perform runtime enforcement.
  *
  * ============================================================================
  * ARCHITECTURAL AUTHORITY
  * ============================================================================
  *
- * General provenance:
+ * Human normative authority:
  *
- *     grammar/data/provenance.g4
+ *     grammar/specification/
+ *
+ * Machine contracts:
+ *
+ *     grammar/spec/
  *
  * Security composition:
  *
  *     grammar/security/security.g4
  *
- * Security semantics:
+ * General provenance:
  *
- *     grammar/spec/security.md
+ *     grammar/data/provenance.g4
  *
- * Generic names / expressions:
+ * Expression provenance:
  *
- *     Core
- *     Types
- *     Expressions
+ *     grammar/expressions/provenance.g4
+ *
+ * Compilation provenance:
+ *
+ *     grammar/compile/provenance.g4
+ *
+ * Trust:
+ *
+ *     grammar/security/trust.g4
+ *
+ * Authorization:
+ *
+ *     grammar/security/authorization.g4
+ *
+ * Capabilities:
+ *
+ *     grammar/security/capabilities.g4
+ *
+ * Generic requirements/capabilities/constraints:
+ *
+ *     grammar/core/
+ *     grammar/resources/
  *
  * Canonical lexer:
  *
  *     grammar/antlr/ZamaniLexer.g4
- *
- * Canonical language composition:
- *
- *     grammar/Zamani.g4
  *
  * Domain-neutral AST:
  *
@@ -113,260 +127,201 @@
  *     quantum::ir
  *
  * ============================================================================
- * OWNERSHIP
+ * OWNERSHIP CONTRACT
  * ============================================================================
  *
  * THIS FILE OWNS:
  *
- *     security provenance requirements
- *     security provenance constraints
- *     security provenance preferences
- *     security provenance hints
- *     security provenance evidence references
- *     security provenance claims
- *     security provenance attestations
- *     security provenance verification intent
- *     security provenance audit intent
- *     security provenance integrity intent
- *     security provenance authenticity intent
- *     security provenance trust intent
- *     security provenance disclosure intent
- *     security provenance retention intent
- *     security provenance classification
- *     security provenance properties
+ *     securityProvenanceFile
+ *     securityProvenanceDeclaration
+ *     securityProvenanceBody
+ *     securityProvenanceMember
+ *     securityProvenanceRequirement
+ *     securityProvenanceConstraint
+ *     securityProvenancePreference
+ *     securityProvenanceHint
+ *     securityProvenanceEvidence
+ *     securityProvenanceAttestation
+ *     securityProvenanceVerification
+ *     securityProvenanceAudit
+ *     securityProvenanceClaim
+ *     securityProvenanceProperty
+ *     securityProvenanceReference
  *
  * THIS FILE DOES NOT OWN:
  *
- *     general data lineage
- *     data derivation
- *     data transformation
- *     schemas
- *     persistence
- *     serialization
- *     identity definitions
- *     authorization
- *     cryptographic algorithms
- *     key management
- *     privacy implementation
- *     trust implementation
- *     audit storage
- *     runtime verification
- *     hardware realization
- *     quantum operations
- *     quantum IR
+ *     general provenance lineage;
+ *     provenance expressions;
+ *     data schemas;
+ *     source maps;
+ *     source spans;
+ *     reproducibility;
+ *     deterministic compilation;
+ *     identity declarations;
+ *     principals;
+ *     permissions;
+ *     authorization;
+ *     capabilities;
+ *     trust relationships;
+ *     cryptographic algorithms;
+ *     key management;
+ *     privacy policy;
+ *     generic contracts;
+ *     generic policies;
+ *     resource allocation;
+ *     effects;
+ *     quantum operations;
+ *     HDL semantics;
+ *     backend realization.
  *
  * ============================================================================
  * SINGLE-OWNER RULE
  * ============================================================================
  *
- * There must be exactly one owner for each concept.
- *
  * General lineage:
  *
  *     data/provenance.g4
  *
- * Security provenance:
+ * Expression provenance:
+ *
+ *     expressions/provenance.g4
+ *
+ * Compilation provenance:
+ *
+ *     compile/provenance.g4
+ *
+ * Security interpretation:
  *
  *     security/provenance.g4
  *
- * Identity:
- *
- *     security/identity.g4
- *     security/identifiers.g4
- *
- * Authorization:
- *
- *     security/authorization.g4
- *     security/permissions.g4
- *
- * Cryptographic intent:
- *
- *     security/cryptography.g4
- *
- * Trust:
- *
- *     security/trust.g4
- *
- * Privacy:
- *
- *     security/privacy.g4
- *
- * Generic security constraints:
- *
- *     security/security-constraints.g4
- *
- * Security provenance MUST NOT recreate rules owned by those grammars.
+ * No file may redefine another owner's provenance syntax merely for
+ * convenience.
  *
  * ============================================================================
- * POCO-REAF
+ * POCO-REAF / OPEN-WORLD CONTRACT
  * ============================================================================
  *
- * Provenance security must remain portable.
+ * This grammar imposes no finite universal capacity.
  *
- * No source-level security provenance construct may require:
+ * It MUST NOT define or depend on:
  *
- *     a specific CPU;
- *     a specific GPU;
- *     a specific FPGA;
- *     a specific ASIC;
- *     a specific QPU;
- *     a specific node;
- *     a specific device;
- *     a specific memory capacity;
- *     a specific storage capacity;
- *     a specific network;
- *     a specific provider;
- *     a specific operating system;
- *     a specific physical address;
- *     a fixed topology.
- *
- * The grammar MUST NOT define:
- *
- *     MAX_IDENTITIES
  *     MAX_PROVENANCE_RECORDS
- *     MAX_AUDIT_EVENTS
  *     MAX_CLAIMS
  *     MAX_EVIDENCE
- *     MAX_TRUST_ANCHORS
- *     MAX_SECURITY_DOMAINS
+ *     MAX_ATTESTATIONS
+ *     MAX_VERIFICATIONS
+ *     MAX_AUDIT_EVENTS
+ *     MAX_ENTITIES
+ *     MAX_ACTIVITIES
+ *     MAX_RELATIONSHIPS
+ *     MAX_IDENTITIES
  *     MAX_KEYS
  *     MAX_CERTIFICATES
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_QUBITS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_CPUS
+ *     MAX_STORAGE
  *
- * or equivalent language-level limits.
+ * Repetition is represented by grammar repetition.
  *
- * Repetition and recursive structures are intentionally unbounded by grammar.
+ * Actual resource limits belong to:
  *
- * Practical resource limits remain implementation/resource-policy concerns.
+ *     resource analysis
+ *     capability negotiation
+ *     execution planning
+ *     deployment
+ *     runtime
  *
- * ============================================================================
- * SECURITY PRINCIPLE
- * ============================================================================
- *
- * Provenance is evidence about origin, transformation, execution, or
- * verification history.
- *
- * Provenance is NOT automatically trustworthy.
- *
- * Therefore the grammar distinguishes:
- *
- *     provenance
- *     provenance claim
- *     provenance evidence
- *     provenance attestation
- *     provenance verification requirement
- *
- * A claim is not proof merely because it appears in source code.
- *
- * The semantic/runtime security layers determine whether evidence is:
- *
- *     verified;
- *     trusted;
- *     authentic;
- *     complete;
- *     current;
- *     applicable;
- *     sufficient.
+ * A target may reject an unsatisfiable security requirement without requiring
+ * a change to the source program.
  *
  * ============================================================================
- * OPEN-WORLD MODEL
+ * OPEN-WORLD SECURITY MODEL
  * ============================================================================
  *
- * Security properties and evidence kinds remain open-world.
+ * Security provenance mechanisms remain open-world.
  *
- * Do not enumerate today's complete universe of:
+ * The grammar MUST NOT enumerate:
  *
  *     hash algorithms;
  *     signature algorithms;
- *     attestation mechanisms;
+ *     attestation technologies;
  *     certificate systems;
- *     ledgers;
  *     identity providers;
- *     audit systems;
- *     cloud providers;
- *     hardware security technologies.
+ *     trust anchors;
+ *     security providers;
+ *     hardware roots of trust;
+ *     ledger technologies;
+ *     future verification mechanisms.
  *
- * Qualified names and expressions represent future mechanisms.
- *
- * Examples:
- *
- *     security::provenance
- *     security::provenance::integrity
- *     security::provenance::authenticity
- *     security::provenance::attestation
- *     security::provenance::verification
- *     future::security::provenance
- *     vendor::security::evidence
- *
- * The parser does not decide what those names mean.
+ * Symbolic qualified names and canonical expressions represent such concepts.
  *
  * ============================================================================
  * SECRET-MATERIAL BOUNDARY
  * ============================================================================
  *
- * Source-level provenance MUST NOT contain secret material.
- *
- * This grammar therefore has no rules for:
+ * This grammar contains no syntax for:
  *
  *     passwords;
  *     private keys;
  *     secret keys;
  *     bearer tokens;
  *     API secrets;
- *     credentials;
  *     authentication secrets;
  *     recovery secrets.
  *
- * A provenance declaration may reference a symbolic security object:
- *
- *     credential::runtime_identity
- *     key::provenance_signing_key
- *     trust::execution_authority
- *
- * but the referenced secret material is resolved outside the grammar.
+ * A provenance property may reference a symbolic object, but the referenced
+ * object is resolved by security infrastructure.
  *
  * ============================================================================
  * DETERMINISM
  * ============================================================================
  *
- * This grammar contains:
+ * The grammar contains:
  *
  *     - no actions;
  *     - no semantic predicates;
  *     - no Rust;
- *     - no filesystem operations;
- *     - no network operations;
+ *     - no filesystem access;
+ *     - no network access;
  *     - no environment inspection;
  *     - no hardware discovery;
  *     - no cryptographic execution;
  *     - no randomness;
  *     - no policy evaluation.
  *
- * Parsing therefore depends only upon:
+ * Parsing depends only upon:
  *
- *     source token stream
+ *     token stream
+ *     composed grammar
  *     grammar version
- *     explicitly selected dialect configuration
+ *     selected dialect configuration
  *
  * ============================================================================
  * AST CONTRACT
  * ============================================================================
  *
- * The parser must preserve:
+ * The frontend AST MUST preserve, where applicable:
  *
- *     - source span;
- *     - declaration kind;
- *     - qualified names;
- *     - expressions;
- *     - evidence references;
- *     - claim structure;
- *     - requirement structure;
- *     - constraint structure;
- *     - preference structure;
- *     - hint structure;
- *     - source ordering where semantically relevant.
+ *     source span
+ *     declaration name
+ *     target expression
+ *     member kind
+ *     member expression
+ *     referenced provenance object
+ *     requirement/constraint/preference/hint distinction
+ *     source ordering
+ *     attributes
+ *     annotations
  *
- * Suggested domain-neutral semantic categories:
+ * Recommended semantic categories:
  *
+ *     SecurityProvenanceDeclaration
  *     SecurityProvenanceRequirement
  *     SecurityProvenanceConstraint
  *     SecurityProvenancePreference
@@ -378,7 +333,7 @@
  *     SecurityProvenanceAudit
  *     SecurityProvenanceProperty
  *
- * These are semantic contracts, not parser implementation requirements.
+ * These are semantic categories, not additional parser grammars.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -386,122 +341,186 @@
  *
  * Semantic analysis determines:
  *
- *     - whether a provenance subject resolves;
- *     - whether an evidence reference is valid;
- *     - whether a claim is applicable;
- *     - whether an attestation is relevant;
+ *     - whether referenced provenance subjects resolve;
+ *     - whether referenced security objects resolve;
+ *     - whether evidence is applicable;
+ *     - whether a claim is merely asserted or externally supported;
  *     - whether evidence satisfies a requirement;
- *     - whether an integrity requirement is satisfiable;
- *     - whether authenticity is required;
- *     - whether trust requirements are satisfiable;
- *     - whether privacy restrictions conflict with provenance disclosure;
- *     - whether retention requirements are compatible;
- *     - whether provenance requirements survive lowering;
- *     - whether the target environment can satisfy mandatory requirements.
+ *     - whether verification is required;
+ *     - whether an attestation is applicable;
+ *     - whether authorization permits provenance access;
+ *     - whether disclosure restrictions conflict with another policy;
+ *     - whether retention requirements are satisfiable;
+ *     - whether trust requirements can be satisfied;
+ *     - whether capabilities exist;
+ *     - whether mandatory requirements survive lowering;
+ *     - whether target realization can satisfy security intent.
  *
- * The parser does not make those decisions.
+ * None of these decisions are made by this grammar.
+ *
+ * ============================================================================
+ * TYPE CONTRACT
+ * ============================================================================
+ *
+ * Expressions appearing in this grammar use canonical Zamani expression
+ * semantics.
+ *
+ * This file MUST NOT define a private security expression language.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Parsing produces no runtime effect.
+ *
+ * Semantic consumers MAY associate security provenance with effects such as:
+ *
+ *     audit;
+ *     disclosure;
+ *     verification;
+ *     authentication;
+ *     authorization;
+ *     network;
+ *     storage;
+ *     foreign;
+ *     native;
+ *
+ * Effect ownership remains in grammar/effects/.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Security provenance may reference required capabilities symbolically.
+ *
+ * Example semantic intent:
+ *
+ *     requires capability("provenance.integrity");
+ *
+ * Capability discovery remains outside this grammar.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Security provenance may participate in resource requirements through the
+ * canonical requirement/capability system.
+ *
+ * This grammar does not define resource quantities or target capacities.
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Security provenance requirements MAY participate in:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * semantics owned by the validation subsystem.
+ *
+ * This file MUST NOT redefine those universal contract constructs.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Security provenance can be constrained by:
+ *
+ *     authorization;
+ *     privacy;
+ *     disclosure;
+ *     retention;
+ *     trust;
+ *     sandbox;
+ *     security policy.
+ *
+ * Policy ownership remains outside this file.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * This grammar is a SECURITY CONSUMER of the universal provenance model.
+ *
+ * It does not create a competing provenance ontology.
+ *
+ * Security semantics attach to provenance entities, activities, relationships,
+ * evidence, decisions, and verification state produced elsewhere.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar creates NO security-provenance IR.
+ * This grammar introduces NO IR.
  *
- * Security provenance lowers through the canonical semantic model.
+ * Security provenance is normalized into the common semantic model and may
+ * accompany:
  *
- * General data provenance remains associated with:
+ *     Classical IR
+ *     quantum::ir
+ *     HDL/hardware representations
+ *     distributed representations
+ *     deployment metadata
  *
- *     data provenance semantics
- *
- * Security provenance metadata may accompany:
- *
- *     classical semantic/IR representations;
- *     quantum::ir;
- *     HDL/hardware semantic representations;
- *     distributed representations;
- *     deployment metadata.
- *
- * The security provenance grammar MUST NOT create:
- *
- *     SecurityProvenanceIR
- *     QuantumSecurityIR
- *     ProvenanceIR
- *
- * as competing canonical IRs.
+ * No SecurityProvenanceIR is permitted.
  *
  * ============================================================================
- * QUANTUM INTEGRATION
+ * QUANTUM BOUNDARY
  * ============================================================================
  *
- * Security provenance may describe quantum execution evidence.
+ * Security provenance may describe security requirements surrounding:
  *
- * Examples of semantic properties include:
+ *     quantum results;
+ *     measurement evidence;
+ *     execution evidence;
+ *     QEC metadata;
+ *     routing metadata;
+ *     scheduling metadata;
+ *     calibration-derived information;
+ *     quantum compilation artifacts.
  *
- *     security::provenance
- *     quantum::measurement_provenance
- *     quantum::execution_attestation
- *     quantum::result_integrity
+ * It MUST NOT define:
  *
- * However this grammar MUST NOT define:
- *
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     topology
- *     calibration
- *     QEC codes
- *     ZQN faults
- *     routing
- *     scheduling
+ *     qubits;
+ *     gates;
+ *     quantum states;
+ *     QEC;
+ *     routing;
+ *     scheduling;
+ *     ZQN.
  *
  * The canonical quantum boundary remains:
  *
  *     quantum::ir
  *
- * Security provenance is metadata/constraint information accompanying that
- * representation.
- *
  * ============================================================================
- * CLASSICAL / HDL / HYBRID / DISTRIBUTED INTEGRATION
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * The same security provenance model applies to:
- *
- *     classical;
- *     quantum;
- *     hybrid;
- *     HDL;
- *     hardware;
- *     accelerator;
- *     AI;
- *     distributed;
- *     networking;
- *     embedded;
- *     future computational domains.
- *
- * The grammar does not need separate provenance syntax for each domain.
+ * Security provenance can accompany HDL and hardware artifacts without
+ * defining signals, timing, synthesis, placement, devices, or physical
+ * resources.
  *
  * ============================================================================
- * REQUIREMENT / CONSTRAINT / PREFERENCE / HINT
+ * BACKEND BOUNDARY
  * ============================================================================
  *
- * Mandatory requirement:
+ * Backends consume semantic security-provenance metadata after:
  *
- *     requires security::provenance::integrity;
+ *     AST
+ *     semantic analysis
+ *     type/effect/capability/resource validation
+ *     policy analysis
+ *     IR lowering
  *
- * Constraint:
+ * Backend realization may attach implementation evidence.
  *
- *     constraint security::provenance::disclosure == restricted;
- *
- * Preference:
- *
- *     prefer security::provenance::attestation;
- *
- * Hint:
- *
- *     hint security::provenance::retain_lineage;
- *
- * These categories MUST remain semantically distinct.
+ * The source grammar remains target-independent.
  *
  * ============================================================================
  * GRAMMAR
@@ -522,77 +541,42 @@ import
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
- * ============================================================================
- *
- * This entry point is intended for:
- *
- *     - grammar conformance tests;
- *     - parser unit tests;
- *     - tooling;
- *     - standalone security-provenance validation.
- *
- * The normal program path enters through Security.securityDeclaration.
+ * PUBLIC STANDALONE ENTRY POINT
  * ============================================================================
  */
 
 securityProvenanceFile
-    : securityProvenanceDeclaration*
-      EOF
+    : securityProvenanceDeclaration* EOF
     ;
 
 
 /*
  * ============================================================================
- * TOP-LEVEL SECURITY PROVENANCE DECLARATION
+ * TOP-LEVEL DECLARATION
  * ============================================================================
  *
- * The introducer is intentionally represented as a contextual identifier
- * rather than introducing a new lexer keyword.
+ * Canonical lexical token:
  *
- * This avoids unnecessary lexical vocabulary expansion.
+ *     PROVENANCE
  *
- * The semantic layer MUST require the introducer spelling:
+ * The declaration is deliberately explicit.
  *
- *     provenance
+ * Unlike the previous design, a bare identifier is not accepted as the
+ * declaration introducer.
  *
- * Case-sensitive.
+ * A declaration MUST contain a body.
  *
- * This keeps "provenance" available as an ordinary identifier everywhere else
- * unless and until the language specification deliberately promotes it to a
- * reserved keyword.
+ * This prevents semantically empty provenance declarations.
  * ============================================================================
  */
 
 securityProvenanceDeclaration
-    : securityProvenanceIntroducer
+    : attributeList?
+      visibility?
+      PROVENANCE
       securityProvenanceTarget?
-      securityProvenanceBody?
+      securityProvenanceBody
       SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * CONTEXTUAL INTRODUCER
- * ============================================================================
- *
- * `identifier` is deliberately used here because the current canonical lexer
- * does not define a dedicated PROVENANCE token.
- *
- * Semantic validation MUST reject:
- *
- *     anything other than the exact identifier "provenance"
- *
- * at this position.
- *
- * This is a contextual-keyword strategy and avoids changing the lexer as part
- * of this independent leaf grammar.
- * ============================================================================
- */
-
-securityProvenanceIntroducer
-    : identifier
     ;
 
 
@@ -601,26 +585,30 @@ securityProvenanceIntroducer
  * TARGET
  * ============================================================================
  *
- * Provenance security may apply to:
+ * `for <expression>` identifies the semantic object whose security provenance
+ * is being constrained or described.
+ *
+ * The expression may resolve to:
  *
  *     a value;
- *     a computation;
- *     an artifact;
- *     a declaration;
- *     a resource;
- *     a module;
- *     a quantum result;
- *     a hardware artifact;
- *     a distributed result;
- *     a future semantic object.
+ *     artifact;
+ *     computation;
+ *     declaration;
+ *     module;
+ *     execution;
+ *     result;
+ *     data object;
+ *     quantum result;
+ *     hardware artifact;
+ *     distributed result;
+ *     future domain object.
  *
- * The target remains a canonical expression.
+ * The expression itself remains owned by Expressions.
  * ============================================================================
  */
 
 securityProvenanceTarget
-    : FOR
-      expression
+    : FOR expression
     ;
 
 
@@ -631,55 +619,99 @@ securityProvenanceTarget
  */
 
 securityProvenanceBody
-    : LBRACE
-      securityProvenanceMember*
-      RBRACE
+    : LBRACE securityProvenanceMember+ RBRACE
     ;
 
 
 /*
  * ============================================================================
- * MEMBERS
+ * MEMBER DISPATCH
+ * ============================================================================
+ *
+ * Universal security provenance controls use canonical lexer tokens where
+ * those tokens already exist.
+ *
+ * Open-world security provenance concepts that do not require a universal
+ * reserved keyword use identifier assignment:
+ *
+ *     claim = ...;
+ *     attestation = ...;
+ *     verification = ...;
+ *     disclosure = ...;
+ *     retention = ...;
+ *
+ * This avoids creating a closed keyword universe for future mechanisms.
  * ============================================================================
  */
 
 securityProvenanceMember
-    : securityProvenanceClaim
-    | securityProvenanceEvidence
-    | securityProvenanceAttestation
-    | securityProvenanceVerification
-    | securityProvenanceAudit
-    | securityProvenanceRequirement
+    : securityProvenanceRequirement
     | securityProvenanceConstraint
     | securityProvenancePreference
     | securityProvenanceHint
-    | securityProvenanceProperty
+    | securityProvenanceEvidence
+    | securityProvenanceAudit
+    | securityProvenanceNamedProperty
     ;
 
 
 /*
  * ============================================================================
- * CLAIM
+ * REQUIREMENT
  * ============================================================================
  *
- * A claim is an assertion about provenance.
+ * Mandatory semantic condition.
  *
- * A claim is NOT automatically verified.
+ * Example:
+ *
+ *     requires security::provenance::integrity;
  * ============================================================================
  */
 
-securityProvenanceClaim
-    : CLAIM
-      securityProvenanceClaimBody
+securityProvenanceRequirement
+    : REQUIRES expression SEMI
     ;
 
 
-securityProvenanceClaimBody
-    : expression
-      SEMI
-    | LBRACE
-      securityProvenanceProperty*
-      RBRACE
+/*
+ * ============================================================================
+ * CONSTRAINT
+ * ============================================================================
+ *
+ * Mandatory restriction on legal realizations.
+ * ============================================================================
+ */
+
+securityProvenanceConstraint
+    : CONSTRAINT expression SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * PREFERENCE
+ * ============================================================================
+ *
+ * Non-mandatory realization preference.
+ * ============================================================================
+ */
+
+securityProvenancePreference
+    : PREFER expression SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * HINT
+ * ============================================================================
+ *
+ * Non-binding implementation guidance.
+ * ============================================================================
+ */
+
+securityProvenanceHint
+    : HINT expression SEMI
     ;
 
 
@@ -688,58 +720,19 @@ securityProvenanceClaimBody
  * EVIDENCE
  * ============================================================================
  *
- * Evidence identifies or describes evidence relevant to a provenance claim.
+ * Evidence is referenced symbolically or through a canonical expression.
  *
- * The actual evidence remains outside the parser.
+ * This does not embed evidence material or perform verification.
+ *
+ * Example:
+ *
+ *     evidence external::execution_record;
+ *
  * ============================================================================
  */
 
 securityProvenanceEvidence
-    : EVIDENCE
-      expression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * ATTESTATION
- * ============================================================================
- *
- * Attestation expresses a requirement or declaration concerning externally
- * supplied provenance evidence.
- *
- * The parser does not verify the attestation.
- * ============================================================================
- */
-
-securityProvenanceAttestation
-    : ATTESTATION
-      expression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * VERIFICATION
- * ============================================================================
- *
- * Verification expresses desired verification semantics.
- *
- * It does not perform verification.
- * ============================================================================
- */
-
-securityProvenanceVerification
-    : VERIFICATION
-      securityProvenanceVerificationExpression
-      SEMI?
-    ;
-
-
-securityProvenanceVerificationExpression
-    : expression
+    : EVIDENCE expression SEMI
     ;
 
 
@@ -748,136 +741,66 @@ securityProvenanceVerificationExpression
  * AUDIT
  * ============================================================================
  *
- * Audit intent describes what provenance security information should be
- * auditable.
+ * Audit intent is represented as an expression.
  *
  * It does not create an audit log.
  * ============================================================================
  */
 
 securityProvenanceAudit
-    : AUDIT
-      expression
-      SEMI?
+    : AUDIT expression SEMI
     ;
 
 
 /*
  * ============================================================================
- * REQUIREMENTS
+ * OPEN-WORLD SECURITY PROPERTY
  * ============================================================================
  *
- * Requirements are mandatory semantic conditions.
- * ============================================================================
- */
-
-securityProvenanceRequirement
-    : REQUIRES
-      securityProvenanceExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * CONSTRAINTS
- * ============================================================================
+ * A property is represented as:
  *
- * Constraints restrict valid realizations.
- * ============================================================================
- */
-
-securityProvenanceConstraint
-    : CONSTRAINT
-      securityProvenanceExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * PREFERENCES
- * ============================================================================
+ *     <identifier> = <expression>;
  *
- * Preferences are not mandatory.
- * ============================================================================
- */
-
-securityProvenancePreference
-    : PREFER
-      securityProvenanceExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * HINTS
- * ============================================================================
- *
- * Hints guide implementation without establishing correctness requirements.
- * ============================================================================
- */
-
-securityProvenanceHint
-    : HINT
-      securityProvenanceExpression
-      SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * OPEN-WORLD PROPERTIES
- * ============================================================================
- *
- * Property names are canonical qualified names.
+ * This provides stable syntax for future security provenance concepts without
+ * continuously expanding the universal lexer.
  *
  * Examples:
  *
- *     security::provenance::integrity = required;
- *     security::provenance::classification = restricted;
- *     future::provenance::property = value;
+ *     claim = source::attestation;
+ *     attestation = authority::execution;
+ *     verification = verifier::policy;
+ *     disclosure = security::restricted;
+ *     retention = policy::required;
+ *     classification = security::sensitive;
  *
- * No finite property registry is embedded in this grammar.
+ * The semantic layer assigns meaning to the qualified property name.
+ *
  * ============================================================================
  */
 
-securityProvenanceProperty
-    : qualifiedName
+securityProvenanceNamedProperty
+    : securityProvenancePropertyName
       ASSIGN
-      securityProvenanceExpression
-      SEMI?
+      expression
+      SEMI
+    ;
+
+
+securityProvenancePropertyName
+    : qualifiedName
     ;
 
 
 /*
  * ============================================================================
- * EXPRESSIONS
+ * EXPLICIT SECURITY PROVENANCE REFERENCES
  * ============================================================================
  *
- * Security provenance deliberately reuses the canonical Zamani expression
- * grammar.
+ * A reference is symbolic.
  *
- * This prevents creation of a private security expression language.
- * ============================================================================
- */
-
-securityProvenanceExpression
-    : expression
-    ;
-
-
-/*
- * ============================================================================
- * NAMED PROVENANCE REFERENCES
- * ============================================================================
+ * It does not imply that the object exists.
  *
- * This rule exists as an explicit integration contract for downstream semantic
- * analysis.
- *
- * It does not imply that the referenced object exists.
- * Name resolution remains downstream.
+ * Resolution belongs to semantic analysis.
  * ============================================================================
  */
 
@@ -888,358 +811,660 @@ securityProvenanceReference
 
 /*
  * ============================================================================
- * REQUIREMENT TARGETS
+ * SEMANTIC NORMALIZATION
  * ============================================================================
  *
- * A security provenance requirement can identify a semantic property through
- * an ordinary qualified name or expression.
+ * The frontend MUST normalize:
  *
- * Examples:
+ *     requires
+ *     constraint
+ *     prefer
+ *     hint
+ *     evidence
+ *     audit
+ *     named properties
  *
- *     requires security::provenance::integrity;
- *     requires security::provenance::authenticity;
- *     requires capability("provenance.verification");
- *     requires security::trusted_execution;
- * ============================================================================
- */
-
-
-/*
- * ============================================================================
- * SEMANTIC NORMALIZATION CONTRACT
- * ============================================================================
+ * into the common provenance/security semantic model.
  *
- * The semantic layer should normalize source constructs into categories such
- * as:
+ * In particular, these semantic distinctions MUST remain intact:
  *
- *     CLAIM
- *     EVIDENCE
- *     ATTESTATION
- *     VERIFICATION
- *     AUDIT
- *     REQUIREMENT
- *     CONSTRAINT
- *     PREFERENCE
- *     HINT
- *     PROPERTY
- *
- * These categories are semantic concepts, not parser-level closed enums.
+ *     assertion     != evidence
+ *     evidence      != verification
+ *     verification  != trust
+ *     audit intent  != audit execution
+ *     requirement   != preference
+ *     preference    != hint
+ *     policy        != provenance
+ *     capability    != authorization
+ *     resource      != capability
  *
  * ============================================================================
- * DATA-PROVENANCE INTEGRATION
+ * GENERAL PROVENANCE INTEGRATION
  * ============================================================================
  *
- * General lineage remains owned by:
+ * General provenance relationships such as:
+ *
+ *     derived_from
+ *     generated_by
+ *     consumed_by
+ *     transformed_by
+ *
+ * remain owned by the general provenance subsystem.
+ *
+ * This file may constrain those relationships semantically, but MUST NOT
+ * redefine them.
+ *
+ * ============================================================================
+ * DATA INTEGRATION
+ * ============================================================================
+ *
+ * Data provenance:
  *
  *     grammar/data/provenance.g4
  *
- * Security provenance can reference or constrain that lineage.
+ * Security provenance may constrain:
  *
- * Example conceptual relationship:
+ *     disclosure;
+ *     integrity;
+ *     authenticity;
+ *     retention;
+ *     evidence;
+ *     verification;
+ *     authorization.
  *
- *     data provenance
- *           |
- *           v
- *     security provenance requirement
- *           |
- *           v
- *     semantic analysis
- *
- * Security provenance MUST NOT reimplement:
- *
- *     derived_from
- *     produced_by
- *     consumed_by
- *     transformed_by
- *     general lineage
- *
- * Those already belong to the data provenance grammar.
+ * Data lineage remains data-provenance-owned.
  *
  * ============================================================================
- * IDENTITY INTEGRATION
+ * EXPRESSION INTEGRATION
  * ============================================================================
  *
- * Identity references may appear as expressions or qualified names.
+ * Expression provenance:
  *
- * Identity definition remains owned by:
+ *     grammar/expressions/provenance.g4
  *
- *     security/identity.g4
- *     security/identifiers.g4
+ * owns provenance(...) expression syntax.
  *
- * This grammar does not authenticate identities.
- *
- * ============================================================================
- * TRUST INTEGRATION
- * ============================================================================
- *
- * Trust references may be expressed through qualified names and expressions.
- *
- * Trust relationships remain owned by:
- *
- *     security/trust.g4
- *
- * This grammar does not evaluate trust.
- *
- * ============================================================================
- * CRYPTOGRAPHIC INTEGRATION
- * ============================================================================
- *
- * Cryptographic properties may be referenced symbolically:
- *
- *     crypto::integrity
- *     crypto::authenticity
- *     crypto::signature
- *     future::crypto::property
- *
- * Cryptographic syntax and algorithm intent remain owned by:
- *
- *     security/cryptography.g4
- *
- * This grammar does not define algorithms.
- *
- * ============================================================================
- * PRIVACY INTEGRATION
- * ============================================================================
- *
- * Provenance can itself be sensitive.
- *
- * Security provenance may therefore express disclosure restrictions:
- *
- *     requires security::provenance::confidential
- *     constraint security::provenance::disclosure == restricted
- *
- * Privacy semantics remain owned by:
- *
- *     security/privacy.g4
- *
- * ============================================================================
- * AUTHORIZATION INTEGRATION
- * ============================================================================
- *
- * Provenance access may be subject to authorization.
- *
- * Authorization remains owned by:
- *
- *     security/authorization.g4
- *     security/permissions.g4
- *
- * This grammar does not grant permissions.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Security provenance requirements may be checked against target capabilities.
- *
- * Example:
- *
- *     requires capability("provenance.integrity");
- *
- * The grammar does not discover whether such capability exists.
- *
- * Resource/capability analysis occurs downstream.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * Security provenance can accompany:
- *
- *     quantum state results;
- *     measurement results;
- *     logical execution;
- *     compilation artifacts;
- *     QEC metadata;
- *     ZQN metadata;
- *     calibration-derived metadata;
- *     scheduling metadata;
- *     routed artifacts.
- *
- * However:
- *
- *     QEC
- *     ZQN
- *     routing
- *     scheduling
- *     calibration
- *
- * remain owners of their respective semantics.
- *
- * Security provenance only expresses the security requirements surrounding
- * those artifacts.
- *
- * ============================================================================
- * RESILIENCE INTEGRATION
- * ============================================================================
- *
- * Security provenance may need to survive:
- *
- *     retry;
- *     recover;
- *     reroute;
- *     reschedule;
- *     rollback;
- *     recompile;
- *     backend migration;
- *     quarantine.
- *
- * This grammar does not perform any of those actions.
- *
- * Mandatory security provenance requirements MUST be preserved by downstream
- * semantic and resilience transformations.
+ * This grammar MUST NOT define provenance(...).
  *
  * ============================================================================
  * COMPILATION INTEGRATION
  * ============================================================================
  *
- * Security provenance metadata may accompany:
+ * Compilation provenance:
  *
- *     source identity;
- *     semantic identity;
- *     IR identity;
- *     compiled artifact identity;
- *     scheduled artifact identity;
- *     routed artifact identity;
- *     result identity.
+ *     grammar/compile/provenance.g4
  *
- * The compiler is responsible for preserving semantic relationships.
+ * owns compiler/build transformation provenance.
  *
- * This grammar does not prescribe the representation of hashes, signatures,
- * fingerprints, or artifact identifiers.
+ * This file may constrain the security requirements surrounding those
+ * artifacts but does not redefine compilation provenance.
  *
  * ============================================================================
- * RUNTIME INTEGRATION
+ * TRUST INTEGRATION
  * ============================================================================
  *
- * Runtime systems may:
+ * Trust relationships remain owned by:
  *
- *     verify evidence;
- *     evaluate trust;
- *     validate attestations;
- *     enforce disclosure restrictions;
- *     authorize provenance access;
- *     record audit events.
+ *     grammar/security/trust.g4
  *
- * None of these operations occur during parsing.
+ * Security provenance may reference trust objects through:
+ *
+ *     expression
+ *     qualifiedName
+ *
+ * The semantic layer resolves the relationship.
+ *
+ * This grammar does not evaluate trust.
  *
  * ============================================================================
- * SCALABILITY
+ * AUTHORIZATION INTEGRATION
  * ============================================================================
  *
- * The following are intentionally represented through repetition:
+ * Authorization remains owned by:
  *
- *     securityProvenanceMember*
- *     securityProvenanceProperty*
+ *     grammar/security/authorization.g4
  *
- * and through canonical expressions/qualified names.
+ * and the permission subsystem.
  *
- * There is no finite grammar-level maximum for:
+ * Provenance does not grant permission.
  *
- *     claims;
- *     evidence items;
- *     attestations;
- *     verification requirements;
- *     audit requirements;
+ * Provenance access authorization is resolved downstream.
+ *
+ * ============================================================================
+ * CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Capabilities remain owned by:
+ *
+ *     grammar/security/capabilities.g4
+ *     grammar/core/capabilities.g4
+ *     grammar/resources/
+ *
+ * A provenance requirement may reference a capability:
+ *
+ *     requires capability("provenance.integrity");
+ *
+ * The grammar does not determine whether the capability is available.
+ *
+ * ============================================================================
+ * PRIVACY INTEGRATION
+ * ============================================================================
+ *
+ * Privacy semantics remain owned by:
+ *
+ *     grammar/security/privacy.g4
+ *
+ * Security provenance may reference privacy/disclosure requirements through
+ * canonical expressions and properties.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Policies remain owned by the policy subsystem.
+ *
+ * Security provenance may be governed by policies concerning:
+ *
+ *     disclosure;
+ *     retention;
+ *     verification;
+ *     evidence;
+ *     audit;
+ *     authorization;
+ *     trust.
+ *
+ * This file does not define policy bodies.
+ *
+ * ============================================================================
+ * EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance may be associated semantically with effects such as:
+ *
+ *     audit;
+ *     verification;
+ *     disclosure;
+ *     network;
+ *     storage;
+ *     native;
+ *     foreign.
+ *
+ * Effect syntax remains owned by grammar/effects/.
+ *
+ * ============================================================================
+ * SANDBOX INTEGRATION
+ * ============================================================================
+ *
+ * A sandbox may constrain:
+ *
+ *     provenance disclosure;
+ *     provenance persistence;
+ *     audit access;
+ *     external evidence access;
+ *     verification services.
+ *
+ * Sandbox syntax remains owned by:
+ *
+ *     grammar/security/sandbox.g4
+ *
+ * ============================================================================
+ * RESOURCE / TARGET INTEGRATION
+ * ============================================================================
+ *
+ * Provenance security requirements may fail because the selected realization
+ * cannot satisfy them.
+ *
+ * That is a semantic/resource diagnostic, not a parser error.
+ *
+ * The grammar therefore remains independent of:
+ *
+ *     CPU count;
+ *     GPU count;
+ *     QPU count;
+ *     node count;
+ *     memory size;
+ *     storage size;
+ *     network size;
+ *     device count.
+ *
+ * ============================================================================
+ * RESILIENCE INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance MUST survive semantic transformations including:
+ *
+ *     retry;
+ *     recovery;
+ *     rerouting;
+ *     rescheduling;
+ *     checkpoint restoration;
+ *     recompilation;
+ *     backend migration;
+ *     quarantine.
+ *
+ * This grammar does not implement those operations.
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance may accompany:
+ *
+ *     quantum execution;
+ *     measurement;
+ *     QEC metadata;
+ *     routing;
+ *     scheduling;
+ *     calibration;
+ *     QPU realization.
+ *
+ * All quantum semantic information remains downstream.
+ *
+ * Canonical quantum boundary:
+ *
+ *     quantum::ir
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance may accompany:
+ *
+ *     HDL source;
+ *     synthesized artifacts;
+ *     hardware descriptions;
+ *     accelerators;
+ *     physical realization metadata.
+ *
+ * It does not define hardware syntax.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance must support semantic provenance associated with:
+ *
+ *     actors;
+ *     tasks;
+ *     services;
+ *     messages;
+ *     distributed results;
+ *     retries;
+ *     partial failures;
+ *     recovery.
+ *
+ * No node or participant count is hard-coded.
+ *
+ * ============================================================================
+ * AI / LEARNING / ADAPTATION INTEGRATION
+ * ============================================================================
+ *
+ * Security provenance may accompany:
+ *
+ *     model derivation;
+ *     training;
+ *     inference;
+ *     evidence;
+ *     adaptation;
+ *     decisions;
+ *     explanations.
+ *
+ * It does not define AI semantics.
+ *
+ * ============================================================================
+ * PROVENANCE TRUST INVARIANTS
+ * ============================================================================
+ *
+ * The semantic model MUST preserve:
+ *
+ *     claim       != evidence
+ *     evidence    != verification
+ *     verification != trust
+ *     observation != prediction
+ *     decision    != evidence
+ *     simulation  != observation
+ *
+ * A source-level claim is never proof merely because it was parsed.
+ *
+ * ============================================================================
+ * PARTIAL / DISTRIBUTED PROVENANCE
+ * ============================================================================
+ *
+ * Semantic provenance MUST be able to represent:
+ *
+ *     partial lineage;
+ *     unresolved external references;
+ *     distributed lineage;
+ *     incremental lineage;
+ *     branching lineage;
+ *     merged lineage;
+ *     superseded evidence;
+ *     retracted claims;
+ *     conflicting evidence.
+ *
+ * These states are semantic concerns and MUST NOT be encoded by artificial
+ * grammar-level limits.
+ *
+ * ============================================================================
+ * EXTENSIBILITY CONTRACT
+ * ============================================================================
+ *
+ * New security provenance concepts should first use:
+ *
+ *     qualified names;
+ *     expressions;
+ *     named properties;
+ *     dialect extensions.
+ *
+ * A new reserved keyword should be introduced only when the construct has
+ * demonstrated universal language-level status.
+ *
+ * ============================================================================
+ * DIAGNOSTICS
+ * ============================================================================
+ *
+ * Structural parser diagnostics MUST cover:
+ *
+ *     missing provenance body;
+ *     empty provenance body;
+ *     missing requirement expression;
+ *     missing constraint expression;
+ *     missing preference expression;
+ *     missing hint expression;
+ *     missing evidence expression;
+ *     missing audit expression;
+ *     missing property value;
+ *     malformed qualified property name.
+ *
+ * Semantic diagnostics belong downstream and include:
+ *
+ *     unresolved provenance reference;
+ *     unsatisfied security requirement;
+ *     unsupported verification requirement;
+ *     unauthorized provenance access;
+ *     incompatible disclosure policy;
+ *     invalid trust reference;
+ *     invalid capability reference;
+ *     invalid retention requirement;
+ *     invalid evidence applicability;
+ *     unsupported target realization.
+ *
+ * ============================================================================
+ * POSITIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * At minimum test:
+ *
+ *     provenance {
+ *         requires security::provenance::integrity;
+ *     }
+ *
+ *     provenance for result {
+ *         evidence = execution::record;
+ *         verification = security::verifier;
+ *     }
+ *
+ *     provenance for quantum_result {
+ *         requires capability("provenance.integrity");
+ *         requires quantum::measurement_provenance;
+ *     }
+ *
+ *     provenance for artifact {
+ *         claim = source::attestation;
+ *         attestation = authority::execution;
+ *         audit security::audit::required;
+ *         disclosure = security::restricted;
+ *         retention = policy::required;
+ *     }
+ *
+ *     provenance for distributed_result {
+ *         requires security::provenance::authenticity;
+ *         prefer security::provenance::attestation;
+ *     }
+ *
+ * ============================================================================
+ * NEGATIVE TEST CONTRACT
+ * ============================================================================
+ *
+ * MUST reject:
+ *
+ *     provenance;
+ *
+ *     provenance {};
+ *
+ *     provenance {
+ *     }
+ *
+ *     provenance {
+ *         requires;
+ *     }
+ *
+ *     provenance {
+ *         evidence;
+ *     }
+ *
+ *     provenance {
+ *         claim =;
+ *     }
+ *
+ *     provenance {
+ *         = expression;
+ *     }
+ *
+ *     provenance {
+ *         requires security::provenance::integrity
+ *     }
+ *
+ * where the required semicolon is part of the canonical statement syntax.
+ *
+ * ============================================================================
+ * BOUNDARY TEST CONTRACT
+ * ============================================================================
+ *
+ * MUST cover:
+ *
+ *     - data + security provenance;
+ *     - compile + security provenance;
+ *     - expression + security provenance;
+ *     - classical + security provenance;
+ *     - quantum + security provenance;
+ *     - HDL + security provenance;
+ *     - AI + security provenance;
+ *     - distributed + security provenance;
+ *     - resource + security provenance;
+ *     - capability + security provenance;
+ *     - trust + security provenance;
+ *     - authorization + security provenance;
+ *     - privacy + security provenance;
+ *     - sandbox + security provenance;
+ *     - policy + security provenance.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Tests MUST distinguish:
+ *
+ *     grammar acceptance limits
+ *
+ * from:
+ *
+ *     implementation/resource exhaustion.
+ *
+ * The semantic model must remain valid for arbitrarily large provenance
+ * graphs subject only to available implementation resources.
+ *
+ * Test dimensions include:
+ *
+ *     declarations;
+ *     members;
+ *     evidence references;
  *     properties;
- *     provenance subjects;
- *     security provenance declarations.
+ *     provenance depth;
+ *     branching;
+ *     merging;
+ *     distributed participants;
+ *     cross-domain artifacts.
+ *
+ * No universal finite maximum is permitted.
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ * DETERMINISM TEST CONTRACT
  * ============================================================================
  *
- * This grammar contains no:
+ * Identical source and identical parser configuration MUST produce equivalent
+ * parse structures independent of:
  *
- *     MAX_*
- *     fixed device count;
- *     fixed node count;
- *     fixed identity count;
- *     fixed policy count;
- *     fixed evidence count;
- *     fixed provenance count;
- *     fixed key count;
- *     fixed certificate count;
- *     fixed hardware identifier;
- *     vendor-specific security implementation;
- *     closed cryptographic algorithm enumeration.
+ *     wall-clock time;
+ *     hardware;
+ *     network;
+ *     filesystem;
+ *     environment;
+ *     runtime security state.
  *
  * ============================================================================
- * RUST 1.97 / 1.97.1 CONTRACT
+ * COMPATIBILITY CONTRACT
  * ============================================================================
  *
- * This grammar contains no Rust implementation code.
+ * New security provenance properties should be introduced through open-world
+ * qualified names before becoming reserved language keywords.
  *
- * Generated parser/compiler integration MUST:
+ * Existing valid provenance syntax MUST retain its meaning across compatible
+ * language versions.
  *
- *     - target Rust 1.97 or 1.97.1;
- *     - use Rust 2021;
- *     - compile without unsafe Rust;
- *     - avoid embedded target-language actions;
- *     - preserve deterministic parsing.
+ * Deprecated constructs require explicit compatibility metadata and diagnostics
+ * in the compatibility subsystem.
  *
- * The Rust implementation should enforce:
+ * ============================================================================
+ * RUST CONTRACT
+ * ============================================================================
+ *
+ * The grammar contains no Rust code.
+ *
+ * The generated frontend implementation MUST target:
+ *
+ *     Rust 1.97 or later
+ *     Rust 2021 or later
+ *
+ * and MUST use safe Rust only.
+ *
+ * The applicable Rust crate SHOULD enforce:
  *
  *     #![forbid(unsafe_code)]
  *
- * at the applicable crate boundary.
+ * No grammar feature requires unsafe Rust.
  *
  * ============================================================================
- * COMPLETION CRITERIA
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * This file is complete when:
+ * DEPENDS_ON:
  *
- * [ ] SecurityProvenance is imported by the canonical security composition
- *     root.
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/
+ *     grammar/types/
+ *     grammar/expressions/
  *
- * [ ] General data provenance remains owned by data/provenance.g4.
+ * EXPORTS:
  *
- * [ ] No second general provenance grammar exists.
+ *     securityProvenanceFile
+ *     securityProvenanceDeclaration
+ *     securityProvenanceBody
+ *     securityProvenanceMember
+ *     securityProvenanceRequirement
+ *     securityProvenanceConstraint
+ *     securityProvenancePreference
+ *     securityProvenanceHint
+ *     securityProvenanceEvidence
+ *     securityProvenanceAudit
+ *     securityProvenanceNamedProperty
+ *     securityProvenanceReference
  *
- * [ ] The contextual `provenance` introducer is semantically validated.
+ * CONSUMED_BY:
  *
- * [ ] Security provenance claims are represented structurally.
+ *     grammar/security/security.g4
+ *     security semantic analysis
+ *     security provenance AST construction
+ *     security tooling
+ *     conformance tests
  *
- * [ ] Evidence is represented without embedding evidence material.
+ * AST_OWNER:
  *
- * [ ] Attestation is represented without performing attestation.
+ *     src/frontend/ast/
  *
- * [ ] Verification is represented without performing verification.
+ * SEMANTIC_OWNER:
  *
- * [ ] Audit intent is represented without creating an audit log.
+ *     security semantic model
  *
- * [ ] Requirements, constraints, preferences, and hints remain distinct.
+ * IR_OWNER:
  *
- * [ ] Open-world qualified names remain supported.
+ *     existing canonical domain IRs
+ *     quantum::ir for quantum semantics
  *
- * [ ] No machine/hardware limits are encoded.
+ * SPEC_OWNER:
  *
- * [ ] No secret material syntax is introduced.
+ *     grammar/spec/security.md
+ *     grammar/spec/provenance.md
  *
- * [ ] No cryptographic algorithm enumeration is introduced.
+ * TEST_OWNER:
  *
- * [ ] No quantum-specific implementation types are introduced.
+ *     grammar/tests/security/provenance/
  *
- * [ ] No competing security-provenance IR is introduced.
+ * RESOURCE_CONTRACT:
  *
- * [ ] Source spans are preserved by the frontend AST contract.
+ *     No source-level finite resource limits.
  *
- * [ ] Positive tests exist.
+ * CAPABILITY_CONTRACT:
  *
- * [ ] Negative tests exist.
+ *     Capability resolution is downstream.
  *
- * [ ] Boundary tests exist.
+ * EFFECT_CONTRACT:
  *
- * [ ] Scalability tests exist.
+ *     Effect classification is downstream.
  *
- * [ ] Determinism tests exist.
+ * CONTRACT_CONTRACT:
  *
- * [ ] Security provenance survives canonical semantic lowering.
+ *     Universal contract semantics remain validation-owned.
  *
- * [ ] Mandatory security requirements survive optimization, routing,
- *     scheduling, resilience, and target lowering.
+ * POLICY_CONTRACT:
  *
- * [ ] Rust 1.97 / 1.97.1 integration remains safe Rust only.
+ *     Policy evaluation remains policy/security-owned.
+ *
+ * PROVENANCE_CONTRACT:
+ *
+ *     This grammar consumes the universal provenance semantic model.
+ *
+ * SCALABILITY_CONTRACT:
+ *
+ *     Open-world; no hard-coded finite provenance capacity.
+ *
+ * COMPATIBILITY_CONTRACT:
+ *
+ *     Qualified-name extension before keyword promotion.
+ *
+ * COMPLETION_CRITERIA:
+ *
+ *     This file is complete when:
+ *
+ *     1. It compiles with the canonical Zamani lexer.
+ *     2. It imports only canonical shared grammar facilities.
+ *     3. It is imported by Security.
+ *     4. It owns no general provenance semantics.
+ *     5. It contains no duplicate trust/authorization/capability grammar.
+ *     6. It contains no secret-material syntax.
+ *     7. It contains no cryptographic implementation.
+ *     8. It contains no target-specific capacity.
+ *     9. It has positive tests.
+ *    10. It has negative tests.
+ *    11. It has boundary tests.
+ *    12. It has scalability tests.
+ *    13. It has determinism tests.
+ *    14. It has compatibility tests.
+ *    15. Its semantic nodes have explicit AST/semantic ownership.
+ *    16. Its security requirements survive canonical lowering.
+ *    17. Quantum security provenance reaches quantum::ir as metadata rather
+ *        than creating another quantum IR.
+ *    18. Rust integration remains safe Rust 1.97+.
  *
  * ============================================================================
  */
