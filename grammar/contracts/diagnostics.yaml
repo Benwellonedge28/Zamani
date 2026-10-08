@@ -1,0 +1,3775 @@
+=============================================================================
+
+Zamani Programming Language
+
+grammar/contracts/diagnostics.yaml
+
+=============================================================================
+
+MACHINE-CHECKABLE DIAGNOSTIC CONTRACT
+
+Repository:
+
+https://github.com/Benwellonedge28/Zamani
+
+Language:
+
+Zamani
+
+Purpose:
+
+Define the single machine-checkable contract for diagnostics emitted by
+
+the Zamani language toolchain from source processing through execution.
+
+Architectural authority:
+
+grammar/DESIGN.md
+
+Normative language authority:
+
+grammar/specification/
+
+Machine-contract authority:
+
+grammar/spec/
+
+Repository ownership:
+
+grammar/OWNERSHIP.yaml
+
+Repository manifest:
+
+grammar/MANIFEST.yaml
+
+Dependency graph:
+
+grammar/DEPENDENCIES.yaml
+
+Status:
+
+grammar/STATUS.yaml
+
+Rust:
+
+edition: 2021
+
+minimum: 1.97
+
+safety: safe Rust only
+
+POCO-REAF:
+
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+
+IMPORTANT:
+
+This contract does not define a universal finite number of diagnostics,
+
+source bytes, AST nodes, targets, qubits, processors, devices, resources,
+
+messages, related locations, or semantic objects.
+
+Implementations MAY impose operational budgets for safety, availability,
+
+memory consumption, terminal output, IDE transport, or hostile input.
+
+Such budgets are implementation/deployment policy and MUST NOT become
+
+language-level semantic limits.
+
+=============================================================================
+
+schema:
+version: "1.0"
+kind: "zamani-diagnostics-contract"
+format: "yaml"
+status: "NORMATIVE"
+stable_identity: "diagnostic-contract-v1"
+repository: "Benwellonedge28/Zamani"
+language: "Zamani"
+
+authority:
+architectural:
+path: "grammar/DESIGN.md"
+role: "architectural_authority"
+
+normative_language:
+path: "grammar/specification/"
+role: "language_meaning"
+
+machine_contract:
+path: "grammar/spec/"
+role: "machine_oriented_contract"
+
+ownership:
+path: "grammar/OWNERSHIP.yaml"
+role: "repository_ownership_registry"
+
+dependencies:
+path: "grammar/DEPENDENCIES.yaml"
+role: "dependency_graph"
+
+manifest:
+path: "grammar/MANIFEST.yaml"
+role: "repository_inventory"
+
+status:
+path: "grammar/STATUS.yaml"
+role: "implementation_status"
+
+historical_reference:
+path: "grammar/Zamani-Grammar.md"
+role: "non_normative_reference"
+ownership_effect: false
+
+navigation:
+path: "grammar/README.md"
+role: "navigation_only"
+ownership_effect: false
+
+=============================================================================
+
+1. OWNERSHIP
+
+=============================================================================
+
+ownership:
+
+canonical_owner:
+path: "grammar/contracts/diagnostics.yaml"
+responsibility:
+- "machine-checkable diagnostic contract"
+- "diagnostic schema"
+- "diagnostic identity contract"
+- "diagnostic domain registry"
+- "diagnostic phase registry"
+- "severity semantics"
+- "source-location contract"
+- "related-location contract"
+- "diagnostic determinism"
+- "diagnostic compatibility"
+- "cross-stage diagnostic invariants"
+- "diagnostic integration requirements"
+
+implementation_owner:
+primary:
+- "src/compiler/diagnostics.rs"
+- "src/error_reporting.rs"
+
+source_mapping:
+  - "src/source_map.rs"
+  - "src/frontend/ast/node/source/"
+  - "src/frontend/ast/node/validation/"
+
+quantum_diagnostic_boundaries:
+  - "src/quantum/frontend/core/diagnostics.rs"
+  - "src/quantum/ir/validation/diagnostics.rs"
+
+grammar_consumers:
+lexical:
+- "grammar/lexer/diagnostics.md"
+- "grammar/lexer/lexer-errors.g4"
+
+semantic:
+  - "grammar/validation/"
+  - "grammar/types/"
+  - "grammar/effects/"
+  - "grammar/resources/"
+  - "grammar/policies/"
+  - "grammar/security/"
+
+domain:
+  - "grammar/classical/"
+  - "grammar/quantum/"
+  - "grammar/hdl/"
+  - "grammar/hybrid/"
+  - "grammar/ai/"
+  - "grammar/data/"
+  - "grammar/concurrency/"
+  - "grammar/distributed/"
+  - "grammar/networking/"
+  - "grammar/hardware/"
+
+compilation:
+  - "grammar/compile/"
+  - "grammar/execution/"
+  - "grammar/interoperability/"
+  - "grammar/dialects/"
+
+composition_is_not_ownership: true
+implementation_is_not_ownership: true
+backend_is_not_ownership: true
+target_is_not_ownership: true
+
+invariant: >
+No grammar domain, compiler pass, backend, runtime, hardware target,
+vendor implementation, or external dialect may silently create a
+conflicting diagnostic architecture.
+
+=============================================================================
+
+2. DIAGNOSTIC PURPOSE
+
+=============================================================================
+
+purpose:
+
+definition: >
+A diagnostic is structured machine-readable information describing a
+condition, observation, warning, failure, explanation, or actionable
+remediation produced by a Zamani toolchain component.
+
+data_first: true
+rendering_is_presentation: true
+
+diagnostic_is_not:
+- "a parser-only object"
+- "a Rust-only error string"
+- "a terminal formatting artifact"
+- "an LSP-only object"
+- "a hardware error code"
+- "a vendor-specific failure format"
+- "an IR-specific error system"
+
+diagnostic_must_survive:
+- "CLI rendering"
+- "library API"
+- "LSP transport"
+- "IDE integration"
+- "JSON serialization"
+- "machine-readable CI output"
+- "compiler logs"
+- "semantic analysis"
+- "IR validation"
+- "target realization"
+- "runtime reporting"
+
+=============================================================================
+
+3. VALIDITY LAYERS
+
+=============================================================================
+
+validity:
+
+ordered_layers:
+- "SOURCE"
+- "LEXICAL"
+- "PARSE"
+- "AST"
+- "NAME"
+- "MODULE"
+- "TYPE"
+- "OWNERSHIP"
+- "MEMORY"
+- "EFFECT"
+- "CONTRACT"
+- "POLICY"
+- "RESOURCE"
+- "CAPABILITY"
+- "DOMAIN"
+- "SEMANTIC"
+- "IR_GENERATION"
+- "IR_VERIFICATION"
+- "OPTIMIZATION"
+- "ROUTING"
+- "SCHEDULING"
+- "RESILIENCE"
+- "QEC"
+- "ZQN"
+- "HAL"
+- "TARGET"
+- "RUNTIME"
+- "TOOLING"
+- "COMPATIBILITY"
+
+distinctions:
+lexical_valid:
+distinct_from:
+- "syntactic_valid"
+- "semantic_valid"
+
+syntactic_valid:
+  distinct_from:
+    - "semantic_valid"
+    - "resource_feasible"
+    - "target_compatible"
+
+semantic_valid:
+  distinct_from:
+    - "compilable"
+    - "target_compatible"
+    - "resource_feasible"
+    - "executable"
+
+resource_feasible:
+  distinct_from:
+    - "syntactic_valid"
+    - "semantic_valid"
+    - "target_compatible"
+
+target_compatible:
+  distinct_from:
+    - "resource_feasible"
+    - "runtime_success"
+
+runtime_success:
+  distinct_from:
+    - "compile_success"
+
+invariant: >
+A diagnostic MUST identify the actual failing or observational layer.
+Implementations MUST NOT collapse materially different failure causes
+into an undifferentiated compilation failure.
+
+=============================================================================
+
+4. DIAGNOSTIC DOMAINS
+
+=============================================================================
+
+domains:
+
+Lexical and syntax
+
+LEX:
+meaning: "lexical analysis"
+owner: "grammar/lexer/"
+examples:
+- "invalid character"
+- "invalid literal"
+- "unterminated literal"
+- "invalid escape"
+
+PARSE:
+meaning: "syntactic parsing"
+owner: "grammar/antlr/"
+examples:
+- "unexpected token"
+- "missing delimiter"
+- "invalid production"
+
+Structural language analysis
+
+AST:
+meaning: "AST construction or structural validation"
+owner: "grammar/validation/"
+
+NAME:
+meaning: "name resolution"
+owner: "grammar/core/"
+
+MODULE:
+meaning: "module/import/use resolution"
+owner: "grammar/modules/"
+
+TYPE:
+meaning: "type checking and type inference"
+owner: "grammar/types/"
+
+OWNERSHIP:
+meaning: "ownership, borrowing, linearity, affinity"
+owner: "grammar/memory/"
+
+MEMORY:
+meaning: "memory model validation"
+owner: "grammar/memory/"
+
+EFFECT:
+meaning: "effect validation"
+owner: "grammar/effects/"
+
+CONTRACT:
+meaning: "contract validation"
+owner: "grammar/specification/"
+
+POLICY:
+meaning: "policy validation"
+owner: "grammar/policies/"
+
+RESOURCE:
+meaning: "resource requirement/constraint validation"
+owner: "grammar/resources/"
+
+CAPABILITY:
+meaning: "capability requirement/availability validation"
+owner: "grammar/core/"
+semantic_consumers:
+- "grammar/resources/"
+- "grammar/hardware/"
+- "grammar/execution/"
+
+Computational domains
+
+CLASSICAL:
+meaning: "classical computation"
+owner: "grammar/classical/"
+
+QUANTUM:
+meaning: "quantum computation"
+owner: "grammar/quantum/"
+
+HYBRID:
+meaning: "cross-domain hybrid computation"
+owner: "grammar/hybrid/"
+
+HDL:
+meaning: "hardware description and hardware/software co-design"
+owner: "grammar/hdl/"
+
+HARDWARE:
+meaning: "abstract hardware capability and realization semantics"
+owner: "grammar/hardware/"
+
+DISTRIBUTED:
+meaning: "distributed computation"
+owner: "grammar/distributed/"
+
+AI:
+meaning: "AI, learning, reasoning, inference and related semantics"
+owner: "grammar/ai/"
+
+DATA:
+meaning: "data, schemas, transformations and data computation"
+owner: "grammar/data/"
+
+NETWORK:
+meaning: "networking and communication semantics"
+owner: "grammar/networking/"
+
+SECURITY:
+meaning: "security, authorization, trust and protection"
+owner: "grammar/security/"
+
+Transformation
+
+MACRO:
+meaning: "macro processing"
+owner: "grammar/macros/"
+
+META:
+meaning: "metaprogramming and reflection"
+owner: "grammar/metaprogramming/"
+
+DIALECT:
+meaning: "registered language dialect"
+owner: "grammar/dialects/"
+
+INTEROP:
+meaning: "foreign language/API/ABI/FFI interoperability"
+owner: "grammar/interoperability/"
+
+SEMANTIC:
+meaning: "cross-domain semantic validation"
+owner: "semantic_analysis"
+
+IR:
+meaning: "canonical or domain IR processing"
+owner: "compiler_ir"
+
+OPT:
+meaning: "target-independent or target-aware optimization"
+owner: "grammar/compile/"
+
+ROUTE:
+meaning: "routing and placement"
+owner: "grammar/compile/"
+
+SCHEDULE:
+meaning: "execution scheduling"
+owner: "grammar/execution/"
+
+QEC:
+meaning: "quantum error correction"
+owner: "grammar/quantum/"
+
+ZQN:
+meaning: "ZQN generation/validation"
+owner: "zqn"
+
+HAL:
+meaning: "hardware abstraction layer integration"
+owner: "hal"
+
+TARGET:
+meaning: "target compatibility and realization"
+owner: "grammar/hardware/"
+
+RUNTIME:
+meaning: "runtime execution"
+owner: "runtime"
+
+RESILIENCE:
+meaning: "resilience, recovery and fault-state handling"
+owner: "grammar/execution/"
+
+COMPAT:
+meaning: "language, grammar, AST, semantic, IR or dialect compatibility"
+owner: "grammar/compatibility/"
+
+SAFETY:
+meaning: "language/compiler safety policy"
+owner: "grammar/security/"
+
+TOOL:
+meaning: "toolchain operation"
+owner: "tooling"
+
+INTERNAL:
+meaning: "compiler implementation invariant violation"
+owner: "compiler"
+
+=============================================================================
+
+5. DIAGNOSTIC PHASES
+
+=============================================================================
+
+phases:
+
+SOURCE:
+ordinal: 0
+meaning: "source acquisition or source identity"
+
+LEXICAL:
+ordinal: 1
+meaning: "character-to-token processing"
+
+PARSE:
+ordinal: 2
+meaning: "token-to-syntax processing"
+
+AST:
+ordinal: 3
+meaning: "AST construction or structural validation"
+
+NAME:
+ordinal: 4
+meaning: "name resolution"
+
+TYPE:
+ordinal: 5
+meaning: "type checking/inference"
+
+EFFECT:
+ordinal: 6
+meaning: "effect validation"
+
+OWNERSHIP:
+ordinal: 7
+meaning: "ownership/borrowing/linearity validation"
+
+RESOURCE:
+ordinal: 8
+meaning: "resource requirement analysis"
+
+CAPABILITY:
+ordinal: 9
+meaning: "capability analysis"
+
+DOMAIN:
+ordinal: 10
+meaning: "domain-specific semantic validation"
+
+SEMANTIC:
+ordinal: 11
+meaning: "cross-domain semantic validation"
+
+IR_GENERATION:
+ordinal: 12
+meaning: "canonical/domain IR generation"
+
+IR_VERIFICATION:
+ordinal: 13
+meaning: "IR invariant verification"
+
+OPTIMIZATION:
+ordinal: 14
+meaning: "optimization"
+
+ROUTING:
+ordinal: 15
+meaning: "placement/routing"
+
+SCHEDULING:
+ordinal: 16
+meaning: "execution scheduling"
+
+RESILIENCE:
+ordinal: 17
+meaning: "resilience/recovery analysis"
+
+QEC:
+ordinal: 18
+meaning: "quantum error correction"
+
+ZQN:
+ordinal: 19
+meaning: "ZQN generation/validation"
+
+HAL:
+ordinal: 20
+meaning: "hardware abstraction integration"
+
+TARGET:
+ordinal: 21
+meaning: "target compatibility/realization"
+
+RUNTIME:
+ordinal: 22
+meaning: "runtime execution"
+
+TOOLING:
+ordinal: 23
+meaning: "tooling or integration"
+
+COMPATIBILITY:
+ordinal: 24
+meaning: "compatibility/migration/version validation"
+
+=============================================================================
+
+6. SEVERITY
+
+=============================================================================
+
+severity:
+
+ERROR:
+blocks_affected_success: true
+meaning: >
+The requested operation cannot be considered valid under the current
+applicable conditions.
+
+WARNING:
+blocks_affected_success: false
+meaning: >
+The program remains potentially valid, but the condition may indicate
+a defect, portability issue, deprecated behavior, suspicious construct,
+or undesirable realization.
+
+INFORMATION:
+blocks_affected_success: false
+meaning: >
+Non-error information about compiler or realization behavior.
+
+NOTE:
+blocks_affected_success: false
+meaning: >
+Context associated with another diagnostic.
+
+HINT:
+blocks_affected_success: false
+meaning: >
+Optional actionable improvement or remediation information.
+
+invariant:
+- "WARNING MUST NOT silently change semantics."
+- "INFORMATION MUST NOT be required for correctness."
+- "NOTE SHOULD normally be attached to another diagnostic."
+- "HINT MUST NOT imply invalidity by itself."
+
+=============================================================================
+
+7. DIAGNOSTIC IDENTITY
+
+=============================================================================
+
+identity:
+
+canonical_format: "ZMN-<DOMAIN>-<CONDITION>"
+
+domain_format:
+pattern: "^[A-Z][A-Z0-9_]*$"
+
+condition_format:
+pattern: "^[A-Z][A-Z0-9_-]*$"
+
+examples:
+- "ZMN-LEX-INVALID-CHARACTER"
+- "ZMN-LEX-INVALID-NUMBER"
+- "ZMN-PARSE-UNEXPECTED-TOKEN"
+- "ZMN-NAME-UNKNOWN-IDENTIFIER"
+- "ZMN-TYPE-MISMATCH"
+- "ZMN-EFFECT-UNDECLARED"
+- "ZMN-RESOURCE-UNSATISFIED"
+- "ZMN-CAPABILITY-MISSING"
+- "ZMN-POLICY-DENIED"
+- "ZMN-QUANTUM-INVALID-OPERATION"
+- "ZMN-QUANTUM-RESOURCE-UNSATISFIED"
+- "ZMN-HDL-INVALID-CONNECTION"
+- "ZMN-IR-INVARIANT-VIOLATION"
+- "ZMN-IR-LOWERING-UNSUPPORTED"
+- "ZMN-TARGET-UNSUPPORTED"
+- "ZMN-COMPAT-DEPRECATED"
+- "ZMN-SAFETY-UNSAFE-DISALLOWED"
+- "ZMN-INTERNAL-INVARIANT"
+
+rules:
+
+stable_code:
+  requirement: >
+    Every externally observable diagnostic MUST have a stable machine
+    readable code.
+
+code_not_message:
+  requirement: >
+    Tooling MUST identify diagnostics by code and structured fields, not
+    by matching human-readable message text.
+
+message_change:
+  allowed: true
+  requirement: >
+    Human-readable wording MAY change while the stable diagnostic meaning
+    remains represented by the same code.
+
+semantic_identity:
+  requirement: >
+    Diagnostics representing the same semantic condition across CLI,
+    compiler library, LSP, IDE, JSON and machine-readable output MUST
+    retain the same diagnostic code.
+
+no_backend_codes_as_language_codes:
+  requirement: >
+    Backend-native error identifiers MUST be retained as optional
+    related machine data and MUST NOT replace the canonical Zamani
+    diagnostic identity.
+
+=============================================================================
+
+8. CODE REGISTRY CONTRACT
+
+=============================================================================
+
+code_registry:
+
+canonical_owner:
+path: "grammar/contracts/diagnostics.yaml"
+
+future_registry:
+recommended_path: "grammar/contracts/diagnostic-codes.yaml"
+
+registry_requirement:
+requirement: >
+A stable implementation MUST maintain one registry mapping every stable
+diagnostic code to its domain, phase, default severity, meaning,
+compatibility status and test coverage.
+
+uniqueness:
+rule: >
+A diagnostic code MUST identify exactly one semantic condition.
+
+reuse:
+forbidden: >
+A stable code MUST NOT be reused for a materially different condition.
+
+reservation:
+allowed: true
+rule: >
+Codes MAY be reserved before implementation, but reserved codes MUST
+NOT be presented as implemented.
+
+deprecation:
+rule: >
+Deprecated diagnostic codes MUST remain recognizable for the compatibility
+period defined by grammar/compatibility/.
+
+removal:
+rule: >
+Removing a stable code requires an explicit compatibility/migration
+record.
+
+collision_detection:
+required: true
+
+=============================================================================
+
+9. DIAGNOSTIC STRUCTURE
+
+=============================================================================
+
+diagnostic:
+
+required_fields:
+
+code:
+  type: "stable-diagnostic-code"
+  required: true
+
+severity:
+  type: "severity"
+  required: true
+
+domain:
+  type: "diagnostic-domain"
+  required: true
+
+phase:
+  type: "diagnostic-phase"
+  required: true
+
+message:
+  type: "human-readable-string"
+  required: true
+
+primary_location:
+  type: "source-or-ir-location"
+  required: false
+  requirement: >
+    A source location SHOULD be present whenever the diagnostic can be
+    causally associated with source or IR location information.
+
+origin:
+  type: "diagnostic-origin"
+  required: true
+
+optional_fields:
+
+labels:
+  type: "ordered-label-list"
+
+notes:
+  type: "ordered-note-list"
+
+help:
+  type: "ordered-help-list"
+
+related_information:
+  type: "ordered-related-information-list"
+
+suggestions:
+  type: "ordered-suggestion-list"
+
+machine_data:
+  type: "structured-key-value-data"
+
+semantic_identity:
+  type: "semantic-identity"
+
+provenance:
+  type: "provenance-reference"
+
+applicability:
+  type: "applicability"
+
+target_context:
+  type: "target-context"
+
+resource_context:
+  type: "resource-context"
+
+capability_context:
+  type: "capability-context"
+
+contract_context:
+  type: "contract-context"
+
+policy_context:
+  type: "policy-context"
+
+cause_chain:
+  type: "ordered-diagnostic-reference-list"
+
+fix:
+  type: "machine-applicable-fix"
+
+=============================================================================
+
+10. ORIGIN
+
+=============================================================================
+
+origin:
+
+allowed:
+
+USER_SOURCE:
+  meaning: "condition caused by user source"
+
+SOURCE_ENVIRONMENT:
+  meaning: "condition caused by source/environment integration"
+
+COMPILER:
+  meaning: "compiler-generated observation or validation result"
+
+FRONTEND:
+  meaning: "frontend subsystem"
+
+SEMANTIC:
+  meaning: "semantic analysis subsystem"
+
+IR:
+  meaning: "IR subsystem"
+
+BACKEND:
+  meaning: "backend subsystem"
+
+TARGET:
+  meaning: "target realization subsystem"
+
+RUNTIME:
+  meaning: "runtime subsystem"
+
+TOOLING:
+  meaning: "tooling integration"
+
+INTERNAL:
+  meaning: "implementation invariant failure"
+
+invariant: >
+An implementation invariant failure MUST NOT be reported as if the user
+wrote invalid source unless the source itself is actually responsible.
+
+=============================================================================
+
+11. SOURCE LOCATION
+
+=============================================================================
+
+location:
+
+canonical_model:
+
+source:
+  source_id:
+    required: true
+    meaning: "stable identity of the source unit"
+
+  start:
+    unit: "utf8-byte-offset"
+    required: true
+
+  end:
+    unit: "utf8-byte-offset"
+    required: true
+
+line_column:
+  role: "derived-presentation"
+  canonical: false
+  indexing:
+    line: "1-based"
+    column: "1-based"
+
+rules:
+
+byte_offsets_are_canonical: true
+
+source_id_required_for_source_span: true
+
+zero_length:
+  allowed: true
+  use:
+    - "insertion point"
+    - "missing token"
+    - "missing delimiter"
+    - "point diagnostic"
+
+ordering:
+  requirement: "start <= end"
+
+same_source:
+  requirement: >
+    A normal contiguous source span MUST refer to one source identity.
+
+unresolved_location:
+  behavior: >
+    If a source location cannot be resolved, the renderer MUST NOT invent
+    line or column information.
+
+internal_invalid_span:
+  classification: "INTERNAL"
+  requirement: >
+    Invalid internal spans MUST be treated as compiler implementation
+    failures rather than user syntax errors.
+
+integration:
+
+current_source_map:
+  path: "src/source_map.rs"
+  current_model:
+    file_id: "FileId"
+    start: "BytePos"
+    end: "BytePos"
+    line: "derived"
+    column: "derived"
+
+frontend_source_model:
+  path: "src/frontend/ast/node/source/"
+  requirement: >
+    Frontend AST source spans MUST be convertible into the canonical
+    diagnostic location model without losing source identity.
+
+quantum_ir:
+  path: "src/quantum/ir/validation/diagnostics.rs"
+  requirement: >
+    Quantum IR diagnostics MAY use IR-native locations. They MUST NOT
+    require the frontend source-map implementation.
+
+=============================================================================
+
+12. SOURCE-SPAN SCALABILITY
+
+=============================================================================
+
+source_span_scalability:
+
+semantic_model:
+offsets: "unbounded-non-negative-integer-concept"
+source_identity: "opaque-stable-identifier"
+
+implementation_model:
+rule: >
+A concrete integer representation is an implementation concern and
+MUST NOT define a language-level source-size ceiling.
+
+overflow:
+classification: "INTERNAL"
+code: "ZMN-INTERNAL-SOURCE-OFFSET-OVERFLOW"
+requirement: >
+If an implementation cannot represent an otherwise valid source
+location, it MUST report an implementation/resource limitation rather
+than silently truncate or corrupt the location.
+
+forbidden:
+- "MAX_SOURCE_BYTES as a language rule"
+- "MAX_DIAGNOSTIC_SPANS as a language rule"
+- "MAX_RELATED_LOCATIONS as a language rule"
+- "MAX_DIAGNOSTIC_CHILDREN as a language rule"
+
+=============================================================================
+
+13. RELATED LOCATIONS
+
+=============================================================================
+
+related_locations:
+
+purpose: >
+Explain causal relationships involving multiple source files, declarations,
+definitions, imports, targets, IR nodes, resources or semantic facts.
+
+location_roles:
+
+PRIMARY:
+  meaning: "most causally significant location"
+
+SECONDARY:
+  meaning: "supporting source location"
+
+DEFINITION:
+  meaning: "location of referenced definition"
+
+USE:
+  meaning: "location of reference"
+
+PREVIOUS:
+  meaning: "previous relevant declaration or state"
+
+REQUIRED:
+  meaning: "location identifying a required construct"
+
+CONFLICT:
+  meaning: "location participating in a conflict"
+
+DERIVED:
+  meaning: "location produced by transformation"
+
+GENERATED:
+  meaning: "generated source or artifact location"
+
+IR:
+  meaning: "IR-level location"
+
+TARGET:
+  meaning: "target-specific contextual location"
+
+rules:
+ordered: true
+deterministic: true
+explicit_labels_required: true
+
+no_hidden_relationships: >
+  A renderer MUST NOT require undocumented assumptions to understand why
+  a secondary location is related.
+
+=============================================================================
+
+14. SEMANTIC IDENTITY
+
+=============================================================================
+
+semantic_identity:
+
+purpose: >
+Stable identity for a semantic condition independent of wording and
+presentation.
+
+components:
+
+language:
+  required: true
+
+language_version:
+  required: true
+
+feature_or_domain:
+  required: true
+
+construct_identity:
+  required: false
+
+semantic_entity_identity:
+  required: false
+
+diagnostic_code:
+  required: true
+
+rule: >
+Diagnostic identity MUST NOT depend on memory addresses, pointer values,
+hash-map iteration order, process IDs, timestamps, random identifiers,
+temporary filesystem paths, or target-local allocation addresses.
+
+=============================================================================
+
+15. RESOURCE DIAGNOSTICS
+
+=============================================================================
+
+resource_diagnostics:
+
+central_rule: >
+Resource infeasibility is not a syntax failure.
+
+distinctions:
+
+resource_requirement_invalid:
+  example: >
+    The source expresses a malformed or semantically invalid resource
+    requirement.
+  domain: "RESOURCE"
+  phase: "RESOURCE"
+
+resource_requirement_unsatisfied:
+  example: >
+    A required resource cannot currently be satisfied by the selected
+    realization environment.
+  domain: "RESOURCE"
+  phase: "RESOURCE"
+
+resource_budget_exhausted:
+  example: >
+    A compiler/runtime operational budget was exhausted.
+  domain: "RESOURCE"
+  phase: "TOOLING or RUNTIME"
+
+target_unavailable:
+  example: >
+    The requested realization target cannot be reached.
+  domain: "TARGET"
+  phase: "TARGET"
+
+canonical_codes:
+malformed_requirement: "ZMN-RESOURCE-INVALID-REQUIREMENT"
+unsatisfied_requirement: "ZMN-RESOURCE-UNSATISFIED"
+constraint_conflict: "ZMN-RESOURCE-CONSTRAINT-CONFLICT"
+preference_unmet: "ZMN-RESOURCE-PREFERENCE-UNMET"
+budget_exhausted: "ZMN-RESOURCE-BUDGET-EXHAUSTED"
+
+examples:
+allowed:
+- "requires qubits >= required_qubits"
+- "requires memory >= required_memory"
+- "requires capability("quantum.measurement")"
+- "requires capability("gpu.compute")"
+- "requires capability("tensor.compute")"
+- "requires topology(required_topology)"
+
+invariant: >
+Diagnostics MUST NOT imply that a resource value is globally impossible
+merely because one target or compiler configuration cannot provide it.
+
+=============================================================================
+
+16. CAPABILITY DIAGNOSTICS
+
+=============================================================================
+
+capability_diagnostics:
+
+central_rule: >
+A capability is distinct from a resource quantity and distinct from a
+physical device identity.
+
+distinctions:
+
+unknown_capability:
+  domain: "CAPABILITY"
+  phase: "CAPABILITY"
+
+unavailable_capability:
+  domain: "CAPABILITY"
+  phase: "CAPABILITY"
+
+forbidden_capability:
+  domain: "POLICY"
+  phase: "POLICY"
+
+capability_realization_failure:
+  domain: "TARGET"
+  phase: "TARGET"
+
+canonical_codes:
+malformed: "ZMN-CAPABILITY-INVALID"
+missing: "ZMN-CAPABILITY-MISSING"
+unavailable: "ZMN-CAPABILITY-UNAVAILABLE"
+denied: "ZMN-CAPABILITY-DENIED"
+
+invariant: >
+A missing capability MUST NOT be reported as an invalid source construct
+when the source requirement itself is valid.
+
+=============================================================================
+
+17. TARGET DIAGNOSTICS
+
+=============================================================================
+
+target_diagnostics:
+
+purpose: >
+Report failures or observations involving concrete target realization
+without making target identity part of universal language semantics.
+
+canonical_codes:
+
+unsupported_target:
+  code: "ZMN-TARGET-UNSUPPORTED"
+
+incompatible_target:
+  code: "ZMN-TARGET-INCOMPATIBLE"
+
+realization_failed:
+  code: "ZMN-TARGET-REALIZATION-FAILED"
+
+target_unavailable:
+  code: "ZMN-TARGET-UNAVAILABLE"
+
+fallback_not_permitted:
+  code: "ZMN-TARGET-FALLBACK-DENIED"
+
+fallback_selected:
+  code: "ZMN-TARGET-FALLBACK-SELECTED"
+  severity: "INFORMATION"
+
+invariant: >
+A target diagnostic MUST distinguish inability to realize a program from
+invalidity of the program's source semantics.
+
+=============================================================================
+
+18. FALLBACK DIAGNOSTICS
+
+=============================================================================
+
+fallback:
+
+semantics:
+
+explicit_only: true
+
+silent_semantic_change: false
+
+approximation_requires_authorization: true
+
+required_information:
+- "original realization requirement"
+- "fallback realization"
+- "policy basis"
+- "capability/resource reason"
+- "semantic-equivalence status"
+
+codes:
+
+selected:
+  code: "ZMN-TARGET-FALLBACK-SELECTED"
+  severity: "INFORMATION"
+
+denied:
+  code: "ZMN-TARGET-FALLBACK-DENIED"
+  severity: "ERROR"
+
+semantic_equivalence_unknown:
+  code: "ZMN-TARGET-FALLBACK-EQUIVALENCE-UNKNOWN"
+  severity: "ERROR"
+
+=============================================================================
+
+19. EFFECT DIAGNOSTICS
+
+=============================================================================
+
+effect_diagnostics:
+
+distinctions:
+
+undeclared:
+  code: "ZMN-EFFECT-UNDECLARED"
+
+forbidden:
+  code: "ZMN-EFFECT-FORBIDDEN"
+
+policy_denied:
+  code: "ZMN-EFFECT-POLICY-DENIED"
+
+capability_missing:
+  code: "ZMN-EFFECT-CAPABILITY-MISSING"
+
+incompatible:
+  code: "ZMN-EFFECT-INCOMPATIBLE"
+
+invariant: >
+Domain-specific effects MUST map into the common effect system rather than
+creating incompatible diagnostic semantics.
+
+=============================================================================
+
+20. POLICY DIAGNOSTICS
+
+=============================================================================
+
+policy_diagnostics:
+
+canonical_codes:
+
+invalid_policy:
+  code: "ZMN-POLICY-INVALID"
+
+denied:
+  code: "ZMN-POLICY-DENIED"
+
+conflict:
+  code: "ZMN-POLICY-CONFLICT"
+
+unsatisfied:
+  code: "ZMN-POLICY-UNSATISFIED"
+
+ambiguous:
+  code: "ZMN-POLICY-AMBIGUOUS"
+
+invariant: >
+Policy failure MUST identify the governing policy condition whenever that
+information is available.
+
+=============================================================================
+
+21. CONTRACT DIAGNOSTICS
+
+=============================================================================
+
+contract_diagnostics:
+
+canonical_codes:
+
+invalid:
+  code: "ZMN-CONTRACT-INVALID"
+
+requires_failed:
+  code: "ZMN-CONTRACT-REQUIRES-FAILED"
+
+ensures_failed:
+  code: "ZMN-CONTRACT-ENSURES-FAILED"
+
+invariant_failed:
+  code: "ZMN-CONTRACT-INVARIANT-FAILED"
+
+assumption_failed:
+  code: "ZMN-CONTRACT-ASSUMPTION-FAILED"
+
+guarantee_failed:
+  code: "ZMN-CONTRACT-GUARANTEE-FAILED"
+
+property_failed:
+  code: "ZMN-CONTRACT-PROPERTY-FAILED"
+
+invariant: >
+Contract diagnostics MUST identify whether failure is statically proven,
+dynamically observed, conservatively unknown, or unsupported by the
+current verification mechanism.
+
+=============================================================================
+
+22. QUANTUM DIAGNOSTICS
+
+=============================================================================
+
+quantum_diagnostics:
+
+owner:
+syntax: "grammar/quantum/"
+semantics: "quantum semantic subsystem"
+ir: "src/quantum/ir/"
+qec: "grammar/quantum/"
+
+canonical_codes:
+
+invalid_operation:
+  code: "ZMN-QUANTUM-INVALID-OPERATION"
+
+invalid_target:
+  code: "ZMN-QUANTUM-INVALID-TARGET"
+
+invalid_parameter:
+  code: "ZMN-QUANTUM-INVALID-PARAMETER"
+
+measurement_invalid:
+  code: "ZMN-QUANTUM-INVALID-MEASUREMENT"
+
+capability_missing:
+  code: "ZMN-QUANTUM-CAPABILITY-MISSING"
+
+resource_unsatisfied:
+  code: "ZMN-QUANTUM-RESOURCE-UNSATISFIED"
+
+routing_failed:
+  code: "ZMN-QUANTUM-ROUTING-FAILED"
+
+scheduling_failed:
+  code: "ZMN-QUANTUM-SCHEDULING-FAILED"
+
+qec_invalid:
+  code: "ZMN-QEC-INVALID"
+
+qec_resource_unsatisfied:
+  code: "ZMN-QEC-RESOURCE-UNSATISFIED"
+
+qec_capability_missing:
+  code: "ZMN-QEC-CAPABILITY-MISSING"
+
+noise_incompatible:
+  code: "ZMN-QUANTUM-NOISE-INCOMPATIBLE"
+
+unsupported_realization:
+  code: "ZMN-QUANTUM-REALIZATION-UNSUPPORTED"
+
+architecture:
+
+generic_operation:
+  rule: >
+    Diagnostic identity MUST NOT require a closed enumeration of all
+    quantum operations.
+
+vendor_operation:
+  rule: >
+    Vendor-specific operation information MAY appear in machine_data or
+    dialect context but MUST NOT replace the canonical diagnostic code.
+
+physical_mapping:
+  rule: >
+    Physical qubit allocation, routing, calibration and scheduling
+    diagnostics occur after semantic quantum validation.
+
+ir_boundary:
+  path: "src/quantum/ir/"
+  invariant: >
+    Quantum diagnostics MUST NOT require a competing quantum IR.
+
+source_mapping:
+  requirement: >
+    Frontend quantum diagnostics MAY carry source locations. Quantum IR
+    validation MAY use IR-native locations and MAY be translated to source
+    locations by an outer diagnostic adapter.
+
+=============================================================================
+
+23. HDL DIAGNOSTICS
+
+=============================================================================
+
+hdl_diagnostics:
+
+canonical_codes:
+
+invalid_port:
+  code: "ZMN-HDL-INVALID-PORT"
+
+invalid_connection:
+  code: "ZMN-HDL-INVALID-CONNECTION"
+
+width_incompatibility:
+  code: "ZMN-HDL-WIDTH-INCOMPATIBLE"
+
+timing_constraint_invalid:
+  code: "ZMN-HDL-TIMING-CONSTRAINT-INVALID"
+
+clock_constraint_invalid:
+  code: "ZMN-HDL-CLOCK-CONSTRAINT-INVALID"
+
+synthesis_unsupported:
+  code: "ZMN-HDL-SYNTHESIS-UNSUPPORTED"
+
+scalability:
+widths_are_program_or_target_properties: true
+fixed_universal_widths_forbidden: true
+
+invariant: >
+HDL diagnostics MUST NOT encode a universal maximum bus width, register
+count, port count, clock count, memory count, pipeline depth or device
+count.
+
+=============================================================================
+
+24. CLASSICAL / DATA / AI / DISTRIBUTED DIAGNOSTICS
+
+=============================================================================
+
+domain_diagnostics:
+
+CLASSICAL:
+examples:
+- "ZMN-CLASSICAL-TYPE-MISMATCH"
+- "ZMN-CLASSICAL-NUMERIC-INVALID"
+- "ZMN-CLASSICAL-OPERATION-INVALID"
+
+DATA:
+examples:
+- "ZMN-DATA-SCHEMA-MISMATCH"
+- "ZMN-DATA-CONVERSION-INVALID"
+- "ZMN-DATA-PROVENANCE-INVALID"
+
+AI:
+examples:
+- "ZMN-AI-MODEL-INVALID"
+- "ZMN-AI-INFERENCE-INVALID"
+- "ZMN-AI-LEARNING-INVALID"
+- "ZMN-AI-EVIDENCE-INVALID"
+- "ZMN-AI-PROVENANCE-INVALID"
+- "ZMN-AI-UNCERTAINTY-INVALID"
+
+DISTRIBUTED:
+examples:
+- "ZMN-DISTRIBUTED-TOPOLOGY-INVALID"
+- "ZMN-DISTRIBUTED-PLACEMENT-UNSATISFIED"
+- "ZMN-DISTRIBUTED-CONSISTENCY-INVALID"
+- "ZMN-DISTRIBUTED-RECOVERY-FAILED"
+
+NETWORK:
+examples:
+- "ZMN-NETWORK-ENDPOINT-INVALID"
+- "ZMN-NETWORK-CAPABILITY-MISSING"
+- "ZMN-NETWORK-POLICY-DENIED"
+
+HARDWARE:
+examples:
+- "ZMN-HARDWARE-CAPABILITY-MISSING"
+- "ZMN-HARDWARE-RESOURCE-UNSATISFIED"
+- "ZMN-HARDWARE-TOPOLOGY-INCOMPATIBLE"
+
+=============================================================================
+
+25. IR DIAGNOSTICS
+
+=============================================================================
+
+ir_diagnostics:
+
+canonical_codes:
+
+generation_failed:
+  code: "ZMN-IR-GENERATION-FAILED"
+
+invariant_violation:
+  code: "ZMN-IR-INVARIANT-VIOLATION"
+
+invalid_operand:
+  code: "ZMN-IR-INVALID-OPERAND"
+
+invalid_type:
+  code: "ZMN-IR-INVALID-TYPE"
+
+invalid_effect:
+  code: "ZMN-IR-INVALID-EFFECT"
+
+invalid_resource:
+  code: "ZMN-IR-INVALID-RESOURCE"
+
+lowering_unsupported:
+  code: "ZMN-IR-LOWERING-UNSUPPORTED"
+
+version_incompatible:
+  code: "ZMN-IR-VERSION-INCOMPATIBLE"
+
+architecture:
+
+canonical_ir:
+  requirement: >
+    Diagnostics MUST preserve the canonical IR architecture. Domain
+    diagnostics MAY identify a domain IR node but MUST NOT create a
+    competing language-wide IR diagnostic authority.
+
+quantum:
+  boundary: "quantum::ir"
+
+classical:
+  boundary: "Classical IR"
+
+hdl:
+  boundary: "HDL/Hardware IR"
+
+=============================================================================
+
+26. INTERNAL COMPILER DIAGNOSTICS
+
+=============================================================================
+
+internal_diagnostics:
+
+purpose: >
+Report failures of compiler implementation invariants without falsely
+attributing them to user source.
+
+canonical_codes:
+
+invariant:
+  code: "ZMN-INTERNAL-INVARIANT"
+
+unreachable_state:
+  code: "ZMN-INTERNAL-UNREACHABLE-STATE"
+
+invalid_span:
+  code: "ZMN-INTERNAL-INVALID-SPAN"
+
+source_offset_overflow:
+  code: "ZMN-INTERNAL-SOURCE-OFFSET-OVERFLOW"
+
+diagnostic_engine_failure:
+  code: "ZMN-INTERNAL-DIAGNOSTIC-ENGINE"
+
+contract_mismatch:
+  code: "ZMN-INTERNAL-CONTRACT-MISMATCH"
+
+ownership_mismatch:
+  code: "ZMN-INTERNAL-OWNERSHIP-MISMATCH"
+
+safety:
+unsafe_rust_forbidden: true
+
+panic_policy:
+ordinary_diagnostic_handling:
+panics: false
+
+implementation_invariant:
+  preferred_behavior: >
+    Return a structured internal diagnostic or typed error rather than
+    panicking during ordinary user-driven compilation.
+
+invariant: >
+An internal diagnostic MUST NOT be downgraded into a user-source error
+merely to make the compiler appear to have accepted the failure.
+
+=============================================================================
+
+27. DIAGNOSTIC COLLECTION
+
+=============================================================================
+
+collection:
+
+conceptual_api:
+
+emit:
+  inputs:
+    - "diagnostic"
+
+emit_many:
+  inputs:
+    - "ordered diagnostic sequence"
+
+merge:
+  inputs:
+    - "diagnostic collections"
+
+deduplicate:
+  optional: true
+
+sort_deterministic:
+  required: true
+
+implementation:
+current_reference:
+path: "src/compiler/diagnostics.rs"
+
+current_type:
+  "Diagnostic"
+
+current_engine:
+  "DiagnosticEngine"
+
+required_behavior:
+
+no_loss_of_identity: true
+
+no_loss_of_location: true
+
+no_loss_of_phase: true
+
+no_loss_of_domain: true
+
+no_loss_of_semantic_context: true
+
+no_unordered_output: true
+
+=============================================================================
+
+28. DEDUPLICATION
+
+=============================================================================
+
+deduplication:
+
+enabled_by_policy: true
+
+fingerprint:
+
+required_components:
+  - "diagnostic_code"
+  - "severity"
+  - "domain"
+  - "phase"
+  - "primary_location"
+  - "semantic_identity"
+  - "stable_machine_data_identity"
+
+forbidden_components:
+  - "rendered_message_only"
+  - "memory_address"
+  - "process_id"
+  - "timestamp"
+  - "random_id"
+  - "hash_map_iteration_order"
+
+rule: >
+Two diagnostics MUST NOT be considered duplicates merely because their
+messages happen to be identical.
+
+current_implementation_gap:
+path: "src/compiler/diagnostics.rs"
+issue: >
+The current fingerprint includes level, code, message and span but not
+domain, phase or semantic identity.
+
+required_resolution:
+  owner: "src/compiler/diagnostics.rs"
+  action:
+    - "extend the implementation fingerprint"
+    - "preserve stable code identity"
+    - "include structured semantic identity when available"
+    - "do not use rendered text as the sole identity"
+
+freeze_condition: >
+  The implementation MUST satisfy the complete fingerprint contract
+  before the diagnostics subsystem is declared STABLE.
+
+=============================================================================
+
+29. DETERMINISTIC ORDERING
+
+=============================================================================
+
+ordering:
+
+deterministic: true
+
+canonical_sort_keys:
+
+- "source_id"
+- "primary_start_offset"
+- "primary_end_offset"
+- "phase_ordinal"
+- "domain"
+- "severity_rank"
+- "diagnostic_code"
+- "semantic_identity"
+- "stable_secondary_sequence"
+
+source_less_diagnostics:
+placement: "after source-located diagnostics unless caller specifies policy"
+
+tie_breaking:
+requirement: >
+Equal primary sort keys MUST have a deterministic secondary ordering.
+
+forbidden:
+- "hash-map iteration order"
+- "thread completion order"
+- "target discovery order"
+- "random order"
+- "memory address order"
+
+invariant: >
+Identical source, language version, diagnostic policy and semantic
+environment MUST produce equivalent diagnostic ordering.
+
+=============================================================================
+
+30. DIAGNOSTIC BUDGETS
+
+=============================================================================
+
+budgets:
+
+purpose: >
+Protect compiler and tooling processes from resource exhaustion without
+defining language-level diagnostic capacity.
+
+policy:
+
+configurable: true
+deployment_defined: true
+language_semantic: false
+
+supported_budget_kinds:
+
+max_total_diagnostics:
+  semantic_limit: false
+
+max_error_diagnostics:
+  semantic_limit: false
+
+max_warning_diagnostics:
+  semantic_limit: false
+
+max_notes:
+  semantic_limit: false
+
+max_help_items:
+  semantic_limit: false
+
+max_rendered_bytes:
+  semantic_limit: false
+
+max_related_locations:
+  semantic_limit: false
+
+max_machine_data_bytes:
+  semantic_limit: false
+
+exhaustion_behavior:
+required:
+- "emit a deterministic budget diagnostic if possible"
+- "preserve the fact that additional diagnostics were suppressed"
+- "never claim that suppressed diagnostics do not exist"
+- "never convert a budget condition into a source-language semantic fact"
+
+canonical_code:
+"ZMN-TOOL-DIAGNOSTIC-BUDGET-EXHAUSTED"
+
+important_rule: >
+Operational budgets MAY be finite. They MUST NOT appear as universal
+language constants or grammar semantics.
+
+=============================================================================
+
+31. MESSAGE CONTRACT
+
+=============================================================================
+
+messages:
+
+required_properties:
+
+concise: true
+human_readable: true
+actionable_when_possible: true
+deterministic: true
+implementation_neutral: true
+
+should_not_contain:
+
+- "memory addresses"
+- "random identifiers"
+- "unstable internal object IDs"
+- "hash-map ordering"
+- "temporary paths unless explicitly relevant"
+- "vendor jargon without context"
+- "undocumented compiler internals"
+
+should_identify:
+
+- "what happened"
+- "where it happened"
+- "why it matters when known"
+
+machine_identity:
+rule: >
+Human-readable wording MUST NOT be used as a compatibility identifier.
+
+=============================================================================
+
+32. LABELS / NOTES / HELP
+
+=============================================================================
+
+annotations:
+
+labels:
+purpose: "short explanations attached to locations"
+ordered: true
+
+notes:
+purpose: "contextual information"
+ordered: true
+
+help:
+purpose: "actionable remediation guidance"
+ordered: true
+
+suggestions:
+purpose: "potential source transformation"
+ordered: true
+
+rules:
+
+no_semantic_mutation_by_rendering: true
+
+suggestions_must_be_validated:
+  requirement: >
+    A machine-applicable suggestion MUST identify enough information for
+    tooling to validate that it applies to the original source revision.
+
+source_revision_binding:
+  requirement: >
+    A machine-applicable fix SHOULD be associated with a source identity
+    and source revision/hash when used by automated tooling.
+
+=============================================================================
+
+33. MACHINE-APPLICABLE FIXES
+
+=============================================================================
+
+fixes:
+
+structure:
+
+applicability:
+  required: true
+
+source_identity:
+  required: true
+
+expected_source_revision:
+  required: false
+
+edits:
+  required: true
+
+edit:
+
+source_id:
+  required: true
+
+start:
+  required: true
+
+end:
+  required: true
+
+replacement:
+  required: true
+
+safety:
+
+overlapping_edits:
+  forbidden: true
+
+invalid_ranges:
+  forbidden: true
+
+stale_source_revision:
+  must_reject: true
+
+semantic_validation:
+  recommended_after_apply: true
+
+=============================================================================
+
+34. RESOURCE / CAPABILITY CONTEXT
+
+=============================================================================
+
+context:
+
+resource:
+
+allowed_fields:
+  - "resource_kind"
+  - "requested_value"
+  - "available_value"
+  - "constraint"
+  - "preference"
+  - "requirement"
+  - "satisfiability_state"
+
+rule: >
+  Resource context MUST remain symbolic and target-aware. It MUST NOT
+  establish universal resource maxima.
+
+capability:
+
+allowed_fields:
+  - "capability_identity"
+  - "required"
+  - "available"
+  - "policy_state"
+  - "target_context"
+
+rule: >
+  Capability context MUST distinguish absence, denial, incompatibility
+  and realization failure.
+
+=============================================================================
+
+35. APPLICABILITY
+
+=============================================================================
+
+applicability:
+
+kinds:
+
+UNIVERSAL:
+  meaning: "applies independent of target"
+
+TARGET:
+  meaning: "applies to a target realization"
+
+DIALECT:
+  meaning: "applies to a dialect"
+
+FEATURE:
+  meaning: "applies to a language feature"
+
+CONFIGURATION:
+  meaning: "applies to compiler/tool configuration"
+
+RUNTIME:
+  meaning: "applies during execution"
+
+invariant: >
+A target-specific diagnostic MUST NOT be presented as a universal language
+prohibition unless the normative specification actually makes it one.
+
+=============================================================================
+
+36. PROVENANCE
+
+=============================================================================
+
+provenance:
+
+optional: true
+
+purpose:
+- "explain derived diagnostics"
+- "identify semantic evidence"
+- "trace optimization decisions"
+- "trace target selection"
+- "trace resource negotiation"
+- "trace quantum routing"
+- "trace resilience decisions"
+
+requirements:
+
+deterministic_identity: true
+
+no_required_unbounded_storage: true
+
+implementation_defined_retention: true
+
+invariant: >
+Provenance may explain a diagnostic but MUST NOT alter its canonical
+identity merely because the provenance rendering changes.
+
+=============================================================================
+
+37. CAUSE CHAINS
+
+=============================================================================
+
+cause_chain:
+
+purpose: >
+Represent causal relationships between diagnostics emitted by different
+compilation stages.
+
+ordering: "causal"
+
+examples:
+
+- "capability missing"
+- "therefore target realization unavailable"
+- "therefore selected compilation target rejected"
+
+rule: >
+A downstream diagnostic MAY reference an upstream diagnostic rather than
+duplicating the complete upstream explanation.
+
+cycle:
+forbidden: true
+
+=============================================================================
+
+38. COMPILER / AST / SEMANTIC / IR INTEGRATION
+
+=============================================================================
+
+integration:
+
+source:
+
+lexer:
+  owner: "grammar/lexer/"
+  emits:
+    - "LEX diagnostics"
+  required:
+    - "stable code"
+    - "source location"
+    - "deterministic ordering"
+
+parser:
+  owner: "grammar/antlr/"
+  emits:
+    - "PARSE diagnostics"
+  required:
+    - "source location where available"
+    - "expected token/context when available"
+    - "no semantic diagnosis disguised as syntax"
+
+ast:
+
+owner:
+  - "src/ast/"
+  - "src/frontend/ast/"
+
+required:
+  - "source span preservation"
+  - "node identity where available"
+  - "diagnostic context"
+
+structural_validation:
+
+owner: "grammar/validation/"
+emits:
+  - "AST"
+  - "NAME"
+  - "MODULE"
+  - "STRUCTURAL diagnostics"
+
+semantic:
+
+owners:
+  - "type analysis"
+  - "effect analysis"
+  - "resource analysis"
+  - "capability analysis"
+  - "policy analysis"
+  - "contract analysis"
+  - "domain semantic analysis"
+
+ir:
+
+owner:
+  - "canonical compiler IR"
+  - "src/quantum/ir/"
+
+requirement: >
+  IR diagnostics MUST retain sufficient semantic identity to relate an IR
+  failure to its source meaning when source mapping exists.
+
+backend:
+
+requirement: >
+  Backend diagnostics MUST preserve the canonical Zamani diagnostic code
+  and may attach backend-specific structured information.
+
+=============================================================================
+
+39. CURRENT RUST IMPLEMENTATION INTEGRATION
+
+=============================================================================
+
+rust_integration:
+
+toolchain:
+
+edition: "2021"
+minimum_version: "1.97"
+newer_stable_allowed: true
+
+safety:
+
+unsafe_forbidden: true
+unsafe_blocks_forbidden: true
+unsafe_traits_forbidden: true
+unsafe_impls_forbidden: true
+
+primary_implementation:
+path: "src/compiler/diagnostics.rs"
+
+current_types:
+- "DiagnosticLevel"
+- "Diagnostic"
+- "DiagnosticConfig"
+- "DiagnosticError"
+- "DiagnosticEngine"
+
+current_mapping:
+
+DiagnosticLevel:
+  contract_field: "severity"
+
+Diagnostic:
+  contract_role: "diagnostic"
+
+Diagnostic.code:
+  contract_field: "code"
+
+Diagnostic.message:
+  contract_field: "message"
+
+Diagnostic.span:
+  contract_field: "primary_location"
+
+Diagnostic.suggestion:
+  contract_field: "suggestions"
+
+Diagnostic.note:
+  contract_field: "notes"
+
+DiagnosticEngine:
+  contract_role: "diagnostic_collection"
+
+required_extensions:
+
+domain:
+  status: "REQUIRED"
+  reason: >
+    The current Diagnostic structure does not independently carry the
+    canonical diagnostic domain.
+
+phase:
+  status: "REQUIRED"
+  reason: >
+    Diagnostics must identify the actual processing phase.
+
+semantic_identity:
+  status: "REQUIRED"
+  reason: >
+    Stable diagnostics cannot rely only on message/code/span.
+
+labels:
+  status: "REQUIRED"
+
+related_information:
+  status: "REQUIRED"
+
+structured_machine_data:
+  status: "REQUIRED"
+
+provenance:
+  status: "REQUIRED_WHEN_AVAILABLE"
+
+applicability:
+  status: "REQUIRED_WHEN_TARGET_OR_FEATURE_SPECIFIC"
+
+cause_chain:
+  status: "REQUIRED_WHEN_CAUSAL"
+
+deterministic_identity:
+  status: "REQUIRED"
+
+compatibility_rule: >
+These extensions MUST be additive or migration-controlled. Existing
+consumers of Diagnostic MUST NOT silently receive a different semantic
+interpretation of existing fields.
+
+=============================================================================
+
+40. CURRENT ERROR-REPORTING INTEGRATION
+
+=============================================================================
+
+error_reporting:
+
+implementation:
+path: "src/error_reporting.rs"
+
+role:
+- "compatibility/error reporting boundary"
+- "translation into user-facing reporting"
+
+requirements:
+
+canonical_code_preservation: true
+severity_preservation: true
+source_location_preservation: true
+phase_preservation: true
+domain_preservation: true
+
+rule: >
+error_reporting.rs MUST render or adapt diagnostics; it MUST NOT become a
+second diagnostic authority.
+
+migration:
+requirement: >
+Legacy compiler error structures MAY remain as compatibility adapters
+only while they preserve the canonical diagnostic contract.
+
+=============================================================================
+
+41. LSP INTEGRATION
+
+=============================================================================
+
+lsp:
+
+implementation:
+path: "src/bin/zamani_lsp_main.rs"
+
+requirements:
+
+diagnostic_code:
+  required: true
+
+severity_mapping:
+  required: true
+
+zero_based_line_column:
+  required: true
+  rule: >
+    LSP presentation coordinates MAY be zero-based while canonical Zamani
+    source coordinates remain source-map coordinates.
+
+source_identity:
+  required: true
+
+deterministic_order:
+  required: true
+
+invariant: >
+LSP diagnostics and compiler diagnostics for the same source/environment
+MUST share canonical codes and source-span semantics.
+
+=============================================================================
+
+42. QUANTUM IR INTEGRATION
+
+=============================================================================
+
+quantum_ir:
+
+implementation:
+path: "src/quantum/ir/"
+
+validation:
+path: "src/quantum/ir/validation/diagnostics.rs"
+
+source_location_rule: >
+Quantum IR validation MUST remain independent of frontend source-map
+implementation details.
+
+translation:
+allowed: true
+direction:
+- "source diagnostic -> IR diagnostic context"
+- "IR diagnostic -> source-aware outer diagnostic"
+
+forbidden:
+- "competing quantum diagnostic authority"
+- "frontend Span requirement inside canonical IR"
+- "vendor diagnostic codes as canonical language identity"
+
+=============================================================================
+
+43. DIAGNOSTIC RENDERING
+
+=============================================================================
+
+rendering:
+
+principle:
+data_first: true
+presentation_separate: true
+
+supported_modes:
+
+terminal:
+  required: true
+
+plain_text:
+  required: true
+
+json:
+  required: true
+
+machine_readable:
+  required: true
+
+lsp:
+  required: true
+
+terminal:
+
+color:
+  optional: true
+
+no_color:
+  required: true
+
+color_must_not_change_semantics: true
+
+rendering_rules:
+
+stable_order: true
+stable_code: true
+no_hidden_fields: true
+no_required_ansi_for_machine_parsing: true
+
+=============================================================================
+
+44. SERIALIZATION
+
+=============================================================================
+
+serialization:
+
+canonical_machine_formats:
+
+json:
+  required: true
+
+yaml:
+  contract_only: true
+
+requirements:
+
+round_trip_semantic_fields: true
+
+preserve_code: true
+
+preserve_severity: true
+
+preserve_domain: true
+
+preserve_phase: true
+
+preserve_location: true
+
+preserve_machine_data: true
+
+rule: >
+Serialization MUST NOT discard fields necessary to identify or classify a
+diagnostic when converting between supported machine-readable formats.
+
+=============================================================================
+
+45. COMPATIBILITY
+
+=============================================================================
+
+compatibility:
+
+diagnostic_contract_version:
+current: "1"
+
+compatibility_owner:
+path: "grammar/compatibility/"
+
+stable_fields:
+- "code"
+- "severity"
+- "domain"
+- "phase"
+- "primary_location"
+
+stable_code_rule: >
+Once a code is STABLE, its fundamental semantic meaning MUST NOT be
+silently changed.
+
+message_compatibility:
+wording_change_allowed: true
+
+severity_change:
+requires_review: true
+rule: >
+A severity change that can alter tooling or compilation behavior MUST
+receive an explicit compatibility decision.
+
+field_addition:
+generally_backward_compatible: true
+
+field_removal:
+requires_migration: true
+
+code_removal:
+requires_migration: true
+
+registry_versioning:
+required: true
+
+=============================================================================
+
+46. PORTABILITY
+
+=============================================================================
+
+portability:
+
+target_independent_codes: true
+
+target_independent_core_semantics: true
+
+target_specific_context_allowed: true
+
+target_specific_context_must_not:
+- "replace canonical diagnostic identity"
+- "alter source semantic meaning"
+- "introduce universal hardware limits"
+
+POCO_REAF:
+requirement: >
+A diagnostic emitted because one target cannot realize a valid program
+MUST describe the realization failure rather than declaring the source
+language construct universally invalid.
+
+=============================================================================
+
+47. SCALABILITY
+
+=============================================================================
+
+scalability:
+
+model: "open-world"
+
+semantic_cardinality:
+diagnostics: "unbounded-by-language"
+source_units: "unbounded-by-language"
+related_locations: "unbounded-by-language"
+compilation_units: "unbounded-by-language"
+target_count: "unbounded-by-language"
+resource_count: "unbounded-by-language"
+capability_count: "unbounded-by-language"
+quantum_operations: "open-ended"
+hardware_instances: "open-ended"
+
+implementation_budget:
+allowed: true
+semantic_limit: false
+
+resource_aware:
+required: true
+
+rule: >
+The diagnostic contract MUST remain valid for computations ranging from
+the smallest feasible realization to the largest feasible realization
+permitted by available resources.
+
+infinite_claim:
+physical_infinity: false
+semantic_open_world: true
+requirement: >
+The architecture is open-ended and does not impose artificial language
+ceilings. Physical execution remains constrained by available resources,
+target capabilities, policies and execution conditions.
+
+=============================================================================
+
+48. FORBIDDEN HARD-CODING
+
+=============================================================================
+
+hard_coding_audit:
+
+forbidden_universal_capacity_names:
+
+- "MAX_QUBITS"
+- "MAX_CPUS"
+- "MAX_CORES"
+- "MAX_THREADS"
+- "MAX_GPUS"
+- "MAX_FPGAS"
+- "MAX_ASICS"
+- "MAX_QPUS"
+- "MAX_NODES"
+- "MAX_MEMORY"
+- "MAX_STORAGE"
+- "MAX_REGISTER_WIDTH"
+- "MAX_VECTOR_WIDTH"
+- "MAX_TENSOR_RANK"
+- "MAX_TENSOR_DIMENSION"
+- "MAX_NETWORK_SIZE"
+- "MAX_DEVICE_COUNT"
+- "MAX_ACCELERATOR_COUNT"
+- "MAX_AGENT_COUNT"
+- "MAX_DIAGNOSTICS"
+- "MAX_DIAGNOSTIC_SPANS"
+- "MAX_DIAGNOSTIC_CHILDREN"
+
+forbidden_equivalents:
+rule: >
+Renaming a forbidden universal capacity constant does not make the
+capacity contractually valid.
+
+allowed:
+- "compiler operational budgets"
+- "deployment resource budgets"
+- "runtime safety budgets"
+- "terminal rendering budgets"
+- "LSP transport budgets"
+- "user-declared program constraints"
+
+invariant: >
+Operational limits MUST remain configuration/policy data and MUST NOT be
+interpreted as language semantics.
+
+=============================================================================
+
+49. DETERMINISM
+
+=============================================================================
+
+determinism:
+
+required: true
+
+same_inputs:
+includes:
+- "same source"
+- "same source identities"
+- "same language version"
+- "same diagnostic contract version"
+- "same compiler semantic environment"
+- "same diagnostic policy"
+
+expected:
+- "same diagnostic codes"
+- "same classifications"
+- "equivalent locations"
+- "same ordering"
+- "same structured semantic identity"
+
+allowed_variation:
+- "human-readable wording when code/meaning remains stable"
+- "presentation formatting"
+- "ANSI color"
+- "target-specific supplementary machine data"
+
+forbidden_variation:
+- "random diagnostic codes"
+- "random ordering"
+- "memory-address ordering"
+- "thread-completion ordering"
+- "hash-map iteration ordering"
+
+=============================================================================
+
+50. ERROR RECOVERY
+
+=============================================================================
+
+recovery:
+
+parser:
+
+requirement: >
+  Parser recovery MAY continue after an error to discover additional
+  independent diagnostics.
+
+invariant: >
+  Recovery MUST NOT manufacture semantic acceptance of malformed input.
+
+semantic:
+
+requirement: >
+  Semantic analysis MAY continue after independent errors where safe.
+
+invariant: >
+  Error recovery MUST preserve deterministic diagnostics.
+
+compiler:
+
+requirement: >
+  A diagnostic budget MAY terminate further analysis when configured, but
+  the resulting budget condition MUST be explicit.
+
+=============================================================================
+
+51. DIAGNOSTIC SUPPRESSION
+
+=============================================================================
+
+suppression:
+
+allowed: true
+
+reasons:
+
+- "duplicate"
+- "user-configured"
+- "diagnostic budget"
+- "cascading error suppression"
+- "tooling presentation policy"
+
+rules:
+
+semantic_identity_preserved: true
+
+suppressed_count:
+  recommended: true
+
+hidden_errors:
+  forbidden: >
+    A tool MUST NOT present compilation as error-free merely because errors
+    were suppressed.
+
+canonical_budget_code:
+"ZMN-TOOL-DIAGNOSTIC-BUDGET-EXHAUSTED"
+
+=============================================================================
+
+52. CASCADING DIAGNOSTICS
+
+=============================================================================
+
+cascading:
+
+purpose: >
+Prevent large numbers of secondary diagnostics caused solely by one
+upstream failure.
+
+allowed:
+- "mark downstream diagnostics as dependent"
+- "attach cause chain"
+- "suppress known derivative diagnostics"
+
+invariant: >
+Suppression of a derivative diagnostic MUST NOT suppress an independent
+semantic failure.
+
+=============================================================================
+
+53. DIAGNOSTIC QUALITY RULES
+
+=============================================================================
+
+quality:
+
+required:
+
+precise:
+  rule: >
+    Identify the most precise known failure condition.
+
+layered:
+  rule: >
+    Identify the correct validation phase.
+
+source_aware:
+  rule: >
+    Include source location whenever available.
+
+machine_readable:
+  rule: >
+    Provide stable identity.
+
+actionable:
+  rule: >
+    Provide remediation where reasonably derivable.
+
+deterministic:
+  rule: >
+    Produce stable ordering and identity.
+
+target_aware:
+  rule: >
+    Identify target realization failures separately from language errors.
+
+scalable:
+  rule: >
+    Do not encode finite hardware or diagnostic capacities into language
+    semantics.
+
+=============================================================================
+
+54. CROSS-DOMAIN RULE
+
+=============================================================================
+
+cross_domain:
+
+requirement: >
+Classical, quantum, HDL, hybrid, AI, data, distributed, networking,
+accelerator and future domains MUST use the same diagnostic contract.
+
+domain_specific_extension:
+allowed: true
+
+domain_specific_extension_rules:
+- "must retain canonical diagnostic code"
+- "must retain canonical severity"
+- "must retain canonical phase"
+- "must retain source/IR location when applicable"
+- "must not create incompatible rendering semantics"
+- "must not create a competing diagnostic identity system"
+
+=============================================================================
+
+55. DIALECT RULE
+
+=============================================================================
+
+dialects:
+
+diagnostic_identity:
+rule: >
+A dialect MAY define additional diagnostics, but each diagnostic MUST
+register with the canonical diagnostic architecture.
+
+external_errors:
+rule: >
+External compiler/parser/backend errors MAY be attached as structured
+machine data or related information.
+
+canonical_translation:
+required: true
+
+opaque_external_error:
+allowed: true
+requirement: >
+Opaque external errors MUST still receive a canonical Zamani diagnostic
+code describing the integration-level condition.
+
+=============================================================================
+
+56. SAFETY
+
+=============================================================================
+
+safety:
+
+rust:
+
+unsafe:
+  forbidden: true
+
+unsafe_block:
+  forbidden: true
+
+unsafe_trait:
+  forbidden: true
+
+unsafe_impl:
+  forbidden: true
+
+diagnostic_handling:
+
+ordinary_paths_must_not_panic: true
+
+invalid_user_input_must_be_recoverable: true
+
+malformed_machine_data_must_not_trigger_undefined_behavior: true
+
+FFI:
+
+rule: >
+  Foreign interfaces MUST cross a validated safe abstraction boundary.
+  The diagnostic contract itself MUST remain safe-Rust compatible.
+
+=============================================================================
+
+57. SECURITY
+
+=============================================================================
+
+security:
+
+diagnostic_content:
+
+secrets:
+  must_not_leak: true
+
+credentials:
+  must_not_leak: true
+
+private_keys:
+  must_not_leak: true
+
+tokens:
+  must_not_leak: true
+
+raw_sensitive_machine_data:
+  policy_controlled: true
+
+target_information:
+requirement: >
+Target information MAY be included when required to explain a failure,
+subject to security policy.
+
+provenance:
+requirement: >
+Provenance information MUST respect applicable security and privacy
+policies.
+
+=============================================================================
+
+58. SOURCE REVISION AND STALE DIAGNOSTICS
+
+=============================================================================
+
+source_revision:
+
+purpose: >
+Prevent diagnostics or fixes generated for one source revision from being
+incorrectly applied to another.
+
+optional_fields:
+
+source_revision:
+  type: "stable-content-or-build-identity"
+
+source_document_version:
+  type: "tooling-defined"
+
+fix_application:
+stale_revision:
+action: "reject"
+
+diagnostic_display:
+stale_diagnostic:
+allowed: true
+requirement: >
+Tooling SHOULD identify when a diagnostic belongs to an older source
+revision.
+
+=============================================================================
+
+59. TEST CONTRACT
+
+=============================================================================
+
+tests:
+
+canonical_root:
+recommended:
+- "grammar/conformance/diagnostics/"
+- "grammar/tests/diagnostics/"
+
+required_categories:
+
+identity:
+  - "stable code format"
+  - "duplicate code detection"
+  - "code registry uniqueness"
+
+severity:
+  - "error"
+  - "warning"
+  - "information"
+  - "note"
+  - "hint"
+
+source_locations:
+  - "single-file span"
+  - "zero-length span"
+  - "multifile diagnostics"
+  - "Unicode source"
+  - "multibyte UTF-8"
+  - "line/column derivation"
+  - "unresolved source location"
+
+phases:
+  - "lexical"
+  - "parse"
+  - "AST"
+  - "name"
+  - "type"
+  - "effect"
+  - "resource"
+  - "capability"
+  - "semantic"
+  - "IR"
+  - "target"
+  - "runtime"
+
+deterministic:
+  - "same input same diagnostics"
+  - "stable sorting"
+  - "stable deduplication"
+  - "parallel diagnostic emission"
+
+resources:
+  - "symbolic resource requirement"
+  - "unsatisfied requirement"
+  - "resource constraint conflict"
+  - "resource budget exhaustion"
+
+capabilities:
+  - "missing capability"
+  - "unavailable capability"
+  - "policy-denied capability"
+
+portability:
+  - "unsupported target"
+  - "target resource insufficiency"
+  - "explicit fallback"
+  - "fallback denied"
+  - "semantic equivalence unknown"
+
+quantum:
+  - "invalid operation"
+  - "invalid target"
+  - "missing quantum capability"
+  - "QEC resource failure"
+  - "routing failure"
+  - "scheduling failure"
+
+hdl:
+  - "invalid connection"
+  - "width incompatibility"
+  - "timing constraint"
+
+IR:
+  - "IR invariant"
+  - "lowering unsupported"
+  - "IR version incompatibility"
+
+internal:
+  - "invalid span"
+  - "source offset overflow"
+  - "diagnostic engine failure"
+
+compatibility:
+  - "stable code preservation"
+  - "message change without code change"
+  - "deprecated code"
+  - "migration"
+
+security:
+  - "secret redaction"
+  - "credential redaction"
+  - "policy-controlled target information"
+
+negative_tests:
+required:
+- "diagnostic without code"
+- "invalid code format"
+- "unknown domain"
+- "unknown phase"
+- "invalid source span"
+- "nondeterministic ordering"
+- "duplicate stable code"
+- "semantic resource failure classified as parse failure"
+- "capability absence classified as syntax failure"
+- "target incompatibility classified as semantic invalidity"
+- "unsafe Rust dependency requirement"
+
+scalability_tests:
+
+principle: >
+  Tests MUST verify that the contract does not impose artificial language
+  limits.
+
+required:
+  - "large diagnostic collections"
+  - "large source files within implementation resources"
+  - "large related-location sets within implementation resources"
+  - "large symbolic resource expressions"
+  - "deep semantic cause chains"
+  - "large mixed-domain programs"
+
+forbidden:
+  - "tests that establish an arbitrary language maximum"
+
+=============================================================================
+
+60. CONFORMANCE FIXTURES
+
+=============================================================================
+
+conformance_examples:
+
+lexical:
+source: |
+let x = @;
+
+expected:
+  phase: "LEXICAL"
+  domain: "LEX"
+  severity: "ERROR"
+  code: "ZMN-LEX-INVALID-CHARACTER"
+
+syntax:
+source: |
+let x = ;
+
+expected:
+  phase: "PARSE"
+  domain: "PARSE"
+  severity: "ERROR"
+  code: "ZMN-PARSE-UNEXPECTED-TOKEN"
+
+resource:
+source: |
+requires qubits >= required_qubits;
+
+target_context:
+  resource_available: false
+
+expected:
+  phase: "RESOURCE"
+  domain: "RESOURCE"
+  severity: "ERROR"
+  code: "ZMN-RESOURCE-UNSATISFIED"
+
+capability:
+source: |
+requires capability("quantum.measurement");
+
+target_context:
+  capability_available: false
+
+expected:
+  phase: "CAPABILITY"
+  domain: "CAPABILITY"
+  severity: "ERROR"
+  code: "ZMN-CAPABILITY-MISSING"
+
+target:
+expected:
+phase: "TARGET"
+domain: "TARGET"
+severity: "ERROR"
+code: "ZMN-TARGET-UNSUPPORTED"
+
+fallback:
+expected:
+phase: "TARGET"
+domain: "TARGET"
+severity: "INFORMATION"
+code: "ZMN-TARGET-FALLBACK-SELECTED"
+
+=============================================================================
+
+61. INTEGRATION MATRIX
+
+=============================================================================
+
+integration_matrix:
+
+grammar_lexer:
+consumes:
+- "LEX domain"
+- "LEXICAL phase"
+- "source-location contract"
+produces:
+- "structured lexical diagnostics"
+
+parser:
+consumes:
+- "PARSE domain"
+- "PARSE phase"
+produces:
+- "structured parse diagnostics"
+
+AST:
+consumes:
+- "source spans"
+- "AST identity"
+produces:
+- "AST diagnostics"
+
+type_system:
+consumes:
+- "TYPE domain"
+- "TYPE phase"
+produces:
+- "type diagnostics"
+
+effects:
+consumes:
+- "EFFECT domain"
+- "EFFECT phase"
+produces:
+- "effect diagnostics"
+
+resources:
+consumes:
+- "RESOURCE domain"
+- "resource requirement semantics"
+produces:
+- "resource diagnostics"
+
+capabilities:
+consumes:
+- "CAPABILITY domain"
+- "capability semantics"
+produces:
+- "capability diagnostics"
+
+policies:
+consumes:
+- "POLICY domain"
+- "policy semantics"
+produces:
+- "policy diagnostics"
+
+quantum:
+consumes:
+- "QUANTUM domain"
+- "QEC domain"
+produces:
+- "quantum diagnostics"
+
+hdl:
+consumes:
+- "HDL domain"
+produces:
+- "HDL diagnostics"
+
+classical:
+consumes:
+- "CLASSICAL domain"
+produces:
+- "classical diagnostics"
+
+ai:
+consumes:
+- "AI domain"
+produces:
+- "AI diagnostics"
+
+distributed:
+consumes:
+- "DISTRIBUTED domain"
+produces:
+- "distributed diagnostics"
+
+networking:
+consumes:
+- "NETWORK domain"
+produces:
+- "network diagnostics"
+
+hardware:
+consumes:
+- "HARDWARE domain"
+- "TARGET domain"
+produces:
+- "hardware/target diagnostics"
+
+compiler:
+consumes:
+- "all semantic diagnostics"
+produces:
+- "canonical diagnostic collection"
+
+LSP:
+consumes:
+- "canonical diagnostics"
+produces:
+- "LSP diagnostic representation"
+
+CLI:
+consumes:
+- "canonical diagnostics"
+produces:
+- "human-readable rendering"
+
+IR:
+consumes:
+- "semantic diagnostics"
+- "IR location model"
+produces:
+- "IR diagnostics"
+
+runtime:
+consumes:
+- "runtime diagnostic contract"
+produces:
+- "runtime diagnostics"
+
+=============================================================================
+
+62. DEPENDENCY CONTRACT
+
+=============================================================================
+
+dependencies:
+
+required_contracts:
+
+- "grammar/contracts/ownership.yaml"
+- "grammar/contracts/dependencies.yaml"
+- "grammar/contracts/ast-mappings.yaml"
+- "grammar/contracts/semantic-mappings.yaml"
+- "grammar/contracts/ir-mappings.yaml"
+- "grammar/spec/diagnostics.md"
+- "grammar/spec/source-spans.md"
+- "grammar/spec/source-map.md"
+- "grammar/validation/source-spans.md"
+- "grammar/lexer/diagnostics.md"
+- "grammar/DESIGN.md"
+
+implementation_dependencies:
+
+- "src/compiler/diagnostics.rs"
+- "src/error_reporting.rs"
+- "src/source_map.rs"
+- "src/frontend/ast/"
+- "src/quantum/frontend/core/diagnostics.rs"
+- "src/quantum/ir/validation/diagnostics.rs"
+
+dependency_rule: >
+This contract defines the diagnostic interface. Implementations consume
+it; they MUST NOT redefine its canonical semantics.
+
+=============================================================================
+
+63. CONFLICT RESOLUTION
+
+=============================================================================
+
+conflicts:
+
+authority_order:
+
+- "grammar/DESIGN.md"
+- "grammar/specification/"
+- "grammar/spec/"
+- "grammar/contracts/"
+- "grammar/implementation grammars"
+- "src/ implementation"
+
+rule: >
+If an implementation conflicts with this contract, the implementation
+MUST be corrected or explicitly marked non-conforming. It MUST NOT
+silently redefine the contract.
+
+historical_documents:
+rule: >
+Historical documentation MUST NOT override this contract.
+
+duplicate_contracts:
+rule: >
+Another file claiming independent canonical diagnostic ownership is an
+audit failure.
+
+=============================================================================
+
+64. VALIDATION RULES
+
+=============================================================================
+
+validation:
+
+machine_checks:
+
+code_format:
+  severity: "ERROR"
+
+code_uniqueness:
+  severity: "ERROR"
+
+known_domain:
+  severity: "ERROR"
+
+known_phase:
+  severity: "ERROR"
+
+valid_severity:
+  severity: "ERROR"
+
+source_span_order:
+  severity: "ERROR"
+
+no_invalid_span_conversion:
+  severity: "ERROR"
+
+deterministic_ordering:
+  severity: "ERROR"
+
+no_duplicate_semantic_identity:
+  severity: "ERROR"
+
+owner_exists:
+  severity: "ERROR"
+
+dependency_exists:
+  severity: "ERROR"
+
+no_circular_contract_dependency:
+  severity: "ERROR"
+
+no_forbidden_capacity_constants:
+  severity: "ERROR"
+
+no_competing_diagnostic_authority:
+  severity: "ERROR"
+
+stable_code_compatibility:
+  severity: "ERROR"
+
+Rust_unsafe_policy:
+  severity: "ERROR"
+
+diagnostics_contract_audit:
+required: true
+
+=============================================================================
+
+65. HARD-CODING AUDIT FOR THIS FILE
+
+=============================================================================
+
+hard_coding_audit_result:
+
+status: "PASS"
+
+language_level_capacity_constants: []
+
+universal_hardware_limits: []
+
+fixed_quantum_capacity: []
+
+fixed_processor_capacity: []
+
+fixed_device_capacity: []
+
+fixed_network_capacity: []
+
+fixed_tensor_capacity: []
+
+fixed_diagnostic_semantic_capacity: []
+
+operational_budget_values:
+none_declared: true
+rule: >
+Runtime/compiler/tooling budgets remain configuration rather than
+universal grammar semantics.
+
+=============================================================================
+
+66. POCO-REAF CONTRACT
+
+=============================================================================
+
+poco_reaf:
+
+name: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
+
+diagnostic_guarantees:
+
+source_portability:
+  requirement: >
+    Diagnostics MUST distinguish invalid source semantics from target
+    realization limitations.
+
+semantic_portability:
+  requirement: >
+    The same source semantic condition MUST retain the same canonical
+    diagnostic identity across compatible targets.
+
+target_portability:
+  requirement: >
+    Target-specific failures MUST be classified as target/resource/
+    capability/realization conditions when appropriate.
+
+scaling:
+  requirement: >
+    Diagnostics MUST remain valid as the program scales to different
+    resource sizes without changing diagnostic semantics.
+
+future_targets:
+  requirement: >
+    Adding a future target MUST NOT require changing existing universal
+    diagnostic meanings merely because the target is new.
+
+future_domains:
+  requirement: >
+    New domains MAY register diagnostics through the common contract
+    without creating a separate diagnostic universe.
+
+forbidden:
+
+- "target-specific source error masquerading as universal syntax error"
+- "resource shortage reported as malformed syntax"
+- "capability absence reported as invalid grammar"
+- "vendor error replacing canonical Zamani identity"
+- "fixed machine capacity encoded into diagnostic semantics"
+- "fixed diagnostic count encoded into language semantics"
+
+=============================================================================
+
+67. FREEZE CONTRACT
+
+=============================================================================
+
+freeze:
+
+file_status:
+target: "STABLE"
+
+prerequisites:
+
+specification:
+  - "grammar/spec/diagnostics.md is consistent"
+  - "grammar/spec/source-spans.md is consistent"
+  - "grammar/spec/source-map.md is consistent"
+
+ownership:
+  - "diagnostic ownership is unique"
+
+dependencies:
+  - "all dependencies resolve"
+
+implementation:
+  - "src/compiler/diagnostics.rs maps required fields"
+  - "src/error_reporting.rs preserves canonical identity"
+  - "LSP preserves canonical identity"
+  - "quantum IR diagnostics remain source-map independent"
+
+tests:
+  - "diagnostic contract tests pass"
+  - "determinism tests pass"
+  - "hard-coding audit passes"
+  - "compatibility tests pass"
+  - "safe-Rust audit passes"
+
+no_downstream_reedit_rule: >
+Once this contract is frozen, downstream implementation files MUST adapt
+through the declared diagnostic interface rather than requiring this
+contract to be semantically rewritten for every new compiler pass,
+hardware target, quantum operation, dialect, or backend.
+
+freeze_definition: >
+The file is frozen when its schema, ownership, domains, phases, severity
+model, identity rules, location model, compatibility rules, scalability
+rules and integration boundaries are stable and all implementation
+mappings are dependency-closed.
+
+=============================================================================
+
+68. COMPLETION CRITERIA
+
+=============================================================================
+
+completion:
+
+file_local:
+
+- "[x] canonical diagnostic contract defined"
+- "[x] authority model defined"
+- "[x] ownership defined"
+- "[x] domains defined"
+- "[x] phases defined"
+- "[x] severity defined"
+- "[x] stable identity defined"
+- "[x] source-location contract defined"
+- "[x] related-location contract defined"
+- "[x] semantic identity defined"
+- "[x] deterministic ordering defined"
+- "[x] deduplication contract defined"
+- "[x] operational budget separation defined"
+- "[x] resource diagnostics defined"
+- "[x] capability diagnostics defined"
+- "[x] target diagnostics defined"
+- "[x] quantum diagnostics defined"
+- "[x] HDL diagnostics defined"
+- "[x] IR diagnostics defined"
+- "[x] internal diagnostics defined"
+- "[x] provenance integration defined"
+- "[x] compatibility contract defined"
+- "[x] LSP integration defined"
+- "[x] Rust 1.97+ contract defined"
+- "[x] safe-Rust contract defined"
+- "[x] POCO-REAF contract defined"
+- "[x] scalability contract defined"
+- "[x] hard-coding audit defined"
+- "[x] test contract defined"
+- "[x] freeze contract defined"
+
+repository_level:
+
+- "[ ] diagnostic code registry exists and is validated"
+- "[ ] src/compiler/diagnostics.rs carries domain and phase"
+- "[ ] diagnostic fingerprints include structured identity"
+- "[ ] related locations are supported"
+- "[ ] machine-readable structured data is supported"
+- "[ ] canonical diagnostic adapters exist for frontend/semantic/IR"
+- "[ ] LSP maps canonical diagnostics"
+- "[ ] quantum IR remains frontend-independent"
+- "[ ] repository-wide diagnostic code collision validation passes"
+- "[ ] repository-wide hard-coding audit passes"
+- "[ ] deterministic diagnostic tests pass"
+- "[ ] compatibility tests pass"
+- "[ ] safe-Rust audit passes"
+
+stable_gate:
+condition: >
+All repository-level requirements must pass before the diagnostic
+subsystem is marked STABLE.
+
+=============================================================================
+
+69. REQUIRED FUTURE FILE INTEGRATION
+
+=============================================================================
+
+future_files:
+
+recommended:
+
+diagnostic_codes:
+  path: "grammar/contracts/diagnostic-codes.yaml"
+  role: >
+    Exhaustive machine-readable registry of individual diagnostic codes.
+  depends_on:
+    - "grammar/contracts/diagnostics.yaml"
+  consumed_by:
+    - "grammar/validation/"
+    - "src/compiler/diagnostics.rs"
+    - "tests"
+
+diagnostic_schemas:
+  path: "grammar/contracts/diagnostic-schema.yaml"
+  role: >
+    Serialization schema for CLI/LSP/JSON/machine consumers.
+  depends_on:
+    - "grammar/contracts/diagnostics.yaml"
+
+rule: >
+These future files extend the contract. They MUST NOT redefine the
+diagnostic architecture established here.
+
+=============================================================================
+
+70. FINAL ARCHITECTURAL INVARIANTS
+
+=============================================================================
+
+invariants:
+
+- id: "DIAG-001"
+  rule: >
+  Every externally observable diagnostic has a stable canonical identity.
+
+- id: "DIAG-002"
+  rule: >
+  Diagnostic meaning is independent of human-readable wording.
+
+- id: "DIAG-003"
+  rule: >
+  Diagnostic phase identifies where the condition was detected.
+
+- id: "DIAG-004"
+  rule: >
+  Diagnostic domain identifies which semantic subsystem owns the condition.
+
+- id: "DIAG-005"
+  rule: >
+  Source locations use source identity plus canonical byte offsets.
+
+- id: "DIAG-006"
+  rule: >
+  Line and column are presentation data derived from canonical source
+  positions.
+
+- id: "DIAG-007"
+  rule: >
+  Resource infeasibility is distinct from syntax invalidity.
+
+- id: "DIAG-008"
+  rule: >
+  Capability absence is distinct from syntax invalidity.
+
+- id: "DIAG-009"
+  rule: >
+  Target incompatibility is distinct from source semantic invalidity.
+
+- id: "DIAG-010"
+  rule: >
+  Fallback behavior must be explicit and policy-authorized.
+
+- id: "DIAG-011"
+  rule: >
+  Diagnostics are deterministic for equivalent compilation environments.
+
+- id: "DIAG-012"
+  rule: >
+  Operational diagnostic budgets are not language-level capacity limits.
+
+- id: "DIAG-013"
+  rule: >
+  No universal hardware capacity is encoded into diagnostic semantics.
+
+- id: "DIAG-014"
+  rule: >
+  New domains and targets extend the diagnostic registry rather than
+  replacing the diagnostic architecture.
+
+- id: "DIAG-015"
+  rule: >
+  Quantum diagnostics converge through the canonical quantum::ir boundary.
+
+- id: "DIAG-016"
+  rule: >
+  Rendering is separate from diagnostic data.
+
+- id: "DIAG-017"
+  rule: >
+  LSP, CLI, compiler library and machine-readable diagnostics share
+  canonical identity.
+
+- id: "DIAG-018"
+  rule: >
+  Internal compiler failures are not falsely reported as user syntax
+  errors.
+
+- id: "DIAG-019"
+  rule: >
+  Production Rust integration uses Rust 1.97 or later and safe Rust only.
+
+- id: "DIAG-020"
+  rule: >
+  A frozen diagnostic contract does not require semantic modification
+  merely because a new target, backend, dialect, operation or computational
+  domain is introduced.
+
+- id: "DIAG-021"
+  rule: >
+  Diagnostic semantics remain valid from the smallest feasible computation
+  to arbitrarily larger feasible computations as available resources grow.
+
+- id: "DIAG-022"
+  rule: >
+  Long-term compatibility is based on stable codes, versioned contracts,
+  structured fields and explicit migration rules.
+
+- id: "DIAG-023"
+  rule: >
+  Diagnostic provenance may explain a decision without becoming a second
+  diagnostic identity system.
+
+- id: "DIAG-024"
+  rule: >
+  A diagnostic contract is complete only when syntax, AST, semantics, IR,
+  compiler, tooling, target and runtime consumers can map to it without
+  inventing competing meanings.
+
+=============================================================================
+
+END OF FILE
+
+=============================================================================
