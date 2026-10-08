@@ -1,0 +1,3575 @@
+# =============================================================================
+# Zamani Programming Language
+# =============================================================================
+#
+# FILE
+#   grammar/contracts/exports.yaml
+#
+# PURPOSE
+#   Canonical machine-checkable export contract for grammar/.
+#
+# ROLE
+#   This file defines:
+#
+#     1. what a grammar unit is allowed to export;
+#     2. which symbols are public;
+#     3. which grammar unit owns each public export;
+#     4. who may consume each export;
+#     5. the AST integration boundary;
+#     6. the semantic integration boundary;
+#     7. the canonical IR integration boundary;
+#     8. diagnostic ownership;
+#     9. compatibility requirements;
+#    10. portability and POCO-REAF requirements;
+#    11. scalability requirements;
+#    12. hard-coding prohibitions;
+#    13. freeze requirements.
+#
+# AUTHORITY
+#   grammar/specification/
+#   grammar/spec/
+#   grammar/contracts/ownership.yaml
+#   grammar/contracts/dependencies.yaml
+#
+# RELATIONSHIP TO OTHER MACHINE CONTRACTS
+#
+#   ownership.yaml
+#       |
+#       +---- establishes canonical symbol ownership
+#       |
+#       v
+#   dependencies.yaml
+#       |
+#       +---- establishes legal dependency direction
+#       |
+#       v
+#   exports.yaml
+#       |
+#       +---- establishes exported interfaces and consumers
+#       |
+#       +---- establishes AST/semantic/IR integration requirements
+#       |
+#       v
+#   ast-mappings.yaml
+#   semantic-mappings.yaml
+#   ir-mappings.yaml
+#
+# IMPORTANT
+#
+#   This file does not define grammar productions.
+#
+#   This file does not define:
+#
+#     - token spellings;
+#     - AST Rust structures;
+#     - semantic algorithms;
+#     - compiler algorithms;
+#     - optimizer algorithms;
+#     - routing algorithms;
+#     - scheduler algorithms;
+#     - hardware discovery;
+#     - target selection;
+#     - runtime implementation;
+#     - vendor-specific machine instructions.
+#
+#   It defines the interfaces between those independently owned layers.
+#
+# LANGUAGE
+#   Zamani
+#
+# RUST
+#   edition: 2021
+#   minimum: 1.97
+#   unsafe: forbidden
+#
+# SCALABILITY
+#   Open-world and resource-bounded.
+#
+# POCO-REAF
+#   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+#
+# INTERPRETATION OF "INFINITY"
+#
+#   "Infinity" means that the language architecture introduces no artificial
+#   finite universal ceiling on machine scale, resource count, resource size,
+#   topology size, tensor dimensions, qubit count, device count, or similar
+#   physical capacity.
+#
+#   Every actual compilation and execution remains finite and is constrained
+#   by available resources, target capabilities, implementation limits,
+#   physical reality, explicit program constraints, and declared policies.
+#
+# =============================================================================
+
+schema:
+  version: "1.0"
+  kind: "zamani-grammar-export-contract"
+  format: "YAML"
+  status: "NORMATIVE"
+  canonical_file: "grammar/contracts/exports.yaml"
+
+repository:
+  name: "Benwellonedge28/Zamani"
+  root: "grammar/"
+  language: "Zamani"
+
+language_runtime_contract:
+  rust:
+    edition: "2021"
+    minimum_version: "1.97"
+    safe_only: true
+    unsafe_allowed: false
+
+  implementation_rule: >
+    Grammar exports MUST NOT require unsafe Rust. Generated or handwritten
+    Rust consuming these contracts MUST remain implementable using safe Rust.
+
+# =============================================================================
+# 1. CONTRACT AUTHORITY
+# =============================================================================
+
+authority:
+
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "normative grammar architecture"
+
+  language_specification:
+    path: "grammar/specification/"
+    role: "normative language meaning"
+
+  machine_specification:
+    path: "grammar/spec/"
+    role: "machine-oriented language contracts"
+
+  ownership:
+    path: "grammar/contracts/ownership.yaml"
+    role: "canonical ownership authority"
+
+  dependencies:
+    path: "grammar/contracts/dependencies.yaml"
+    role: "canonical dependency authority"
+
+  exports:
+    path: "grammar/contracts/exports.yaml"
+    role: "canonical export/interface authority"
+
+  ast_mappings:
+    path: "grammar/contracts/ast-mappings.yaml"
+    role: "AST integration authority"
+
+  semantic_mappings:
+    path: "grammar/contracts/semantic-mappings.yaml"
+    role: "semantic integration authority"
+
+  ir_mappings:
+    path: "grammar/contracts/ir-mappings.yaml"
+    role: "canonical IR integration authority"
+
+  diagnostics:
+    path: "grammar/contracts/diagnostics.yaml"
+    role: "diagnostic integration authority"
+
+  compatibility:
+    path: "grammar/contracts/compatibility.yaml"
+    role: "compatibility integration authority"
+
+  feature_status:
+    path: "grammar/contracts/feature-status.yaml"
+    role: "feature lifecycle authority"
+
+  inventory:
+    path: "grammar/MANIFEST.yaml"
+    role: "repository inventory"
+
+  ownership_index:
+    path: "grammar/OWNERSHIP.yaml"
+    role: "repository ownership index"
+
+  dependency_index:
+    path: "grammar/DEPENDENCIES.yaml"
+    role: "compatibility/dependency index"
+
+  status:
+    path: "grammar/STATUS.yaml"
+    role: "repository lifecycle status"
+
+  freeze:
+    path: "grammar/FREEZE.md"
+    role: "freeze procedure"
+
+  conformance:
+    path: "grammar/CONFORMANCE.md"
+    role: "production conformance contract"
+
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    normative: false
+    role: "historical and extended reference only"
+
+  implementation_reference:
+    path: "grammar/grammar.md"
+    normative: false
+    role: "derived implementation/conformance reference"
+
+# =============================================================================
+# 2. EXPORT PRINCIPLES
+# =============================================================================
+
+principles:
+
+  one_owner:
+    severity: "error"
+    rule: >
+      Every public export MUST have exactly one canonical owner.
+
+  one_identity:
+    severity: "error"
+    rule: >
+      One semantic concept MUST NOT be exported under multiple competing
+      canonical identities unless an explicit compatibility alias is declared.
+
+  explicit_export:
+    severity: "error"
+    rule: >
+      A grammar rule is not public merely because another grammar happens to
+      import it. Public status MUST be explicitly declared.
+
+  explicit_consumer:
+    severity: "error"
+    rule: >
+      Every public export MUST declare its legal consumers.
+
+  no_hidden_exports:
+    severity: "error"
+    rule: >
+      A grammar file MUST NOT expose undocumented public rules through import
+      side effects or parser reachability alone.
+
+  composition_is_not_ownership:
+    severity: "error"
+    rule: >
+      Composition roots and dispatchers consume exports but MUST NOT acquire
+      ownership of the concepts they dispatch.
+
+  facade_is_not_duplication:
+    severity: "error"
+    rule: >
+      A facade may re-export an existing canonical symbol but MUST NOT create
+      a competing definition.
+
+  stable_boundary:
+    severity: "error"
+    rule: >
+      A frozen export MUST expose a stable contract that allows downstream
+      implementations to evolve without requiring upstream semantic changes.
+
+  no_backend_export:
+    severity: "error"
+    rule: >
+      Grammar exports MUST describe source-language meaning or source-language
+      interfaces. Vendor machine instructions and backend implementation
+      objects MUST NOT become grammar exports.
+
+  no_runtime_export:
+    severity: "error"
+    rule: >
+      Grammar MUST NOT export live runtime state, physical device instances,
+      mutable hardware inventory, calibration state, or runtime telemetry.
+
+  deterministic:
+    severity: "error"
+    rule: >
+      Export resolution MUST be deterministic and independent of filesystem
+      ordering, target availability, wall-clock time, randomness, or runtime
+      state.
+
+# =============================================================================
+# 3. EXPORT KINDS
+# =============================================================================
+
+export_kinds:
+
+  grammar_rule:
+    description: "Public parser or lexer rule."
+
+  parser_entry:
+    description: "Stable parser entry point."
+
+  lexer_token:
+    description: "Canonical lexical token exported through the lexer boundary."
+
+  grammar_fragment:
+    description: "Internal lexical/parser fragment explicitly reusable by consumers."
+
+  type_constructor:
+    description: "Source-level type constructor."
+
+  expression_constructor:
+    description: "Source-level expression form."
+
+  statement_constructor:
+    description: "Source-level statement form."
+
+  declaration_constructor:
+    description: "Source-level declaration form."
+
+  effect_constructor:
+    description: "Source-level effect declaration/reference."
+
+  resource_constructor:
+    description: "Source-level resource requirement or resource expression."
+
+  capability_constructor:
+    description: "Source-level capability declaration/reference."
+
+  policy_constructor:
+    description: "Source-level policy expression."
+
+  contract_constructor:
+    description: "Source-level contract expression."
+
+  provenance_constructor:
+    description: "Source-level provenance/evidence construct."
+
+  domain_constructor:
+    description: "Domain-specific source construct integrated into common semantics."
+
+  dialect_boundary:
+    description: "Explicit extension/interoperability boundary."
+
+  compatibility_alias:
+    description: "Versioned compatibility alias for an existing canonical export."
+
+  composition_root:
+    description: "Grammar composition boundary."
+
+# =============================================================================
+# 4. VISIBILITY LEVELS
+# =============================================================================
+
+visibility:
+
+  public:
+    meaning: >
+      May be consumed by any legal grammar layer or parser composition
+      boundary specified by this contract.
+
+  domain_public:
+    meaning: >
+      May be consumed by the owning domain and explicitly declared
+      cross-domain consumers.
+
+  internal:
+    meaning: >
+      May only be consumed within the owning grammar subsystem.
+
+  compatibility_only:
+    meaning: >
+      Exists only to preserve a declared compatibility surface.
+
+  generated:
+    meaning: >
+      Generated from authoritative source data and MUST NOT become an
+      independent authority.
+
+# =============================================================================
+# 5. REQUIRED EXPORT RECORD
+# =============================================================================
+
+export_record_schema:
+
+  required:
+    - "id"
+    - "symbol"
+    - "kind"
+    - "owner"
+    - "visibility"
+    - "status"
+    - "purpose"
+    - "consumers"
+    - "dependencies"
+    - "ast"
+    - "semantic"
+    - "ir"
+    - "diagnostics"
+    - "compatibility"
+    - "scalability"
+    - "poco_reaf"
+    - "hard_coding"
+    - "freeze"
+
+  fields:
+
+    id:
+      type: "string"
+      rule: "Globally unique within grammar/."
+
+    symbol:
+      type: "string"
+      rule: "Canonical source/grammar symbol."
+
+    kind:
+      type: "enum"
+      values:
+        - "grammar_rule"
+        - "parser_entry"
+        - "lexer_token"
+        - "grammar_fragment"
+        - "type_constructor"
+        - "expression_constructor"
+        - "statement_constructor"
+        - "declaration_constructor"
+        - "effect_constructor"
+        - "resource_constructor"
+        - "capability_constructor"
+        - "policy_constructor"
+        - "contract_constructor"
+        - "provenance_constructor"
+        - "domain_constructor"
+        - "dialect_boundary"
+        - "compatibility_alias"
+        - "composition_root"
+
+    owner:
+      type: "repository_path"
+      rule: >
+        MUST identify exactly one canonical owning grammar file or explicitly
+        authorized specification registry.
+
+    visibility:
+      type: "enum"
+      values:
+        - "public"
+        - "domain_public"
+        - "internal"
+        - "compatibility_only"
+        - "generated"
+
+    status:
+      type: "lifecycle"
+
+    purpose:
+      type: "string"
+
+    consumers:
+      type: "list[path_or_symbol]"
+
+    dependencies:
+      type: "list[path_or_symbol]"
+
+    ast:
+      required_fields:
+        - "required"
+        - "owner"
+        - "mapping"
+        - "source_span"
+
+    semantic:
+      required_fields:
+        - "required"
+        - "owner"
+        - "mapping"
+
+    ir:
+      required_fields:
+        - "required"
+        - "mapping"
+        - "canonical_boundary"
+
+    diagnostics:
+      required_fields:
+        - "required"
+        - "owner"
+        - "identity"
+
+    compatibility:
+      required_fields:
+        - "versioned"
+        - "stability"
+        - "migration"
+
+    scalability:
+      required_fields:
+        - "symbolic_scale"
+        - "finite_capacity_free"
+        - "resource_behavior"
+
+    poco_reaf:
+      required_fields:
+        - "portable_meaning"
+        - "target_independence"
+        - "realization_behavior"
+
+    hard_coding:
+      required_fields:
+        - "forbidden_capacity_constants"
+        - "target_specific_values"
+        - "audit"
+
+    freeze:
+      required_fields:
+        - "required_checks"
+        - "blocking_conditions"
+
+# =============================================================================
+# 6. CANONICAL PUBLIC COMPOSITION EXPORTS
+# =============================================================================
+
+canonical_composition_exports:
+
+  - id: "root.program"
+    symbol: "program"
+    kind: "parser_entry"
+    owner: "grammar/Zamani.g4"
+    visibility: "public"
+    status: "SPECIFIED"
+    purpose: >
+      Parse one complete Zamani source unit and require complete input
+      consumption.
+    consumers:
+      - "src/parser.rs"
+      - "grammar/conformance/syntax/"
+      - "grammar/golden/parser/"
+    dependencies:
+      - "grammar/antlr/ZamaniParser.g4::sourceUnit"
+      - "grammar/antlr/ZamaniLexer.g4"
+    ast:
+      required: true
+      owner: "src/ast/mod.rs"
+      mapping: "Program"
+      source_span: true
+    semantic:
+      required: true
+      owner: "semantic implementation"
+      mapping: "program semantic model"
+    ir:
+      required: false
+      mapping: "delegates to contained semantic constructs"
+      canonical_boundary: "domain semantic models"
+    diagnostics:
+      required: true
+      owner: "src/parser.rs / diagnostic implementation"
+      identity: "program-parse"
+    compatibility:
+      versioned: true
+      stability: "language-versioned"
+      migration: "grammar/compatibility/"
+    scalability:
+      symbolic_scale: true
+      finite_capacity_free: true
+      resource_behavior: "source size constrained only by implementation resources"
+    poco_reaf:
+      portable_meaning: true
+      target_independence: true
+      realization_behavior: "downstream target realization"
+    hard_coding:
+      forbidden_capacity_constants: true
+      target_specific_values: true
+      audit: "grammar/validation/hard-coding.md"
+    freeze:
+      required_checks:
+        - "parser generation"
+        - "complete-input enforcement"
+        - "AST mapping"
+        - "diagnostic mapping"
+        - "compatibility validation"
+      blocking_conditions:
+        - "domain-specific implementation in root"
+        - "hardware dependency"
+        - "duplicate program root"
+
+  - id: "parser.sourceUnit"
+    symbol: "sourceUnit"
+    kind: "parser_entry"
+    owner: "grammar/antlr/ZamaniParser.g4"
+    visibility: "public"
+    status: "SPECIFIED"
+    purpose: "Canonical parser composition unit."
+    consumers:
+      - "grammar/Zamani.g4::program"
+      - "src/parser.rs"
+    dependencies:
+      - "core"
+      - "declarations"
+      - "statements"
+      - "modules"
+      - "functions"
+      - "domain dispatchers"
+    ast:
+      required: true
+      owner: "src/ast/mod.rs"
+      mapping: "Program / Statement collection"
+      source_span: true
+    semantic:
+      required: true
+      owner: "semantic implementation"
+      mapping: "source-unit semantic model"
+    ir:
+      required: false
+      mapping: "contained constructs"
+      canonical_boundary: "domain canonical IR"
+    diagnostics:
+      required: true
+      owner: "parser diagnostics"
+      identity: "source-unit-parse"
+    compatibility:
+      versioned: true
+      stability: "language-versioned"
+      migration: "grammar/compatibility/"
+    scalability:
+      symbolic_scale: true
+      finite_capacity_free: true
+      resource_behavior: "implementation-resource bounded"
+    poco_reaf:
+      portable_meaning: true
+      target_independence: true
+      realization_behavior: "downstream"
+    hard_coding:
+      forbidden_capacity_constants: true
+      target_specific_values: true
+      audit: "grammar/validation/hard-coding.md"
+    freeze:
+      required_checks:
+        - "dispatch completeness"
+        - "no duplicate item ownership"
+        - "AST coverage"
+        - "parser diagnostics"
+      blocking_conditions:
+        - "missing domain dispatcher"
+        - "duplicate source-unit root"
+
+# =============================================================================
+# 7. LEXICAL EXPORT BOUNDARY
+# =============================================================================
+
+lexical_exports:
+
+  public_boundary:
+    symbol: "ZamaniLexer"
+    owner: "grammar/antlr/ZamaniLexer.g4"
+    consumers:
+      - "grammar/antlr/ZamaniParser.g4"
+      - "grammar/Zamani.g4"
+      - "src/lexer.rs"
+    rule: >
+      ZamaniLexer.g4 is the single public lexer boundary. It MUST NOT redefine
+      individual tokens owned by grammar/lexer/.
+
+  canonical_lexical_composition:
+    owner: "grammar/lexer/lexer.g4"
+    consumers:
+      - "grammar/antlr/ZamaniLexer.g4"
+
+  token_authority:
+    owner: "grammar/lexer/tokens.g4"
+    rule: >
+      Individual token identities MUST be owned by the canonical token
+      registry and lexical component hierarchy.
+
+  token_export_requirements:
+    every_token:
+      requires:
+        - "unique token identity"
+        - "canonical spelling or lexical definition"
+        - "category"
+        - "owner"
+        - "compatibility identity"
+        - "test coverage"
+      forbids:
+        - "duplicate canonical token"
+        - "hardware-specific token"
+        - "vendor-device token"
+        - "finite-capacity token"
+
+  lexical_ast_boundary:
+    required: false
+    rule: >
+      Lexical exports do not directly construct AST nodes. They contribute
+      token information consumed by the parser.
+
+  lexical_semantic_boundary:
+    required: false
+    rule: >
+      Tokens do not encode domain semantic decisions.
+
+  lexical_ir_boundary:
+    required: false
+    rule: >
+      Tokens never directly construct or select an IR.
+
+# =============================================================================
+# 8. CORE EXPORTS
+# =============================================================================
+
+core_exports:
+
+  namespace:
+    owner: "grammar/core/"
+    public_concepts:
+      - "program"
+      - "sourceUnit"
+      - "item"
+      - "identifier"
+      - "qualifiedName"
+      - "path"
+      - "visibility"
+      - "attribute"
+      - "modifier"
+      - "capabilityReference"
+      - "requirement"
+      - "constraint"
+      - "preference"
+      - "hint"
+
+  ownership_rule: >
+    Core exports provide domain-neutral language foundations. They MUST NOT
+    encode domain-specific hardware realization.
+
+  required_integration:
+    ast_owner: "src/ast/mod.rs"
+    semantic_owner: "semantic implementation"
+    ir_owner: "canonical domain IR implementations"
+
+  target_independence: true
+
+# =============================================================================
+# 9. MODULE EXPORTS
+# =============================================================================
+
+module_exports:
+
+  owner: "grammar/modules/"
+
+  canonical_exports:
+    - "module"
+    - "modulePath"
+    - "import"
+    - "use"
+    - "export"
+    - "reexport"
+    - "namespace"
+    - "moduleAlias"
+
+  rules:
+    - >
+      Modules MUST expose stable names and dependency boundaries without
+      depending on physical deployment topology.
+    - >
+      A module path MUST NOT imply a physical machine, node, device, or
+      vendor.
+
+  ast:
+    owner: "src/ast/mod.rs"
+    required: true
+
+  semantic:
+    owner: "semantic module system"
+    required: true
+
+  ir:
+    required: true
+    mapping: "module identity and resolved symbol references"
+    canonical_boundary: "canonical domain IR"
+
+# =============================================================================
+# 10. DECLARATION EXPORTS
+# =============================================================================
+
+declaration_exports:
+
+  owner: "grammar/declarations/"
+
+  canonical_families:
+    - "variableDeclaration"
+    - "constantDeclaration"
+    - "functionDeclaration"
+    - "typeDeclaration"
+    - "structDeclaration"
+    - "enumDeclaration"
+    - "traitDeclaration"
+    - "interfaceDeclaration"
+    - "implementationDeclaration"
+    - "typeAliasDeclaration"
+    - "classDeclaration"
+    - "effectDeclaration"
+    - "moduleDeclaration"
+    - "attributeDeclaration"
+
+  rule:
+    one_symbol_one_owner: true
+    semantic_meaning: "domain-neutral"
+
+  ast:
+    owner: "src/ast/mod.rs"
+    required: true
+    current_mapping_policy: >
+      Existing AST variants may be consumed where semantically equivalent.
+      Missing production representations MUST be added through the AST
+      contract before the corresponding grammar export is marked STABLE.
+
+  semantic:
+    required: true
+    owner: "semantic declaration/type/function implementation"
+
+  ir:
+    required: true
+    mapping: "resolved declarations and definitions"
+    canonical_boundary: "domain-specific canonical IR"
+
+# =============================================================================
+# 11. TYPE EXPORTS
+# =============================================================================
+
+type_exports:
+
+  owner: "grammar/types/"
+
+  canonical_families:
+
+    primitive:
+      exports:
+        - "primitiveType"
+        - "booleanType"
+        - "characterType"
+        - "integerType"
+        - "unsignedIntegerType"
+        - "floatingType"
+        - "stringType"
+        - "unitType"
+        - "neverType"
+
+    structural:
+      exports:
+        - "tupleType"
+        - "arrayType"
+        - "sliceType"
+        - "mapType"
+        - "recordType"
+        - "unionType"
+        - "sumType"
+
+    callable:
+      exports:
+        - "functionType"
+        - "closureType"
+        - "lambdaType"
+
+    generic:
+      exports:
+        - "genericType"
+        - "typeParameter"
+        - "typeBound"
+        - "typeConstraint"
+        - "associatedType"
+        - "higherKindedType"
+
+    ownership:
+      exports:
+        - "referenceType"
+        - "pointerType"
+        - "linearType"
+        - "affineType"
+        - "lifetime"
+
+    advanced:
+      exports:
+        - "optionalType"
+        - "resultType"
+        - "dependentType"
+        - "refinementType"
+        - "temporalType"
+        - "identityType"
+
+    domain:
+      exports:
+        - "quantumType"
+        - "resourceType"
+        - "hardwareCapabilityType"
+
+  integration:
+
+    ast:
+      owner: "src/ast/mod.rs"
+      canonical_boundary: "TypeExpr"
+      required: true
+
+    semantic:
+      owner: "semantic type system"
+      required: true
+
+    ir:
+      required: true
+      mapping: "resolved canonical type representation"
+      canonical_boundary: "domain canonical IR"
+
+  scalability:
+    rule: >
+      Type constructors MUST support symbolic, generic, runtime, or otherwise
+      semantically constrained dimensions where applicable.
+
+    forbidden:
+      - "universal maximum array length"
+      - "universal maximum tensor rank"
+      - "universal maximum type nesting depth"
+      - "target register width as type-system limit"
+
+  implementation_constraint:
+    rule: >
+      Rust implementation details such as i8, i16, i32, i64, i128, f32, and
+      f64 MUST NOT be interpreted as universal limits of the Zamani language.
+      They are implementation representations unless the source language
+      explicitly defines them as source-level types.
+
+# =============================================================================
+# 12. MEMORY EXPORTS
+# =============================================================================
+
+memory_exports:
+
+  owner: "grammar/memory/"
+
+  canonical_families:
+    - "ownership"
+    - "borrow"
+    - "reference"
+    - "lifetime"
+    - "allocation"
+    - "deallocation"
+    - "region"
+    - "addressSpace"
+    - "sharedMemory"
+    - "distributedMemory"
+    - "acceleratorMemory"
+    - "persistentMemory"
+    - "temporalMemory"
+
+  integration:
+    ast:
+      owner: "src/ast/mod.rs"
+      required: true
+
+    semantic:
+      owner: "memory/ownership semantic implementation"
+      required: true
+
+    ir:
+      required: true
+      mapping: "memory intent and ownership constraints"
+      canonical_boundary: "canonical domain IR"
+
+  forbidden:
+    - "physical RAM size as language constant"
+    - "physical VRAM size as language constant"
+    - "fixed address-space capacity"
+    - "fixed number of memory regions"
+
+# =============================================================================
+# 13. EXPRESSION EXPORTS
+# =============================================================================
+
+expression_exports:
+
+  owner: "grammar/expressions/"
+
+  canonical_expression_algebra:
+
+    atomic:
+      - "identifierExpression"
+      - "literalExpression"
+      - "pathExpression"
+
+    operators:
+      - "prefixExpression"
+      - "infixExpression"
+      - "assignmentExpression"
+      - "compoundAssignmentExpression"
+
+    control:
+      - "ifExpression"
+      - "matchExpression"
+      - "blockExpression"
+      - "loopExpression"
+
+    callable:
+      - "callExpression"
+      - "lambdaExpression"
+      - "closureExpression"
+      - "methodCallExpression"
+
+    data:
+      - "arrayExpression"
+      - "tupleExpression"
+      - "recordExpression"
+      - "indexExpression"
+      - "rangeExpression"
+
+    access:
+      - "memberAccessExpression"
+
+    type:
+      - "castExpression"
+      - "typeAscriptionExpression"
+
+    asynchronous:
+      - "awaitExpression"
+      - "asyncExpression"
+      - "spawnExpression"
+
+    error:
+      - "tryExpression"
+      - "tryCatchExpression"
+
+    extension:
+      - "macroExpression"
+      - "queryExpression"
+      - "reasoningExpression"
+      - "uncertaintyExpression"
+      - "evidenceExpression"
+      - "policyExpression"
+
+    domain:
+      - "quantumExpression"
+      - "simulationExpression"
+
+  duplicate_concept_policy:
+    rule: >
+      Concepts with competing filenames or rule identities MUST resolve to one
+      canonical export. Examples include singular/plural duplicate naming such
+      as closure/closures and lambda/lambdas. A compatibility alias may exist,
+      but two canonical owners are forbidden.
+
+  ast:
+    owner: "src/ast/mod.rs"
+    required: true
+    canonical_boundary: "Expression"
+
+  semantic:
+    required: true
+    owner: "semantic expression implementation"
+
+  ir:
+    required: true
+    mapping: "resolved expression semantics"
+    canonical_boundary: "domain canonical IR"
+
+# =============================================================================
+# 14. FUNCTION EXPORTS
+# =============================================================================
+
+function_exports:
+
+  owner: "grammar/functions/"
+
+  canonical_families:
+    - "function"
+    - "parameter"
+    - "returnType"
+    - "genericFunction"
+    - "functionConstraint"
+    - "closure"
+    - "lambda"
+    - "asyncFunction"
+    - "foreignFunction"
+    - "compileTimeFunction"
+    - "generator"
+    - "callingConvention"
+    - "functionContract"
+
+  semantic_requirements:
+    - "type checking"
+    - "effect checking"
+    - "capability checking"
+    - "resource checking"
+    - "contract checking"
+    - "policy checking"
+
+  ast:
+    owner: "src/ast/mod.rs"
+    required: true
+
+  semantic:
+    owner: "semantic function/type implementation"
+    required: true
+
+  ir:
+    required: true
+    mapping: "callable semantic representation"
+    canonical_boundary: "canonical domain IR"
+
+# =============================================================================
+# 15. STATEMENT EXPORTS
+# =============================================================================
+
+statement_exports:
+
+  owner: "grammar/statements/"
+
+  canonical_families:
+
+    binding:
+      - "letStatement"
+      - "constStatement"
+
+    control:
+      - "returnStatement"
+      - "breakStatement"
+      - "continueStatement"
+      - "whileStatement"
+      - "forStatement"
+      - "matchStatement"
+
+    contracts:
+      - "assertStatement"
+      - "retractStatement"
+      - "requiresStatement"
+      - "ensuresStatement"
+      - "invariantStatement"
+      - "assumeStatement"
+      - "guaranteeStatement"
+      - "propertyStatement"
+
+    reasoning:
+      - "inferStatement"
+      - "deduceStatement"
+      - "reasonStatement"
+
+    learning:
+      - "learnStatement"
+
+    adaptation:
+      - "adaptStatement"
+
+    query:
+      - "queryStatement"
+
+    explanation:
+      - "explainStatement"
+
+    simulation:
+      - "simulateStatement"
+
+    policy:
+      - "policyStatement"
+
+    sandbox:
+      - "sandboxStatement"
+
+    domain:
+      - "quantumStatement"
+      - "hdlStatement"
+      - "distributedStatement"
+      - "networkStatement"
+
+  adaptation_rule:
+    export: "adaptStatement"
+    requires:
+      - "policy"
+      - "capability"
+      - "effect"
+      - "resource"
+      - "authorization"
+      - "provenance"
+    forbids:
+      - "unrestricted self-modifying code"
+      - "silent semantic mutation"
+      - "unauthorized code generation"
+
+  ast:
+    owner: "src/ast/mod.rs"
+    required: true
+    rule: >
+      Existing Statement variants may be used only when their semantics match
+      the canonical source construct. A grammar export MUST NOT be marked
+      STABLE merely because parsing succeeds.
+
+  semantic:
+    required: true
+    owner: "semantic statement implementation"
+
+  ir:
+    required: true
+    mapping: "validated statement semantics"
+    canonical_boundary: "canonical domain IR"
+
+# =============================================================================
+# 16. EFFECT EXPORTS
+# =============================================================================
+
+effect_exports:
+
+  owner: "grammar/effects/"
+
+  canonical_families:
+    - "effect"
+    - "effectSet"
+    - "effectParameter"
+    - "effectComposition"
+    - "effectRequirement"
+    - "effectCapabilityRelation"
+
+  effect_categories:
+    - "io"
+    - "network"
+    - "mutation"
+    - "randomness"
+    - "native"
+    - "foreign"
+    - "distributed"
+    - "measurement"
+    - "quantum"
+    - "learning"
+    - "adaptation"
+    - "reflection"
+    - "codeGeneration"
+    - "simulation"
+    - "security"
+    - "hardware"
+
+  rule: >
+    Effect categories describe semantic behavior. They do not select a
+    particular hardware implementation.
+
+  ast:
+    required: true
+    owner: "src/ast/mod.rs or canonical owned AST modules"
+    mapping: "effect annotations/declarations"
+
+  semantic:
+    required: true
+    owner: "effect semantic implementation"
+
+  ir:
+    required: true
+    mapping: "effect metadata attached to canonical semantic operations"
+    canonical_boundary: "canonical domain IR"
+
+# =============================================================================
+# 17. RESOURCE EXPORTS
+# =============================================================================
+
+resource_exports:
+
+  owner: "grammar/resources/"
+
+  canonical_families:
+    - "resource"
+    - "resourceExpression"
+    - "resourceRequirement"
+    - "resourceConstraint"
+    - "resourcePreference"
+    - "resourceBudget"
+    - "resourceNegotiation"
+    - "placementRequirement"
+    - "topologyRequirement"
+    - "reliabilityRequirement"
+    - "latencyRequirement"
+    - "energyRequirement"
+
+  capability_relationship:
+    owner: "grammar/core/capabilities.g4"
+    semantic_owner: "grammar/resources/"
+
+  permitted_forms:
+    - "requires qubits >= required_qubits"
+    - "requires memory >= required_memory"
+    - "requires capability(\"quantum.measurement\")"
+    - "requires capability(\"gpu.compute\")"
+    - "requires capability(\"tensor.compute\")"
+    - "requires topology(required_topology)"
+    - "prefer ..."
+    - "constrain ..."
+    - "allow ..."
+    - "forbid ..."
+
+  hard_coding:
+    forbidden:
+      - "MAX_QUBITS"
+      - "MAX_CPUS"
+      - "MAX_CORES"
+      - "MAX_THREADS"
+      - "MAX_GPUS"
+      - "MAX_FPGAS"
+      - "MAX_ASICS"
+      - "MAX_QPUS"
+      - "MAX_NODES"
+      - "MAX_MEMORY"
+      - "MAX_STORAGE"
+      - "MAX_REGISTER_WIDTH"
+      - "MAX_VECTOR_WIDTH"
+      - "MAX_TENSOR_RANK"
+      - "MAX_TENSOR_DIMENSION"
+      - "MAX_NETWORK_SIZE"
+      - "MAX_DEVICE_COUNT"
+      - "MAX_ACCELERATOR_COUNT"
+      - "MAX_AGENT_COUNT"
+      - "MAX_CIRCUIT_DEPTH"
+
+    equivalent_limits_forbidden: true
+
+  ast:
+    required: true
+    owner: "domain-neutral AST implementation"
+    mapping: "resource requirement/constraint nodes"
+
+  semantic:
+    required: true
+    owner: "resource and capability semantic implementation"
+
+  ir:
+    required: true
+    mapping: "resource/capability metadata"
+    canonical_boundary: "canonical semantic IR"
+
+  runtime:
+    allowed_to_consume: true
+    rule: >
+      Runtime may evaluate resource availability but MUST NOT redefine source
+      resource semantics.
+
+# =============================================================================
+# 18. CAPABILITY EXPORTS
+# =============================================================================
+
+capability_exports:
+
+  owner: "grammar/core/capabilities.g4"
+
+  canonical_families:
+    - "capabilityReference"
+    - "capabilityRequirement"
+    - "capabilityProvision"
+    - "capabilityConstraint"
+
+  examples:
+    - "quantum.measurement"
+    - "gpu.compute"
+    - "tensor.compute"
+
+  rule: >
+    Capability identifiers are open-world symbolic identifiers. The grammar
+    MUST NOT contain a finite universal catalogue of physical devices.
+
+  ownership_split:
+    syntax: "grammar/core/capabilities.g4"
+    resource_semantics: "grammar/resources/"
+    target_capability_discovery: "hardware/compiler/runtime"
+    capability_execution: "runtime/HAL"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    mapping: "capability requirements attached to semantic operations"
+    canonical_boundary: "canonical domain IR"
+
+# =============================================================================
+# 19. CONTRACT EXPORTS
+# =============================================================================
+
+contract_exports:
+
+  owners:
+    generic: "grammar/core/"
+    statement_contracts: "grammar/statements/"
+    function_contracts: "grammar/functions/"
+
+  canonical:
+    - "requires"
+    - "ensures"
+    - "invariant"
+    - "assume"
+    - "guarantee"
+    - "property"
+
+  semantics:
+    rule: >
+      Contracts constrain program meaning and correctness. They MUST NOT be
+      converted into hidden hardware assumptions.
+
+  ast:
+    required: true
+    owner: "domain-neutral AST"
+
+  semantic:
+    required: true
+    owner: "contract validation"
+
+  ir:
+    required: true
+    mapping: "verified contract metadata"
+    canonical_boundary: "semantic IR"
+
+# =============================================================================
+# 20. POLICY EXPORTS
+# =============================================================================
+
+policy_exports:
+
+  owner: "grammar/policies/"
+
+  canonical:
+    - "policy"
+    - "policyScope"
+    - "policyRule"
+    - "policyRequirement"
+    - "policyConstraint"
+    - "policyPreference"
+    - "policyFallback"
+    - "policyAuthorization"
+
+  integration:
+    effects: "grammar/effects/"
+    resources: "grammar/resources/"
+    security: "grammar/security/"
+    execution: "grammar/execution/"
+    adaptation: "grammar/statements/"
+
+  rule: >
+    Policies govern permitted realization and behavior. They do not become
+    hidden parser-time execution.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    mapping: "policy metadata and validated constraints"
+    canonical_boundary: "semantic IR"
+
+# =============================================================================
+# 21. PROVENANCE AND EVIDENCE EXPORTS
+# =============================================================================
+
+provenance_exports:
+
+  owner:
+    syntax: "grammar/ai/"
+    cross_domain_contract: "grammar/core/"
+    semantic: "semantic provenance implementation"
+
+  canonical:
+    - "evidence"
+    - "provenance"
+    - "explanation"
+    - "decisionRecord"
+    - "confidence"
+    - "uncertainty"
+    - "sourceReference"
+
+  rule: >
+    Provenance constructs are language-level semantic metadata. They MUST NOT
+    force a particular storage system or backend.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    mapping: "provenance metadata"
+    canonical_boundary: "canonical semantic IR"
+
+# =============================================================================
+# 22. CLASSICAL COMPUTING EXPORTS
+# =============================================================================
+
+classical_exports:
+
+  owner: "grammar/classical/"
+
+  canonical_families:
+    - "scalar"
+    - "numeric"
+    - "vector"
+    - "matrix"
+    - "tensor"
+    - "linearAlgebra"
+    - "statistics"
+    - "signalProcessing"
+    - "symbolicComputation"
+    - "optimization"
+    - "acceleratorIntent"
+
+  integration:
+    depends_on:
+      - "grammar/types/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/memory/"
+
+  ast:
+    required: true
+    owner: "src/ast/mod.rs or owned AST extension modules"
+
+  semantic:
+    required: true
+    owner: "classical semantic implementation"
+
+  ir:
+    required: true
+    canonical_boundary: "Classical IR"
+
+  portability:
+    rule: >
+      Classical exports describe computation, not CPU instruction sets or
+      fixed machine widths unless explicitly part of source semantics.
+
+# =============================================================================
+# 23. DATA EXPORTS
+# =============================================================================
+
+data_exports:
+
+  owner: "grammar/data/"
+
+  canonical_families:
+    - "collection"
+    - "record"
+    - "schema"
+    - "table"
+    - "graph"
+    - "dataset"
+    - "stream"
+    - "pipeline"
+    - "query"
+    - "serialization"
+    - "deserialization"
+    - "transformation"
+    - "dataProvenance"
+
+  external_formats:
+    rule: >
+      SQL, JSON, XML and other external data formats are dialect/interoperability
+      boundaries and MUST NOT silently become universal core syntax.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "canonical data/domain IR"
+
+# =============================================================================
+# 24. CONCURRENCY EXPORTS
+# =============================================================================
+
+concurrency_exports:
+
+  owner: "grammar/concurrency/"
+
+  canonical:
+    - "task"
+    - "future"
+    - "actor"
+    - "channel"
+    - "parallelRegion"
+    - "pipeline"
+    - "synchronization"
+    - "collective"
+    - "workDistribution"
+
+  realization_rule: >
+    Source-level concurrency expresses computation semantics. It MUST NOT
+    require the programmer to select a physical thread, core, GPU lane, or
+    cluster node unless explicitly requested as a semantic constraint.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "Classical IR / distributed semantic IR / domain IR"
+
+# =============================================================================
+# 25. DISTRIBUTED EXPORTS
+# =============================================================================
+
+distributed_exports:
+
+  owner: "grammar/distributed/"
+
+  canonical:
+    - "node"
+    - "process"
+    - "distributedTask"
+    - "message"
+    - "channel"
+    - "service"
+    - "topology"
+    - "placement"
+    - "partition"
+    - "replication"
+    - "consistency"
+    - "faultTolerance"
+    - "remoteExecution"
+
+  scalability:
+    rule: >
+      Node count, process count, message count, channel count and topology
+      size are open-world resource properties and MUST NOT be universal
+      grammar limits.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "distributed semantic IR / canonical domain IR"
+
+# =============================================================================
+# 26. NETWORKING EXPORTS
+# =============================================================================
+
+networking_exports:
+
+  owner: "grammar/networking/"
+
+  canonical:
+    - "address"
+    - "endpoint"
+    - "channel"
+    - "message"
+    - "request"
+    - "response"
+    - "service"
+    - "route"
+    - "protocol"
+    - "stream"
+    - "socket"
+    - "discovery"
+    - "networkCapability"
+
+  rule: >
+    Networking exports describe network semantics and intent. They MUST NOT
+    define a finite universal network topology.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "network/domain semantic IR"
+
+# =============================================================================
+# 27. HARDWARE EXPORTS
+# =============================================================================
+
+hardware_exports:
+
+  owner: "grammar/hardware/"
+
+  canonical_families:
+    - "hardwareCapability"
+    - "hardwareResource"
+    - "hardwareTopology"
+    - "hardwareMemory"
+    - "hardwareTiming"
+    - "hardwarePower"
+    - "hardwareThermal"
+    - "hardwareReliability"
+    - "hardwarePlacement"
+    - "hardwareNegotiation"
+
+  ownership_boundary:
+    grammar:
+      owns:
+        - "hardware intent"
+        - "capability references"
+        - "abstract resources"
+        - "abstract topology"
+        - "placement intent"
+        - "timing intent"
+        - "reliability requirements"
+
+    compiler:
+      owns:
+        - "target discovery"
+        - "target matching"
+        - "lowering"
+        - "specialization"
+
+    runtime:
+      owns:
+        - "live device state"
+        - "telemetry"
+        - "calibration"
+        - "execution state"
+
+  forbidden:
+    - "physical device inventory in universal grammar"
+    - "vendor-specific hardware as universal grammar requirement"
+    - "fixed device counts"
+    - "fixed memory capacities"
+    - "fixed bus widths"
+    - "fixed topology sizes"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "HDL/Hardware IR or domain canonical IR"
+
+# =============================================================================
+# 28. QUANTUM EXPORTS
+# =============================================================================
+
+quantum_exports:
+
+  owner: "grammar/quantum/"
+
+  canonical_families:
+
+    operation:
+      exports:
+        - "quantumOperation"
+        - "operationSpecifier"
+        - "operationTargetList"
+        - "operationParameterList"
+        - "operationAttributeList"
+        - "operationModifierList"
+
+    operation_specifier:
+      allowed:
+        - "builtin"
+        - "custom"
+        - "vendor"
+        - "parameterized"
+        - "dialect"
+        - "future"
+
+    state:
+      exports:
+        - "quantumState"
+        - "logicalQubit"
+        - "quantumRegister"
+
+    control:
+      exports:
+        - "quantumControl"
+        - "controlledOperation"
+        - "adjointOperation"
+        - "inverseOperation"
+
+    measurement:
+      exports:
+        - "quantumMeasurement"
+        - "measurementResult"
+        - "midCircuitMeasurement"
+        - "feedForward"
+
+    channels:
+      exports:
+        - "quantumChannel"
+        - "noiseModel"
+        - "noiseParameter"
+
+    observable:
+      exports:
+        - "observable"
+        - "expectation"
+
+    dynamic:
+      exports:
+        - "dynamicCircuit"
+        - "conditionalQuantumOperation"
+        - "classicalFeedForward"
+
+    error_correction:
+      exports:
+        - "errorCorrectionRequirement"
+        - "logicalCode"
+        - "codeDistance"
+        - "syndrome"
+        - "decoderRequirement"
+        - "faultToleranceRequirement"
+
+    pulse:
+      exports:
+        - "pulse"
+        - "pulseParameter"
+        - "timingRequirement"
+
+  critical_rule:
+    finite_operation_catalogue_forbidden: true
+    rule: >
+      Quantum grammar MUST NOT require a permanently enumerated universal
+      catalogue of gate names. New operations MUST be representable through
+      the generic operationSpecifier contract and registered through
+      appropriate metadata or dialect mechanisms.
+
+  physical_separation:
+    logical_semantics:
+      owner: "grammar/quantum/"
+    physical_mapping:
+      owner: "compiler/lowering/routing"
+    calibration:
+      owner: "runtime/HAL"
+    physical_qubits:
+      owner: "target realization"
+
+  ast:
+    required: true
+    owner: "domain-neutral AST plus quantum semantic extensions where required"
+
+  semantic:
+    required: true
+    owner: "quantum semantic implementation"
+
+  ir:
+    required: true
+    canonical_boundary: "quantum::ir"
+
+  resilience:
+    required: true
+    rule: >
+      Quantum source semantics may express resilience requirements but MUST
+      not encode physical QPU limits.
+
+# =============================================================================
+# 29. HDL EXPORTS
+# =============================================================================
+
+hdl_exports:
+
+  owner: "grammar/hdl/"
+
+  canonical_families:
+    - "hdlModule"
+    - "port"
+    - "signal"
+    - "wire"
+    - "register"
+    - "memory"
+    - "combinationalBlock"
+    - "sequentialBlock"
+    - "clock"
+    - "reset"
+    - "clocking"
+    - "timing"
+    - "pipeline"
+    - "generate"
+    - "interface"
+    - "protocol"
+    - "stateMachine"
+    - "assertion"
+    - "verification"
+    - "synthesisIntent"
+    - "physicalIntent"
+
+  scalability:
+    rule: >
+      Widths, depths, lane counts, register counts, memory capacities,
+      pipeline depths, clock counts and device counts are source parameters or
+      target properties, never universal grammar ceilings.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+    owner: "HDL/hardware semantic implementation"
+
+  ir:
+    required: true
+    canonical_boundary: "HDL/Hardware IR"
+
+# =============================================================================
+# 30. HYBRID EXPORTS
+# =============================================================================
+
+hybrid_exports:
+
+  owner: "grammar/hybrid/"
+
+  canonical:
+    - "classicalQuantumBoundary"
+    - "quantumClassicalBoundary"
+    - "hostDeviceBoundary"
+    - "sharedDataBoundary"
+    - "feedForwardBoundary"
+    - "hybridSynchronization"
+    - "hybridResourceRequirement"
+    - "acceleratorInteroperability"
+
+  rule: >
+    Hybrid exports compose already-defined domain semantics. They MUST NOT
+    redefine classical, quantum, HDL, or hardware semantics.
+
+  dependencies:
+    - "grammar/classical/"
+    - "grammar/quantum/"
+    - "grammar/hdl/"
+    - "grammar/hardware/"
+    - "grammar/effects/"
+    - "grammar/resources/"
+    - "grammar/execution/"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "canonical domain IR composition"
+
+# =============================================================================
+# 31. AI / REASONING EXPORTS
+# =============================================================================
+
+ai_exports:
+
+  owner: "grammar/ai/"
+
+  canonical_families:
+    reasoning:
+      - "infer"
+      - "deduce"
+      - "reason"
+
+    learning:
+      - "learn"
+      - "training"
+      - "adaptation"
+
+    uncertainty:
+      - "probability"
+      - "confidence"
+      - "uncertainty"
+
+    evidence:
+      - "evidence"
+      - "provenance"
+      - "explanation"
+      - "decisionRecord"
+
+    models:
+      - "model"
+      - "dataset"
+      - "inference"
+      - "optimization"
+
+    symbolic:
+      - "knowledge"
+      - "rule"
+      - "constraint"
+      - "neuralSymbolic"
+
+    agents:
+      - "agent"
+      - "planning"
+      - "decision"
+
+  application_specificity:
+    rule: >
+      Application-specific concepts MUST NOT become universal language
+      keywords merely because an AI or application subsystem can consume them.
+
+    extension_mechanisms:
+      - "libraries"
+      - "dialects"
+      - "capabilities"
+      - "policies"
+      - "application modules"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "AI/domain semantic IR"
+
+# =============================================================================
+# 32. EXECUTION EXPORTS
+# =============================================================================
+
+execution_exports:
+
+  owner: "grammar/execution/"
+
+  canonical:
+    - "executionContext"
+    - "executionIntent"
+    - "dispatch"
+    - "placement"
+    - "scheduleIntent"
+    - "adaptiveExecution"
+    - "simulation"
+    - "parallelExecution"
+    - "distributedExecution"
+    - "checkpoint"
+    - "recovery"
+    - "resilience"
+    - "timeline"
+    - "observation"
+    - "profiling"
+    - "tracing"
+    - "lifecycle"
+    - "fallback"
+
+  boundary:
+    grammar_owns:
+      - "execution intent"
+      - "portable execution constraints"
+      - "fallback declarations"
+      - "adaptation intent"
+
+    compiler_owns:
+      - "scheduling"
+      - "lowering"
+      - "placement realization"
+      - "target specialization"
+
+    runtime_owns:
+      - "live execution state"
+      - "recovery execution"
+      - "telemetry"
+      - "device interaction"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "execution/domain semantic IR"
+
+# =============================================================================
+# 33. COMPILATION EXPORTS
+# =============================================================================
+
+compile_exports:
+
+  owner: "grammar/compile/"
+
+  canonical:
+    - "compilationUnit"
+    - "compilationTarget"
+    - "targetSelectionIntent"
+    - "crossCompilation"
+    - "loweringIntent"
+    - "optimizationIntent"
+    - "specialization"
+    - "conditionalCompilation"
+    - "featureSelection"
+    - "reproducibleBuild"
+    - "artifact"
+    - "deploymentIntent"
+
+  compile_once_rule:
+    rule: >
+      Compile-once refers to preserving portable program meaning and stable
+      semantic artifacts. It MUST NOT imply that one target-native machine-code
+      artifact can execute unchanged on physically incompatible targets.
+
+  artifact_requirements:
+    - "language version"
+    - "grammar version"
+    - "AST/semantic version"
+    - "IR version"
+    - "dialect versions"
+    - "resource requirements"
+    - "capability requirements"
+    - "constraints"
+    - "preferences"
+    - "policies"
+    - "effects"
+    - "provenance"
+    - "reproducibility metadata"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "canonical semantic IR"
+
+# =============================================================================
+# 34. INTEROPERABILITY EXPORTS
+# =============================================================================
+
+interoperability_exports:
+
+  owner: "grammar/interoperability/"
+
+  canonical:
+    - "foreignFunction"
+    - "foreignType"
+    - "ffiBoundary"
+    - "abiBoundary"
+    - "callingConvention"
+    - "linkage"
+    - "serialization"
+    - "externalFormat"
+    - "foreignModule"
+
+  external_formats:
+    rule: >
+      External language and data formats are integration boundaries. Their
+      presence does not make the external language part of the Zamani core
+      grammar.
+
+  safety:
+    rule: >
+      Foreign execution must be represented through explicit effects,
+      capabilities, policies, contracts, and provenance where applicable.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "interoperability semantic representation"
+
+# =============================================================================
+# 35. DIALECT EXPORTS
+# =============================================================================
+
+dialect_exports:
+
+  owner: "grammar/dialects/"
+
+  canonical:
+    - "dialect"
+    - "dialectIdentity"
+    - "dialectNamespace"
+    - "dialectVersion"
+    - "dialectDependency"
+    - "dialectCapability"
+    - "dialectSyntax"
+    - "dialectSemanticMapping"
+    - "dialectRegistration"
+    - "dialectCompatibility"
+
+  requirements:
+    identity: true
+    namespace: true
+    version: true
+    dependencies: true
+    compatibility: true
+    semantic_mapping: true
+
+  rule: >
+    A dialect MUST NOT silently redefine a stable core export.
+
+  future_extension:
+    rule: >
+      New computational domains, hardware families, operation sets, data
+      formats, and application capabilities should preferentially extend the
+      language through dialects rather than modifying the universal core.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "dialect semantic adapter"
+
+# =============================================================================
+# 36. SECURITY EXPORTS
+# =============================================================================
+
+security_exports:
+
+  owner: "grammar/security/"
+
+  canonical:
+    - "identity"
+    - "authorization"
+    - "permission"
+    - "capability"
+    - "sandbox"
+    - "trust"
+    - "audit"
+    - "privacy"
+    - "secretReference"
+    - "cryptographicIntent"
+    - "secureComputation"
+    - "securityConstraint"
+
+  rule: >
+    Grammar describes security intent and constraints. It MUST NOT directly
+    execute authorization or security operations during parsing.
+
+  integration:
+    effects: "grammar/effects/"
+    policies: "grammar/policies/"
+    resources: "grammar/resources/"
+    execution: "grammar/execution/"
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "security semantic IR"
+
+# =============================================================================
+# 37. MACRO EXPORTS
+# =============================================================================
+
+macro_exports:
+
+  owner: "grammar/macros/"
+
+  canonical:
+    - "macroDeclaration"
+    - "macroParameter"
+    - "macroInvocation"
+    - "macroExpansion"
+    - "macroHygiene"
+    - "macroDiagnostic"
+
+  rule: >
+    Macro expansion MUST NOT bypass lexical, syntactic, type, effect,
+    capability, resource, policy, contract, or security validation.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    mapping: "expanded semantic program"
+    canonical_boundary: "same canonical semantic pipeline as ordinary source"
+
+# =============================================================================
+# 38. METAPROGRAMMING EXPORTS
+# =============================================================================
+
+metaprogramming_exports:
+
+  owner: "grammar/metaprogramming/"
+
+  canonical:
+    - "quotation"
+    - "unquotation"
+    - "syntaxTree"
+    - "reflection"
+    - "introspection"
+    - "compileTimeExecution"
+    - "codeGeneration"
+    - "specialization"
+    - "schemaGeneration"
+
+  required_controls:
+    - "effect"
+    - "capability"
+    - "policy"
+    - "sandbox"
+    - "provenance"
+
+  rule: >
+    Reflection and code generation MUST be controlled semantic operations and
+    MUST NOT create an unrestricted path around the language safety model.
+
+  ast:
+    required: true
+
+  semantic:
+    required: true
+
+  ir:
+    required: true
+    canonical_boundary: "semantic IR"
+
+# =============================================================================
+# 39. VALIDATION EXPORTS
+# =============================================================================
+
+validation_exports:
+
+  owner: "grammar/validation/"
+
+  canonical_validation_contracts:
+
+    inventory:
+      - "inventoryValidation"
+
+    ownership:
+      - "ownershipValidation"
+
+    dependencies:
+      - "dependencyValidation"
+
+    lexer:
+      - "tokenUniquenessValidation"
+      - "lexerBoundaryValidation"
+
+    parser:
+      - "parserBoundaryValidation"
+      - "reachabilityValidation"
+      - "ambiguityValidation"
+      - "precedenceValidation"
+
+    semantics:
+      - "astCoverageValidation"
+      - "semanticCoverageValidation"
+      - "irCoverageValidation"
+
+    portability:
+      - "targetIndependenceValidation"
+      - "hardCodingValidation"
+      - "scalabilityValidation"
+
+    quality:
+      - "duplicateConceptValidation"
+      - "pathHygieneValidation"
+      - "sourceSpanValidation"
+
+  rule: >
+    Validation grammars and documents may validate production grammar but MUST
+    NOT become upstream semantic dependencies of the language itself.
+
+# =============================================================================
+# 40. COMPATIBILITY EXPORTS
+# =============================================================================
+
+compatibility_exports:
+
+  owner: "grammar/compatibility/"
+
+  canonical:
+    - "languageVersion"
+    - "grammarVersion"
+    - "lexerVersion"
+    - "parserVersion"
+    - "astVersion"
+    - "semanticVersion"
+    - "irVersion"
+    - "dialectVersion"
+    - "featureGate"
+    - "deprecatedFeature"
+    - "compatibilityAlias"
+    - "migrationRule"
+
+  stable_export_requirements:
+    - "compatibility identifier"
+    - "version classification"
+    - "migration behavior"
+    - "deprecation behavior where applicable"
+
+  rule: >
+    Compatibility aliases MUST point to an existing canonical export and MUST
+    NOT create a second semantic owner.
+
+# =============================================================================
+# 41. AST INTEGRATION CONTRACT
+# =============================================================================
+
+ast_integration:
+
+  canonical_owner:
+    primary: "src/ast/mod.rs"
+
+  source_span:
+    required: true
+    rule: >
+      Every semantic source construct MUST preserve source location information
+      sufficiently for deterministic diagnostics, tooling, provenance and
+      conformance.
+
+  domain_neutrality:
+    required: true
+    rule: >
+      Parser exports MUST first map into the canonical frontend AST or an
+      explicitly authorized AST extension that participates in the same
+      domain-neutral architecture.
+
+  required_metadata:
+    where_applicable:
+      - "attributes"
+      - "modifiers"
+      - "effects"
+      - "capabilities"
+      - "resources"
+      - "contracts"
+      - "policies"
+      - "provenance"
+
+  forbidden:
+    - "vendor instruction objects in frontend AST"
+    - "physical device identity in universal AST"
+    - "runtime telemetry in frontend AST"
+    - "hidden parser-only semantics"
+    - "backend-specific scheduling decisions"
+
+  implementation_gap_rule:
+    rule: >
+      Existing AST variants that do not faithfully represent a canonical
+      grammar export MUST NOT be treated as proof of production completeness.
+      The export remains below STABLE until its AST contract is complete.
+
+# =============================================================================
+# 42. SEMANTIC INTEGRATION CONTRACT
+# =============================================================================
+
+semantic_integration:
+
+  pipeline:
+
+    - "lexical classification"
+    - "parsing"
+    - "domain-neutral AST"
+    - "structural validation"
+    - "type validation"
+    - "effect validation"
+    - "capability validation"
+    - "resource validation"
+    - "contract validation"
+    - "policy validation"
+    - "provenance validation"
+    - "domain semantic validation"
+    - "canonical domain IR"
+
+  rule: >
+    A grammar export cannot be considered semantically complete solely because
+    it has an ANTLR production.
+
+  required_semantic_contract:
+    - "meaning"
+    - "well-formedness"
+    - "type behavior"
+    - "effect behavior where applicable"
+    - "resource behavior where applicable"
+    - "capability behavior where applicable"
+    - "policy behavior where applicable"
+    - "diagnostics"
+    - "compatibility"
+
+# =============================================================================
+# 43. IR INTEGRATION CONTRACT
+# =============================================================================
+
+ir_integration:
+
+  source_path:
+
+    - "Zamani source"
+    - "domain-neutral AST"
+    - "semantic model"
+    - "canonical domain IR"
+    - "optimization"
+    - "lowering"
+    - "target realization"
+
+  canonical_ir:
+
+    classical:
+      name: "Classical IR"
+      owner: "compiler/IR implementation"
+
+    quantum:
+      name: "quantum::ir"
+      owner: "src/quantum/ir/ and associated compiler implementation"
+
+    hdl:
+      name: "HDL/Hardware IR"
+      owner: "hardware/HDL compiler implementation"
+
+  rule: >
+    Grammar exports MUST NOT lower directly to vendor-specific machine
+    representations.
+
+  competing_frontend_ir:
+    forbidden: true
+
+  target_specific_ir:
+    allowed_only_after:
+      - "semantic validation"
+      - "canonical IR"
+      - "explicit lowering boundary"
+
+# =============================================================================
+# 44. DIAGNOSTIC INTEGRATION
+# =============================================================================
+
+diagnostic_integration:
+
+  required:
+    - "stable diagnostic identity"
+    - "source span"
+    - "category"
+    - "severity"
+    - "deterministic message contract"
+    - "machine-readable representation where applicable"
+    - "compatibility behavior"
+
+  ownership:
+
+    lexical:
+      owner: "lexer/parser diagnostic implementation"
+
+    syntax:
+      owner: "parser diagnostic implementation"
+
+    type:
+      owner: "semantic type implementation"
+
+    effect:
+      owner: "effect validation"
+
+    resource:
+      owner: "resource validation"
+
+    capability:
+      owner: "capability validation"
+
+    contract:
+      owner: "contract validation"
+
+    policy:
+      owner: "policy/security validation"
+
+    provenance:
+      owner: "provenance validation"
+
+    target:
+      owner: "compiler/runtime realization boundary"
+
+  critical_rule: >
+    Target infeasibility is not a syntax error. A valid source program that
+    cannot be realized on a selected target must receive a semantic,
+    compilation, or runtime realization diagnostic according to the failure
+    stage.
+
+# =============================================================================
+# 45. POCO-REAF EXPORT CONTRACT
+# =============================================================================
+
+poco_reaf:
+
+  program_once:
+    required: true
+    rule: >
+      Source semantics MUST NOT require separate source programs solely because
+      target scale changes.
+
+  compile_once:
+    required: true
+    rule: >
+      Portable semantic artifacts MUST preserve source meaning independently
+      from one particular target realization.
+
+  run_everywhere:
+    required: true
+    requires:
+      - "capability discovery"
+      - "resource matching"
+      - "target-independent semantics"
+      - "target-aware lowering"
+      - "compatibility validation"
+
+  run_anywhere:
+    required: true
+    rule: >
+      A target is valid only when all required semantic conditions,
+      capabilities, resources, policies, effects and constraints permit it.
+
+  run_forever:
+    required: true
+    requires:
+      - "language versioning"
+      - "AST compatibility"
+      - "semantic compatibility"
+      - "IR compatibility"
+      - "dialect versioning"
+      - "migration rules"
+      - "reproducibility metadata"
+
+  fallback:
+    explicit: true
+    rule: >
+      Fallback MUST be explicitly authorized. The implementation MUST NOT
+      silently replace an unavailable realization with an approximation that
+      changes declared semantics.
+
+# =============================================================================
+# 46. SCALABILITY CONTRACT
+# =============================================================================
+
+scalability:
+
+  model: "open_world"
+
+  source_language:
+    artificial_universal_limits: false
+
+  resource_model:
+    symbolic: true
+    dynamic: true
+    negotiated: true
+    target_discovered: true
+
+  allowed:
+    - "symbolic dimensions"
+    - "generic dimensions"
+    - "dependent dimensions"
+    - "runtime dimensions"
+    - "resource expressions"
+    - "capability expressions"
+    - "abstract topology"
+    - "placement requirements"
+    - "resource budgets"
+    - "constraints"
+    - "preferences"
+
+  forbidden:
+    - "universal maximum machine size"
+    - "universal maximum qubit count"
+    - "universal maximum memory"
+    - "universal maximum thread count"
+    - "universal maximum tensor rank"
+    - "universal maximum device count"
+    - "universal maximum network size"
+
+  scaling_invariant:
+    rule: >
+      Changing available target resources MUST NOT require changing source
+      syntax solely to represent a larger realization.
+
+# =============================================================================
+# 47. HARD-CODING CONTRACT
+# =============================================================================
+
+hard_coding:
+
+  forbidden_categories:
+
+    machine:
+      - "MAX_CPUS"
+      - "MAX_CORES"
+      - "MAX_THREADS"
+      - "MAX_GPUS"
+      - "MAX_FPGAS"
+      - "MAX_ASICS"
+      - "MAX_QPUS"
+      - "MAX_ACCELERATORS"
+      - "MAX_DEVICES"
+
+    quantum:
+      - "MAX_QUBITS"
+      - "MAX_LOGICAL_QUBITS"
+      - "MAX_PHYSICAL_QUBITS"
+      - "MAX_CIRCUIT_DEPTH"
+
+    memory:
+      - "MAX_MEMORY"
+      - "MAX_STORAGE"
+      - "MAX_REGISTER_WIDTH"
+      - "MAX_VECTOR_WIDTH"
+
+    data:
+      - "MAX_TENSOR_RANK"
+      - "MAX_TENSOR_DIMENSION"
+      - "MAX_NETWORK_SIZE"
+      - "MAX_DATASET_SIZE"
+
+    distributed:
+      - "MAX_NODES"
+      - "MAX_PROCESSES"
+      - "MAX_AGENTS"
+      - "MAX_CHANNELS"
+
+  equivalent_detection:
+    required: true
+    rule: >
+      Renaming, encoding, hiding, moving or deriving a prohibited universal
+      capacity does not make it valid.
+
+  allowed:
+    - "program-specific constants"
+    - "symbolic requirements"
+    - "resource constraints explicitly written by the programmer"
+    - "target-reported capacities during realization"
+
+# =============================================================================
+# 48. TARGET INDEPENDENCE
+# =============================================================================
+
+target_independence:
+
+  grammar_may_export:
+    - "requirements"
+    - "capabilities"
+    - "constraints"
+    - "preferences"
+    - "abstract topology"
+    - "placement intent"
+    - "execution intent"
+    - "fallback policy"
+    - "resource budget"
+    - "reliability requirement"
+    - "latency requirement"
+    - "energy requirement"
+
+  grammar_must_not_export:
+    - "physical device inventory"
+    - "vendor instruction set"
+    - "physical routing result"
+    - "physical placement result"
+    - "runtime scheduling result"
+    - "calibration data"
+    - "live telemetry"
+    - "device discovery result"
+
+  rule: >
+    A target can constrain realization but cannot redefine source semantics.
+
+# =============================================================================
+# 49. EXPORT CONSUMER RULES
+# =============================================================================
+
+consumer_rules:
+
+  grammar_to_grammar:
+    allowed: true
+    requirements:
+      - "dependency declared"
+      - "owner exists"
+      - "export is public or explicitly permitted"
+      - "no cycle"
+
+  grammar_to_ast:
+    allowed: "indirect"
+    rule: >
+      Grammar exports map through the parser into AST structures. Grammar
+      source files MUST NOT contain Rust AST implementation code.
+
+  grammar_to_semantic:
+    allowed: "contractual"
+    rule: >
+      Grammar specifies source constructs; semantic implementation interprets
+      them.
+
+  grammar_to_ir:
+    allowed: "mapping only"
+    rule: >
+      Grammar may identify the canonical IR mapping but MUST NOT implement the
+      IR.
+
+  grammar_to_runtime:
+    allowed: false
+    rule: >
+      Grammar does not consume live runtime state.
+
+  grammar_to_backend:
+    allowed: false
+    rule: >
+      Backend implementation is downstream from canonical semantic IR.
+
+  grammar_to_tests:
+    allowed: false
+    rule: >
+      Tests consume grammar exports; grammar does not depend on tests.
+
+# =============================================================================
+# 50. ROOT EXPORT MATRIX
+# =============================================================================
+
+root_export_matrix:
+
+  "grammar/Zamani.g4":
+    exports:
+      - "program"
+    consumes:
+      - "grammar/antlr/ZamaniParser.g4"
+      - "grammar/antlr/ZamaniLexer.g4"
+
+  "grammar/antlr/ZamaniParser.g4":
+    exports:
+      - "sourceUnit"
+      - "item"
+      - "declaration"
+      - "statement"
+      - "expression"
+      - "type"
+    consumes:
+      - "grammar/core/"
+      - "grammar/modules/"
+      - "grammar/declarations/"
+      - "grammar/types/"
+      - "grammar/memory/"
+      - "grammar/expressions/"
+      - "grammar/functions/"
+      - "grammar/statements/"
+      - "grammar/effects/"
+      - "grammar/resources/"
+      - "grammar/policies/"
+      - "grammar/security/"
+      - "grammar/classical/"
+      - "grammar/data/"
+      - "grammar/concurrency/"
+      - "grammar/distributed/"
+      - "grammar/networking/"
+      - "grammar/hardware/"
+      - "grammar/quantum/"
+      - "grammar/hdl/"
+      - "grammar/hybrid/"
+      - "grammar/ai/"
+      - "grammar/execution/"
+      - "grammar/compile/"
+      - "grammar/interoperability/"
+      - "grammar/dialects/"
+      - "grammar/macros/"
+      - "grammar/metaprogramming/"
+
+  "grammar/antlr/ZamaniLexer.g4":
+    exports:
+      - "canonical Zamani token vocabulary"
+    consumes:
+      - "grammar/lexer/lexer.g4"
+
+# =============================================================================
+# 51. DOMAIN EXPORT MATRIX
+# =============================================================================
+
+domain_export_matrix:
+
+  classical:
+    owner: "grammar/classical/"
+    foundations:
+      - "types"
+      - "expressions"
+      - "functions"
+      - "memory"
+      - "effects"
+      - "resources"
+    canonical_ir: "Classical IR"
+
+  quantum:
+    owner: "grammar/quantum/"
+    foundations:
+      - "types"
+      - "expressions"
+      - "effects"
+      - "resources"
+      - "capabilities"
+      - "hardware"
+      - "execution"
+    canonical_ir: "quantum::ir"
+
+  hdl:
+    owner: "grammar/hdl/"
+    foundations:
+      - "types"
+      - "memory"
+      - "hardware"
+      - "resources"
+      - "execution"
+    canonical_ir: "HDL/Hardware IR"
+
+  hybrid:
+    owner: "grammar/hybrid/"
+    foundations:
+      - "classical"
+      - "quantum"
+      - "hdl"
+      - "hardware"
+      - "effects"
+      - "resources"
+    canonical_ir: "canonical domain IR composition"
+
+  ai:
+    owner: "grammar/ai/"
+    foundations:
+      - "types"
+      - "data"
+      - "expressions"
+      - "functions"
+      - "effects"
+      - "resources"
+      - "concurrency"
+      - "distributed"
+      - "provenance"
+    canonical_ir: "AI/domain semantic IR"
+
+# =============================================================================
+# 52. EXPORT STATUS MODEL
+# =============================================================================
+
+status_model:
+
+  allowed:
+    - "HISTORICAL"
+    - "PROPOSED"
+    - "PLANNED"
+    - "EXPERIMENTAL"
+    - "SPECIFIED"
+    - "IMPLEMENTED"
+    - "PARTIALLY_IMPLEMENTED"
+    - "TESTED"
+    - "STABLE"
+    - "DEPRECATED"
+    - "REJECTED"
+
+  stable_requirements:
+    - "single owner"
+    - "resolved dependencies"
+    - "documented consumers"
+    - "AST mapping"
+    - "semantic mapping"
+    - "IR mapping where applicable"
+    - "diagnostics"
+    - "compatibility"
+    - "source spans"
+    - "hard-coding audit"
+    - "target-independence audit"
+    - "scalability audit"
+    - "conformance tests"
+    - "negative tests"
+    - "ambiguity validation"
+    - "reachability validation"
+    - "safe Rust integration"
+
+  rule: >
+    A grammar export MUST NOT be marked STABLE merely because its grammar rule
+    parses successfully.
+
+# =============================================================================
+# 53. FREEZE CONTRACT
+# =============================================================================
+
+freeze:
+
+  export_is_freezable_only_when:
+
+    ownership:
+      - "exactly one owner"
+      - "ownership agrees with ownership.yaml"
+      - "ownership agrees with OWNERSHIP.yaml"
+
+    dependencies:
+      - "all mandatory dependencies resolve"
+      - "dependency graph remains acyclic"
+      - "dependency status is sufficient"
+
+    grammar:
+      - "rule reachable"
+      - "rule unambiguous"
+      - "precedence defined"
+      - "no accidental duplicate concept"
+      - "no hidden export"
+
+    AST:
+      - "AST mapping exists"
+      - "source span behavior exists"
+      - "stable node identity exists"
+
+    semantics:
+      - "semantic meaning defined"
+      - "type behavior defined where applicable"
+      - "effects defined where applicable"
+      - "capabilities defined where applicable"
+      - "resources defined where applicable"
+      - "contracts defined where applicable"
+      - "policies defined where applicable"
+      - "provenance defined where applicable"
+
+    IR:
+      - "canonical IR mapping exists where applicable"
+      - "no competing frontend IR"
+      - "no vendor-specific direct lowering"
+
+    diagnostics:
+      - "diagnostic identity exists"
+      - "failure stage is defined"
+      - "diagnostic is deterministic"
+
+    compatibility:
+      - "version identity exists"
+      - "migration behavior exists where required"
+      - "deprecation behavior exists where required"
+
+    scalability:
+      - "no universal finite capacity"
+      - "symbolic scale supported where applicable"
+      - "resource negotiation defined where applicable"
+
+    safety:
+      - "safe Rust implementation"
+      - "no unsafe requirement"
+
+    tests:
+      - "positive test"
+      - "negative test"
+      - "boundary test"
+      - "integration test"
+      - "conformance test"
+
+  downstream_reedit_rule:
+    rule: >
+      A frozen export MUST NOT require semantic re-edit solely because a
+      downstream compiler, backend, runtime, target, accelerator, device,
+      dialect, or future realization is added.
+
+# =============================================================================
+# 54. AUTOMATED VALIDATION CONTRACT
+# =============================================================================
+
+validation:
+
+  ownership:
+    checks:
+      - "every public export has one owner"
+      - "owner path exists"
+      - "owner agrees with ownership.yaml"
+      - "no duplicate canonical owner"
+
+  dependencies:
+    checks:
+      - "every consumer is legal"
+      - "every dependency is declared"
+      - "no cycle"
+      - "no hidden import"
+
+  grammar:
+    checks:
+      - "all exported rules resolve"
+      - "all public entries are reachable"
+      - "no unreachable public export"
+      - "no ambiguous public export"
+      - "no duplicate public export"
+
+  AST:
+    checks:
+      - "every semantic export has AST mapping"
+      - "source span is preserved"
+      - "mapping is stable"
+
+  semantics:
+    checks:
+      - "every semantic export has semantic owner"
+      - "semantic status is tracked"
+
+  IR:
+    checks:
+      - "every lowering-relevant export has canonical IR mapping"
+      - "no direct vendor IR mapping"
+      - "quantum maps through quantum::ir"
+
+  portability:
+    checks:
+      - "no physical capacity constants"
+      - "no target-specific universal syntax"
+      - "no vendor lock-in in core exports"
+
+  safety:
+    checks:
+      - "Rust version >= 1.97"
+      - "Rust 2021"
+      - "unsafe forbidden"
+
+# =============================================================================
+# 55. CI INTEGRATION
+# =============================================================================
+
+ci:
+
+  mandatory:
+
+    contract_validation:
+      - "validate YAML"
+      - "validate schema"
+      - "validate ownership"
+      - "validate dependencies"
+      - "validate exports"
+      - "validate consumers"
+      - "validate AST mappings"
+      - "validate semantic mappings"
+      - "validate IR mappings"
+
+    grammar_validation:
+      - "ANTLR generation"
+      - "lexer validation"
+      - "parser validation"
+      - "reachability"
+      - "ambiguity"
+      - "precedence"
+      - "duplicate token detection"
+      - "hard-coding audit"
+
+    rust_validation:
+      - "cargo check"
+      - "cargo test"
+      - "cargo clippy"
+      - "unsafe-policy validation"
+
+    conformance:
+      - "lexical"
+      - "parser"
+      - "AST"
+      - "semantic"
+      - "IR"
+      - "compatibility"
+      - "portability"
+      - "scalability"
+
+  release_rule:
+    rule: >
+      A production release MUST NOT mark an export STABLE while any mandatory
+      validation gate is failed or unverified.
+
+# =============================================================================
+# 56. REQUIRED CROSS-CONTRACT CONSISTENCY
+# =============================================================================
+
+cross_contract_consistency:
+
+  ownership:
+    source: "grammar/contracts/ownership.yaml"
+    requirement: >
+      Every export owner in this file MUST exist in the ownership contract.
+
+  dependencies:
+    source: "grammar/contracts/dependencies.yaml"
+    requirement: >
+      Every declared consumer/dependency MUST be legal under the dependency
+      DAG.
+
+  manifest:
+    source: "grammar/MANIFEST.yaml"
+    requirement: >
+      Every exported grammar file MUST be represented in the repository
+      inventory.
+
+  status:
+    source: "grammar/STATUS.yaml"
+    requirement: >
+      Export lifecycle status MUST agree with repository status.
+
+  ast:
+    source: "grammar/contracts/ast-mappings.yaml"
+    requirement: >
+      Every export with ast.required=true MUST have a matching AST mapping.
+
+  semantic:
+    source: "grammar/contracts/semantic-mappings.yaml"
+    requirement: >
+      Every export with semantic.required=true MUST have a matching semantic
+      mapping.
+
+  ir:
+    source: "grammar/contracts/ir-mappings.yaml"
+    requirement: >
+      Every export with ir.required=true MUST have a matching IR mapping.
+
+  diagnostics:
+    source: "grammar/contracts/diagnostics.yaml"
+    requirement: >
+      Every export with diagnostics.required=true MUST have a matching
+      diagnostic identity.
+
+  compatibility:
+    source: "grammar/contracts/compatibility.yaml"
+    requirement: >
+      Every stable export MUST have a compatibility identity.
+
+# =============================================================================
+# 57. GENERATED INDEX RULE
+# =============================================================================
+
+generated_index:
+
+  purpose: >
+    Provide a complete machine-generated list of all leaf exports without
+    requiring this contract to become a second grammar-definition authority.
+
+  source_of_truth:
+    - "individual grammar file export declarations"
+    - "grammar/contracts/exports.yaml"
+    - "grammar/contracts/ownership.yaml"
+    - "grammar/MANIFEST.yaml"
+
+  generated_outputs:
+    - "grammar/generated/exports-index.yaml"
+
+  rule: >
+    generated/exports-index.yaml is derived output and MUST NOT be edited as
+    an independent authority.
+
+  synchronization:
+    required: true
+
+  stale_generated_index:
+    severity: "error"
+
+# =============================================================================
+# 58. LEAF FILE REQUIREMENT
+# =============================================================================
+
+leaf_file_export_requirement:
+
+  every_grammar_file:
+    required_metadata:
+      - "purpose"
+      - "status"
+      - "authority"
+      - "owns"
+      - "does_not_own"
+      - "imports"
+      - "exports"
+      - "consumers"
+      - "ast_owner"
+      - "semantic_owner"
+      - "ir_owner"
+      - "diagnostic_owner"
+      - "test_owner"
+      - "compatibility_contract"
+      - "scalability_contract"
+      - "poco_reaf_contract"
+      - "hard_coding_audit"
+      - "freeze_criteria"
+
+  rule: >
+    A grammar file cannot be frozen while its export metadata is absent or
+    inconsistent with this contract.
+
+# =============================================================================
+# 59. NO-DOWNSTREAM-REEDIT GUARANTEE
+# =============================================================================
+
+downstream_reedit_guarantee:
+
+  principle: >
+    A correctly frozen export is an interface, not a provisional implementation
+    detail.
+
+  allowed_downstream_changes:
+    - "new compiler backend"
+    - "new target"
+    - "new device"
+    - "new accelerator"
+    - "new QPU"
+    - "new FPGA"
+    - "new ASIC"
+    - "new simulator"
+    - "new runtime"
+    - "new scheduler"
+    - "new router"
+    - "new optimization"
+    - "new deployment environment"
+    - "new dialect that does not redefine stable core semantics"
+
+  prohibited_effect:
+    rule: >
+      None of the above may require modifying a correctly frozen source grammar
+      export merely to make the new realization possible.
+
+# =============================================================================
+# 60. RESOURCE AVAILABILITY MODEL
+# =============================================================================
+
+resource_availability:
+
+  source:
+    expresses:
+      - "minimum requirements"
+      - "maximum permitted usage when explicitly requested"
+      - "preferences"
+      - "constraints"
+      - "capability requirements"
+      - "topology requirements"
+      - "fallback policies"
+
+  compiler:
+    determines:
+      - "candidate targets"
+      - "capability matching"
+      - "resource matching"
+      - "specialization"
+      - "lowering"
+      - "routing"
+      - "scheduling"
+
+  runtime:
+    determines:
+      - "actual availability"
+      - "dynamic state"
+      - "recovery"
+      - "execution"
+
+  rule: >
+    Resource availability MUST remain outside the universal grammar's physical
+    capacity model.
+
+# =============================================================================
+# 61. PORTABILITY GUARANTEE
+# =============================================================================
+
+portability:
+
+  source_program:
+    invariant: >
+      A valid program describes semantic computation and portable realization
+      requirements rather than one mandatory physical implementation.
+
+  target_variation:
+    allowed:
+      - "machine size"
+      - "CPU architecture"
+      - "GPU architecture"
+      - "FPGA architecture"
+      - "ASIC architecture"
+      - "accelerator architecture"
+      - "QPU architecture"
+      - "simulator"
+      - "HPC system"
+      - "cluster"
+      - "future realization"
+
+  semantic_preservation:
+    required: true
+    rule: >
+      Where the program declares semantic equivalence requirements, target
+      realization MUST preserve them or explicitly reject the realization.
+
+# =============================================================================
+# 62. FINAL ACCEPTANCE CRITERIA
+# =============================================================================
+
+acceptance:
+
+  exports_yaml_complete_when:
+
+    authority:
+      - "authority chain is explicit"
+      - "no competing export authority exists"
+
+    ownership:
+      - "every public export has one owner"
+
+    composition:
+      - "root exports are explicit"
+      - "domain exports are explicit"
+      - "leaf export metadata is machine-checkable"
+
+    consumers:
+      - "all public consumers are declared"
+
+    AST:
+      - "all applicable exports have AST mappings"
+
+    semantic:
+      - "all semantic exports have semantic mappings"
+
+    IR:
+      - "all lowering-relevant exports have canonical IR mappings"
+
+    diagnostics:
+      - "all applicable exports have diagnostic contracts"
+
+    compatibility:
+      - "all stable exports are versioned"
+
+    scalability:
+      - "no universal finite capacity is exported"
+
+    portability:
+      - "no physical target is required by universal syntax"
+
+    POCO_REAF:
+      - "portable meaning is separated from realization"
+
+    safety:
+      - "Rust 1.97+"
+      - "Rust 2021"
+      - "unsafe forbidden"
+
+    tests:
+      - "positive coverage"
+      - "negative coverage"
+      - "integration coverage"
+      - "scalability coverage"
+      - "portability coverage"
+
+  repository_freeze_dependency:
+    rule: >
+      exports.yaml itself may be frozen before the entire grammar tree, but
+      the complete grammar directory MUST NOT be declared FROZEN until every
+      exported production has satisfied its applicable downstream contracts.
+
+# =============================================================================
+# 63. CURRENT REPOSITORY INTEGRATION STATE
+# =============================================================================
+
+current_state:
+
+  contract_status: "SPECIFIED"
+
+  repository_status: "AUDIT_REQUIRED"
+
+  production_ready: false
+
+  reason: >
+    This export contract defines the production boundary, but production
+    readiness requires repository-wide validation of every concrete grammar
+    export against ownership, dependency, AST, semantic, IR, diagnostic,
+    compatibility, path, ambiguity, hard-coding, safety and conformance
+    contracts.
+
+  important_existing_implementation_observation:
+    ast:
+      owner: "src/ast/mod.rs"
+      rule: >
+        The current AST contains many established variants and also contains
+        domain-specific and historical implementation constructs. These MUST
+        be reconciled against the canonical domain-neutral AST contract before
+        corresponding grammar exports can be marked STABLE.
+
+    unsafe:
+      rule: >
+        The current AST includes an Unsafe statement variant. This export
+        contract does not authorize unsafe Rust implementation. Source-language
+        safety semantics and Rust implementation safety are separate concerns;
+        the repository's production policy requires safe Rust implementation.
+
+    fixed_widths:
+      rule: >
+        Existing implementation-level integer and floating-point widths MUST
+        NOT be interpreted as universal Zamani machine limits. Source-level
+        fixed-width numeric types, where intentionally specified, are semantic
+        types; implementation representation remains downstream.
+
+  next_validation_stage:
+    name: "EXPORT_CLOSURE_AUDIT"
+    required_inputs:
+      - "grammar/MANIFEST.yaml"
+      - "grammar/OWNERSHIP.yaml"
+      - "grammar/contracts/ownership.yaml"
+      - "grammar/contracts/dependencies.yaml"
+      - "grammar/contracts/exports.yaml"
+      - "grammar/contracts/ast-mappings.yaml"
+      - "grammar/contracts/semantic-mappings.yaml"
+      - "grammar/contracts/ir-mappings.yaml"
+      - "grammar/contracts/diagnostics.yaml"
+      - "grammar/contracts/compatibility.yaml"
+      - "grammar/STATUS.yaml"
+
+# =============================================================================
+# 64. NON-NEGOTIABLE INVARIANTS
+# =============================================================================
+
+invariants:
+
+  one_language:
+    rule: >
+      Classical, quantum, HDL, AI, data, distributed, networking, hardware,
+      accelerator and future computational domains remain domains of one
+      language.
+
+  one_lexer:
+    rule: >
+      One public lexer boundary exists.
+
+  one_parser:
+    rule: >
+      One public parser boundary and one complete-program root exist.
+
+  one_ast:
+    rule: >
+      Source constructs pass through the canonical frontend AST architecture.
+
+  one_semantic_model:
+    rule: >
+      Domain semantics integrate through the common semantic validation model.
+
+  canonical_ir:
+    rule: >
+      Canonical domain IRs are downstream of semantic meaning.
+
+  one_owner:
+    rule: >
+      Every public export has exactly one canonical owner.
+
+  no_hidden_capacity:
+    rule: >
+      No universal source-language export may hide a finite physical capacity.
+
+  no_target_leakage:
+    rule: >
+      Universal exports cannot depend on a particular physical target.
+
+  no_backend_upstream:
+    rule: >
+      Backend implementation details cannot become grammar dependencies.
+
+  no_runtime_upstream:
+    rule: >
+      Runtime state cannot become grammar dependencies.
+
+  no_test_upstream:
+    rule: >
+      Tests cannot become grammar dependencies.
+
+  no_unsafe:
+    rule: >
+      Rust implementation remains safe-only.
+
+  explicit_fallback:
+    rule: >
+      Fallback behavior must be explicitly authorized and semantically
+      validated.
+
+  stable_interfaces:
+    rule: >
+      Frozen exports remain valid interfaces when downstream targets and
+      implementations evolve.
+
+  open_world:
+    rule: >
+      New resources, capabilities, devices, operations and target types can be
+      introduced without changing the fundamental universal grammar merely to
+      encode their finite physical properties.
+
+# =============================================================================
+# END OF grammar/contracts/exports.yaml
+# =============================================================================
