@@ -1,0 +1,1793 @@
+# ============================================================================
+# Zamani Programming Language
+# ============================================================================
+#
+# File:
+#   grammar/MANIFEST.yaml
+#
+# Purpose:
+#   Canonical machine-readable manifest for the complete Zamani grammar
+#   subsystem.
+#
+# This file is the inventory and integration contract for grammar/.
+#
+# It does NOT itself grant STABLE status to a grammar feature.
+#
+# A file becomes STABLE only after all required production gates defined here
+# have been satisfied and evidenced.
+#
+# Repository:
+#   https://github.com/Benwellonedge28/Zamani
+#
+# Language:
+#   Zamani
+#
+# Rust:
+#   Edition 2021
+#   Minimum supported Rust: 1.97
+#   Newer compatible stable Rust versions are permitted.
+#
+# Safety:
+#   Production Zamani Rust implementation MUST use safe Rust.
+#   No unsafe blocks, unsafe functions, unsafe traits, unsafe implementations,
+#   or equivalent unsafe Rust may be introduced.
+#
+# Architecture:
+#   Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
+#
+# Scalability:
+#   Open-ended.
+#   The language MUST NOT impose universal finite hardware/resource ceilings.
+#   Actual execution remains bounded by available resources and implementation
+#   capacity; such limits MUST NOT become language-wide semantic limits.
+#
+# ============================================================================
+
+manifest:
+  schema_version: "1.0"
+  manifest_version: "1.0.0"
+  kind: "zamani-grammar-production-manifest"
+  language: "Zamani"
+  repository: "Benwellonedge28/Zamani"
+  branch: "main"
+  root: "grammar/"
+  generated_from: "git-tree"
+  inventory_revision: "main"
+  inventory_file_count: 877
+  inventory_is_authoritative: false
+  manifest_is_authoritative_for:
+    - "grammar ownership"
+    - "grammar integration contracts"
+    - "freeze requirements"
+    - "production readiness gates"
+    - "repository inventory metadata"
+    - "cross-layer integration requirements"
+
+status:
+  overall: "AUDIT_REQUIRED"
+  freeze_allowed: false
+  reason: >
+    The repository contains a large existing grammar surface that must first
+    pass ownership, dependency, lexical, parser, AST, semantic, IR,
+    diagnostics, compatibility, scalability, hard-coding, naming, ambiguity,
+    and conformance validation.
+  stable_requires:
+    - "all mandatory production gates pass"
+    - "all direct dependencies are frozen"
+    - "all exported symbols have exactly one owner"
+    - "all externally consumed contracts are documented"
+    - "all required downstream mappings exist"
+    - "all required tests pass"
+    - "no unresolved hard-coded capacity exists"
+    - "no unresolved malformed path/name exists"
+    - "no unresolved duplicate conceptual owner exists"
+
+# ============================================================================
+# AUTHORITY MODEL
+# ============================================================================
+
+authority:
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "normative grammar architecture"
+    authority: "primary"
+
+  human_language_specification:
+    path: "grammar/specification/"
+    role: "normative language meaning"
+    authority: "primary"
+
+  machine_contracts:
+    path: "grammar/spec/"
+    role: "machine-readable/machine-oriented language contracts"
+    authority: "primary"
+
+  canonical_grammar_composition:
+    path: "grammar/Zamani.g4"
+    role: "top-level ANTLR composition"
+    authority: "composition-only"
+
+  canonical_lexer_boundary:
+    path: "grammar/antlr/ZamaniLexer.g4"
+    role: "single public ANTLR lexer boundary"
+    authority: "lexical composition boundary"
+
+  canonical_parser_boundary:
+    path: "grammar/antlr/ZamaniParser.g4"
+    role: "single public ANTLR parser boundary"
+    authority: "parser composition boundary"
+
+  lexical_contracts:
+    path: "grammar/lexer/"
+    role: "lexical family ownership and contracts"
+
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    role: "historical/extended reference"
+    authority: "non-normative"
+
+  conformance_reference:
+    path: "grammar/grammar.md"
+    role: "derived conformance/status reference"
+    authority: "derived"
+
+  implementation:
+    rust_paths:
+      - "src/lexer.rs"
+      - "src/parser.rs"
+      - "src/ast/"
+      - "src/semantic/"
+      - "src/ir/"
+      - "src/quantum/"
+      - "src/compile/"
+    rule: >
+      Grammar syntax is not considered implemented merely because an ANTLR
+      production exists. Implementation requires the complete applicable
+      frontend-to-semantic-to-IR integration path.
+
+# ============================================================================
+# GLOBAL ARCHITECTURE
+# ============================================================================
+
+architecture:
+  canonical_pipeline:
+    - stage: "source"
+      owner: "grammar/"
+    - stage: "lexing"
+      owner: "grammar/lexer/ + grammar/antlr/ZamaniLexer.g4"
+    - stage: "parsing"
+      owner: "grammar/antlr/ZamaniParser.g4 + modular grammar delegates"
+    - stage: "domain-neutral AST"
+      owner: "src/ast/"
+    - stage: "structural validation"
+      owner: "grammar/validation/ + compiler validation"
+    - stage: "type validation"
+      owner: "types/ + semantic implementation"
+    - stage: "effect validation"
+      owner: "effects/ + semantic implementation"
+    - stage: "capability validation"
+      owner: "resources/ + semantic implementation"
+    - stage: "resource validation"
+      owner: "resources/ + semantic implementation"
+    - stage: "contract validation"
+      owner: "validation/ + semantic implementation"
+    - stage: "policy validation"
+      owner: "policies/ + security/ + semantic implementation"
+    - stage: "provenance"
+      owner: "semantic/provenance implementation"
+    - stage: "domain semantics"
+      owner: "domain-specific grammar + semantic implementation"
+    - stage: "canonical IR"
+      owner: "src/ir/"
+    - stage: "canonical quantum IR"
+      owner: "quantum::ir"
+    - stage: "optimization"
+      owner: "compiler/backend"
+    - stage: "lowering"
+      owner: "compiler/backend"
+    - stage: "target negotiation"
+      owner: "compiler/runtime"
+    - stage: "routing"
+      owner: "compiler/backend/runtime"
+    - stage: "scheduling"
+      owner: "compiler/backend/runtime"
+    - stage: "resilience"
+      owner: "compiler/runtime"
+    - stage: "ZQN"
+      owner: "compiler/backend/runtime"
+    - stage: "HAL"
+      owner: "target/runtime integration"
+
+  root_composition:
+    grammar/Zamani.g4:
+      owns:
+        - "program-level composition"
+        - "universal item dispatch"
+        - "universal expression/type dispatch where required"
+        - "EOF"
+      does_not_own:
+        - "tokens"
+        - "domain-specific token definitions"
+        - "domain-specific semantic rules"
+        - "hardware limits"
+        - "resource realization"
+        - "IR definitions"
+        - "runtime behavior"
+
+  one_language_rule: >
+    Classical, quantum, HDL, AI, data, distributed, networking, accelerator,
+    embedded, and future computational domains are domains of one Zamani
+    language. They MUST NOT become unrelated languages sharing a repository.
+
+# ============================================================================
+# RUST / IMPLEMENTATION CONTRACT
+# ============================================================================
+
+implementation:
+  rust:
+    edition: "2021"
+    minimum_version: "1.97"
+    safety: "safe-only"
+    unsafe_allowed: false
+
+  antlr:
+    runtime: "antlr-rust"
+    version: "0.3.0-beta"
+
+  cargo:
+    manifest: "Cargo.toml"
+    toolchain: "rust-toolchain.toml"
+
+  required_repository_integration:
+    - "src/lexer.rs"
+    - "src/parser.rs"
+    - "src/ast/"
+    - "src/semantic/"
+    - "src/ir/"
+    - "src/quantum/"
+    - "tests/lexer_tests.rs"
+    - "tests/parser_tests.rs"
+    - "tests/semantic_tests.rs"
+    - "tests/ir_gen_tests.rs"
+
+  implementation_rule: >
+    No grammar feature is considered implemented until its required Rust
+    frontend, AST, semantic, diagnostic, and IR integration exists.
+
+# ============================================================================
+# UNIVERSAL FILE CONTRACT
+# ============================================================================
+
+file_contract:
+  required_fields_before_freeze:
+    - "path"
+    - "kind"
+    - "status"
+    - "purpose"
+    - "authority"
+    - "owner"
+    - "does_not_own"
+    - "inputs"
+    - "outputs"
+    - "imports"
+    - "exports"
+    - "consumed_by"
+    - "ast_owner"
+    - "semantic_owner"
+    - "ir_owner"
+    - "runtime_owner"
+    - "diagnostics_owner"
+    - "test_owner"
+    - "compatibility_owner"
+    - "scalability_contract"
+    - "poco_reaf_contract"
+    - "hard_coding_audit"
+    - "ambiguity_contract"
+    - "error_handling"
+    - "conformance_requirements"
+    - "freeze_criteria"
+
+  ownership_rule: >
+    Every grammar symbol MUST have exactly one canonical owner.
+
+  dependency_rule: >
+    A file may depend on another file's exported contract, but MUST NOT
+    duplicate ownership of an exported symbol.
+
+  downstream_stability_rule: >
+    Once frozen, a file MUST NOT require semantic modification merely because
+    a downstream backend, target, device, dialect, or runtime implementation
+    is added.
+
+  interface_rule: >
+    Cross-file integration MUST occur through stable exported grammar,
+    semantic, AST, IR, capability, resource, effect, policy, or contract
+    interfaces.
+
+# ============================================================================
+# STATUS MODEL
+# ============================================================================
+
+status_model:
+  allowed:
+    - "HISTORICAL"
+    - "REJECTED"
+    - "PROPOSED"
+    - "PLANNED"
+    - "EXPERIMENTAL"
+    - "PARTIALLY_IMPLEMENTED"
+    - "IMPLEMENTED"
+    - "CONFORMANT"
+    - "STABLE"
+    - "DEPRECATED"
+
+  stable_definition: >
+    STABLE means the feature has a complete specification, unique ownership,
+    resolved dependencies, valid ANTLR composition, AST mapping, semantic
+    mapping, required IR mapping, diagnostics, compatibility contract,
+    conformance tests, scalability audit, hard-coding audit, and downstream
+    integration evidence.
+
+  implemented_definition: >
+    IMPLEMENTED means implementation exists, but does not necessarily imply
+    complete production conformance.
+
+  conformant_definition: >
+    CONFORMANT means applicable conformance tests and integration gates pass.
+
+# ============================================================================
+# SCALABILITY / POCO-REAF CONTRACT
+# ============================================================================
+
+scalability:
+  model: "open-ended"
+
+  fundamental_rule: >
+    Zamani source syntax describes portable program meaning and execution
+    intent. It MUST NOT encode an arbitrary finite universe of physical
+    machines.
+
+  forbidden_universal_limits:
+    - "MAX_QUBITS"
+    - "MAX_CPUS"
+    - "MAX_CORES"
+    - "MAX_THREADS"
+    - "MAX_GPUS"
+    - "MAX_FPGAS"
+    - "MAX_ASICS"
+    - "MAX_QPUS"
+    - "MAX_NODES"
+    - "MAX_MEMORY"
+    - "MAX_STORAGE"
+    - "MAX_REGISTER_WIDTH"
+    - "MAX_VECTOR_WIDTH"
+    - "MAX_TENSOR_RANK"
+    - "MAX_TENSOR_DIMENSION"
+    - "MAX_NETWORK_SIZE"
+    - "MAX_DEVICE_COUNT"
+    - "MAX_ACCELERATOR_COUNT"
+    - "MAX_AGENT_COUNT"
+    - "MAX_GATE_COUNT"
+
+  forbidden_equivalents:
+    rule: >
+      Renaming a forbidden capacity constant does not make it valid.
+      Equivalent finite capacity restrictions are also prohibited from the
+      target-independent language architecture.
+
+  permitted_resource_semantics:
+    - "requires"
+    - "prefer"
+    - "constrain"
+    - "allow"
+    - "forbid"
+    - "capability"
+    - "topology"
+    - "resource"
+    - "budget"
+    - "availability"
+    - "reliability"
+    - "latency"
+    - "energy"
+    - "throughput"
+    - "memory"
+    - "storage"
+
+  canonical_examples:
+    - 'requires qubits >= required_qubits'
+    - 'requires memory >= required_memory'
+    - 'requires capability("quantum.measurement")'
+    - 'requires capability("gpu.compute")'
+    - 'requires capability("tensor.compute")'
+    - 'requires topology(required_topology)'
+
+  realization_boundary:
+    grammar: "express intent"
+    ast: "preserve intent"
+    semantic_model: "validate intent"
+    compiler: "negotiate and specialize"
+    runtime: "discover and realize"
+    hardware: "execute"
+
+  physical_limit_rule: >
+    Actual hardware and implementation limits remain valid. They MUST be
+    represented as target/environment feasibility information rather than
+    universal language ceilings.
+
+  infinity_semantics: >
+    "Infinity" means no artificial language-level upper bound. It does not
+    claim that physical memory, storage, compiler memory, execution time,
+    hardware resources, or implementation representations are mathematically
+    infinite.
+
+# ============================================================================
+# POCO-REAF
+# ============================================================================
+
+poco_reaf:
+  enabled: true
+
+  meaning:
+    source: "Program Once"
+    compilation: "Compile Once"
+    execution: "Run Everywhere"
+    target_scope: "Anywhere"
+    compatibility: "Forever"
+
+  semantic_contract: >
+    POCO-REAF preserves program meaning across target realizations. It does
+    not require one target-specific machine binary to execute natively on
+    every physically different architecture.
+
+  required_layers:
+    - "source portability"
+    - "semantic portability"
+    - "canonical IR portability"
+    - "target negotiation"
+    - "target realization"
+    - "compatibility/versioning"
+    - "migration where necessary"
+
+  prohibited_behavior:
+    - "silent semantic change"
+    - "silent unsupported-feature substitution"
+    - "implicit approximation without authorization"
+    - "target-specific grammar leakage"
+    - "vendor-specific hardware assumptions in universal syntax"
+
+# ============================================================================
+# RESOURCE / CAPABILITY CONTRACT
+# ============================================================================
+
+resources:
+  semantic_distinctions:
+    requirement:
+      meaning: "mandatory condition"
+    capability:
+      meaning: "target/environment ability"
+    constraint:
+      meaning: "restriction on acceptable realization"
+    preference:
+      meaning: "non-mandatory selection preference"
+    hint:
+      meaning: "optimization information that cannot alter meaning"
+    budget:
+      meaning: "execution/compilation allowance"
+    negotiation:
+      meaning: "matching program requirements to environment capabilities"
+    realization:
+      meaning: "mapping logical intent to physical resources"
+
+  ownership:
+    grammar: "grammar/resources/"
+    semantic_validation: "semantic implementation"
+    discovery: "runtime/target discovery"
+    realization: "compiler/runtime/backend"
+
+# ============================================================================
+# EFFECT CONTRACT
+# ============================================================================
+
+effects:
+  owner: "grammar/effects/"
+  canonical_categories:
+    - "io"
+    - "network"
+    - "mutation"
+    - "randomness"
+    - "native"
+    - "foreign"
+    - "distributed"
+    - "measurement"
+    - "quantum"
+    - "learning"
+    - "adaptation"
+    - "reflection"
+    - "code_generation"
+    - "simulation"
+
+  extensibility: "open-ended"
+
+  rule: >
+    New effects MUST be registered through the effect contract and MUST NOT
+    require redesigning the universal language merely because a new effect
+    category appears.
+
+# ============================================================================
+# CONTRACT / POLICY / PROVENANCE
+# ============================================================================
+
+contracts:
+  owner: "grammar/validation/"
+  supported_categories:
+    - "requires"
+    - "ensures"
+    - "invariant"
+    - "assume"
+    - "guarantee"
+    - "property"
+    - "assertion"
+    - "refinement"
+
+  lowering_rule: >
+    Contract semantics MUST remain preserved through lowering whenever their
+    declared meaning requires preservation.
+
+policies:
+  owner: "grammar/policies/"
+  governance_categories:
+    - "allow"
+    - "forbid"
+    - "prefer"
+    - "require"
+    - "authorize"
+    - "restrict"
+    - "fallback"
+    - "adaptation"
+    - "execution"
+    - "deployment"
+    - "resource"
+    - "security"
+
+  rule: >
+    Policies govern behavior; they MUST NOT silently redefine type, operation,
+    or resource semantics.
+
+provenance:
+  cross_domain: true
+  required_for:
+    - "inference where provenance is requested"
+    - "reasoning where evidence is requested"
+    - "adaptation"
+    - "code generation"
+    - "target selection"
+    - "resource negotiation"
+    - "compiler transformations where required"
+    - "security decisions where required"
+    - "quantum routing where required"
+    - "simulation decisions where required"
+
+# ============================================================================
+# DOMAIN CONTRACT
+# ============================================================================
+
+domains:
+
+  core:
+    path: "grammar/core/"
+    role: "universal language foundation"
+
+  lexer:
+    path: "grammar/lexer/"
+    role: "lexical contracts and token ownership"
+
+  types:
+    path: "grammar/types/"
+    role: "universal type syntax"
+
+  expressions:
+    path: "grammar/expressions/"
+    role: "universal expression algebra"
+
+  statements:
+    path: "grammar/statements/"
+    role: "universal statement algebra"
+
+  declarations:
+    path: "grammar/declarations/"
+    role: "declaration syntax"
+
+  functions:
+    path: "grammar/functions/"
+    role: "function abstraction"
+
+  modules:
+    path: "grammar/modules/"
+    role: "module/package structure"
+
+  memory:
+    path: "grammar/memory/"
+    role: "source-level memory/ownership semantics"
+
+  effects:
+    path: "grammar/effects/"
+    role: "effect system"
+
+  resources:
+    path: "grammar/resources/"
+    role: "resource and capability requirements"
+
+  policies:
+    path: "grammar/policies/"
+    role: "governance and execution policy"
+
+  security:
+    path: "grammar/security/"
+    role: "security and sandbox contracts"
+
+  validation:
+    path: "grammar/validation/"
+    role: "structural and contract validation"
+
+  classical:
+    path: "grammar/classical/"
+    role: "classical computation"
+
+  data:
+    path: "grammar/data/"
+    role: "data and tensor/data-processing semantics"
+
+  concurrency:
+    path: "grammar/concurrency/"
+    role: "concurrency abstraction"
+
+  distributed:
+    path: "grammar/distributed/"
+    role: "distributed computation"
+
+  networking:
+    path: "grammar/networking/"
+    role: "network semantics"
+
+  hardware:
+    path: "grammar/hardware/"
+    role: "abstract hardware capabilities and intent"
+
+  execution:
+    path: "grammar/execution/"
+    role: "execution intent"
+
+  compile:
+    path: "grammar/compile/"
+    role: "compilation intent"
+
+  quantum:
+    path: "grammar/quantum/"
+    role: "quantum computation"
+
+  hdl:
+    path: "grammar/hdl/"
+    role: "hardware-description semantics"
+
+  hybrid:
+    path: "grammar/hybrid/"
+    role: "cross-domain classical/quantum/HDL/hardware integration"
+
+  ai:
+    path: "grammar/ai/"
+    role: "reasoning, inference, learning, uncertainty, models, agents"
+
+  interoperability:
+    path: "grammar/interoperability/"
+    role: "foreign formats, ABI, FFI, external integration"
+
+  dialects:
+    path: "grammar/dialects/"
+    role: "registered syntax/semantic extensions"
+
+  macros:
+    path: "grammar/macros/"
+    role: "controlled syntax transformation"
+
+  metaprogramming:
+    path: "grammar/metaprogramming/"
+    role: "controlled reflection, generation, compile-time computation"
+
+  compatibility:
+    path: "grammar/compatibility/"
+    role: "versioning and migration"
+
+  mathematics:
+    path: "grammar/mathematics/"
+    role: "mathematical syntax"
+
+  nano:
+    path: "grammar/nano/"
+    role: "atomic/molecular/nanoscale computation abstractions"
+
+  filesystem:
+    path: "grammar/filesystem/"
+    role: "filesystem/source resource semantics"
+
+  nlp:
+    path: "grammar/nlp/"
+    role: "natural-language processing domain"
+
+# ============================================================================
+# DOMAIN DEPENDENCY ORDER
+# ============================================================================
+
+dependency_layers:
+
+  layer_0_authority:
+    - "grammar/DESIGN.md"
+    - "grammar/specification/"
+    - "grammar/spec/"
+
+  layer_1_lexical:
+    - "grammar/lexer/"
+    - "grammar/antlr/ZamaniLexer.g4"
+
+  layer_2_core:
+    - "grammar/core/"
+    - "grammar/modules/"
+    - "grammar/declarations/"
+
+  layer_3_types:
+    - "grammar/types/"
+    - "grammar/memory/"
+
+  layer_4_expressions:
+    - "grammar/expressions/"
+
+  layer_5_functions_and_statements:
+    - "grammar/functions/"
+    - "grammar/statements/"
+
+  layer_6_control_plane:
+    - "grammar/effects/"
+    - "grammar/resources/"
+    - "grammar/validation/"
+    - "grammar/policies/"
+    - "grammar/security/"
+
+  layer_7_classical_data:
+    - "grammar/classical/"
+    - "grammar/mathematics/"
+    - "grammar/data/"
+
+  layer_8_parallel_distributed:
+    - "grammar/concurrency/"
+    - "grammar/distributed/"
+    - "grammar/networking/"
+
+  layer_9_realization_intent:
+    - "grammar/hardware/"
+    - "grammar/execution/"
+    - "grammar/compile/"
+
+  layer_10_quantum:
+    - "grammar/quantum/"
+
+  layer_11_hdl:
+    - "grammar/hdl/"
+
+  layer_12_hybrid:
+    - "grammar/hybrid/"
+
+  layer_13_ai:
+    - "grammar/ai/"
+    - "grammar/nlp/"
+
+  layer_14_extensions:
+    - "grammar/interoperability/"
+    - "grammar/dialects/"
+    - "grammar/macros/"
+    - "grammar/metaprogramming/"
+
+  layer_15_compatibility:
+    - "grammar/compatibility/"
+
+  layer_16_composition:
+    - "grammar/antlr/ZamaniParser.g4"
+    - "grammar/Zamani.g4"
+
+  rule: >
+    A file in a later layer MUST NOT become a prerequisite for a file in an
+    earlier layer unless an explicit architecture exception is documented.
+
+# ============================================================================
+# LEXER CONTRACT
+# ============================================================================
+
+lexer:
+  canonical_public_boundary:
+    path: "grammar/antlr/ZamaniLexer.g4"
+
+  canonical_internal_composition:
+    path: "grammar/lexer/lexer.g4"
+
+  token_registry:
+    path: "grammar/lexer/tokens.g4"
+
+  ownership_rule: >
+    Every emitted token MUST have exactly one lexical owner.
+
+  prohibited:
+    - "duplicate token declarations"
+    - "duplicate token spellings without documented contextual semantics"
+    - "domain-specific lexer authorities"
+    - "parser-level token redefinitions"
+    - "hardware-specific token capacity limits"
+
+  token_categories:
+    - "keyword"
+    - "identifier"
+    - "operator"
+    - "punctuation"
+    - "literal"
+    - "annotation"
+    - "comment"
+    - "lexical-error"
+
+  contextual_keyword_rule: >
+    A word MUST NOT become globally reserved merely because a domain happens
+    to use it. Contextual reservation MUST be explicitly documented.
+
+# ============================================================================
+# QUANTUM CONTRACT
+# ============================================================================
+
+quantum:
+  path: "grammar/quantum/"
+  canonical_ir: "quantum::ir"
+
+  operation_model:
+    rule: "data-driven"
+    required_components:
+      - "operationSpecifier"
+      - "targets"
+      - "optional controls"
+      - "parameters"
+      - "results"
+      - "attributes"
+      - "modifiers"
+
+  operation_kinds:
+    - "builtin"
+    - "custom"
+    - "vendor"
+    - "parameterized"
+    - "dialect"
+    - "future"
+
+  prohibited_architecture: >
+    The universal grammar MUST NOT require a permanently enumerated finite
+    catalogue of quantum gates or physical devices.
+
+  physical_mapping:
+    grammar: "logical quantum intent"
+    semantic_model: "validated quantum meaning"
+    quantum_ir: "canonical quantum representation"
+    backend: "physical mapping"
+    runtime: "device discovery and execution"
+
+  resource_rule: >
+    Logical qubit expressions MUST NOT be interpreted as direct physical
+    qubit allocation by the grammar.
+
+# ============================================================================
+# HDL CONTRACT
+# ============================================================================
+
+hdl:
+  path: "grammar/hdl/"
+
+  owns:
+    - "hardware intent"
+    - "modules"
+    - "ports"
+    - "signals"
+    - "nets"
+    - "registers"
+    - "memories"
+    - "clocking"
+    - "timing"
+    - "pipelines"
+    - "state machines"
+    - "verification intent"
+    - "synthesis intent"
+
+  does_not_own:
+    - "fixed universal hardware capacity"
+    - "vendor-specific device selection"
+    - "physical placement"
+    - "routing implementation"
+    - "fabrication technology"
+
+# ============================================================================
+# AI CONTRACT
+# ============================================================================
+
+ai:
+  path: "grammar/ai/"
+
+  common_semantic_foundations:
+    - "types"
+    - "effects"
+    - "resources"
+    - "capabilities"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "evidence"
+    - "uncertainty"
+
+  extensible_categories:
+    - "inference"
+    - "deduction"
+    - "reasoning"
+    - "learning"
+    - "adaptation"
+    - "probability"
+    - "confidence"
+    - "evidence"
+    - "models"
+    - "datasets"
+    - "training"
+    - "agents"
+    - "planning"
+    - "neural-symbolic"
+
+  application_keyword_rule: >
+    Application-specific concepts MUST NOT automatically become universal
+    language keywords. They belong in libraries, dialects, capabilities,
+    policies, or application-level packages.
+
+# ============================================================================
+# INTEROPERABILITY CONTRACT
+# ============================================================================
+
+interoperability:
+  path: "grammar/interoperability/"
+
+  categories:
+    - "foreign-source-format"
+    - "ABI"
+    - "API"
+    - "FFI"
+    - "calling-convention"
+    - "foreign-type"
+    - "serialization"
+    - "external-function"
+    - "linkage"
+
+  rule: >
+    Supporting an external language or data format does not make that external
+    language or format part of the Zamani core language.
+
+# ============================================================================
+# DIALECT CONTRACT
+# ============================================================================
+
+dialects:
+  path: "grammar/dialects/"
+
+  required_metadata:
+    - "identity"
+    - "namespace"
+    - "version"
+    - "dependencies"
+    - "capabilities"
+    - "syntax"
+    - "semantic_mapping"
+    - "compatibility"
+    - "registration"
+    - "status"
+
+  rule: >
+    A dialect MUST integrate through explicit registration and stable semantic
+    interfaces. A dialect MUST NOT silently redefine core Zamani semantics.
+
+# ============================================================================
+# MACRO / METAPROGRAMMING CONTRACT
+# ============================================================================
+
+metaprogramming:
+  macros:
+    path: "grammar/macros/"
+    requirements:
+      - "hygiene"
+      - "source provenance"
+      - "expansion diagnostics"
+      - "semantic validation after expansion"
+
+  metaprogramming:
+    path: "grammar/metaprogramming/"
+    requirements:
+      - "controlled reflection"
+      - "controlled introspection"
+      - "quotation"
+      - "unquotation"
+      - "code generation"
+      - "compile-time evaluation"
+      - "provenance"
+      - "effects"
+      - "capabilities"
+      - "policies"
+      - "sandbox"
+
+  rule: >
+    Metaprogramming MUST NOT provide an unchecked path around type checking,
+    effects, capabilities, resource checks, security policy, or provenance.
+
+# ============================================================================
+# AST CONTRACT
+# ============================================================================
+
+ast:
+  owner: "src/ast/"
+
+  required_property: >
+    The AST is domain-neutral at its structural boundary.
+
+  grammar_to_ast:
+    rule: >
+      Every stable grammar production that carries semantic meaning MUST have
+      a documented AST mapping.
+
+  source_information:
+    preserve:
+      - "source span"
+      - "source location"
+      - "relevant lexical identity"
+      - "source provenance"
+      - "diagnostic context"
+
+  prohibited:
+    - "physical device allocation in syntax AST"
+    - "vendor-specific instruction representation"
+    - "backend scheduling state"
+    - "runtime-only hardware state"
+
+# ============================================================================
+# SEMANTIC CONTRACT
+# ============================================================================
+
+semantic:
+  owner: "src/semantic/"
+
+  required_domains:
+    - "names"
+    - "types"
+    - "values"
+    - "operations"
+    - "effects"
+    - "capabilities"
+    - "resources"
+    - "requirements"
+    - "constraints"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "diagnostics"
+    - "compatibility"
+
+  rule: >
+    Grammar describes syntax. Semantic analysis determines meaning and
+    validity. Grammar files MUST NOT become a substitute for semantic
+    analysis.
+
+# ============================================================================
+# IR CONTRACT
+# ============================================================================
+
+ir:
+  owner: "src/ir/"
+
+  canonical_boundaries:
+    classical: "Classical IR"
+    quantum: "quantum::ir"
+    hardware: "HDL/Hardware semantic IR as defined by compiler architecture"
+
+  rule: >
+    Domain-specific lowering representations MAY exist downstream, but they
+    MUST NOT replace the canonical semantic IR boundary.
+
+  prohibited:
+    - "grammar-defined vendor IR"
+    - "grammar-defined physical QPU IR"
+    - "grammar-defined GPU instruction IR"
+    - "grammar-defined FPGA implementation IR"
+
+# ============================================================================
+# DIAGNOSTIC CONTRACT
+# ============================================================================
+
+diagnostics:
+  required_layers:
+    - "lexical"
+    - "syntactic"
+    - "structural"
+    - "type"
+    - "effect"
+    - "contract"
+    - "policy"
+    - "capability"
+    - "resource"
+    - "semantic"
+    - "compatibility"
+    - "lowering"
+    - "backend"
+
+  rule: >
+    Diagnostics MUST identify the earliest applicable semantic layer rather
+    than collapsing every failure into a generic compilation error.
+
+# ============================================================================
+# VALIDATION CONTRACT
+# ============================================================================
+
+validation:
+  path: "grammar/validation/"
+
+  mandatory_checks:
+    ownership:
+      - "unique token owner"
+      - "unique parser-rule owner"
+      - "unique exported-symbol owner"
+
+    dependency:
+      - "all imports resolve"
+      - "no forbidden dependency direction"
+      - "no unresolved cycles"
+      - "dependency graph is deterministic"
+
+    grammar:
+      - "no unintended left recursion"
+      - "no unreachable rules"
+      - "no accidental ambiguity"
+      - "precedence is explicit"
+      - "parser entry points are reachable"
+
+    lexical:
+      - "no duplicate token spelling"
+      - "no duplicate token definition"
+      - "contextual keywords are explicit"
+
+    scalability:
+      - "no universal hardware ceiling"
+      - "no disguised finite capacity"
+      - "symbolic dimensions remain symbolic"
+      - "resource feasibility remains downstream"
+
+    integration:
+      - "AST mapping exists"
+      - "semantic mapping exists"
+      - "IR mapping exists where required"
+      - "diagnostic mapping exists"
+      - "compatibility mapping exists"
+
+    naming:
+      - "no unexplained near-duplicate filenames"
+      - "no trailing whitespace in paths"
+      - "no whitespace-dependent filenames"
+      - "no singular/plural duplicates without documented ownership"
+
+# ============================================================================
+# CURRENT REPOSITORY PATH AUDIT
+# ============================================================================
+
+path_audit:
+  policy: "FAIL_CLOSED"
+
+  reject:
+    - "trailing whitespace in filename"
+    - "leading whitespace in filename"
+    - "embedded newline in filename"
+    - "embedded tab in filename"
+    - "case-only collision"
+    - "duplicate semantic owner"
+    - "unexplained singular/plural duplicate"
+
+  known_current_tree_issue:
+    path_pattern:
+      - "grammar/validation/grammar-validation.md "
+    classification: "MALFORMED_PATH"
+    required_action: >
+      Rename to a canonical path without trailing whitespace before the
+      containing directory can be frozen.
+
+  known_conceptual_duplicate_classes:
+    examples:
+      - "closure vs closures"
+      - "lambda vs lambdas"
+      - "map vs map-types"
+      - "option vs option-types"
+      - "array vs array-types"
+    rule: >
+      Each pair MUST be proven intentionally distinct or consolidated before
+      the affected directory is frozen.
+
+# ============================================================================
+# INVENTORY CONTRACT
+# ============================================================================
+
+inventory:
+  source:
+    canonical: "Git tree of grammar/"
+    current_count: 877
+
+  each_entry_must_record:
+    - "path"
+    - "kind"
+    - "sha"
+    - "size"
+    - "owner_domain"
+    - "status"
+
+  each_stable_entry_must_add:
+    - "purpose"
+    - "authority"
+    - "does_not_own"
+    - "imports"
+    - "exports"
+    - "consumed_by"
+    - "ast_owner"
+    - "semantic_owner"
+    - "ir_owner"
+    - "runtime_owner"
+    - "diagnostics_owner"
+    - "test_owner"
+    - "compatibility_owner"
+    - "scalability_contract"
+    - "poco_reaf_contract"
+    - "hard_coding_audit"
+    - "ambiguity_contract"
+    - "error_handling"
+    - "conformance_requirements"
+    - "freeze_criteria"
+
+  inventory_status_rule: >
+    Git existence alone NEVER implies implementation status.
+
+# ============================================================================
+# DIRECTORY INTEGRATION CONTRACTS
+# ============================================================================
+
+directories:
+
+  grammar/lexer/:
+    freezes_before:
+      - "core"
+      - "types"
+      - "expressions"
+      - "statements"
+      - "domains"
+    must_integrate_with:
+      - "grammar/antlr/ZamaniLexer.g4"
+      - "src/lexer.rs"
+      - "tests/lexer_tests.rs"
+
+  grammar/core/:
+    freezes_before:
+      - "types"
+      - "expressions"
+      - "statements"
+      - "domains"
+    must_integrate_with:
+      - "src/ast/"
+      - "src/parser.rs"
+
+  grammar/types/:
+    freezes_before:
+      - "expressions"
+      - "functions"
+      - "statements"
+      - "domains"
+    must_integrate_with:
+      - "src/ast/"
+      - "src/semantic/"
+      - "type-system implementation"
+
+  grammar/expressions/:
+    freezes_before:
+      - "statements"
+      - "classical"
+      - "quantum"
+      - "hdl"
+      - "ai"
+    must_integrate_with:
+      - "types"
+      - "src/ast/"
+      - "src/semantic/"
+
+  grammar/effects/:
+    freezes_before:
+      - "quantum"
+      - "ai"
+      - "execution"
+      - "interoperability"
+      - "metaprogramming"
+    must_integrate_with:
+      - "semantic effect checker"
+      - "policy system"
+      - "capability system"
+
+  grammar/resources/:
+    freezes_before:
+      - "hardware"
+      - "execution"
+      - "compile"
+      - "quantum"
+      - "hdl"
+      - "distributed"
+    must_integrate_with:
+      - "resource analysis"
+      - "capability discovery"
+      - "target negotiation"
+
+  grammar/quantum/:
+    freezes_after:
+      - "types"
+      - "expressions"
+      - "effects"
+      - "resources"
+      - "hardware"
+      - "execution"
+    must_integrate_with:
+      - "src/quantum/"
+      - "quantum::ir"
+
+  grammar/hdl/:
+    freezes_after:
+      - "types"
+      - "expressions"
+      - "resources"
+      - "hardware"
+      - "execution"
+    must_integrate_with:
+      - "hardware semantic model"
+      - "HDL lowering"
+
+  grammar/hybrid/:
+    freezes_after:
+      - "classical"
+      - "quantum"
+      - "hdl"
+      - "hardware"
+      - "execution"
+
+  grammar/ai/:
+    freezes_after:
+      - "types"
+      - "data"
+      - "effects"
+      - "resources"
+      - "policies"
+      - "provenance"
+      - "concurrency"
+      - "distributed"
+
+  grammar/interoperability/:
+    freezes_after:
+      - "core"
+      - "types"
+      - "effects"
+      - "security"
+    must_integrate_with:
+      - "ABI"
+      - "FFI"
+      - "foreign representation layer"
+
+  grammar/dialects/:
+    freezes_after:
+      - "core"
+      - "types"
+      - "semantic contracts"
+    must_integrate_with:
+      - "dialect registry"
+      - "compatibility"
+
+  grammar/macros/:
+    freezes_after:
+      - "lexer"
+      - "core"
+      - "types"
+      - "expressions"
+      - "statements"
+
+  grammar/metaprogramming/:
+    freezes_after:
+      - "AST"
+      - "semantic model"
+      - "effects"
+      - "capabilities"
+      - "policies"
+      - "security"
+
+  grammar/compatibility/:
+    freezes_before:
+      - "final root freeze"
+    must_integrate_with:
+      - "language version"
+      - "grammar version"
+      - "AST version"
+      - "semantic version"
+      - "IR version"
+      - "dialect version"
+
+# ============================================================================
+# CONFORMANCE TEST CONTRACT
+# ============================================================================
+
+tests:
+  root: "grammar/tests/"
+
+  required_categories:
+    - "lexical"
+    - "parser"
+    - "AST"
+    - "structural-validation"
+    - "types"
+    - "effects"
+    - "resources"
+    - "capabilities"
+    - "contracts"
+    - "policies"
+    - "classical"
+    - "quantum"
+    - "HDL"
+    - "hybrid"
+    - "AI"
+    - "data"
+    - "concurrency"
+    - "distributed"
+    - "networking"
+    - "hardware"
+    - "execution"
+    - "interoperability"
+    - "dialects"
+    - "macros"
+    - "metaprogramming"
+    - "compatibility"
+    - "diagnostics"
+    - "source-spans"
+    - "portability"
+    - "scalability"
+    - "hard-coding"
+    - "fuzzing"
+    - "negative-tests"
+
+  per_stable_file:
+    required:
+      - "positive test where applicable"
+      - "negative test where applicable"
+      - "boundary test"
+      - "integration test where externally consumed"
+      - "scalability test where cardinality/resource semantics apply"
+
+  repository_integration:
+    existing:
+      - "tests/lexer_tests.rs"
+      - "tests/parser_tests.rs"
+      - "tests/semantic_tests.rs"
+      - "tests/ir_gen_tests.rs"
+      - "tests/compiler_pipeline.rs"
+      - "tests/grammar_doc_tests.rs"
+
+# ============================================================================
+# GOLDEN / EXAMPLE CONTRACT
+# ============================================================================
+
+examples:
+  required_canonical_examples:
+    - "minimal.zm"
+    - "classical.zm"
+    - "quantum.zm"
+    - "hdl.zm"
+    - "hybrid.zm"
+    - "poco-reaf.zm"
+
+  purpose:
+    - "parser conformance"
+    - "semantic conformance"
+    - "documentation"
+    - "regression testing"
+    - "portability testing"
+
+golden:
+  recommended_root: "grammar/golden/"
+  categories:
+    - "lexer"
+    - "parser"
+    - "ast"
+    - "semantic"
+    - "diagnostics"
+
+# ============================================================================
+# FREEZE PROTOCOL
+# ============================================================================
+
+freeze_protocol:
+
+  stage_0_inventory:
+    status: "AUDIT"
+    actions:
+      - "enumerate every grammar file"
+      - "normalize malformed paths"
+      - "identify duplicate filenames/concepts"
+      - "assign provisional ownership"
+      - "build dependency graph"
+      - "record repository SHA"
+    output:
+      - "MANIFEST.yaml"
+      - "ownership report"
+      - "dependency report"
+      - "path report"
+
+  stage_1_authority:
+    freeze:
+      - "DESIGN.md"
+      - "specification/"
+      - "spec/"
+    gate:
+      - "no contradictory normative definitions"
+
+  stage_2_lexer:
+    freeze:
+      - "lexer/"
+      - "antlr/ZamaniLexer.g4"
+    gate:
+      - "unique token ownership"
+      - "lexical conformance"
+      - "Rust lexer agreement"
+
+  stage_3_core:
+    freeze:
+      - "core/"
+      - "modules/"
+      - "declarations/"
+    gate:
+      - "stable names and source-unit structure"
+
+  stage_4_types:
+    freeze:
+      - "types/"
+      - "memory/"
+    gate:
+      - "complete type ownership and semantic mapping"
+
+  stage_5_expressions:
+    freeze:
+      - "expressions/"
+    gate:
+      - "precedence"
+      - "ambiguity"
+      - "AST coverage"
+
+  stage_6_functions_statements:
+    freeze:
+      - "functions/"
+      - "statements/"
+    gate:
+      - "semantic and effect integration"
+
+  stage_7_control_plane:
+    freeze:
+      - "effects/"
+      - "resources/"
+      - "validation/"
+      - "policies/"
+      - "security/"
+    gate:
+      - "requirements"
+      - "capabilities"
+      - "effects"
+      - "contracts"
+      - "policies"
+
+  stage_8_classical_data:
+    freeze:
+      - "classical/"
+      - "mathematics/"
+      - "data/"
+
+  stage_9_concurrency:
+    freeze:
+      - "concurrency/"
+      - "distributed/"
+      - "networking/"
+
+  stage_10_realization:
+    freeze:
+      - "hardware/"
+      - "execution/"
+      - "compile/"
+
+  stage_11_quantum:
+    freeze:
+      - "quantum/"
+    gate:
+      - "quantum::ir integration"
+      - "no physical gate-set ceiling"
+      - "resource/capability integration"
+
+  stage_12_hdl:
+    freeze:
+      - "hdl/"
+    gate:
+      - "hardware intent separated from realization"
+
+  stage_13_hybrid:
+    freeze:
+      - "hybrid/"
+
+  stage_14_ai:
+    freeze:
+      - "ai/"
+      - "nlp/"
+
+  stage_15_extensions:
+    freeze:
+      - "interoperability/"
+      - "dialects/"
+      - "macros/"
+      - "metaprogramming/"
+
+  stage_16_compatibility:
+    freeze:
+      - "compatibility/"
+    gate:
+      - "versioning"
+      - "migration"
+      - "AST compatibility"
+      - "semantic compatibility"
+      - "IR compatibility"
+
+  stage_17_root:
+    freeze_last:
+      - "antlr/ZamaniParser.g4"
+      - "Zamani.g4"
+
+    gate:
+      - "all dependencies frozen"
+      - "all parser dispatchers complete"
+      - "all conformance suites pass"
+
+# ============================================================================
+# ROOT FREEZE CRITERIA
+# ============================================================================
+
+root_freeze:
+  required:
+    - "one language authority"
+    - "one specification authority"
+    - "one machine-contract authority"
+    - "one lexer boundary"
+    - "one parser boundary"
+    - "one composition root"
+    - "unique token ownership"
+    - "unique grammar-rule ownership"
+    - "acyclic dependency graph"
+    - "complete AST mapping"
+    - "complete semantic mapping"
+    - "complete IR mapping"
+    - "complete diagnostics mapping"
+    - "complete compatibility mapping"
+    - "zero unresolved malformed paths"
+    - "zero unresolved duplicate owners"
+    - "zero unresolved hard-coded universal capacities"
+    - "zero unresolved grammar ambiguity"
+    - "zero unresolved unreachable production"
+    - "zero unresolved accidental left recursion"
+    - "all mandatory tests passing"
+
+  final_state:
+    manifest_status: "FROZEN"
+    grammar_status: "FROZEN"
+    next_stage_allowed: true
+
+# ============================================================================
+# PRODUCTION READINESS
+# ============================================================================
+
+production_readiness:
+
+  definition: >
+    grammar/ is production-ready only when the complete source language
+    architecture is closed under its declared contracts while remaining open
+    to new targets, resources, capabilities, devices, algorithms, operations,
+    dialects, and execution environments.
+
+  production_ready_requires:
+    - "complete inventory"
+    - "complete ownership"
+    - "complete dependency graph"
+    - "complete lexical authority"
+    - "complete parser composition"
+    - "complete AST integration"
+    - "complete semantic integration"
+    - "complete canonical IR integration"
+    - "complete diagnostics"
+    - "complete compatibility"
+    - "complete tests"
+    - "hard-coding audit passed"
+    - "portability audit passed"
+    - "scalability audit passed"
+    - "safe-Rust audit passed"
+
+  non_goals:
+    - "guaranteeing infinite physical resources"
+    - "guaranteeing infinite compiler memory"
+    - "guaranteeing one native binary for every architecture"
+    - "enumerating every future device in the grammar"
+    - "encoding vendor hardware into universal syntax"
+
+# ============================================================================
+# MACHINE VALIDATION RULE
+# ============================================================================
+
+machine_validation:
+  manifest_must_fail_if:
+    - "inventory count differs from repository tree without explicit update"
+    - "a file has multiple owners"
+    - "an exported grammar symbol has multiple owners"
+    - "an import cannot be resolved"
+    - "dependency graph contains a forbidden cycle"
+    - "a stable file lacks required contract fields"
+    - "a stable semantic production lacks AST mapping"
+    - "a stable semantic production lacks required IR mapping"
+    - "a token has multiple owners"
+    - "a universal hardware capacity is hard-coded"
+    - "a malformed path exists"
+    - "a trailing-whitespace filename exists"
+    - "a stable file lacks tests"
+    - "a stable file lacks compatibility status"
+    - "a root grammar is frozen before its dependencies"
+
+  machine_validation_may_warn:
+    - "experimental feature"
+    - "planned feature"
+    - "historical feature"
+    - "deprecated feature"
+
+# ============================================================================
+# CURRENT INVENTORY SNAPSHOT
+# ============================================================================
+
+inventory_snapshot:
+  current_grammar_file_count: 877
+
+  required_next_generated_artifacts:
+    - "grammar/OWNERSHIP.yaml"
+    - "grammar/DEPENDENCIES.yaml"
+    - "grammar/STATUS.yaml"
+    - "grammar/contracts/"
+    - "grammar/conformance/"
+    - "grammar/golden/"
+    - "grammar/examples/"
+
+  important:
+    >
+    MANIFEST.yaml is the authoritative schema for what every inventory entry
+    must prove before freezing. The exact per-file Git SHA and byte size are
+    repository inventory data and MUST be regenerated from the Git tree whenever
+    grammar files are added, removed, renamed, or modified.
+
+# ============================================================================
+# FINAL RULE
+# ============================================================================
+
+final_rule: >
+  Do not grow grammar/ by adding isolated grammar files without first giving
+  the file a unique owner, explicit dependency contract, stable exports,
+  downstream consumers, AST mapping, semantic mapping, IR mapping where
+  applicable, diagnostics, compatibility behavior, tests, scalability
+  guarantees, POCO-REAF behavior, and hard-coding audit.
+
+freeze_statement: >
+  When every inventory entry satisfies this manifest, all dependency layers
+  are frozen in order, all validation gates pass, and the root composition
+  grammars pass final conformance, grammar/ becomes the frozen, target-
+  independent source-language boundary for Zamani.
