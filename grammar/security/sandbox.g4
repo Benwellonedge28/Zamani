@@ -13,115 +13,164 @@
  *
  * STATUS
  * ------
- * CANONICAL SOURCE-LEVEL SANDBOX INTENT GRAMMAR
+ * CANONICAL PRODUCTION SANDBOX GRAMMAR
  *
  * ============================================================================
  * PURPOSE
  * ============================================================================
  *
- * This grammar defines source-level sandbox intent.
+ * This grammar defines the source-level syntax for declaring a sandbox
+ * boundary around computation.
  *
- * A sandbox is a declarative security/execution boundary that constrains
- * what a computation may require, provide, perform, access, invoke, modify,
- * communicate with, or adapt to.
+ * A sandbox is a declarative security/execution boundary.
  *
- * This grammar does NOT implement sandbox enforcement.
+ * It expresses constraints over:
  *
- * It does NOT:
+ *     effects
+ *     capabilities
+ *     resources
+ *     networking
+ *     native execution
+ *     foreign/FFI execution
+ *     reflection
+ *     adaptation
+ *     simulation
+ *     policies
+ *     contracts
+ *     provenance
+ *     auditing
+ *     tracing
+ *     arbitrary security-relevant subjects
  *
- *     authenticate
- *     authorize
- *     allocate resources
- *     inspect hardware
- *     inspect the filesystem
- *     inspect the network
- *     execute programs
- *     invoke FFI
- *     invoke native code
- *     evaluate policies
- *     resolve capabilities
- *     resolve resources
- *     perform reflection
- *     perform adaptation
- *     create credentials
- *     create secrets
- *     select a target
- *     select a device
- *     create an IR
- *     execute an IR
+ * This grammar describes INTENT.
  *
- * It represents SOURCE INTENT only.
+ * It does NOT implement:
+ *
+ *     authentication
+ *     authorization
+ *     identity resolution
+ *     credential management
+ *     cryptography
+ *     capability discovery
+ *     capability resolution
+ *     resource discovery
+ *     resource allocation
+ *     target selection
+ *     device selection
+ *     filesystem inspection
+ *     network inspection
+ *     runtime enforcement
+ *     process isolation
+ *     container creation
+ *     virtual-machine creation
+ *     native execution
+ *     foreign execution
+ *     reflection
+ *     adaptation
+ *     simulation
+ *     policy evaluation
+ *     audit persistence
+ *     provenance persistence
+ *     IR generation
+ *     scheduling
+ *     routing
+ *     QEC
+ *     ZQN
+ *     HAL realization
+ *
+ * Those responsibilities belong to downstream semantic, compiler, runtime,
+ * security, deployment, and target-realization layers.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
  * ============================================================================
  *
- *     source
- *       |
- *       v
- *     ZamaniLexer
- *       |
- *       v
+ *     Zamani source
+ *          |
+ *          v
+ *     canonical lexer
+ *          |
+ *          v
+ *     ZamaniParser
+ *          |
+ *          v
  *     SecuritySandbox
- *       |
- *       v
+ *          |
+ *          v
  *     domain-neutral AST
- *       |
- *       v
+ *          |
+ *          v
  *     structural validation
- *       |
- *       +--> types
- *       +--> effects
- *       +--> capabilities
- *       +--> resources
- *       +--> contracts
- *       +--> policies
- *       +--> provenance
- *       |
- *       v
- *     security semantic model
- *       |
- *       v
+ *          |
+ *          +--> types
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> contracts
+ *          +--> policies
+ *          +--> provenance
+ *          +--> security
+ *          |
+ *          v
+ *     semantic sandbox model
+ *          |
+ *          v
  *     canonical semantic model
- *       |
- *       +------------------------------+
- *       |                              |
- *       v                              v
- *     classical                    quantum::ir
- *       |                              |
- *       +--------------+---------------+
- *                      |
- *                      v
- *               optimization/lowering
- *                      |
- *                      v
- *              execution planning
- *                      |
- *                      v
- *              target realization
+ *          |
+ *          +--------------------------+
+ *          |                          |
+ *          v                          v
+ *     classical representation    quantum semantic model
+ *                                     |
+ *                                     v
+ *                                 quantum::ir
+ *          |                          |
+ *          +-------------+------------+
+ *                        |
+ *                        v
+ *                  optimization
+ *                        |
+ *                        v
+ *                    lowering
+ *                        |
+ *                        v
+ *                routing/scheduling
+ *                        |
+ *                        v
+ *                 resilience/QEC
+ *                        |
+ *                        v
+ *                       ZQN
+ *                        |
+ *                        v
+ *                       HAL
+ *                        |
+ *                        v
+ *                 target realization
  *
- * Sandbox syntax therefore remains target-independent.
+ * The sandbox grammar MUST NOT bypass this architecture.
  *
  * ============================================================================
  * IMPLEMENTATION BASELINE
  * ============================================================================
  *
- * Grammar technology:
+ * Grammar:
  *
  *     ANTLR4 parser grammar
  *
- * Rust implementation baseline:
+ * Rust:
  *
- *     Rust 1.97+
- *
- * Rust edition:
- *
+ *     Rust 1.97 or later
  *     Rust 2021
  *
  * Safety:
  *
- *     This grammar contains no embedded Rust actions.
- *     Generated frontend integration must remain safe Rust.
+ *     no embedded Rust
+ *     no semantic actions
+ *     no semantic predicates
+ *     no unsafe Rust requirement
+ *
+ * The generated frontend MUST remain safe Rust.
  *
  * ============================================================================
  * OWNERSHIP
@@ -129,177 +178,298 @@
  *
  * THIS FILE OWNS:
  *
- *     - sandbox statement syntax;
- *     - sandbox target syntax;
- *     - sandbox configuration syntax;
- *     - sandbox directives;
- *     - sandbox allow/forbid intent;
- *     - sandbox permission intent;
- *     - sandbox requirement intent;
- *     - sandbox contract intent;
- *     - sandbox preference intent;
- *     - sandbox fallback intent;
- *     - sandbox effect restrictions;
- *     - sandbox capability restrictions;
- *     - sandbox resource restrictions;
- *     - sandbox native/foreign restrictions;
- *     - sandbox reflection restrictions;
- *     - sandbox adaptation restrictions;
- *     - sandbox network restrictions;
- *     - sandbox property metadata;
- *     - sandbox provenance metadata;
- *     - sandbox audit/trace intent;
- *     - nested sandbox configuration.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - lexical tokens;
- *     - identifiers;
- *     - qualified names;
- *     - expressions;
- *     - generic capabilities;
- *     - resource requirements;
- *     - effect semantics;
- *     - authorization;
- *     - identity;
- *     - trust;
- *     - credentials;
- *     - cryptography;
- *     - policy evaluation;
- *     - runtime enforcement;
- *     - hardware selection;
- *     - resource allocation;
- *     - execution scheduling;
- *     - quantum operations;
- *     - quantum routing;
- *     - QEC;
- *     - ZQN;
- *     - HAL;
- *     - backend selection.
- *
- * ============================================================================
- * DEPENDENCY CONTRACT
- * ============================================================================
- *
- * DEPENDS_ON:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *     grammar/core/*
- *     grammar/types/*
- *     grammar/expressions/*
- *
- * Canonical imported grammar owners:
- *
- *     Core
- *     Types
- *     Expressions
- *
- * EXPORTS:
- *
+ *     sandboxFile
  *     sandboxStatement
  *     sandboxTarget
+ *     sandboxWithClause
+ *     sandboxOptionList
+ *     sandboxOption
  *     sandboxBody
  *     sandboxMember
  *     sandboxDirective
+ *     sandboxDirectiveOperator
+ *     sandboxSubjectList
  *     sandboxSubject
+ *     sandboxEffectSubject
+ *     sandboxCapabilitySubject
+ *     sandboxResourceSubject
+ *     sandboxNetworkSubject
+ *     sandboxNativeSubject
+ *     sandboxForeignSubject
+ *     sandboxReflectionSubject
+ *     sandboxAdaptationSubject
+ *     sandboxSimulationSubject
+ *     sandboxQualifiedSubject
+ *     sandboxExpressionSubject
  *     sandboxRequirement
  *     sandboxContract
+ *     sandboxPreference
+ *     sandboxFallback
+ *     sandboxPolicyReference
+ *     sandboxProvenanceDirective
+ *     sandboxReferenceOrExpression
+ *     sandboxAuditDirective
+ *     sandboxAuditSpecification
+ *     sandboxTraceDirective
+ *     sandboxTraceSpecification
  *     sandboxProperty
+ *     sandboxNested
  *
- * CONSUMED_BY:
+ * THIS FILE DOES NOT OWN:
  *
- *     grammar/statements/statements.g4
- *
- * AST_OWNER:
- *
- *     repository frontend AST.
- *
- * SEMANTIC_OWNER:
- *
- *     repository security/policy semantic analysis.
- *
- * EFFECT_OWNER:
- *
- *     grammar/effects/*
- *
- * CAPABILITY_OWNER:
- *
- *     grammar/core/capabilities.g4
- *     grammar/security/capabilities.g4
- *
- * RESOURCE_OWNER:
- *
- *     grammar/resources/*
- *
- * POLICY_OWNER:
- *
- *     grammar/security/policy.g4
- *     grammar/policies/*
- *
- * PROVENANCE_OWNER:
- *
- *     grammar/security/provenance.g4
- *     grammar/spec/provenance.md
- *
- * IR_OWNER:
- *
- *     canonical semantic/domain IR.
- *
- * Quantum programs eventually cross:
- *
+ *     identifiers
+ *     qualified names
+ *     attributes
+ *     visibility
+ *     expressions
+ *     types
+ *     generic types
+ *     capabilities
+ *     capability declarations
+ *     capability resolution
+ *     effects
+ *     effect declarations
+ *     effect semantics
+ *     resources
+ *     resource allocation
+ *     policies
+ *     policy evaluation
+ *     permissions
+ *     authorization
+ *     identities
+ *     credentials
+ *     trust
+ *     cryptography
+ *     provenance semantics
+ *     audit persistence
+ *     runtime enforcement
+ *     process isolation
+ *     operating-system primitives
+ *     filesystem implementation
+ *     networking implementation
+ *     FFI implementation
+ *     ABI implementation
+ *     reflection implementation
+ *     adaptation implementation
+ *     simulation implementation
+ *     hardware selection
+ *     target selection
+ *     scheduling
+ *     routing
+ *     quantum operations
  *     quantum::ir
- *
- * TEST_OWNER:
- *
- *     grammar/tests/security/
- *     grammar/tests/parser/
- *     grammar/tests/semantic/
- *     grammar/tests/boundary/
- *     grammar/tests/scalability/
- *
- * SPEC_OWNER:
- *
- *     grammar/DESIGN.md
- *     grammar/specification/
- *     grammar/spec/
+ *     QEC
+ *     ZQN
+ *     HAL
  *
  * ============================================================================
  * SINGLE-AUTHORITY RULE
  * ============================================================================
  *
- * This file is the sole grammar owner of:
+ * This file is the ONLY grammar owner of:
  *
  *     sandboxStatement
  *
- * No other grammar may define another competing sandbox statement.
+ * No other grammar may define another sandbox statement.
  *
  * In particular:
  *
  *     grammar/statements/statements.g4
  *
- * MUST NOT duplicate sandbox syntax.
+ * MUST NOT reproduce sandbox syntax.
  *
- * It imports this grammar and consumes:
+ * It must import:
+ *
+ *     SecuritySandbox
+ *
+ * and consume:
  *
  *     sandboxStatement
  *
  * exactly once.
  *
  * ============================================================================
- * LEXICAL AUTHORITY
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * This grammar consumes tokens supplied by:
+ * DIRECT DEPENDENCIES
+ * -------------------
  *
- *     grammar/lexer/tokens.g4
+ *     Core
+ *     Types
+ *     Expressions
  *
- * through:
+ * These provide:
+ *
+ *     attributes
+ *     visibility
+ *     qualifiedName
+ *     expression
+ *     type-related expression support
+ *     common source-level structures
+ *
+ * LEXICAL DEPENDENCY
+ * ------------------
  *
  *     grammar/antlr/ZamaniLexer.g4
  *
- * This file MUST NOT define lexer rules.
+ * through:
  *
- * Existing canonical tokens include:
+ *     tokenVocab = ZamaniLexer
+ *
+ * PUBLIC EXPORTS
+ * --------------
+ *
+ *     sandboxFile
+ *     sandboxStatement
+ *
+ *     sandboxTarget
+ *     sandboxWithClause
+ *     sandboxOptionList
+ *     sandboxOption
+ *
+ *     sandboxBody
+ *     sandboxMember
+ *
+ *     sandboxDirective
+ *     sandboxDirectiveOperator
+ *     sandboxSubjectList
+ *     sandboxSubject
+ *
+ *     sandboxRequirement
+ *     sandboxContract
+ *     sandboxPreference
+ *     sandboxFallback
+ *     sandboxPolicyReference
+ *     sandboxProvenanceDirective
+ *     sandboxAuditDirective
+ *     sandboxTraceDirective
+ *     sandboxProperty
+ *     sandboxNested
+ *
+ * CONSUMERS
+ * ---------
+ *
+ * Primary:
+ *
+ *     grammar/statements/statements.g4
+ *
+ * Parser composition:
+ *
+ *     grammar/antlr/ZamaniParser.g4
+ *
+ * Semantic consumers:
+ *
+ *     security semantic analysis
+ *     capability analysis
+ *     effect analysis
+ *     resource analysis
+ *     policy analysis
+ *     contract analysis
+ *     provenance analysis
+ *     execution planning
+ *
+ * AST OWNER
+ * ---------
+ *
+ * The domain-neutral frontend AST.
+ *
+ * This grammar does not define Rust AST structs.
+ *
+ * SEMANTIC OWNER
+ * --------------
+ *
+ * Security/sandbox semantic analysis.
+ *
+ * The semantic layer converts the parse structure into a target-neutral
+ * sandbox intent model.
+ *
+ * EFFECT OWNER
+ * ------------
+ *
+ *     grammar/effects/
+ *
+ * Sandbox syntax references effects but does not redefine them.
+ *
+ * CAPABILITY OWNER
+ * ----------------
+ *
+ *     grammar/resources/
+ *     grammar/core/capabilities.g4
+ *     grammar/security/capabilities.g4
+ *
+ * Sandbox syntax references capabilities but does not define capability
+ * resolution.
+ *
+ * RESOURCE OWNER
+ * --------------
+ *
+ *     grammar/resources/
+ *
+ * Sandbox syntax references resources but does not allocate resources.
+ *
+ * POLICY OWNER
+ * ------------
+ *
+ *     grammar/policies/
+ *     grammar/security/policy.g4
+ *
+ * Policy evaluation remains outside this grammar.
+ *
+ * PROVENANCE OWNER
+ * ----------------
+ *
+ * General provenance:
+ *
+ *     grammar/data/provenance.g4
+ *
+ * Security provenance:
+ *
+ *     grammar/security/provenance.g4
+ *
+ * IR OWNER
+ * --------
+ *
+ * No IR is created here.
+ *
+ * Sandbox information is carried through the canonical semantic model.
+ *
+ * Quantum semantics eventually cross:
+ *
+ *     quantum::ir
+ *
+ * TEST OWNER
+ * ----------
+ *
+ *     grammar/tests/security/
+ *     grammar/tests/parser/
+ *     grammar/tests/semantic/
+ *     grammar/tests/boundary/
+ *     grammar/tests/scalability/
+ *     grammar/tests/compatibility/
+ *
+ * SPECIFICATION OWNER
+ * -------------------
+ *
+ *     grammar/DESIGN.md
+ *     grammar/specification/
+ *     grammar/spec/
+ *
+ * ============================================================================
+ * LEXICAL AUTHORITY
+ * ============================================================================
+ *
+ * This file defines NO lexer rules.
+ *
+ * All tokens come from:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * through:
+ *
+ *     tokenVocab = ZamaniLexer
+ *
+ * Existing canonical tokens consumed here include:
  *
  *     SANDBOX
  *     WITH
@@ -322,289 +492,405 @@
  *     FOREIGN
  *     REFLECTION
  *     ADAPTATION
+ *     SIMULATION
  *     POLICY
+ *     PROVENANCE
  *     AUDIT
  *     TRACE
- *     PROVENANCE
- *     SOURCE
  *     PROPERTY
  *
- * No additional sandbox-specific keyword is required for the canonical
- * sandbox model.
+ * Punctuation and operators are likewise supplied by the canonical lexer.
+ *
+ * No sandbox-specific lexical vocabulary is created here.
  *
  * ============================================================================
  * OPEN-WORLD PRINCIPLE
  * ============================================================================
  *
- * Sandbox subjects are deliberately open-ended.
+ * Sandbox subjects MUST remain open-world.
  *
- * The grammar MUST NOT enumerate a finite universe of:
+ * This grammar MUST NOT enumerate a closed list of:
  *
  *     effects
  *     capabilities
  *     resources
- *     devices
- *     filesystems
  *     networks
  *     protocols
- *     hardware
- *     vendors
+ *     filesystems
+ *     devices
  *     processors
  *     accelerators
- *     quantum systems
- *     policies
- *     execution environments
- *
- * A new capability or effect must be representable without changing this
- * grammar merely because its name is new.
- *
- * For example:
- *
- *     capability("future.compute.mode");
- *     capability("vendor.future.feature");
- *     effect("future.effect");
- *     resource("future.resource");
- *
- * remain syntactically representable.
- *
- * ============================================================================
- * POCO-REAF / SCALABILITY CONTRACT
- * ============================================================================
- *
- * This grammar contains NO language-level capacity constants.
- *
- * It MUST NOT define limits for:
- *
- *     sandboxes
- *     nested sandboxes
- *     directives
- *     policies
- *     capabilities
- *     effects
- *     resources
- *     expressions
- *     targets
- *     devices
- *     CPUs
- *     GPUs
- *     FPGAs
- *     ASICs
- *     accelerators
  *     QPUs
- *     qubits
- *     nodes
- *     threads
- *     actors
- *     processes
- *     memory
- *     storage
- *     network size
- *     topology size
- *     tensor rank
- *     register width
+ *     policies
+ *     security mechanisms
+ *     execution environments
+ *     vendors
  *
- * Repetition is represented through ANTLR repetition operators.
+ * New semantic objects MUST be representable through:
  *
- * Practical limits may be imposed by:
+ *     qualifiedName
+ *     expression
  *
- *     compiler resources
+ * or the generic:
+ *
+ *     effect(...)
+ *     capability(...)
+ *     resource(...)
+ *
+ * forms.
+ *
+ * Examples:
+ *
+ *     effect("future.effect");
+ *     capability("future.compute.mode");
+ *     resource("future.resource");
+ *     future::security::mechanism;
+ *     vendor::future::capability;
+ *
+ * remain syntactically representable without changing this grammar.
+ *
+ * ============================================================================
+ * SCALABILITY / POCO-REAF CONTRACT
+ * ============================================================================
+ *
+ * This grammar introduces NO universal physical or computational limits.
+ *
+ * It MUST NOT define:
+ *
+ *     MAX_SANDBOXES
+ *     MAX_NESTING
+ *     MAX_RULES
+ *     MAX_CAPABILITIES
+ *     MAX_EFFECTS
+ *     MAX_RESOURCES
+ *     MAX_POLICIES
+ *     MAX_TARGETS
+ *     MAX_DEVICES
+ *     MAX_NODES
+ *     MAX_THREADS
+ *     MAX_MEMORY
+ *     MAX_STORAGE
+ *     MAX_NETWORK_SIZE
+ *     MAX_QUBITS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_TENSOR_RANK
+ *     MAX_REGISTER_WIDTH
+ *
+ * There is no language-level limit on:
+ *
+ *     sandbox declarations
+ *     sandbox members
+ *     directives
+ *     subjects
+ *     options
+ *     requirements
+ *     contracts
+ *     policies
+ *     nested sandboxes
+ *     qualified-name depth
+ *     expression complexity
+ *
+ * Repetition is represented structurally through ANTLR repetition operators.
+ *
+ * Actual limits may arise from:
+ *
+ *     available compiler memory
+ *     available compiler time
  *     parser configuration
- *     runtime resources
  *     operating-system limits
+ *     runtime resources
  *     deployment policy
  *     target resources
  *
- * Those are NOT language semantics.
+ * Such limits are implementation/environment constraints, NOT language
+ * semantics.
  *
  * ============================================================================
  * TARGET INDEPENDENCE
  * ============================================================================
  *
- * A sandbox may constrain:
+ * A sandbox can accompany:
  *
- *     embedded execution
- *     classical execution
- *     parallel execution
- *     distributed execution
- *     accelerator execution
- *     quantum execution
- *     HDL simulation
- *     hardware interaction
+ *     classical computation
+ *     numerical computation
  *     AI/model execution
  *     data processing
+ *     quantum computation
+ *     hybrid quantum-classical computation
+ *     HDL
+ *     hardware/software co-design
+ *     embedded computation
+ *     accelerator computation
+ *     parallel computation
+ *     distributed computation
  *     networking
  *     simulation
+ *     future computational domains
  *
- * without changing the grammar.
+ * without changing this grammar.
  *
- * Physical target selection belongs downstream.
+ * Physical realization is always downstream.
  *
  * ============================================================================
- * SECURITY MODEL
+ * SECURITY SEMANTICS
  * ============================================================================
  *
- * The source program may state:
+ * The source program may declare:
  *
- *     allow X
- *     forbid X
- *     permit X
- *     deny X
+ *     allow X;
+ *     forbid X;
+ *     permit X;
+ *     deny X;
  *
- * These are DECLARATIVE INTENT.
+ * These are declarations of intent.
  *
- * They do not themselves establish authorization.
+ * They do NOT automatically establish authorization.
  *
- * Semantic/security analysis must determine:
+ * The semantic/security layers determine:
  *
- *     whether X exists;
- *     whether X is meaningful;
+ *     whether X resolves;
  *     whether X is authorized;
- *     whether X is compatible with enclosing policy;
- *     whether X conflicts with another rule;
- *     whether X can be enforced;
+ *     whether X is meaningful in context;
+ *     whether X conflicts with another declaration;
+ *     whether X is enforceable;
+ *     whether X is compatible with an enclosing sandbox;
+ *     whether X is compatible with policy;
  *     whether the target can preserve the requested boundary.
  *
- * Runtime enforcement belongs outside the parser.
+ * The parser must remain neutral about these questions.
+ *
+ * ============================================================================
+ * SANDBOX COMPOSITION MODEL
+ * ============================================================================
+ *
+ * A sandbox may contain:
+ *
+ *     directives
+ *     requirements
+ *     contracts
+ *     preferences
+ *     fallbacks
+ *     policy references
+ *     provenance references
+ *     audit intent
+ *     trace intent
+ *     properties
+ *     nested sandboxes
+ *
+ * The semantic layer is responsible for combining them.
+ *
+ * This grammar preserves source order through the parse tree.
+ *
+ * The semantic layer may subsequently establish precedence rules such as:
+ *
+ *     enclosing boundary
+ *     nested boundary
+ *     prohibition
+ *     permission
+ *     requirement
+ *     constraint
+ *     preference
+ *     fallback
+ *
+ * Those precedence rules MUST NOT be encoded implicitly by parser ordering.
+ *
+ * ============================================================================
+ * TARGET SYNTAX
+ * ============================================================================
+ *
+ * A sandbox may optionally be associated with a symbolic target expression:
+ *
+ *     sandbox execution_context {
+ *         forbid network;
+ *     }
+ *
+ * The target is an expression rather than a closed enumeration.
+ *
+ * This permits:
+ *
+ *     named execution contexts
+ *     deployment profiles
+ *     symbolic environments
+ *     abstract targets
+ *     future target classes
+ *
+ * without encoding physical machines in the grammar.
+ *
+ * The target does NOT mean "select this physical device".
+ *
+ * Target resolution remains downstream.
+ *
+ * ============================================================================
+ * CONFIGURATION SYNTAX
+ * ============================================================================
+ *
+ * A sandbox may optionally contain open-world configuration:
+ *
+ *     sandbox with (
+ *         mode = security::restricted,
+ *         isolation = security::strong
+ *     ) {
+ *         forbid network;
+ *     }
+ *
+ * Configuration keys are qualified names.
+ *
+ * Configuration values are expressions.
+ *
+ * The grammar does not define a finite option catalogue.
+ *
+ * Semantic validation determines:
+ *
+ *     whether an option is known;
+ *     whether its value is valid;
+ *     whether it conflicts with another option;
+ *     whether it is supported by the target;
+ *     whether it is permitted by policy.
  *
  * ============================================================================
  * EFFECT INTEGRATION
  * ============================================================================
  *
- * Sandbox restrictions may constrain effects such as:
+ * Sandbox restrictions may refer to arbitrary effects.
  *
- *     io
- *     network
- *     mutation
- *     randomness
- *     native
- *     foreign
- *     distributed
- *     measurement
- *     learning
- *     adaptation
- *     reflection
- *     code_generation
- *     simulation
+ * Examples:
  *
- * The effect system remains authoritative for effect semantics.
+ *     forbid effect("network");
+ *     forbid effect("native");
+ *     forbid effect("reflection");
+ *     forbid effect("adaptation");
+ *     forbid effect("code_generation");
+ *     forbid effect("measurement");
  *
- * This grammar only expresses restrictions.
+ * The effect subsystem remains authoritative for effect identity and
+ * semantics.
  *
- * Example:
- *
- *     sandbox {
- *         forbid effect("network");
- *         forbid effect("native");
- *     }
+ * This grammar only expresses a boundary over an effect.
  *
  * ============================================================================
  * CAPABILITY INTEGRATION
  * ============================================================================
  *
- * Sandbox capability restrictions reference capabilities symbolically.
+ * Sandbox restrictions may refer to capabilities.
  *
- * Example:
+ * Examples:
  *
- *     sandbox {
- *         forbid capability("native.execute");
- *         require capability("security.isolation");
- *     }
+ *     forbid capability("native.execute");
+ *     forbid capability("network.external");
+ *     require capability("security.isolation");
+ *
+ * Capability identity and resolution remain downstream.
  *
  * The sandbox grammar does not determine whether a capability exists.
- *
- * Capability resolution belongs downstream.
  *
  * ============================================================================
  * RESOURCE INTEGRATION
  * ============================================================================
  *
- * Sandboxes may constrain resources.
+ * Sandbox requirements may reference symbolic resources.
  *
  * Examples:
  *
- *     sandbox {
- *         require resource("memory") <= memory_budget;
- *         require resource("network.bandwidth") <= bandwidth_budget;
- *     }
- *
- * Resource expressions remain symbolic.
+ *     requires resource("memory") <= memory_budget;
+ *     requires resource("network.bandwidth") >= required_bandwidth;
+ *     forbid resource("external_storage");
  *
  * The grammar does not allocate resources.
  *
- * It does not select a device.
+ * It does not inspect machine capacity.
  *
- * It does not establish a universal capacity.
+ * It does not select hardware.
+ *
+ * Resource feasibility remains downstream.
  *
  * ============================================================================
  * NETWORK INTEGRATION
  * ============================================================================
  *
- * Network restrictions may be represented through the open-world subject model.
- *
- * Examples:
+ * The canonical NETWORK token provides a compact source-level form:
  *
  *     forbid network;
- *     forbid network::external;
+ *
+ * It may also be parameterized:
+ *
  *     forbid network("external");
  *
- * The semantic layer determines what the selected representation means.
+ * More specific namespaces remain open:
  *
- * No finite protocol catalogue is embedded here.
+ *     forbid network::external;
+ *     forbid network::untrusted;
+ *     forbid network::control;
+ *
+ * No finite protocol or network catalogue is embedded here.
  *
  * ============================================================================
  * FILESYSTEM INTEGRATION
  * ============================================================================
  *
- * Filesystem concepts remain symbolic.
+ * Filesystem security subjects remain open-world qualified names.
  *
- * For example:
+ * Examples:
  *
+ *     forbid filesystem::read;
  *     forbid filesystem::write;
  *     forbid filesystem::external;
+ *     forbid filesystem::device;
  *
- * The identifier namespace remains open.
- *
- * The grammar does not define:
+ * The grammar deliberately does not encode:
  *
  *     POSIX
  *     Windows
  *     ext4
  *     NTFS
  *     FAT
+ *     mount tables
  *     device paths
  *
- * as a closed language universe.
+ * as universal language concepts.
+ *
+ * Filesystem semantics remain downstream.
  *
  * ============================================================================
- * NATIVE / FOREIGN INTEGRATION
+ * NATIVE / FOREIGN / FFI INTEGRATION
  * ============================================================================
  *
- * Native and foreign operations may be restricted:
+ * Native execution may be restricted:
  *
  *     forbid native;
- *     forbid foreign;
  *     forbid native::execute;
+ *
+ * Foreign/FFI execution may be restricted:
+ *
+ *     forbid foreign;
  *     forbid foreign::call;
  *
- * FFI and ABI semantics remain owned by:
+ * Parameterized forms are also supported:
  *
- *     grammar/interoperability/*
+ *     forbid native("runtime::operation");
+ *     forbid foreign("external::operation");
  *
- * The sandbox merely expresses a boundary.
+ * FFI/ABI semantics remain owned by:
+ *
+ *     grammar/interoperability/
+ *
+ * The sandbox merely expresses the boundary.
  *
  * ============================================================================
  * REFLECTION INTEGRATION
  * ============================================================================
  *
- * Reflection can be restricted without defining a reflection implementation.
- *
- * Examples:
+ * Reflection may be restricted:
  *
  *     forbid reflection;
+ *     forbid reflection::read;
  *     forbid reflection::write;
  *     forbid reflection::code_generation;
  *
- * Reflection semantics remain owned by metaprogramming/reflection systems.
+ * Reflection semantics remain owned by the metaprogramming subsystem.
  *
  * ============================================================================
  * ADAPTATION INTEGRATION
@@ -613,281 +899,127 @@
  * Adaptive execution may be restricted:
  *
  *     forbid adaptation;
+ *     forbid adaptation::state;
+ *     forbid adaptation::model;
  *     forbid adaptation::code;
  *     forbid adaptation::policy;
  *
- * Sandbox policy MUST NOT be interpreted as permission for unrestricted
- * self-modifying execution.
+ * Sandbox syntax does NOT authorize unrestricted self-modification.
  *
- * Adaptation semantics remain downstream.
- *
- * ============================================================================
- * CONTRACT INTEGRATION
- * ============================================================================
- *
- * Sandbox members may express:
- *
- *     requires
- *     ensures
- *     invariant
- *     assume
- *     guarantee
- *
- * These constructs participate in the universal contract system.
- *
- * The sandbox grammar does not redefine contract semantics.
- *
- * ============================================================================
- * POLICY INTEGRATION
- * ============================================================================
- *
- * Sandbox declarations may be constrained by policies.
- *
- * Example:
- *
- *     sandbox {
- *         policy security::restricted_execution;
- *     }
- *
- * Policy evaluation belongs to the policy subsystem.
- *
- * This grammar records the reference.
- *
- * ============================================================================
- * PROVENANCE INTEGRATION
- * ============================================================================
- *
- * Sandbox intent must remain traceable.
- *
- * The AST/source model must preserve source spans for:
- *
- *     sandbox
- *     target
- *     directives
- *     subjects
- *     requirements
- *     contracts
- *     policies
- *     properties
- *     provenance declarations
- *     audit/trace declarations
- *
- * Provenance consumers may record:
- *
- *     source
- *     sandbox identity
- *     inherited sandbox
- *     policy source
- *     capability decision
- *     resource decision
- *     effect decision
- *     enforcement result
- *     fallback
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * A sandbox may constrain quantum execution.
- *
- * Example:
- *
- *     sandbox {
- *         forbid capability("quantum.hardware.control");
- *         forbid effect("network");
- *         require capability("quantum.measurement");
- *     }
- *
- * The sandbox grammar MUST NOT define:
- *
- *     physical qubits
- *     physical qubit IDs
- *     gate catalogues
- *     coupling maps
- *     calibration
- *     pulse schedules
- *     QEC codes
- *     routing
- *     scheduling
- *
- * Quantum semantics eventually cross:
- *
- *     quantum::ir
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * A sandbox may constrain hardware interaction.
- *
- * Examples:
- *
- *     forbid capability("hardware.configure");
- *     forbid native::hardware_access;
- *
- * Physical hardware selection remains downstream.
- *
- * ============================================================================
- * DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * A sandbox may constrain distributed behavior:
- *
- *     forbid capability("distributed.spawn");
- *     forbid network;
- *     require capability("distributed.isolation");
- *
- * The number of nodes, services, actors, or processes is not fixed.
- *
- * ============================================================================
- * AI / MODEL INTEGRATION
- * ============================================================================
- *
- * A sandbox may constrain model execution:
- *
- *     forbid capability("model.external_data");
- *     forbid network;
- *     forbid reflection;
- *
- * Learning/adaptation semantics remain in their appropriate domain systems.
+ * Adaptation authorization and semantics remain downstream.
  *
  * ============================================================================
  * SIMULATION INTEGRATION
  * ============================================================================
  *
- * A sandbox may allow or forbid simulation:
+ * Simulation may be restricted or required:
  *
- *     allow simulation;
  *     forbid simulation;
+ *     require capability("simulation.quantum");
  *
- * Whether simulation can satisfy another semantic requirement is decided
- * downstream by execution planning.
+ * or referenced as:
  *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
+ *     simulation::quantum
+ *     simulation::hardware
+ *     simulation::distributed
  *
- * Parsing depends only on:
- *
- *     source token stream
- *     grammar version
- *     parser configuration
- *
- * It MUST NOT depend on:
- *
- *     hardware
- *     filesystem state
- *     network state
- *     resource availability
- *     wall-clock time
- *     random state
- *     target availability
- *     runtime state
+ * Simulation remains an execution strategy rather than a second language.
  *
  * ============================================================================
- * SECRET-MATERIAL BOUNDARY
+ * CONTRACT INTEGRATION
  * ============================================================================
  *
- * This grammar MUST NOT introduce syntax for:
+ * Sandbox declarations may contain:
  *
- *     passwords
- *     private keys
- *     secret keys
- *     bearer tokens
- *     API keys
- *     authentication secrets
- *     recovery secrets
- *     raw credential material
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
  *
- * Symbolic references to security objects are permitted.
+ * These use the canonical expression system.
  *
- * Secret material belongs to secure credential/key-management infrastructure.
+ * This grammar does not redefine contract semantics.
  *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
+ * Preconditions/requirements remain represented by:
  *
- * Recommended frontend representation:
+ *     requires
  *
- *     SandboxStatement {
- *         attributes
- *         visibility
- *         target
- *         configuration
- *         source_span
- *     }
- *
- * Configuration should preserve ordered source members:
- *
- *     SandboxMember
- *
- * with semantic variants such as:
- *
- *     SandboxPermission
- *     SandboxRequirement
- *     SandboxContract
- *     SandboxPreference
- *     SandboxFallback
- *     SandboxPolicyReference
- *     SandboxProperty
- *     SandboxProvenance
- *     SandboxAudit
- *     SandboxNested
- *
- * The exact Rust representation belongs to the frontend AST.
- *
- * This grammar must preserve enough parse structure for the AST to distinguish
- * each source form without reconstructing information from raw text.
+ * Contract analysis remains downstream.
  *
  * ============================================================================
- * SEMANTIC CONTRACT
+ * POLICY INTEGRATION
  * ============================================================================
  *
- * Semantic analysis must:
+ * A sandbox may reference a policy:
  *
- *     resolve sandbox target;
- *     resolve names;
- *     normalize directives;
- *     resolve capabilities;
- *     resolve effects;
- *     resolve resources;
- *     resolve policy references;
- *     validate contract expressions;
- *     detect contradictory restrictions;
- *     calculate inherited restrictions;
- *     validate nesting;
- *     determine enforcement requirements;
- *     preserve provenance;
- *     determine whether requested isolation is realizable.
+ *     policy security::restricted_execution;
  *
- * Parser acceptance MUST NOT imply semantic validity.
+ * The policy grammar remains authoritative for policy declarations and
+ * policy semantics.
+ *
+ * This grammar stores a reference to that policy.
+ *
+ * It does not evaluate the policy.
  *
  * ============================================================================
- * CONFLICT SEMANTICS
+ * PROVENANCE INTEGRATION
  * ============================================================================
  *
- * This grammar deliberately does not decide conflicts such as:
+ * Sandbox declarations are security-sensitive source intent.
  *
- *     allow X;
- *     forbid X;
+ * Their source structure should remain traceable.
  *
- * or:
+ * Downstream provenance may record:
  *
- *     require capability("x");
- *     forbid capability("x");
+ *     source location
+ *     sandbox identity
+ *     enclosing sandbox
+ *     referenced policy
+ *     capability decision
+ *     effect decision
+ *     resource decision
+ *     authorization decision
+ *     enforcement result
+ *     fallback
+ *     verification result
  *
- * Such conflicts are semantic/policy diagnostics.
- *
- * The parser must accept structurally valid input and preserve the ordering
- * needed for downstream conflict analysis.
+ * The grammar itself performs none of these operations.
  *
  * ============================================================================
- * NESTING SEMANTICS
+ * AUDIT / TRACE INTEGRATION
  * ============================================================================
  *
- * Nested sandboxes are supported.
+ * A sandbox may request audit or trace behavior:
  *
- * Example:
+ *     audit;
+ *     audit security::events;
+ *
+ *     trace;
+ *     trace security::decisions;
+ *
+ * These declarations express observability intent.
+ *
+ * They do not persist records and do not activate runtime tracing.
+ *
+ * ============================================================================
+ * PROPERTY INTEGRATION
+ * ============================================================================
+ *
+ * Open-world properties may be attached:
+ *
+ *     property security::classification = security::restricted;
+ *
+ * Property names remain qualified names.
+ *
+ * Property values are expressions.
+ *
+ * The grammar does not define a closed property catalogue.
+ *
+ * ============================================================================
+ * NESTED SANDBOXES
+ * ============================================================================
+ *
+ * Nested sandbox declarations are recursive:
  *
  *     sandbox {
  *         forbid network;
@@ -897,76 +1029,233 @@
  *         }
  *     }
  *
- * Nested restrictions normally compose toward the more restrictive effective
- * boundary, but the exact conflict/inheritance semantics belong to policy
- * analysis.
+ * No nesting depth is encoded.
  *
- * The grammar does not impose a nesting-depth limit.
+ * Semantic analysis determines:
+ *
+ *     inheritance
+ *     attenuation
+ *     conflict
+ *     shadowing
+ *     composition
+ *     compatibility
+ *     enforcement requirements
  *
  * ============================================================================
- * TARGET SEMANTICS
+ * QUANTUM INTEGRATION
  * ============================================================================
  *
- * The optional target is an expression.
+ * Sandbox declarations may accompany quantum computation:
  *
- * Examples:
- *
- *     sandbox execution_context {
+ *     sandbox {
+ *         forbid capability("quantum.hardware.control");
+ *         require capability("quantum.measurement");
  *         forbid network;
  *     }
  *
- *     sandbox workload {
- *         forbid native;
- *     }
+ * This grammar MUST NOT define:
  *
- *     sandbox expression_for_target {
- *         ...
- *     }
+ *     qubits
+ *     physical qubit IDs
+ *     gate catalogues
+ *     coupling maps
+ *     calibration
+ *     pulses
+ *     QEC codes
+ *     routing
+ *     scheduling
+ *     QPU models
  *
- * The target is NOT:
+ * Quantum semantics remain downstream.
  *
- *     CPU number
- *     GPU number
- *     QPU number
- *     node number
- *     physical address
- *     device identifier
+ * The canonical quantum IR boundary remains:
  *
- * Physical target resolution belongs downstream.
+ *     quantum::ir
  *
- * ============================================================================
- * WITH OPTIONS
- * ============================================================================
- *
- * Sandbox configuration may carry open-ended named options:
- *
- *     sandbox with (
- *         mode = security::strict,
- *         policy = security::restricted
- *     ) {
- *         ...
- *     }
- *
- * The grammar does not enumerate option names.
- *
- * This permits future configuration dimensions without grammar redesign.
+ * Sandbox information may accompany that semantic/IR representation as
+ * security metadata and constraints.
  *
  * ============================================================================
- * PUBLIC RULES
+ * HDL / HARDWARE INTEGRATION
  * ============================================================================
  *
- * Stable public rules:
+ * Sandbox intent may constrain hardware interaction:
+ *
+ *     forbid capability("hardware.configure");
+ *     forbid hardware::reconfigure;
+ *     forbid native::hardware_access;
+ *
+ * This grammar does not select physical hardware.
+ *
+ * Hardware realization remains downstream.
+ *
+ * ============================================================================
+ * DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Sandbox intent may constrain distributed execution:
+ *
+ *     forbid capability("distributed.spawn");
+ *     forbid network;
+ *     require capability("distributed.isolation");
+ *
+ * The grammar contains no node-count limit.
+ *
+ * ============================================================================
+ * AI / MODEL INTEGRATION
+ * ============================================================================
+ *
+ * Sandbox intent may constrain model execution:
+ *
+ *     forbid capability("model.external_data");
+ *     forbid network;
+ *     forbid reflection;
+ *     forbid adaptation;
+ *
+ * Learning, reasoning, adaptation, evidence, uncertainty and model semantics
+ * remain owned by their respective domain systems.
+ *
+ * ============================================================================
+ * INTEROPERABILITY
+ * ============================================================================
+ *
+ * FFI and ABI declarations remain owned by interoperability grammars.
+ *
+ * Sandbox restrictions merely constrain them:
+ *
+ *     forbid foreign;
+ *     forbid foreign::call;
+ *     forbid native;
+ *
+ * ============================================================================
+ * METAPROGRAMMING
+ * ============================================================================
+ *
+ * Reflection and code generation may be restricted through open-world
+ * qualified names or the REFLECTION token:
+ *
+ *     forbid reflection;
+ *     forbid reflection::write;
+ *     forbid reflection::code_generation;
+ *
+ * Metaprogramming semantics remain downstream.
+ *
+ * ============================================================================
+ * DETERMINISM
+ * ============================================================================
+ *
+ * Parsing must depend only upon:
+ *
+ *     source token stream
+ *     grammar version
+ *     parser configuration
+ *
+ * Parsing MUST NOT depend upon:
+ *
+ *     hardware availability
+ *     memory availability
+ *     network state
+ *     filesystem state
+ *     wall-clock time
+ *     randomness
+ *     scheduler state
+ *     runtime state
+ *     target selection
+ *
+ * Identical source and parser configuration must produce equivalent parse
+ * structures and source spans.
+ *
+ * ============================================================================
+ * SOURCE-PRESERVATION CONTRACT
+ * ============================================================================
+ *
+ * Downstream AST and tooling must be able to preserve source information for:
+ *
+ *     sandbox declaration
+ *     target
+ *     configuration
+ *     directives
+ *     subjects
+ *     requirements
+ *     contracts
+ *     preferences
+ *     fallbacks
+ *     policy references
+ *     provenance references
+ *     audit directives
+ *     trace directives
+ *     properties
+ *     nested sandboxes
+ *
+ * Source spans are therefore an AST/frontend responsibility.
+ *
+ * ============================================================================
+ * ERROR BOUNDARY
+ * ============================================================================
+ *
+ * PARSER ERRORS
+ * ------------
+ *
+ * The parser should diagnose structural failures such as:
+ *
+ *     missing sandbox body
+ *     malformed target
+ *     malformed with clause
+ *     malformed option
+ *     malformed directive
+ *     missing directive subject
+ *     malformed subject
+ *     malformed requirement
+ *     malformed contract
+ *     malformed policy reference
+ *     malformed property
+ *     malformed nested sandbox
+ *     missing statement terminator
+ *
+ * SEMANTIC ERRORS
+ * --------------
+ *
+ * The parser MUST NOT reject a construct merely because its semantic name is
+ * unknown.
+ *
+ * Examples of downstream semantic diagnostics:
+ *
+ *     unknown capability
+ *     unknown effect
+ *     unknown resource
+ *     unknown policy
+ *     contradictory restrictions
+ *     unsatisfied requirement
+ *     unauthorized operation
+ *     unavailable isolation mechanism
+ *     unenforceable restriction
+ *     incompatible nested sandbox
+ *     unsupported target
+ *     insufficient resources
+ *
+ * This separation is mandatory for forward compatibility.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Stable public rule:
  *
  *     sandboxStatement
- *     sandboxTarget
- *     sandboxBody
- *     sandboxMember
- *     sandboxDirective
- *     sandboxSubject
- *     sandboxRequirement
- *     sandboxContract
- *     sandboxProperty
  *
+ * Existing canonical sandbox vocabulary is reused.
+ *
+ * This grammar MUST NOT create compatibility aliases by defining duplicate
+ * lexer tokens.
+ *
+ * Historical source spellings belong under:
+ *
+ *     grammar/compatibility/
+ *
+ * where they may be translated to canonical sandbox syntax.
+ *
+ * ============================================================================
+ * GRAMMAR
  * ============================================================================
  */
 
@@ -976,22 +1265,28 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Core, Types, Expressions;
+import
+    Core,
+    Types,
+    Expressions
+    ;
 
 
 /*
  * ============================================================================
- * STANDALONE TEST ENTRY
+ * STANDALONE FILE ENTRY
  * ============================================================================
  *
- * This is useful for isolated grammar testing.
+ * This rule exists for isolated grammar tests and tooling.
  *
  * The production parser consumes sandboxStatement through Statements.
- * ============================================================================
+ *
+ * It intentionally permits zero or more declarations so that an empty fixture
+ * can be tested independently.
  */
-
 sandboxFile
-    : sandboxStatement* EOF
+    : sandboxStatement*
+      EOF
     ;
 
 
@@ -1000,20 +1295,19 @@ sandboxFile
  * CANONICAL SANDBOX STATEMENT
  * ============================================================================
  *
- * Canonical minimal form:
+ * Minimal:
  *
  *     sandbox {
- *         forbid effect("network");
- *         forbid capability("native.execute");
+ *         forbid network;
  *     }
  *
- * Targeted form:
+ * Targeted:
  *
  *     sandbox execution_context {
  *         forbid network;
  *     }
  *
- * Configured form:
+ * Configured:
  *
  *     sandbox with (
  *         mode = security::restricted
@@ -1023,13 +1317,13 @@ sandboxFile
  *
  * Target + configuration:
  *
- *     sandbox execution_context
- *         with (
- *             mode = security::restricted
- *         )
- *     {
+ *     sandbox execution_context with (
+ *         mode = security::restricted
+ *     ) {
  *         forbid network;
  *     }
+ *
+ * Optional attributes and visibility are supplied by Core.
  */
 sandboxStatement
     : attributes*
@@ -1047,9 +1341,16 @@ sandboxStatement
  * TARGET
  * ============================================================================
  *
- * The target is intentionally an expression.
+ * A target is an expression rather than a closed target catalogue.
  *
- * This allows symbolic target references without enumerating target classes.
+ * Examples:
+ *
+ *     execution_context
+ *     deployment::restricted
+ *     simulation::quantum
+ *     execution_profile
+ *
+ * Target resolution is downstream.
  */
 sandboxTarget
     : expression
@@ -1058,17 +1359,19 @@ sandboxTarget
 
 /*
  * ============================================================================
- * OPTIONAL CONFIGURATION
+ * CONFIGURATION
  * ============================================================================
  *
- * Syntax:
+ * Configuration keys are qualified names.
+ *
+ * Configuration values are expressions.
+ *
+ * Example:
  *
  *     with (
- *         option = expression,
- *         another_option = expression
+ *         mode = security::restricted,
+ *         isolation = security::strong
  *     )
- *
- * Option names are open-world identifiers/qualified names.
  */
 sandboxWithClause
     : WITH
@@ -1097,10 +1400,9 @@ sandboxOption
 
 /*
  * ============================================================================
- * SANDBOX BODY
+ * BODY
  * ============================================================================
  */
-
 sandboxBody
     : LBRACE
       sandboxMember*
@@ -1110,10 +1412,12 @@ sandboxBody
 
 /*
  * ============================================================================
- * SANDBOX MEMBER
+ * BODY MEMBER
  * ============================================================================
  *
- * Ordering is preserved by the parse tree.
+ * Each concrete member has one owner in this grammar.
+ *
+ * Semantic precedence is NOT encoded by this ordering.
  */
 sandboxMember
     : sandboxDirective
@@ -1135,9 +1439,16 @@ sandboxMember
  * ALLOW / FORBID / PERMIT / DENY
  * ============================================================================
  *
- * These are declarations of security/execution intent.
+ * These are source-level security-boundary declarations.
  *
- * They do not perform authorization.
+ * They do not authorize anything at runtime.
+ *
+ * Examples:
+ *
+ *     allow capability("sandboxed.compute");
+ *     forbid effect("network");
+ *     permit native::safe_operation;
+ *     deny foreign;
  */
 sandboxDirective
     : sandboxDirectiveOperator
@@ -1166,19 +1477,16 @@ sandboxSubjectList
 
 /*
  * ============================================================================
- * SANDBOX SUBJECT
+ * SUBJECT
  * ============================================================================
  *
- * Subject syntax deliberately combines:
+ * The subject model is deliberately open-world.
  *
- *     canonical domain references
- *     qualified names
- *     expressions
+ * Specialized forms exist only for canonical vocabulary whose lexical token
+ * is already part of Zamani.
  *
- * with explicit forms for keyword-tokenized semantic categories.
- *
- * This avoids requiring a new lexer keyword whenever a new security-relevant
- * capability/effect/resource appears.
+ * Future security concepts should normally use qualifiedName or expression
+ * rather than requiring a new keyword.
  */
 sandboxSubject
     : sandboxEffectSubject
@@ -1195,6 +1503,17 @@ sandboxSubject
     ;
 
 
+/*
+ * ============================================================================
+ * EFFECT SUBJECT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     effect("network")
+ *     effect("future::effect")
+ *     effect(effect_name)
+ */
 sandboxEffectSubject
     : EFFECT
       LPAREN
@@ -1203,6 +1522,17 @@ sandboxEffectSubject
     ;
 
 
+/*
+ * ============================================================================
+ * CAPABILITY SUBJECT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     capability("native.execute")
+ *     capability(quantum::measurement)
+ *     capability(required_capability)
+ */
 sandboxCapabilitySubject
     : CAPABILITY
       LPAREN
@@ -1211,6 +1541,17 @@ sandboxCapabilitySubject
     ;
 
 
+/*
+ * ============================================================================
+ * RESOURCE SUBJECT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     resource("memory")
+ *     resource(memory_kind)
+ *     resource("network.bandwidth")
+ */
 sandboxResourceSubject
     : RESOURCE
       LPAREN
@@ -1219,6 +1560,24 @@ sandboxResourceSubject
     ;
 
 
+/*
+ * ============================================================================
+ * NETWORK SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     network
+ *
+ * Parameterized:
+ *
+ *     network("external")
+ *
+ * Open-world:
+ *
+ *     network::external
+ *     network::control
+ */
 sandboxNetworkSubject
     : NETWORK
     | NETWORK
@@ -1228,6 +1587,23 @@ sandboxNetworkSubject
     ;
 
 
+/*
+ * ============================================================================
+ * NATIVE SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     native
+ *
+ * Parameterized:
+ *
+ *     native("runtime::operation")
+ *
+ * Qualified:
+ *
+ *     native::execute
+ */
 sandboxNativeSubject
     : NATIVE
     | NATIVE
@@ -1239,6 +1615,23 @@ sandboxNativeSubject
     ;
 
 
+/*
+ * ============================================================================
+ * FOREIGN SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     foreign
+ *
+ * Parameterized:
+ *
+ *     foreign("external::operation")
+ *
+ * Qualified:
+ *
+ *     foreign::call
+ */
 sandboxForeignSubject
     : FOREIGN
     | FOREIGN
@@ -1250,6 +1643,24 @@ sandboxForeignSubject
     ;
 
 
+/*
+ * ============================================================================
+ * REFLECTION SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     reflection
+ *
+ * Parameterized:
+ *
+ *     reflection("operation")
+ *
+ * Qualified:
+ *
+ *     reflection::write
+ *     reflection::code_generation
+ */
 sandboxReflectionSubject
     : REFLECTION
     | REFLECTION
@@ -1261,6 +1672,24 @@ sandboxReflectionSubject
     ;
 
 
+/*
+ * ============================================================================
+ * ADAPTATION SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     adaptation
+ *
+ * Parameterized:
+ *
+ *     adaptation("model")
+ *
+ * Qualified:
+ *
+ *     adaptation::code
+ *     adaptation::policy
+ */
 sandboxAdaptationSubject
     : ADAPTATION
     | ADAPTATION
@@ -1272,6 +1701,24 @@ sandboxAdaptationSubject
     ;
 
 
+/*
+ * ============================================================================
+ * SIMULATION SUBJECT
+ * ============================================================================
+ *
+ * Compact:
+ *
+ *     simulation
+ *
+ * Parameterized:
+ *
+ *     simulation("quantum")
+ *
+ * Qualified:
+ *
+ *     simulation::quantum
+ *     simulation::hardware
+ */
 sandboxSimulationSubject
     : SIMULATION
     | SIMULATION
@@ -1283,11 +1730,39 @@ sandboxSimulationSubject
     ;
 
 
+/*
+ * ============================================================================
+ * GENERIC QUALIFIED SUBJECT
+ * ============================================================================
+ *
+ * Examples:
+ *
+ *     filesystem::read
+ *     hardware::configure
+ *     distributed::spawn
+ *     model::external_data
+ *     security::trusted_execution
+ *     future::security::mechanism
+ *
+ * No closed vocabulary is imposed.
+ */
 sandboxQualifiedSubject
     : qualifiedName
     ;
 
 
+/*
+ * ============================================================================
+ * GENERIC EXPRESSION SUBJECT
+ * ============================================================================
+ *
+ * Parenthesized expressions provide an explicit escape hatch for complex
+ * symbolic security subjects without expanding the keyword vocabulary.
+ *
+ * Example:
+ *
+ *     forbid (security_domain == restricted);
+ */
 sandboxExpressionSubject
     : LPAREN
       expression
@@ -1297,17 +1772,28 @@ sandboxExpressionSubject
 
 /*
  * ============================================================================
- * REQUIREMENTS
+ * REQUIREMENT
  * ============================================================================
+ *
+ * REQUIREMENT syntax is intentionally delegated to the expression system.
  *
  * Examples:
  *
- *     require capability("security.isolation");
- *     require resource("memory") <= memory_budget;
+ *     requires capability("security.isolation");
  *
- * REQUIRES is the canonical language token.
+ *     requires resource("memory") <= memory_budget;
  *
- * A requirement is not an allocation.
+ *     requires capability("quantum.measurement")
+ *         and capability("quantum.dynamic_control");
+ *
+ * A requirement is an assertion of necessary conditions.
+ *
+ * It is NOT:
+ *
+ *     allocation
+ *     reservation
+ *     hardware selection
+ *     authorization
  */
 sandboxRequirement
     : REQUIRES
@@ -1321,7 +1807,10 @@ sandboxRequirement
  * CONTRACTS
  * ============================================================================
  *
- * These reuse the universal contract vocabulary.
+ * These are source-level contract declarations whose conditions are ordinary
+ * Zamani expressions.
+ *
+ * Contract semantics remain owned by the validation/contract subsystem.
  */
 sandboxContract
     : ENSURES
@@ -1341,12 +1830,17 @@ sandboxContract
 
 /*
  * ============================================================================
- * PREFERENCES
+ * PREFERENCE
  * ============================================================================
  *
- * Preferences do not override requirements or prohibitions.
+ * A preference does not override:
  *
- * Semantic precedence is determined downstream by policy analysis.
+ *     prohibition
+ *     requirement
+ *     security policy
+ *     authorization
+ *
+ * Semantic precedence is downstream.
  */
 sandboxPreference
     : PREFER
@@ -1360,9 +1854,13 @@ sandboxPreference
  * FALLBACK
  * ============================================================================
  *
- * A fallback describes alternative execution/security intent.
+ * A fallback describes alternative realization intent.
  *
- * It does not perform fallback execution.
+ * It does not execute the fallback.
+ *
+ * Example:
+ *
+ *     fallback simulation::quantum;
  */
 sandboxFallback
     : FALLBACK
@@ -1380,7 +1878,7 @@ sandboxFallback
  *
  *     policy security::restricted_execution;
  *
- * The policy subsystem owns policy semantics.
+ * Policy declaration and evaluation remain owned by the policy subsystem.
  */
 sandboxPolicyReference
     : POLICY
@@ -1391,15 +1889,18 @@ sandboxPolicyReference
 
 /*
  * ============================================================================
- * PROVENANCE
+ * PROVENANCE REFERENCE
  * ============================================================================
- *
- * Generic provenance references remain open-world.
  *
  * Examples:
  *
  *     provenance security::policy_source;
- *     provenance source::deployment_profile;
+ *     provenance execution::deployment_profile;
+ *     provenance provenance_reference;
+ *
+ * This records source intent only.
+ *
+ * General and security provenance semantics remain downstream.
  */
 sandboxProvenanceDirective
     : PROVENANCE
@@ -1419,9 +1920,19 @@ sandboxReferenceOrExpression
  * AUDIT
  * ============================================================================
  *
- * Audit intent is declarative.
+ * Bare:
  *
- * It does not itself create or persist an audit record.
+ *     audit;
+ *
+ * Referenced:
+ *
+ *     audit security::events;
+ *
+ * Parameterized:
+ *
+ *     audit(security::events);
+ *
+ * The parser records intent only.
  */
 sandboxAuditDirective
     : AUDIT
@@ -1431,7 +1942,10 @@ sandboxAuditDirective
 
 
 sandboxAuditSpecification
-    : expression
+    : LPAREN
+      expression
+      RPAREN
+    | expression
     ;
 
 
@@ -1440,7 +1954,17 @@ sandboxAuditSpecification
  * TRACE
  * ============================================================================
  *
- * Trace intent is declarative.
+ * Bare:
+ *
+ *     trace;
+ *
+ * Referenced:
+ *
+ *     trace security::decisions;
+ *
+ * Parameterized:
+ *
+ *     trace(security::decisions);
  */
 sandboxTraceDirective
     : TRACE
@@ -1450,22 +1974,23 @@ sandboxTraceDirective
 
 
 sandboxTraceSpecification
-    : expression
+    : LPAREN
+      expression
+      RPAREN
+    | expression
     ;
 
 
 /*
  * ============================================================================
- * GENERIC PROPERTIES
+ * OPEN-WORLD PROPERTY
  * ============================================================================
- *
- * Open-world metadata.
  *
  * Example:
  *
  *     property security::classification = security::restricted;
  *
- * Property names are not enumerated.
+ * The property namespace is not enumerated.
  */
 sandboxProperty
     : PROPERTY
@@ -1481,9 +2006,17 @@ sandboxProperty
  * NESTED SANDBOX
  * ============================================================================
  *
- * Nested sandbox configuration is recursive.
+ * Example:
  *
- * No finite nesting depth is encoded.
+ *     sandbox {
+ *         forbid network;
+ *
+ *         sandbox {
+ *             forbid native;
+ *         }
+ *     }
+ *
+ * Nesting is recursive and has no grammar-level depth limit.
  */
 sandboxNested
     : sandboxStatement
@@ -1492,176 +2025,799 @@ sandboxNested
 
 /*
  * ============================================================================
- * ERROR / DIAGNOSTIC CONTRACT
+ * AST CONTRACT
  * ============================================================================
  *
- * Parser-level diagnostics should cover:
+ * The parser output MUST preserve enough structure for the frontend AST to
+ * represent:
  *
- *     missing sandbox body
- *     malformed target
- *     malformed with clause
- *     malformed option
- *     malformed directive
- *     malformed subject
- *     malformed requirement
- *     malformed contract
- *     malformed policy reference
- *     malformed property
- *     malformed nested sandbox
- *     missing statement terminator
+ *     Sandbox
+ *       attributes
+ *       visibility
+ *       target
+ *       configuration
+ *       members
  *
- * Semantic diagnostics belong downstream:
+ *     SandboxDirective
+ *       operator
+ *       subjects
  *
- *     unknown capability
- *     unknown effect
- *     unknown resource
- *     contradictory allow/forbid rules
- *     unsatisfied requirement
- *     forbidden capability
- *     invalid policy
- *     invalid target
- *     invalid nesting semantics
- *     unenforceable isolation requirement
- *     incompatible target
- *     insufficient resources
+ *     SandboxRequirement
+ *       condition
+ *
+ *     SandboxContract
+ *       kind
+ *       condition
+ *
+ *     SandboxPreference
+ *       condition
+ *
+ *     SandboxFallback
+ *       expression
+ *
+ *     SandboxPolicyReference
+ *       policy
+ *
+ *     SandboxProvenanceDirective
+ *       reference/expression
+ *
+ *     SandboxAuditDirective
+ *       specification
+ *
+ *     SandboxTraceDirective
+ *       specification
+ *
+ *     SandboxProperty
+ *       name
+ *       value
+ *
+ *     NestedSandbox
+ *       sandbox
+ *
+ * The exact Rust types remain owned by the frontend AST implementation.
+ *
+ * Every AST node must preserve source spans.
  *
  * ============================================================================
- * SEMANTIC NON-RESPONSIBILITY
+ * SEMANTIC CONTRACT
  * ============================================================================
  *
- * The parser MUST NOT reject:
+ * Semantic analysis MUST:
  *
- *     capability names it does not know;
- *     effect names it does not know;
- *     resource names it does not know;
- *     future policy names;
- *     future hardware capabilities;
- *     future execution environments;
- *     future security mechanisms;
+ *     resolve sandbox scope;
+ *     resolve nested sandbox relationships;
+ *     resolve target references;
+ *     resolve configuration options;
+ *     resolve subjects;
+ *     resolve capabilities;
+ *     resolve effects;
+ *     resolve resources;
+ *     resolve policies;
+ *     validate requirements;
+ *     validate contracts;
+ *     detect contradictions;
+ *     determine effective restrictions;
+ *     determine inheritance/attenuation;
+ *     validate authorization;
+ *     determine enforceability;
+ *     determine target compatibility;
+ *     preserve provenance.
  *
- * merely because they are unknown to the current parser.
+ * Semantic analysis MUST NOT infer that:
  *
- * Such issues are semantic resolution questions.
+ *     syntax == authorization
+ *     syntax == enforcement
+ *     requirement == allocation
+ *     capability == possession
+ *     target == physical device
+ *     policy reference == policy approval
  *
  * ============================================================================
- * HARD-CODING AUDIT
+ * EFFECT CONTRACT
  * ============================================================================
  *
- * This file contains no:
+ * Sandbox directives are constraints over the canonical effect system.
  *
- *     MAX_SANDBOXES
- *     MAX_NESTING
- *     MAX_RULES
- *     MAX_CAPABILITIES
- *     MAX_EFFECTS
- *     MAX_RESOURCES
- *     MAX_POLICIES
- *     MAX_TARGETS
- *     MAX_DEVICES
- *     MAX_NODES
- *     MAX_THREADS
- *     MAX_MEMORY
- *     MAX_STORAGE
- *     MAX_NETWORK_SIZE
- *     MAX_QUBITS
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_TENSOR_RANK
- *     MAX_REGISTER_WIDTH
+ * Example:
  *
- * It contains no:
+ *     forbid effect("network");
  *
- *     vendor catalogue
- *     device catalogue
- *     physical device identifiers
+ * The semantic representation should associate the declaration with the
+ * canonical effect identity rather than creating a sandbox-specific effect
+ * universe.
+ *
+ * ============================================================================
+ * CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Capability references remain symbolic until capability resolution.
+ *
+ * Example:
+ *
+ *     forbid capability("native.execute");
+ *
+ * The compiler must not assume that the capability exists merely because
+ * the syntax parsed.
+ *
+ * ============================================================================
+ * RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * Resource expressions remain symbolic.
+ *
+ * Example:
+ *
+ *     requires resource("memory") <= required_memory;
+ *
+ * No physical memory amount is embedded in this grammar.
+ *
+ * The resource subsystem determines:
+ *
+ *     feasibility
+ *     availability
+ *     allocation
+ *     negotiation
+ *     specialization
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Policy references are symbolic.
+ *
+ * The policy subsystem determines:
+ *
+ *     policy resolution
+ *     policy composition
+ *     conflict resolution
+ *     precedence
+ *     authorization implications
+ *     target-specific applicability
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * The semantic model must preserve:
+ *
+ *     source span
+ *     sandbox scope
+ *     nesting relationship
+ *     subject
+ *     directive
+ *     referenced policy
+ *     requirement
+ *     contract
+ *     property
+ *
+ * Downstream systems may attach:
+ *
+ *     decision
+ *     evidence
+ *     verification
+ *     enforcement result
+ *     target realization
+ *
+ * ============================================================================
+ * IR CONTRACT
+ * ============================================================================
+ *
+ * This grammar produces NO IR.
+ *
+ * Sandbox intent may lower to:
+ *
+ *     security metadata
+ *     semantic constraints
+ *     effect restrictions
+ *     capability constraints
+ *     resource constraints
+ *     execution constraints
+ *     deployment constraints
+ *     provenance metadata
+ *
+ * The information may accompany:
+ *
+ *     classical IR
+ *     quantum::ir
+ *     HDL/hardware representations
+ *     distributed representations
+ *     accelerator representations
+ *
+ * No:
+ *
+ *     SandboxIR
+ *     SecuritySandboxIR
+ *     QuantumSandboxIR
+ *
+ * should become a competing canonical IR merely because sandboxing is present.
+ *
+ * ============================================================================
+ * QUANTUM IR BOUNDARY
+ * ============================================================================
+ *
+ * Quantum-related sandbox intent follows:
+ *
+ *     source
+ *       |
+ *       v
+ *     sandbox AST
+ *       |
+ *       v
+ *     security semantics
+ *       |
+ *       v
+ *     quantum semantic model
+ *       |
+ *       v
+ *     quantum::ir
+ *
+ * Sandbox syntax MUST NOT create a second quantum representation.
+ *
+ * ============================================================================
+ * HDL / HARDWARE BOUNDARY
+ * ============================================================================
+ *
+ * Sandbox constraints may accompany HDL and hardware semantic representations.
+ *
+ * The grammar does not encode:
+ *
+ *     FPGA resource counts
+ *     ASIC cell counts
+ *     CPU counts
+ *     GPU counts
+ *     register widths
+ *     memory capacities
+ *     device identifiers
  *     physical topology
- *     fixed resource capacity
- *     fixed quantum capacity
- *     fixed hardware width
  *
  * ============================================================================
- * SCALABILITY TEST CONTRACT
+ * RUST SAFETY CONTRACT
  * ============================================================================
  *
- * Tests must progressively increase:
+ * This grammar contains:
  *
- *     sandbox count
- *     member count
- *     directive count
- *     subject count
- *     expression complexity
- *     qualified-name depth
- *     nested sandbox depth
- *     option count
- *     policy references
- *     resource expressions
- *     cross-domain restrictions
+ *     no Rust actions;
+ *     no Rust semantic predicates;
+ *     no I/O;
+ *     no filesystem access;
+ *     no networking;
+ *     no hardware access;
+ *     no dynamic execution;
+ *     no unsafe code.
  *
- * The grammar itself must remain unchanged as test scale increases.
+ * Generated Rust must remain safe Rust and compile under:
+ *
+ *     Rust 1.97+
+ *
+ * with the repository's configured Rust 2021 toolchain.
+ *
+ * The grammar must not require:
+ *
+ *     unsafe blocks
+ *     unsafe traits
+ *     unsafe extern functions
+ *     raw-pointer based sandboxing
+ *
+ * Runtime enforcement may use safe abstractions appropriate to the target
+ * implementation, but such mechanisms are outside this grammar.
  *
  * ============================================================================
- * POSITIVE TEST CONTRACT
+ * ANTLR COMPOSITION CONTRACT
  * ============================================================================
  *
- * At minimum:
+ * Statements composition MUST import:
  *
- *     sandbox {
- *         forbid effect("network");
- *         forbid capability("native.execute");
- *     }
+ *     SecuritySandbox
+ *
+ * and consume:
+ *
+ *     sandboxStatement
+ *
+ * exactly once.
+ *
+ * It MUST NOT copy sandbox productions.
+ *
+ * Expressions remain owned by:
+ *
+ *     Expressions
+ *
+ * Core remains responsible for:
+ *
+ *     attributes
+ *     visibility
+ *     qualifiedName
+ *
+ * ============================================================================
+ * REQUIRED STATEMENTS.G4 INTEGRATION
+ * ============================================================================
+ *
+ * grammar/statements/statements.g4
+ *
+ * MUST change its imports from:
+ *
+ *     Declarations,
+ *     Assignments,
+ *     AssertionsParser,
+ *     ControlFlow,
+ *     ConcurrencyStatements,
+ *     EffectStatements,
+ *     ResourceStatements,
+ *     ReasonStatements,
+ *     Domains,
+ *     UnsafeStatementsParser,
+ *     Expressions,
+ *     ZamaniCoreBlocks
+ *
+ * to include:
+ *
+ *     SecuritySandbox
+ *
+ * and its universal statement rule MUST include:
+ *
+ *     | sandboxStatement
+ *
+ * exactly once.
+ *
+ * The resulting ownership is:
+ *
+ *     Statements
+ *          |
+ *          +--> sandboxStatement
+ *                    |
+ *                    v
+ *              SecuritySandbox
+ *
+ * No other statement grammar should duplicate the sandbox rules.
+ *
+ * ============================================================================
+ * REQUIRED PARSER INTEGRATION
+ * ============================================================================
+ *
+ * grammar/antlr/ZamaniParser.g4
+ *
+ * MUST continue to consume the statement composition root rather than
+ * defining sandbox syntax itself.
+ *
+ * The dependency direction must remain:
+ *
+ *     ZamaniParser
+ *          |
+ *          v
+ *     Statements
+ *          |
+ *          v
+ *     SecuritySandbox
+ *
+ * Never:
+ *
+ *     SecuritySandbox
+ *          |
+ *          v
+ *     ZamaniParser
+ *
+ * ============================================================================
+ * REQUIRED LEXER INTEGRATION
+ * ============================================================================
+ *
+ * No lexer changes are required solely for this file because the repository
+ * already provides the canonical sandbox/security vocabulary:
+ *
+ *     SANDBOX
+ *     WITH
+ *     ALLOW
+ *     FORBID
+ *     PERMIT
+ *     DENY
+ *     REQUIRES
+ *     ENSURES
+ *     INVARIANT
+ *     ASSUME
+ *     GUARANTEE
+ *     PREFER
+ *     FALLBACK
+ *     EFFECT
+ *     CAPABILITY
+ *     RESOURCE
+ *     NETWORK
+ *     NATIVE
+ *     FOREIGN
+ *     REFLECTION
+ *     ADAPTATION
+ *     SIMULATION
+ *     POLICY
+ *     PROVENANCE
+ *     AUDIT
+ *     TRACE
+ *     PROPERTY
+ *
+ * Future sandbox subjects should normally remain identifiers or qualified
+ * names rather than becoming new reserved words.
+ *
+ * ============================================================================
+ * REQUIRED SECURITY INTEGRATION
+ * ============================================================================
+ *
+ * The security subsystem consumes the sandbox semantic model.
+ *
+ * It is responsible for:
+ *
+ *     authorization
+ *     trust
+ *     identity
+ *     permission interpretation
+ *     enforcement feasibility
+ *     security conflict analysis
+ *
+ * This grammar does not duplicate those grammars.
+ *
+ * ============================================================================
+ * REQUIRED EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Effect analysis consumes:
+ *
+ *     sandboxEffectSubject
+ *
+ * and converts it into a constraint over the canonical effect model.
+ *
+ * ============================================================================
+ * REQUIRED CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Capability analysis consumes:
+ *
+ *     sandboxCapabilitySubject
+ *
+ * and resolves it against the canonical capability model.
+ *
+ * ============================================================================
+ * REQUIRED RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Resource analysis consumes:
+ *
+ *     sandboxResourceSubject
+ *     sandboxRequirement
+ *
+ * and evaluates feasibility without introducing source-level capacity limits.
+ *
+ * ============================================================================
+ * REQUIRED POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Policy analysis consumes:
+ *
+ *     sandboxPolicyReference
+ *
+ * and determines policy applicability and composition.
+ *
+ * Sandbox syntax itself must not evaluate policy.
+ *
+ * ============================================================================
+ * REQUIRED PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Provenance analysis consumes source spans and semantic relationships from
+ * the sandbox AST.
+ *
+ * Security provenance may additionally consume:
+ *
+ *     sandboxPolicyReference
+ *     sandboxAuditDirective
+ *     sandboxTraceDirective
+ *
+ * ============================================================================
+ * REQUIRED EXECUTION INTEGRATION
+ * ============================================================================
+ *
+ * Execution planning consumes the resolved sandbox model to derive an
+ * executable security boundary.
+ *
+ * It may determine:
+ *
+ *     isolation strategy
+ *     permitted effects
+ *     denied effects
+ *     capability requirements
+ *     resource constraints
+ *     policy constraints
+ *     fallback behavior
+ *     target-specific enforcement
+ *
+ * The parser does not select the implementation.
+ *
+ * ============================================================================
+ * REQUIRED QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * Quantum execution consumes sandbox-derived semantic constraints before
+ * realization.
+ *
+ * The pipeline remains:
+ *
+ *     sandbox
+ *       |
+ *       v
+ *     semantic constraints
+ *       |
+ *       v
+ *     quantum semantic model
+ *       |
+ *       v
+ *     quantum::ir
+ *       |
+ *       v
+ *     routing
+ *       |
+ *       v
+ *     scheduling
+ *       |
+ *       v
+ *     resilience/QEC
+ *       |
+ *       v
+ *     ZQN
+ *       |
+ *       v
+ *     HAL
+ *
+ * ============================================================================
+ * REQUIRED HARDWARE / HDL INTEGRATION
+ * ============================================================================
+ *
+ * Hardware and HDL systems consume sandbox constraints as semantic metadata.
+ *
+ * They remain responsible for:
+ *
+ *     synthesis
+ *     placement
+ *     physical implementation
+ *     target capabilities
+ *     enforcement mechanisms
+ *
+ * ============================================================================
+ * REQUIRED DISTRIBUTED INTEGRATION
+ * ============================================================================
+ *
+ * Distributed execution may consume:
+ *
+ *     network restrictions
+ *     capability restrictions
+ *     resource restrictions
+ *     nested sandbox scopes
+ *     policy constraints
+ *
+ * No node-count or topology-size limit is introduced.
+ *
+ * ============================================================================
+ * REQUIRED FFI / ABI INTEGRATION
+ * ============================================================================
+ *
+ * Interoperability consumes:
+ *
+ *     native subjects
+ *     foreign subjects
+ *     capability restrictions
+ *     effect restrictions
+ *
+ * FFI/ABI declarations remain owned by:
+ *
+ *     grammar/interoperability/
+ *
+ * ============================================================================
+ * REQUIRED METAPROGRAMMING INTEGRATION
+ * ============================================================================
+ *
+ * Metaprogramming consumes:
+ *
+ *     reflection restrictions
+ *     adaptation restrictions
+ *     code-generation restrictions where represented through qualified names
+ *
+ * The sandbox grammar does not define reflection semantics.
+ *
+ * ============================================================================
+ * REQUIRED SIMULATION INTEGRATION
+ * ============================================================================
+ *
+ * Simulation may consume:
+ *
+ *     simulation restrictions
+ *     simulation capabilities
+ *     fallback expressions
+ *
+ * Simulation remains an execution mode rather than a separate source
+ * language.
+ *
+ * ============================================================================
+ * REQUIRED TEST CONTRACT
+ * ============================================================================
+ *
+ * STRUCTURAL TESTS
+ * ----------------
+ *
+ * Verify:
+ *
+ *     SecuritySandbox generates successfully.
+ *     Core import resolves.
+ *     Types import resolves.
+ *     Expressions import resolves.
+ *     ZamaniLexer token vocabulary resolves.
+ *     No duplicate rule ownership exists.
+ *     No undefined tokens exist.
+ *     No undefined parser rules exist.
+ *
+ * ============================================================================
+ * POSITIVE TESTS
+ * ============================================================================
+ *
+ * Minimal:
  *
  *     sandbox {
  *         forbid network;
  *     }
  *
- *     sandbox {
- *         forbid native;
- *         forbid foreign;
- *         forbid reflection;
- *         forbid adaptation;
- *     }
+ * Effect:
  *
  *     sandbox {
- *         require capability("security.isolation");
- *         require resource("memory") <= memory_budget;
+ *         forbid effect("network");
+ *         forbid effect("native");
  *     }
+ *
+ * Capability:
+ *
+ *     sandbox {
+ *         forbid capability("native.execute");
+ *         require capability("security.isolation");
+ *     }
+ *
+ * Resource:
+ *
+ *     sandbox {
+ *         requires resource("memory") <= memory_budget;
+ *     }
+ *
+ * Network:
+ *
+ *     sandbox {
+ *         forbid network;
+ *         forbid network::external;
+ *     }
+ *
+ * Filesystem:
+ *
+ *     sandbox {
+ *         forbid filesystem::write;
+ *         forbid filesystem::external;
+ *     }
+ *
+ * Native/foreign:
+ *
+ *     sandbox {
+ *         forbid native;
+ *         forbid native::execute;
+ *         forbid foreign;
+ *         forbid foreign::call;
+ *     }
+ *
+ * Reflection:
+ *
+ *     sandbox {
+ *         forbid reflection;
+ *         forbid reflection::write;
+ *         forbid reflection::code_generation;
+ *     }
+ *
+ * Adaptation:
+ *
+ *     sandbox {
+ *         forbid adaptation;
+ *         forbid adaptation::code;
+ *         forbid adaptation::policy;
+ *     }
+ *
+ * Simulation:
+ *
+ *     sandbox {
+ *         forbid simulation;
+ *         forbid simulation::external;
+ *     }
+ *
+ * Target:
  *
  *     sandbox execution_context {
  *         forbid network;
  *     }
  *
+ * Configuration:
+ *
  *     sandbox with (
- *         mode = security::restricted
+ *         mode = security::restricted,
+ *         isolation = security::strong
  *     ) {
  *         forbid native;
  *     }
  *
+ * Target + configuration:
+ *
+ *     sandbox execution_context with (
+ *         mode = security::restricted
+ *     ) {
+ *         forbid network;
+ *     }
+ *
+ * Contracts:
+ *
+ *     sandbox {
+ *         ensures security::isolated;
+ *         invariant security::boundary_intact;
+ *         assume execution::trusted;
+ *         guarantee security::auditability;
+ *     }
+ *
+ * Policy:
+ *
  *     sandbox {
  *         policy security::restricted_execution;
- *         property security::classification = security::restricted;
+ *     }
+ *
+ * Provenance:
+ *
+ *     sandbox {
+ *         provenance security::policy_source;
+ *     }
+ *
+ * Audit:
+ *
+ *     sandbox {
+ *         audit;
  *         audit security::events;
+ *         audit(security::events);
+ *     }
+ *
+ * Trace:
+ *
+ *     sandbox {
+ *         trace;
  *         trace security::decisions;
+ *         trace(security::decisions);
  *     }
  *
- *     sandbox {
- *         forbid filesystem::write;
- *         forbid network::external;
- *         forbid foreign::call;
- *     }
+ * Property:
  *
  *     sandbox {
+ *         property security::classification = security::restricted;
+ *     }
+ *
+ * Nested:
+ *
+ *     sandbox {
+ *         forbid network;
+ *
  *         sandbox {
  *             forbid native;
  *         }
  *     }
  *
+ * Cross-domain:
+ *
+ *     sandbox {
+ *         forbid network;
+ *         forbid foreign;
+ *         forbid reflection;
+ *         forbid adaptation;
+ *         require capability("quantum.measurement");
+ *         requires resource("memory") <= required_memory;
+ *         policy security::restricted_execution;
+ *         provenance security::policy_source;
+ *         ensures security::boundary_intact;
+ *     }
+ *
  * ============================================================================
- * NEGATIVE TEST CONTRACT
+ * NEGATIVE TESTS
  * ============================================================================
  *
- * The suite must reject structurally malformed forms such as:
+ * The parser must reject:
  *
  *     sandbox
  *
@@ -1693,345 +2849,217 @@ sandboxNested
  *         policy;
  *     }
  *
- * Semantic impossibilities such as an unavailable capability MUST be tested
- * downstream rather than converted into parser errors.
+ *     sandbox {
+ *         capability("x")
+ *     }
+ *
+ *     sandbox {
+ *         forbid effect;
+ *     }
+ *
+ *     sandbox {
+ *         forbid capability;
+ *     }
+ *
+ *     sandbox {
+ *         forbid network(
+ *     }
  *
  * ============================================================================
- * BOUNDARY TEST CONTRACT
+ * SEMANTIC NEGATIVE TESTS
  * ============================================================================
  *
- * Test combinations of:
+ * These MUST NOT be parser failures merely because the semantic value is
+ * invalid:
  *
- *     sandbox + classical computation
- *     sandbox + quantum computation
- *     sandbox + hybrid computation
- *     sandbox + HDL
- *     sandbox + hardware intent
- *     sandbox + accelerator
- *     sandbox + AI/model execution
- *     sandbox + distributed execution
- *     sandbox + networking
- *     sandbox + FFI
- *     sandbox + reflection
- *     sandbox + adaptation
- *     sandbox + simulation
- *     sandbox + contracts
- *     sandbox + policies
- *     sandbox + provenance
- *     sandbox + resource requirements
- *     sandbox + capabilities
- *     sandbox + effects
+ *     unknown capability
+ *     unknown effect
+ *     unknown resource
+ *     unknown policy
+ *     unavailable capability
+ *     insufficient resources
+ *     contradictory restrictions
+ *     unauthorized operation
+ *     unenforceable boundary
+ *
+ * They belong to semantic/security validation.
  *
  * ============================================================================
- * CROSS-DOMAIN TEST
+ * BOUNDARY TESTS
  * ============================================================================
  *
- * At least one conformance fixture should combine:
+ * Test sandbox integration with:
  *
- *     classical execution
- *     quantum execution
+ *     classical computation
+ *     numerical computation
+ *     AI/model execution
+ *     data processing
+ *     quantum computation
+ *     hybrid computation
+ *     HDL
+ *     hardware intent
+ *     accelerator intent
+ *     concurrency
+ *     distributed computation
+ *     networking
+ *     FFI
+ *     ABI
+ *     reflection
+ *     adaptation
+ *     simulation
+ *     contracts
+ *     policies
+ *     provenance
+ *     resources
+ *     capabilities
+ *     effects
+ *
+ * ============================================================================
+ * SCALABILITY TESTS
+ * ============================================================================
+ *
+ * Test increasingly large inputs containing:
+ *
+ *     sandbox declarations
+ *     sandbox members
+ *     directive subjects
+ *     subject lists
+ *     options
+ *     nested sandboxes
+ *     qualified-name depth
+ *     expression complexity
+ *     policy references
  *     resource requirements
  *     capability requirements
- *     effect restrictions
- *     network restrictions
- *     native/foreign restrictions
- *     policy references
- *     provenance
- *     contracts
  *
- * in one source program.
+ * No test size may become a language-level constant.
+ *
+ * Tests should establish that the grammar does not artificially cap the
+ * language.
  *
  * ============================================================================
- * DETERMINISM TEST
+ * DETERMINISM TESTS
  * ============================================================================
  *
- * Identical:
+ * Parse identical:
  *
  *     source
  *     grammar version
  *     lexer version
  *     parser configuration
  *
- * must produce equivalent parse-tree structure.
+ * multiple times.
  *
- * Parsing must not depend on:
+ * Verify equivalent parse structures and source spans.
  *
- *     hardware
- *     resource availability
- *     target selection
+ * The result must not depend on:
+ *
+ *     target hardware
+ *     memory availability
  *     filesystem state
  *     network state
  *     wall-clock time
- *     random state
+ *     randomness
+ *     scheduler state
  *     runtime state
  *
  * ============================================================================
- * COMPATIBILITY CONTRACT
+ * COMPATIBILITY TESTS
  * ============================================================================
  *
- * Stable public entry:
+ * Existing canonical constructs must remain parseable:
  *
- *     sandboxStatement
+ *     sandbox { ... }
+ *     sandbox target { ... }
+ *     sandbox with (...) { ... }
+ *     allow ...
+ *     forbid ...
+ *     permit ...
+ *     deny ...
+ *     requires ...
+ *     ensures ...
+ *     invariant ...
+ *     assume ...
+ *     guarantee ...
+ *     prefer ...
+ *     fallback ...
+ *     policy ...
+ *     provenance ...
+ *     audit ...
+ *     trace ...
+ *     property ...
  *
- * Existing token names are reused.
- *
- * No new lexical keyword is introduced by this grammar.
- *
- * Future sandbox subjects should normally be represented through:
- *
- *     qualifiedName
- *     expression
- *     capability(...)
- *     effect(...)
- *     resource(...)
- *
- * rather than adding a new keyword.
- *
- * ============================================================================
- * INTEGRATION WITH STATEMENTS.G4
- * ============================================================================
- *
- * grammar/statements/statements.g4
- *
- * MUST add this grammar to its imports:
- *
- *     SecuritySandbox
- *
- * and add exactly one alternative:
- *
- *     | sandboxStatement
- *
- * to the universal statement rule.
- *
- * It MUST NOT copy any sandbox production into statements.g4.
- *
- * The resulting composition is:
- *
- *     Statements.statement
- *          |
- *          +--> sandboxStatement
- *                    |
- *                    v
- *               SecuritySandbox
+ * Compatibility aliases, where required, must be handled by the repository's
+ * compatibility subsystem rather than by duplicate lexer tokens or duplicate
+ * sandbox grammar authorities.
  *
  * ============================================================================
- * INTEGRATION WITH CORE
+ * HARD-CODING AUDIT
  * ============================================================================
  *
- * Core owns:
+ * PASS CONDITIONS
+ * --------------
  *
- *     attributes
- *     visibility
- *     qualifiedName
- *     names
- *     generic core syntax
+ * This file contains no:
  *
- * This file consumes those rules.
+ *     machine capacity
+ *     memory capacity
+ *     processor count
+ *     GPU count
+ *     FPGA count
+ *     ASIC count
+ *     QPU count
+ *     node count
+ *     thread count
+ *     actor count
+ *     device count
+ *     network size
+ *     topology size
+ *     tensor rank
+ *     register width
+ *     fixed sandbox count
+ *     fixed nesting depth
+ *     fixed rule count
+ *     fixed policy count
+ *     fixed capability count
+ *     fixed effect count
+ *     fixed resource count
  *
- * ============================================================================
- * INTEGRATION WITH TYPES
- * ============================================================================
+ * It contains no:
  *
- * Type syntax remains owned by Types.
- *
- * Sandbox expressions may contain typed expressions, but sandbox.g4 does not
- * redefine type syntax.
- *
- * ============================================================================
- * INTEGRATION WITH EXPRESSIONS
- * ============================================================================
- *
- * Expression semantics remain owned by Expressions.
- *
- * This file uses expression as an opaque source-level semantic expression.
- *
- * ============================================================================
- * INTEGRATION WITH EFFECTS
- * ============================================================================
- *
- * Sandbox restrictions are consumed by effect analysis.
- *
- * Example:
- *
- *     forbid effect("network");
- *
- * becomes semantic intent equivalent to a restriction over the canonical
- * effect model.
- *
- * The effect grammar does not need to know sandbox syntax.
+ *     vendor catalogue
+ *     hardware catalogue
+ *     device catalogue
+ *     protocol catalogue
+ *     filesystem catalogue
+ *     physical target catalogue
  *
  * ============================================================================
- * INTEGRATION WITH CAPABILITIES
+ * SECURITY AUDIT
  * ============================================================================
  *
- * Capability restrictions are consumed by capability analysis.
+ * PASS CONDITIONS
+ * --------------
  *
- * Example:
+ * The grammar:
  *
- *     forbid capability("native.execute");
- *
- * The sandbox grammar does not duplicate capability declaration syntax.
- *
- * ============================================================================
- * INTEGRATION WITH RESOURCES
- * ============================================================================
- *
- * Resource restrictions and requirements flow into resource analysis.
- *
- * They remain symbolic.
- *
- * Physical realization is downstream.
- *
- * ============================================================================
- * INTEGRATION WITH SECURITY POLICY
- * ============================================================================
- *
- * Policy references are passed to the security/policy semantic layer.
- *
- * The sandbox grammar does not evaluate policies.
- *
- * ============================================================================
- * INTEGRATION WITH PROVENANCE
- * ============================================================================
- *
- * Sandbox source spans and policy references must remain available to
- * provenance/audit infrastructure.
- *
- * ============================================================================
- * INTEGRATION WITH QUANTUM
- * ============================================================================
- *
- * Sandbox metadata may accompany quantum semantic operations.
- *
- * The canonical path remains:
- *
- *     sandbox intent
- *          |
- *          v
- *     security/policy semantics
- *          |
- *          v
- *     canonical semantic model
- *          |
- *          v
- *     quantum semantic model
- *          |
- *          v
- *     quantum::ir
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing
- *          |
- *          v
- *     scheduling
- *          |
- *          v
- *     resilience/QEC
- *          |
- *          v
- *     ZQN
- *          |
- *          v
- *     HAL
- *
- * Sandbox syntax MUST NOT create another quantum IR.
- *
- * ============================================================================
- * INTEGRATION WITH HDL / HARDWARE
- * ============================================================================
- *
- * Sandbox restrictions may accompany HDL/hardware intent.
- *
- * They remain security metadata and semantic constraints.
- *
- * They do not select:
- *
- *     CPU
- *     GPU
- *     FPGA
- *     ASIC
- *     QPU
- *     accelerator
- *
- * ============================================================================
- * INTEGRATION WITH DISTRIBUTED EXECUTION
- * ============================================================================
- *
- * Sandbox restrictions may constrain:
- *
- *     node communication
- *     service access
- *     actor creation
- *     distributed execution
- *     external networking
- *
- * The number of nodes is not part of the grammar's universe.
- *
- * ============================================================================
- * INTEGRATION WITH FFI / ABI
- * ============================================================================
- *
- * Sandbox restrictions may forbid:
- *
- *     native
- *     foreign
- *     foreign::call
- *
- * FFI/ABI details remain owned by interoperability grammars.
- *
- * ============================================================================
- * INTEGRATION WITH METAPROGRAMMING
- * ============================================================================
- *
- * Sandbox restrictions may forbid:
- *
- *     reflection
- *     reflection::write
- *     reflection::code_generation
- *
- * Metaprogramming semantics remain downstream.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar creates NO IR.
- *
- * Sandbox information may become:
- *
- *     security metadata
- *     semantic constraints
- *     capability constraints
- *     effect restrictions
- *     resource constraints
- *     policy metadata
- *     provenance metadata
- *     deployment constraints
- *
- * It may accompany:
- *
- *     classical IR
- *     quantum::ir
- *     HDL/hardware representations
- *     distributed representations
- *     accelerator representations
- *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
- *
- * This file contains no Rust code.
- *
- * Generated/consuming frontend implementation must:
- *
- *     compile with Rust 1.97+
- *     use Rust 2021
- *     remain memory-safe
- *     remain deterministic at the parser layer
- *     contain no unsafe Rust requirement
+ *     does not authorize;
+ *     does not authenticate;
+ *     does not allocate;
+ *     does not execute;
+ *     does not access secrets;
+ *     does not perform I/O;
+ *     does not access the filesystem;
+ *     does not access the network;
+ *     does not inspect hardware;
+ *     does not invoke FFI;
+ *     does not invoke native code;
+ *     does not evaluate policy;
+ *     does not perform reflection;
+ *     does not perform adaptation;
+ *     does not generate code;
+ *     does not create credentials;
+ *     does not create security state.
  *
  * ============================================================================
  * COMPLETION CRITERIA
@@ -2039,123 +3067,127 @@ sandboxNested
  *
  * This file is DONE when:
  *
- * [ ] SecuritySandbox is the sole owner of sandboxStatement.
+ *     [ ] SecuritySandbox is the sole owner of sandboxStatement.
  *
- * [ ] No lexer rule is defined here.
+ *     [ ] The canonical lexer provides every referenced token.
  *
- * [ ] Existing canonical lexer tokens are reused.
+ *     [ ] No lexer rules exist in this file.
  *
- * [ ] No new sandbox keyword is required for ordinary new subjects.
+ *     [ ] Core owns names/attributes/visibility.
  *
- * [ ] sandbox { ... } parses.
+ *     [ ] Expressions owns expression syntax.
  *
- * [ ] sandbox <target> { ... } parses.
+ *     [ ] Types owns type syntax.
  *
- * [ ] sandbox with (...) { ... } parses.
+ *     [ ] Effects owns effect semantics.
  *
- * [ ] nested sandboxes parse.
+ *     [ ] Capabilities owns capability semantics.
  *
- * [ ] allow/forbid/permit/deny parse.
+ *     [ ] Resources owns resource semantics.
  *
- * [ ] effect restrictions parse.
+ *     [ ] Policies owns policy semantics.
  *
- * [ ] capability restrictions parse.
+ *     [ ] Security owns authorization/enforcement semantics.
  *
- * [ ] resource restrictions parse.
+ *     [ ] Provenance owns provenance semantics.
  *
- * [ ] network restrictions parse.
+ *     [ ] sandboxStatement is consumed exactly once by Statements.
  *
- * [ ] native restrictions parse.
+ *     [ ] sandbox { ... } parses.
  *
- * [ ] foreign restrictions parse.
+ *     [ ] sandbox target { ... } parses.
  *
- * [ ] reflection restrictions parse.
+ *     [ ] sandbox with (...) { ... } parses.
  *
- * [ ] adaptation restrictions parse.
+ *     [ ] sandbox target with (...) { ... } parses.
  *
- * [ ] simulation restrictions parse.
+ *     [ ] allow/forbid/permit/deny parse.
  *
- * [ ] symbolic qualified-name restrictions parse.
+ *     [ ] effect subjects parse.
  *
- * [ ] generic expression restrictions parse.
+ *     [ ] capability subjects parse.
  *
- * [ ] requirements parse.
+ *     [ ] resource subjects parse.
  *
- * [ ] contracts parse.
+ *     [ ] network subjects parse.
  *
- * [ ] preferences parse.
+ *     [ ] native subjects parse.
  *
- * [ ] fallbacks parse.
+ *     [ ] foreign subjects parse.
  *
- * [ ] policy references parse.
+ *     [ ] reflection subjects parse.
  *
- * [ ] provenance metadata parses.
+ *     [ ] adaptation subjects parse.
  *
- * [ ] audit metadata parses.
+ *     [ ] simulation subjects parse.
  *
- * [ ] trace metadata parses.
+ *     [ ] open-world qualified subjects parse.
  *
- * [ ] arbitrary properties parse.
+ *     [ ] expression subjects parse.
  *
- * [ ] no finite capability universe exists.
+ *     [ ] requirements parse.
  *
- * [ ] no finite effect universe exists.
+ *     [ ] contracts parse.
  *
- * [ ] no finite resource universe exists.
+ *     [ ] preferences parse.
  *
- * [ ] no hardware capacity is encoded.
+ *     [ ] fallbacks parse.
  *
- * [ ] no device catalogue is encoded.
+ *     [ ] policy references parse.
  *
- * [ ] no physical target is selected.
+ *     [ ] provenance references parse.
  *
- * [ ] no resource is allocated.
+ *     [ ] audit directives parse.
  *
- * [ ] no policy is evaluated.
+ *     [ ] trace directives parse.
  *
- * [ ] no runtime operation occurs.
+ *     [ ] properties parse.
  *
- * [ ] no IR is created.
+ *     [ ] nested sandboxes parse.
  *
- * [ ] quantum semantics remain downstream.
+ *     [ ] semantic errors remain downstream.
  *
- * [ ] quantum::ir remains the canonical quantum IR.
+ *     [ ] no physical target is selected by the grammar.
  *
- * [ ] AST mapping is defined.
+ *     [ ] no resource is allocated by the grammar.
  *
- * [ ] semantic ownership is defined.
+ *     [ ] no policy is evaluated by the grammar.
  *
- * [ ] effect integration is defined.
+ *     [ ] no runtime operation is performed.
  *
- * [ ] capability integration is defined.
+ *     [ ] no IR is created.
  *
- * [ ] resource integration is defined.
+ *     [ ] quantum::ir remains the canonical quantum boundary.
  *
- * [ ] policy integration is defined.
+ *     [ ] no fixed capacity exists.
  *
- * [ ] provenance integration is defined.
+ *     [ ] no finite security catalogue is embedded.
  *
- * [ ] positive tests exist.
+ *     [ ] positive tests pass.
  *
- * [ ] negative tests exist.
+ *     [ ] negative tests pass.
  *
- * [ ] boundary tests exist.
+ *     [ ] semantic-negative tests pass.
  *
- * [ ] scalability tests exist.
+ *     [ ] boundary tests pass.
  *
- * [ ] cross-domain tests exist.
+ *     [ ] scalability tests pass.
  *
- * [ ] determinism tests exist.
+ *     [ ] determinism tests pass.
  *
- * [ ] Rust 1.97+ integration succeeds.
+ *     [ ] compatibility tests pass.
+ *
+ *     [ ] generated Rust compiles with Rust 1.97+.
+ *
+ *     [ ] no unsafe Rust is required.
  *
  * ============================================================================
  * FINAL ARCHITECTURAL GUARANTEE
  * ============================================================================
  *
- * This file describes:
+ * This grammar describes:
  *
- *     WHAT SECURITY BOUNDARY IS REQUESTED
+ *     WHAT SECURITY/EXECUTION BOUNDARY THE PROGRAM REQUESTS
  *
  * It does not describe:
  *
@@ -2169,33 +3201,45 @@ sandboxNested
  *     sandbox intent
  *          |
  *          v
- *     security/policy analysis
+ *     domain-neutral AST
  *          |
- *          +--> effects
- *          +--> capabilities
- *          +--> resources
- *          +--> contracts
- *          +--> provenance
+ *          v
+ *     security/effect/capability/resource/policy analysis
  *          |
  *          v
  *     canonical semantic model
  *          |
- *          +--> classical
- *          +--> quantum::ir
- *          +--> HDL
- *          +--> hardware
- *          +--> distributed
- *          +--> accelerator
- *          +--> future domains
+ *          +--> classical representation
+ *          +--> quantum semantic model
+ *          |        |
+ *          |        v
+ *          |    quantum::ir
+ *          |
+ *          +--> HDL/hardware representation
+ *          +--> distributed representation
+ *          +--> accelerator representation
+ *          +--> future domain representations
  *          |
  *          v
- *     execution planning
+ *     optimization/lowering
  *          |
  *          v
- *     target realization
+ *     routing/scheduling/resilience
+ *          |
+ *          v
+ *     ZQN/HAL
+ *          |
+ *          v
+ *     available target realization
  *
- * The sandbox grammar therefore does not create a ceiling on the size,
- * technology, or computational domain of Zamani programs.
+ * The sandbox grammar therefore remains compatible with:
  *
+ *     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+ *
+ * while imposing no artificial computational, hardware, quantum, networking,
+ * resource, or security-domain ceiling.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
