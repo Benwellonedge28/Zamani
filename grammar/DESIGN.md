@@ -3,270 +3,491 @@ Zamani Grammar Architecture and Production Design
 Path: "grammar/DESIGN.md"
 Repository: "Benwellonedge28/Zamani"
 Language: Zamani
-Compiler: ZUTC / Zamani compiler
-Edition: Rust 2021
-Minimum Rust version: Rust 1.97.1
-Rust safety: Safe Rust only; production Rust implementation MUST NOT use "unsafe"
+Compiler/frontend: ZUTC / Zamani compiler
+Rust edition: 2021
+Minimum Rust version: Rust 1.97.1 or later
+Rust safety: Safe Rust only; production Rust code MUST NOT use "unsafe"
 Architecture: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
 Status: Normative architectural specification
-Scope: Grammar, lexical contracts, frontend integration, semantic ownership, domain integration, compatibility, scalability and conformance.
+Scope: Language grammar, lexical architecture, parser integration, AST integration, semantic ownership, IR boundaries, domain integration, portability, scalability, compatibility, validation, conformance, and production readiness.
 
 ---
 
 1. Purpose
 
-This document establishes the normative architecture for the Zamani "grammar/" subsystem.
+This document defines the normative architecture of the "grammar/" subsystem.
 
-It defines how Zamani source-language syntax is specified, implemented, validated, integrated and maintained across the repository.
+It establishes:
 
-Its purpose is to ensure that Zamani can express classical, quantum, hybrid, hardware-description, AI, distributed, parallel, scientific, data, networking and future computational paradigms through one coherent language.
+- what the grammar subsystem owns;
+- what it does not own;
+- which files are authoritative;
+- how syntax is represented;
+- how syntax integrates with the Rust frontend;
+- how domain-neutral AST structures are produced;
+- how semantic meaning is established;
+- how types, effects, resources, capabilities, contracts, policies, and provenance interact;
+- how classical, quantum, HDL, AI, data, distributed, networking, accelerator, and future computational domains integrate;
+- how canonical IR is reached;
+- how quantum computation crosses the "quantum::ir" boundary;
+- how target independence is preserved;
+- how programs scale from tiny computations to arbitrarily large feasible computations;
+- how compatibility is maintained;
+- how production conformance is established.
 
-The architecture must support programs ranging from the smallest meaningful computation to arbitrarily large computations, subject to actual semantic requirements, implementation representation limits and available resources.
+This document is an architectural contract.
 
-This document also integrates useful UBUNTU concepts into Zamani without introducing a second language, competing grammar authority or application-specific keyword explosion.
+It is not an inventory of every keyword, grammar production, AST field, instruction, hardware device, or backend.
 
-It is an architectural contract. It does not certify that every described feature is already implemented.
+A feature described here is not automatically implemented merely because the architecture permits it.
 
-A design requirement is not an implementation claim.
+A feature MUST NOT be marked implemented or stable until the required implementation and conformance evidence exists.
 
-A feature may only be called production-ready after its complete implementation and conformance requirements have been demonstrated.
+---
 
 2. Normative terminology
 
-The words below have precise meanings throughout this document.
+The following terms have mandatory meanings.
 
-- MUST / MUST NOT: Mandatory architectural requirement.
-- SHOULD / SHOULD NOT: Strong recommendation, with documented justification required for deviations.
-- MAY: Optional implementation or extension.
-- Specified: A normative design exists.
-- Implemented: The required implementation exists and is integrated.
-- Conformant: The implementation passes the applicable conformance suite.
-- Stable: The feature has an approved compatibility contract.
-- Experimental: The feature is explicitly non-stable.
-- Deprecated: The feature remains recognizable but has an announced replacement or removal policy.
-- Unsupported: The implementation cannot currently provide the feature.
-- Target: A compilation or execution environment.
-- Resource: A logical or physical quantity consumed or required by computation.
-- Capability: An operation or property supported by an execution environment.
-- Realization: The concrete implementation of logical program intent on a target.
+MUST
 
-These statuses MUST NOT be used interchangeably.
+A mandatory requirement.
 
-3. Existing repository baseline
+MUST NOT
 
-This design is based on the existing repository structure and implementation, not an assumption that the repository is an empty language project.
+A prohibited behavior.
 
-The repository already contains:
+SHOULD
 
-- "grammar/Zamani.g4"
-- "grammar/Zamani-Grammar.md"
-- "grammar/grammar.md"
-- "grammar/README.md"
-- "grammar/DESIGN.md"
-- multiple domain-specific grammar directories;
-- "src/lexer.rs";
-- "src/parser.rs";
-- "src/ast/mod.rs";
-- quantum-related compiler components;
-- existing concurrency, effects, resource, execution and interoperability work.
+A strong recommendation. A deviation requires documented justification.
 
-The Rust frontend currently contains constructs and representations that are not necessarily identical to the ANTLR grammar.
+SHOULD NOT
 
-For example, the existing AST includes dedicated quantum, nano, learning, concurrency, effect and other language constructs. The parser is a recursive-descent/Pratt implementation. The lexer contains its own token definitions and keyword recognition.
+A behavior normally prohibited unless documented justification exists.
 
-Consequently, no grammar document may assume that adding an ANTLR production automatically changes the behavior of the Rust compiler.
+MAY
 
-3.1 Repository facts that must be reconciled
+An allowed option.
 
-The repository's "Cargo.toml" currently declares Rust 2021 and contains a "rust-version" entry that must be validated and normalized to a valid Cargo version string.
+Specification
 
-The required baseline for this architecture is:
+The normative definition of language meaning.
 
-edition = "2021"
-rust-version = "1.97.1"
+Grammar
 
-The actual build must be tested using that toolchain.
+The formal syntactic representation accepted by a grammar implementation.
 
-The existing AST also contains an "Unsafe" language node. This design distinguishes:
+Lexer
 
-1. Rust implementation safety.
-2. Zamani source-language unsafe operations.
+The component that converts source characters into tokens.
 
-Production Rust code MUST NOT use Rust "unsafe".
+Parser
 
-The presence of a Zamani "unsafe" syntax node does not authorize unsafe Rust implementation. The source-language feature must independently pass the security and semantics requirements defined below.
+The component that converts tokens into syntactic structures.
 
-3.2 Repository inspection and change policy
+AST
 
-Before changing an existing grammar or frontend file, developers MUST inspect:
+The domain-neutral representation of source-level structure and meaning-bearing syntax.
 
-- its current contents;
-- its direct imports;
-- its public types and rules;
-- its downstream consumers;
-- associated tests;
-- relevant semantic and IR implementations;
-- compatibility requirements.
+Semantic model
 
-A proposed architecture MUST NOT silently replace existing files with assumed versions.
+The validated meaning of an AST independent of a particular physical target.
 
-Existing major filenames MUST be preserved unless an approved migration establishes otherwise.
+IR
 
-4. Fundamental language objective
+An intermediate representation used after semantic analysis.
 
-Zamani is intended to provide one coherent programming language for:
+Canonical IR
 
-- classical computation;
-- systems programming;
-- embedded computation;
-- scientific and numerical computation;
-- symbolic computation;
-- AI and machine learning;
-- tensor and data computation;
-- parallel and concurrent computation;
-- distributed and high-performance computing;
-- quantum computation;
-- hybrid quantum-classical computation;
-- quantum error correction;
-- hardware description;
-- hardware/software co-design;
-- accelerators;
-- networking;
-- cryptography;
-- security;
-- edge and cloud computation;
-- temporal computation;
-- metaprogramming;
-- interoperability;
-- domain-specific extensions;
-- future computational paradigms.
+The repository-defined target-independent intermediate representation used as the stable compiler boundary.
 
-These are domains of one language, not separate languages that happen to share a filename.
+"quantum::ir"
 
-They MUST share common foundations for:
+The canonical quantum intermediate representation boundary. Quantum semantics MUST converge through this representation rather than creating competing quantum IRs.
 
-- identifiers and names;
-- expressions;
-- statements;
-- declarations;
+Target
+
+A compilation or execution environment.
+
+Examples include CPU, GPU, FPGA, ASIC, accelerator, QPU, simulator, embedded device, HPC system, cluster, distributed environment, or future computational environment.
+
+Capability
+
+A property or operation an execution environment can provide.
+
+Resource
+
+A logical or physical quantity required or consumed by computation.
+
+Requirement
+
+A condition that must be satisfied for a declared program meaning or execution strategy.
+
+Constraint
+
+A restriction on an acceptable realization.
+
+Preference
+
+A non-mandatory selection preference.
+
+Hint
+
+Optimization information that MUST NOT change program meaning.
+
+Policy
+
+A set of rules governing allowed, required, preferred, prohibited, or fallback behavior.
+
+Effect
+
+A semantic description of observable or relevant computational consequences.
+
+Contract
+
+A machine-checkable semantic obligation such as a precondition, postcondition, invariant, assumption, guarantee, property, or assertion.
+
+Provenance
+
+Information describing the origin, transformation, evidence, derivation, verification, or decision history of an artifact or semantic fact.
+
+Realization
+
+The concrete mapping of portable program intent onto a target.
+
+Dialect
+
+An explicitly registered extension or external syntax domain that maps into Zamani semantic structures.
+
+Conformance
+
+Evidence that an implementation satisfies its applicable normative contracts.
+
+Production-ready
+
+A feature whose specification, syntax, AST, semantics, diagnostics, integration, tests, compatibility, and required downstream behavior are complete and validated.
+
+---
+
+3. Fundamental architectural principles
+
+The "grammar/" subsystem MUST follow these principles.
+
+3.1 One language
+
+Zamani is one programming language.
+
+Classical computation, quantum computation, HDL, AI, data, distributed computation, networking, accelerators, and future domains are domains of the same language.
+
+They MUST NOT become unrelated languages sharing a repository.
+
+---
+
+3.2 One architectural authority
+
+There MUST be one architectural authority for the grammar subsystem:
+
+"grammar/DESIGN.md"
+
+There MUST NOT be competing architecture documents with equal authority.
+
+---
+
+3.3 One canonical language specification
+
+Normative language meaning belongs under:
+
+"grammar/specification/"
+
+Machine-oriented contracts, schemas, conformance metadata, and validation definitions belong under:
+
+"grammar/spec/"
+
+The two MUST agree.
+
+When a contradiction exists, it MUST be resolved explicitly rather than silently choosing whichever file was edited last.
+
+---
+
+3.4 One canonical grammar composition root
+
+"grammar/Zamani.g4" is the canonical ANTLR grammar composition root.
+
+It MUST remain a composition root rather than becoming a second semantic specification.
+
+It SHOULD contain only the universal root dispatch and imports/delegation necessary to compose the grammar.
+
+Domain-specific productions belong to their designated grammar owners.
+
+---
+
+3.5 One lexical authority
+
+"grammar/antlr/ZamaniLexer.g4" is the canonical ANTLR lexical authority.
+
+"grammar/lexer/" owns the lexical contracts and registries.
+
+The Rust implementation in "src/lexer.rs" is the executable frontend lexical implementation.
+
+These representations MUST be reconciled through shared conformance tests.
+
+Neither the ANTLR lexer nor Rust lexer may silently define a different language.
+
+---
+
+3.6 One semantic model
+
+Different domains MAY have domain-specific semantic models, but they MUST share universal semantic foundations:
+
+- names;
 - types;
-- source locations;
-- diagnostics;
-- modules;
+- values;
+- operations;
 - effects;
 - capabilities;
 - resources;
+- requirements;
 - constraints;
 - contracts;
 - policies;
 - provenance;
-- semantic validation;
+- diagnostics;
 - compatibility.
 
-Domain-specific meaning MUST be introduced through explicit semantic contracts and domain-owned extensions.
+---
 
-5. POCO-REAF
+3.7 One canonical IR architecture
 
-5.1 Definition
+The compiler MUST have a canonical target-independent IR boundary.
+
+Classical computation MUST converge into the canonical classical IR.
+
+Quantum computation MUST converge through:
+
+"quantum::ir"
+
+Domain-specific IRs MAY exist for lowering or optimization, but they MUST NOT replace the canonical semantic boundary.
+
+---
+
+3.8 Grammar is not hardware realization
+
+The grammar describes program meaning and portable intent.
+
+It MUST NOT hard-code a particular physical machine universe.
+
+Hardware realization belongs downstream.
+
+---
+
+3.9 Open-world scalability
+
+The architecture MUST be open-ended.
+
+Adding:
+
+- a new processor;
+- a new accelerator;
+- a new QPU;
+- a new FPGA family;
+- a new tensor engine;
+- a new network topology;
+- a new quantum operation;
+- a new AI model;
+- a new data format;
+- a new computational paradigm
+
+MUST NOT require rewriting the universal language architecture merely because the new target or operation did not previously exist.
+
+---
+
+3.10 Safe Rust
+
+The reference implementation MUST use safe Rust.
+
+Production Rust code MUST NOT use:
+
+- "unsafe";
+- unsafe blocks;
+- unsafe traits;
+- unsafe implementations;
+- FFI implemented through unsafe Rust without an approved safe abstraction boundary.
+
+Where external systems require unsafe primitives internally, the project architecture MUST isolate that concern outside the safe Rust language implementation and expose only a validated safe interface to the compiler.
+
+---
+
+4. Existing repository integration baseline
+
+This architecture is designed against the existing repository rather than an assumed empty project.
+
+The repository contains major components including:
+
+- "grammar/Zamani.g4";
+- "grammar/Zamani-Grammar.md";
+- "grammar/grammar.md";
+- "grammar/README.md";
+- "grammar/lexer/";
+- "grammar/antlr/";
+- "grammar/core/";
+- "grammar/classical/";
+- "grammar/quantum/";
+- "grammar/hdl/";
+- "grammar/ai/";
+- "grammar/data/";
+- "grammar/distributed/";
+- "grammar/networking/";
+- "grammar/effects/";
+- "grammar/resources/";
+- "grammar/execution/";
+- "grammar/interoperability/";
+- "grammar/metaprogramming/";
+- "grammar/concurrency/";
+- "grammar/security/";
+- "grammar/validation/";
+- "grammar/dialects/";
+- "grammar/hybrid/";
+- "grammar/hardware/";
+- "grammar/memory/";
+- "grammar/modules/";
+- "grammar/types/";
+- "grammar/statements/";
+- "grammar/expressions/";
+- "grammar/tests/";
+- Rust frontend implementation under "src/".
+
+The current Rust frontend includes its own lexer and parser behavior.
+
+Therefore:
+
+«Adding an ANTLR production does not, by itself, implement a Zamani feature.»
+
+Every new feature MUST be traced across the complete required implementation path.
+
+---
+
+5. Rust implementation baseline
+
+The minimum supported Rust toolchain is:
+
+Rust 1.97.1
+
+Newer stable Rust versions MAY be supported.
+
+The repository SHOULD continuously test at least:
+
+- minimum supported Rust version;
+- current stable Rust;
+- supported CI toolchains.
+
+The language implementation MUST use Rust 2021.
+
+Production implementation MUST compile without Rust "unsafe".
+
+Dependency additions MUST NOT silently introduce an architecture that requires unsafe Rust in the Zamani compiler itself.
+
+---
+
+6. POCO-REAF
 
 POCO-REAF means:
 
 Program Once, Compile Once, Run Everywhere, Anywhere, Forever.
 
-A Zamani program MUST express stable program meaning independently of a particular physical machine.
+This is an architectural goal concerning preservation of program meaning across targets and scales.
 
-The same source-level program SHOULD remain usable across different target architectures, scales and future execution environments without rewriting its algorithm merely because hardware changes.
-
-POCO-REAF is a portability architecture, not a guarantee that every target can execute every program.
-
-The following are different conditions:
-
-Lexically valid
-    ≠
-Syntactically valid
-    ≠
-Structurally valid
-    ≠
-Semantically valid
-    ≠
-Compilable
-    ≠
-Target compatible
-    ≠
-Resource feasible
-    ≠
-Runtime available
-    ≠
-Successfully executed
-
-A program may be valid even when a particular machine cannot currently execute it.
-
-The compiler MUST distinguish these conditions and report the appropriate result.
-
-5.2 Compilation-once interpretation
-
-Compilation-once MUST NOT be interpreted as requiring one binary to execute natively on every possible architecture.
+It does not mean that one target-specific binary can physically execute on every architecture.
 
 The architecture distinguishes:
 
-- source portability;
-- semantic portability;
-- canonical IR portability;
-- target-specific lowering;
-- executable portability;
-- runtime portability;
-- reproducibility.
+source portability
+        ↓
+semantic portability
+        ↓
+canonical IR portability
+        ↓
+target realization
+        ↓
+target executable
 
-A compilation artifact may contain target-independent information and target-specific realizations.
+A program SHOULD be written once and retain its semantic meaning across:
 
-A target-specific binary cannot be assumed to execute on a different architecture.
+- tiny devices;
+- embedded systems;
+- CPUs;
+- multicore systems;
+- GPUs;
+- FPGAs;
+- ASICs;
+- accelerators;
+- QPUs;
+- simulators;
+- HPC systems;
+- clusters;
+- distributed environments;
+- cloud environments;
+- future computational targets.
 
-The compiler MUST preserve source meaning when producing different target realizations.
+A target that cannot satisfy the program's requirements MUST NOT silently change its meaning.
 
-5.3 Feasibility
+The compiler/runtime MUST instead report the unsatisfied condition or select an explicitly authorized alternative.
 
-If a target lacks a required capability or resource, the compiler/runtime MUST:
+---
 
-- report the unsatisfied requirement;
-- identify the relevant target capability or resource;
-- explain whether a permitted alternative exists;
-- preserve program meaning;
-- avoid silently weakening guarantees.
+7. Validity is layered
 
-Possible permitted alternatives include simulation, decomposition, routing, distribution, scheduling, recovery and other explicitly authorized realizations.
+The implementation MUST distinguish:
 
-Fallbacks MUST be explicit in semantic policy or compilation configuration.
+Lexically valid
+      ≠
+Syntactically valid
+      ≠
+Structurally valid
+      ≠
+Type valid
+      ≠
+Effect valid
+      ≠
+Contract valid
+      ≠
+Policy valid
+      ≠
+Resource valid
+      ≠
+Capability valid
+      ≠
+Semantically valid
+      ≠
+Compilable
+      ≠
+Target-compatible
+      ≠
+Resource-feasible
+      ≠
+Executable
+      ≠
+Successfully executed
 
-6. Scalability and resource independence
+Diagnostics MUST identify the layer at which a failure occurs.
 
-6.1 General principle
+For example:
 
-Zamani MUST NOT impose arbitrary universal hardware ceilings through grammar productions, AST representations, semantic constants or compiler architecture.
+- malformed source is a lexical/syntactic error;
+- incompatible types are semantic/type errors;
+- forbidden network access is an effect/policy error;
+- unavailable QPU measurement is a capability error;
+- insufficient memory is a resource-feasibility error;
+- unsupported target lowering is a backend error.
 
-The intended scale includes:
+These MUST NOT be collapsed into a generic "compile failed" state.
 
-one value
-one operation
-one function
-one logical qubit
-one processor
-one accelerator
-one device
-        |
-        v
-large programs
-large datasets
-large tensors
-large quantum computations
-large heterogeneous systems
-large distributed systems
-future computational environments
+---
 
-Actual feasibility is determined by semantics, available resources and explicitly declared policies.
+8. Scalability model
 
-6.2 Prohibited universal limits
+Zamani MUST NOT define arbitrary universal hardware ceilings.
 
-The language architecture MUST NOT establish universal fixed ceilings such as:
+The architecture MUST NOT contain universal limits such as:
 
 MAX_QUBITS
 MAX_CPUS
@@ -274,6 +495,7 @@ MAX_CORES
 MAX_THREADS
 MAX_GPUS
 MAX_FPGAS
+MAX_ASICS
 MAX_QPUS
 MAX_NODES
 MAX_MEMORY
@@ -282,207 +504,1517 @@ MAX_REGISTER_WIDTH
 MAX_VECTOR_WIDTH
 MAX_TENSOR_RANK
 MAX_TENSOR_DIMENSION
-MAX_TIMELINES
-MAX_AGENTS
-MAX_DEVICES
-MAX_ACCELERATORS
 MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+MAX_ACCELERATOR_COUNT
+MAX_AGENT_COUNT
 MAX_GATE_COUNT
 
-The same prohibition applies to equivalent renamed constants.
+Nor may equivalent renamed constants be introduced.
 
-The grammar MUST NOT enumerate a fixed physical universe of resources as its universal model.
+The prohibition applies to:
 
-6.3 Finite representation is not an artificial language ceiling
+- grammar;
+- AST;
+- semantic models;
+- compiler configuration;
+- universal resource registries;
+- IR;
+- target-independent specifications.
 
-All real implementations have finite representations and finite execution resources.
+---
 
-Zamani MUST acknowledge these facts rather than claiming literal mathematical infinity.
+8.1 Actual limits
 
-The following distinctions are mandatory:
+Physical systems and software implementations necessarily have finite resources.
 
-Concept| Required interpretation
-Language expressiveness| No arbitrary universal hardware ceiling
-Integer representation| Explicitly specified and checked
-Collection size| Determined by type, representation and available resources
-Compiler memory| Governed by implementation and configurable resource policy
-Physical qubits| Determined by target availability
-Tensor dimensions| Represented according to type and implementation capabilities
-Network size| Determined by declared semantics and available infrastructure
-Runtime allocation| Checked against actual available resources
+Therefore Zamani MUST distinguish:
 
-An implementation limit MUST be documented, observable and distinguishable from a language restriction.
+language expressiveness
 
-When a representation limit is reached, the compiler MUST produce a diagnostic rather than overflow, truncate, wrap unexpectedly or silently corrupt program meaning.
+from:
 
-6.4 Numeric values
+implementation representation capacity
 
-Ordinary program constants remain valid.
+and:
 
-For example:
+available target resources
 
-let n = 1024;
+An implementation limit MUST:
 
-is valid program data.
+- be documented;
+- be detectable;
+- produce a deterministic diagnostic where applicable;
+- never be disguised as a language-wide semantic limit;
+- never silently corrupt program meaning.
 
-A particular matrix dimension may also be specified in a program.
+---
 
-What is prohibited is making such a value the universal maximum supported by Zamani.
+8.2 Symbolic resource requirements
 
-7. Separation of responsibilities
+The preferred resource model is symbolic.
 
-The central rule is:
+Examples:
 
-Source describes:
-    meaning
-    computation
-    types
-    correctness
-    effects
-    requirements
-    constraints
-    capabilities
-    policies
-    preferences
+requires qubits >= required_qubits;
+requires memory >= required_memory;
+requires capability("quantum.measurement");
+requires capability("gpu.compute");
+requires capability("tensor.compute");
+requires topology(required_topology);
 
-Compiler/runtime determines:
-    target
-    placement
-    scheduling
-    routing
-    decomposition
-    implementation
-    physical resources
-    native instructions
-    execution strategy
+The identifiers and expressions are semantic requirements.
 
-Grammar MUST NOT own physical hardware realization.
+They are not hard-coded machine capacities.
 
-The grammar describes the program's logical intent.
+---
 
-The compiler and runtime realize that intent where possible.
+8.3 Scaling
 
-8. Universal resource model
+A program SHOULD scale through:
 
-The following concepts MUST remain distinct.
+- symbolic dimensions;
+- runtime values;
+- generic types;
+- resource negotiation;
+- target discovery;
+- capability negotiation;
+- decomposition;
+- parallelization;
+- distribution;
+- scheduling;
+- routing;
+- specialization;
+- runtime allocation.
 
-8.1 Requirement
+The source program MUST NOT need to know the physical size of the target unless the programmer deliberately requests target-specific behavior.
 
-A requirement is necessary for the program's declared semantics.
+---
 
-Conceptual form:
+9. Separation between intent and realization
+
+The source language describes:
+
+- values;
+- types;
+- computation;
+- relationships;
+- contracts;
+- effects;
+- requirements;
+- constraints;
+- capabilities;
+- policies;
+- preferences;
+- hints;
+- provenance.
+
+The compiler/runtime determines:
+
+- physical placement;
+- scheduling;
+- routing;
+- decomposition;
+- memory allocation;
+- accelerator selection;
+- QPU mapping;
+- hardware-specific instructions;
+- distributed placement;
+- execution strategy.
+
+The grammar MUST NOT own physical realization.
+
+---
+
+10. Universal resource model
+
+The following concepts MUST remain semantically distinct.
+
+10.1 Requirement
+
+A requirement states something necessary for the intended computation or execution mode.
+
+Example:
 
 requires qubits >= required_qubits;
 
-8.2 Capability
+---
 
-A capability describes an operation or property supported by a target.
+10.2 Capability
+
+A capability identifies something an environment can provide.
+
+Example:
 
 requires capability("quantum.measurement");
 requires capability("tensor.compute");
 
-Capability names MUST be extensible and registered through the appropriate semantic or capability registry.
+Capability identifiers MUST be extensible.
 
-8.3 Constraint
+They MUST NOT require a universal enumeration of every future device.
 
-A constraint restricts an acceptable realization.
+---
+
+10.3 Constraint
+
+A constraint restricts acceptable realization.
+
+Example:
 
 requires latency <= latency_budget;
 
-A constraint MUST have defined units, comparison semantics and diagnostic behavior.
+Units and comparison semantics MUST be defined by the owning specification.
 
-8.4 Preference
+---
 
-A preference guides target selection without becoming a mandatory requirement.
+10.4 Preference
 
-8.5 Hint
+A preference influences selection without becoming a correctness requirement.
 
-A hint supplies optimization information without changing program meaning.
+Example conceptual intent:
 
-8.6 Budget
+prefer capability("accelerator.compute");
 
-A budget expresses a permitted resource expenditure or bound.
+---
 
-Budgets MUST NOT become universal machine capacities.
+10.5 Hint
 
-8.7 Negotiation
+A hint may improve optimization but MUST NOT change program meaning.
 
-Negotiation determines whether the requirements and policies can be satisfied by a candidate environment.
+---
 
-8.8 Realization
+10.6 Budget
 
-Physical mapping, resource allocation, topology selection and device placement belong downstream.
+A budget bounds permitted consumption for a particular compilation or execution context.
 
-The logical program MUST NOT be forced to contain physical resource identifiers unless the programmer explicitly requests target-specific behavior.
+A budget MUST NOT be confused with a universal machine capacity.
 
-9. Repository authority model
+---
 
-There MUST be one canonical Zamani language.
+10.7 Negotiation
 
-The repository may maintain multiple representations of that language, but they MUST have explicitly separated responsibilities.
+Negotiation determines whether a target or execution environment can satisfy requirements and policies.
 
-9.1 "grammar/DESIGN.md"
+---
 
-This document.
+10.8 Realization
 
-Owns:
+Realization maps logical intent onto actual resources.
 
-- architecture;
-- ownership boundaries;
-- integration contracts;
-- invariants;
-- scalability;
-- compatibility principles;
-- conformance requirements;
-- production acceptance.
+The grammar expresses the requirements; downstream compilation and execution resolve them.
 
-Does not own every grammar production or implementation detail.
+---
 
-9.2 "grammar/README.md"
+11. Universal effect model
 
-Owns navigation and entry-point documentation.
+Effects describe semantically relevant consequences.
 
-It MUST identify authoritative specifications, implementation references and conformance resources.
+The effect system MUST be shared across all domains.
 
-It MUST NOT introduce independent language semantics.
+Applicable effect categories include:
 
-9.3 "grammar/Zamani.g4"
+io
+network
+mutation
+randomness
+native
+foreign
+distributed
+measurement
+quantum
+learning
+adaptation
+reflection
+code_generation
+simulation
 
-Owns the canonical ANTLR grammar composition.
+Additional effects MAY be registered.
 
-It MUST:
+An operation such as learning, adaptation, measurement, reflection, simulation, or foreign execution MUST participate in effect checking where its semantics require it.
 
-- remain the stable root grammar entry point;
-- define the accepted composition boundary;
-- include the appropriate root program rule and EOF;
-- delegate domain syntax to its designated grammar owners;
-- avoid duplicate lexical or semantic definitions;
-- preserve compatibility deliberately.
+Effects MUST NOT be implemented as merely descriptive comments.
 
-It MUST NOT claim that ANTLR is the sole implementation authority while the Rust lexer/parser independently accept different syntax.
+---
 
-9.4 "grammar/Zamani-Grammar.md"
+12. Contracts
 
-Owns historical, extended and explanatory grammar material.
+Contracts are universal semantic obligations.
 
-Every feature MUST be classified as one of:
+They include:
 
-- stable;
-- proposed;
-- experimental;
-- deprecated;
-- historical;
-- not implemented.
+- "requires";
+- "ensures";
+- "invariant";
+- "assume";
+- "guarantee";
+- "property";
+- assertions;
+- refinement conditions;
+- verification obligations.
 
-Presence in this document does not automatically authorize syntax.
+Contracts MAY apply to:
 
-9.5 "grammar/grammar.md"
+- ordinary functions;
+- quantum operations;
+- hardware descriptions;
+- AI models;
+- actors;
+- distributed services;
+- resources;
+- data transformations;
+- compilation transformations.
 
-Owns implementation conformance documentation.
+Contracts MUST survive semantic lowering whenever their meaning requires preservation.
 
-It MUST describe the behavior actually implemented by the reference compiler.
+---
 
-Each feature MUST distinguish applicable stages:
+13. Policies
+
+Policies govern what is:
+
+- required;
+- allowed;
+- preferred;
+- prohibited;
+- authorized;
+- restricted;
+- recoverable;
+- selectable as fallback.
+
+Policies MUST be separate from raw syntax.
+
+They MAY govern:
+
+- security;
+- resource allocation;
+- execution;
+- adaptation;
+- simulation;
+- target selection;
+- deployment;
+- quantum execution;
+- distributed execution;
+- FFI;
+- reflection;
+- generated code.
+
+Policy evaluation MUST produce diagnostics or decisions that can be represented in provenance where required.
+
+---
+
+14. Provenance
+
+Provenance is a cross-domain facility.
+
+It MUST be capable of recording, where applicable:
+
+source
+derived_from
+generated_by
+transformed_by
+verified_by
+reason
+evidence
+decision
+version
+timestamp
+
+Provenance MAY be attached to:
+
+- source declarations;
+- inferred facts;
+- AI decisions;
+- compiler transformations;
+- resource decisions;
+- target selection;
+- quantum routing;
+- optimization;
+- HDL synthesis;
+- security decisions;
+- simulation results.
+
+Provenance MUST NOT require every implementation to retain unlimited history in memory.
+
+Storage strategy is an implementation concern.
+
+Semantic provenance requirements MUST remain explicit.
+
+---
+
+15. Evidence and explainability
+
+Evidence is a semantic concept independent of any specific AI system.
+
+An evidence record MAY contain:
+
+- claim;
+- supporting evidence;
+- source;
+- confidence;
+- derivation;
+- verification status;
+- provenance.
+
+Explainability MAY be used for:
+
+- AI decisions;
+- compiler transformations;
+- optimization;
+- target selection;
+- resource negotiation;
+- quantum routing;
+- hardware placement;
+- security decisions.
+
+The grammar MUST NOT require a particular explanation algorithm.
+
+---
+
+16. Controlled reasoning
+
+Zamani MAY provide generic reasoning constructs including concepts corresponding to:
+
+- inference;
+- deduction;
+- induction;
+- abduction;
+- causal reasoning;
+- counterfactual reasoning;
+- evidence-based conclusion.
+
+These are language capabilities, not application-specific language universes.
+
+Reasoning MUST integrate with:
+
+- types;
+- effects;
+- evidence;
+- provenance;
+- policies;
+- contracts;
+- canonical semantic representation.
+
+---
+
+17. Knowledge model
+
+Knowledge constructs MAY support:
+
+- assertions;
+- retractions;
+- queries;
+- relations;
+- derived facts;
+- metadata;
+- provenance.
+
+The knowledge model MUST be generic enough to support:
+
+- AI knowledge;
+- graph data;
+- scientific data;
+- configuration;
+- compiler facts;
+- hardware capability facts;
+- security facts.
+
+The core grammar MUST NOT require an application-specific knowledge vocabulary.
+
+---
+
+18. Learning
+
+Learning is a semantic operation.
+
+A learning construct SHOULD be able to express:
+
+- input;
+- target;
+- data;
+- model;
+- objective;
+- resources;
+- capabilities;
+- effects;
+- policy;
+- provenance.
+
+Algorithms MUST NOT be permanently enumerated in the universal grammar.
+
+New learning algorithms SHOULD be introduced through libraries, semantic registries, dialects, metadata, or implementations rather than requiring universal grammar modification.
+
+---
+
+19. Controlled adaptation
+
+Adaptation is permitted only under explicit semantic control.
+
+Adaptation MUST NOT mean unrestricted self-modifying code.
+
+An adaptation operation MUST participate in applicable:
+
+- authorization;
+- policy;
+- capabilities;
+- effects;
+- resource requirements;
+- contracts;
+- provenance.
+
+The conceptual execution sequence is:
+
+adaptation request
+       ↓
+policy evaluation
+       ↓
+authorization
+       ↓
+capability check
+       ↓
+effect check
+       ↓
+resource check
+       ↓
+state/model/strategy update
+       ↓
+validation
+       ↓
+provenance
+       ↓
+continued execution
+
+Unauthorized code generation or arbitrary executable mutation MUST be rejected.
+
+---
+
+20. Pattern matching and guards
+
+Pattern matching is a universal language feature.
+
+It MUST support, where specified:
+
+- structural patterns;
+- value patterns;
+- type patterns;
+- destructuring;
+- guarded patterns;
+- nested patterns;
+- domain-owned patterns.
+
+Patterns MUST integrate with:
+
+- type checking;
+- exhaustiveness analysis where applicable;
+- control flow;
+- ownership/borrowing semantics where applicable;
+- contracts.
+
+Domain grammars MUST NOT create competing pattern languages.
+
+---
+
+21. Type-system architecture
+
+The type system MUST be target-independent.
+
+The architecture MAY support:
+
+High priority
+
+- generics;
+- generic bounds;
+- associated types;
+- type constraints;
+- tuples;
+- records;
+- sum types;
+- option/result types;
+- linear types;
+- affine types;
+- pattern-oriented types.
+
+Later or advanced capabilities
+
+- dependent types;
+- type classes;
+- existential types;
+- variance;
+- higher-kinded types;
+- type-level computation;
+- type families;
+- other advanced generic mechanisms.
+
+The type system MUST NOT encode fixed physical capacities as universal type limits.
+
+---
+
+22. Uncertainty and probability
+
+Uncertainty MUST be representable without forcing one implementation strategy.
+
+Concepts MAY include:
+
+- uncertain values;
+- probability;
+- distributions;
+- confidence;
+- belief;
+- stochastic computation.
+
+The semantic layer MUST distinguish:
+
+probabilistic meaning
+
+from:
+
+one particular probabilistic runtime implementation
+
+---
+
+23. Classical computation
+
+The classical subsystem provides ordinary computational semantics.
+
+It MUST integrate with the universal foundations:
+
+- types;
+- expressions;
+- statements;
+- functions;
+- memory;
+- effects;
+- resources;
+- capabilities;
+- contracts;
+- policies;
+- provenance.
+
+Classical IR is the canonical representation for classical computational meaning before target-specific lowering.
+
+---
+
+24. Quantum computation
+
+The quantum subsystem MUST be a first-class domain of the language.
+
+It MUST integrate with:
+
+- types;
+- effects;
+- resources;
+- capabilities;
+- contracts;
+- policies;
+- provenance;
+- hybrid execution;
+- classical control.
+
+Quantum semantics MUST remain target-independent until target realization.
+
+---
+
+25. Quantum operation extensibility
+
+Quantum operations MUST be data-driven.
+
+The universal grammar MUST NOT depend on a permanently enumerated list such as:
+
+H
+X
+Y
+Z
+CNOT
+
+Instead, the grammar SHOULD represent the semantic structure of an operation through concepts such as:
+
+operationSpecifier
+targets
+parameters
+results
+attributes
+modifiers
+
+The operation specifier MAY identify:
+
+- built-in operation;
+- registered operation;
+- custom operation;
+- vendor operation;
+- parameterized operation;
+- dialect operation.
+
+Adding a new quantum operation MUST NOT require changing the universal grammar when the existing operation representation can express it.
+
+---
+
+26. "quantum::ir" boundary
+
+All quantum semantic operations that proceed toward compilation MUST have a defined path into:
+
+quantum::ir
+
+There MUST NOT be multiple competing canonical quantum IRs.
+
+Domain-specific intermediate forms MAY exist temporarily, but they MUST have explicit lowering into "quantum::ir".
+
+The quantum pipeline is conceptually:
+
+Zamani quantum syntax
+        ↓
+domain-neutral AST
+        ↓
+quantum semantic validation
+        ↓
+quantum semantic model
+        ↓
+quantum::ir
+        ↓
+optimization
+        ↓
+routing
+        ↓
+scheduling
+        ↓
+resilience / QEC
+        ↓
+ZQN
+        ↓
+HAL / target realization
+
+---
+
+27. Quantum resources and capabilities
+
+Quantum programs MUST describe logical requirements rather than universal physical ceilings.
+
+Examples include:
+
+requires qubits >= required_qubits;
+requires capability("quantum.measurement");
+requires capability("quantum.dynamic_circuit");
+requires capability("quantum.error_correction");
+requires topology(required_topology);
+
+The grammar MUST NOT determine the maximum number of physical qubits supported by the language.
+
+The target determines actual availability.
+
+---
+
+28. Quantum error correction and resilience
+
+Quantum error correction belongs downstream of quantum semantic representation.
+
+The architecture MUST permit:
+
+- error models;
+- resilience requirements;
+- QEC strategy;
+- logical-to-physical mapping;
+- distance requirements;
+- recovery;
+- fault-aware scheduling.
+
+QEC-specific implementation limits MUST NOT become universal language limits.
+
+---
+
+29. Hybrid computation
+
+Hybrid computation is a first-class integration boundary.
+
+The architecture MUST support interactions such as:
+
+classical → quantum
+quantum → classical
+measurement → classical decision
+classical control → quantum operation
+AI → quantum
+quantum → AI
+CPU → accelerator
+host → device
+
+Hybrid semantics MUST converge into shared semantic and IR structures.
+
+A separate hybrid language MUST NOT be created.
+
+---
+
+30. Hardware description
+
+HDL is a semantic domain of Zamani.
+
+The HDL architecture MUST support, where specified:
+
+- signals;
+- state;
+- combinational behavior;
+- sequential behavior;
+- timing;
+- clocks;
+- interfaces;
+- memory;
+- hardware intent;
+- verification;
+- simulation;
+- synthesis.
+
+HDL source MUST describe hardware intent rather than impose universal hardware dimensions.
+
+Physical implementation belongs downstream.
+
+---
+
+31. Hardware/software co-design
+
+Hardware and software MUST be able to share:
+
+- types;
+- interfaces;
+- resources;
+- capabilities;
+- contracts;
+- effects;
+- provenance.
+
+A hardware implementation MAY expose capabilities consumed by software.
+
+A software program MAY express hardware requirements.
+
+The compiler determines the realization.
+
+---
+
+32. AI and intelligent computation
+
+AI is a semantic domain, not a replacement language.
+
+AI capabilities MAY include:
+
+- inference;
+- deduction;
+- induction;
+- abduction;
+- learning;
+- adaptation;
+- uncertainty;
+- knowledge;
+- evidence;
+- explanation;
+- planning;
+- agents;
+- neural-symbolic computation;
+- probabilistic computation.
+
+AI constructs MUST reuse universal Zamani foundations.
+
+---
+
+33. Agents and concurrency
+
+AI agents MUST integrate with the existing concurrency architecture.
+
+The architecture is:
+
+AI agent
+   ↓
+actor
+   ↓
+message
+   ↓
+channel
+   ↓
+task
+   ↓
+scheduler
+
+The AI subsystem MUST NOT create a second actor model.
+
+"grammar/concurrency/actors.g4" remains the owner of general actor syntax and lifecycle semantics.
+
+AI-specific semantics describe agent behavior while reusing the common actor infrastructure.
+
+---
+
+34. Distributed computation
+
+Distributed computation MUST integrate with:
+
+- concurrency;
+- actors;
+- messages;
+- channels;
+- topology;
+- resource requirements;
+- capabilities;
+- policies;
+- resilience;
+- provenance.
+
+No universal maximum node count may exist.
+
+---
+
+35. Networking
+
+Networking MUST be represented through explicit effects and capabilities.
+
+Network operations SHOULD participate in:
+
+effect(network)
+
+and applicable:
+
+capability("network.*")
+
+requirements.
+
+Networking MUST integrate with:
+
+- security;
+- policies;
+- effects;
+- distributed computation;
+- provenance;
+- interoperability.
+
+---
+
+36. Data computation
+
+Data capabilities MAY include:
+
+- structured data;
+- tensors;
+- arrays;
+- graphs;
+- datasets;
+- schemas;
+- queries;
+- streaming;
+- provenance;
+- uncertainty.
+
+Data representations MUST remain independent of a fixed maximum size.
+
+---
+
+37. External data languages and formats
+
+SQL, JSON, XML, and similar formats MUST NOT become universal Zamani grammar requirements merely because the language interoperates with them.
+
+They belong under appropriate:
+
+grammar/dialects/
+
+or:
+
+grammar/interoperability/
+
+depending on ownership.
+
+Their semantic output SHOULD map into common Zamani data/query/interoperability models.
+
+---
+
+38. Interoperability
+
+FFI and ABI are explicit interoperability boundaries.
+
+The interoperability subsystem SHOULD own:
+
+ffi.g4
+abi.g4
+foreign.g4
+calling-convention.g4
+data-layout.g4
+linkage.g4
+external-functions.g4
+external-types.g4
+
+Foreign calls MUST participate in:
+
+- effects;
+- capabilities;
+- policy;
+- type compatibility;
+- data-layout validation;
+- provenance.
+
+Rust implementation boundaries MUST remain safe.
+
+---
+
+39. Metaprogramming
+
+Metaprogramming MAY include:
+
+- reflection;
+- introspection;
+- compile-time evaluation;
+- syntax trees;
+- quotation;
+- generation;
+- type-level computation.
+
+Reflection MUST NOT automatically grant arbitrary runtime mutation.
+
+Code generation and executable generation MUST participate in:
+
+- capabilities;
+- effects;
+- policy;
+- provenance;
+- validation.
+
+---
+
+40. Simulation
+
+Simulation is an execution strategy, not a separate programming language.
+
+The architecture MUST support simulation of:
+
+- classical systems;
+- quantum systems;
+- hardware;
+- distributed systems;
+- AI systems;
+- performance;
+- fault conditions;
+- execution strategies.
+
+Simulation SHOULD preserve the same semantic model used by actual execution.
+
+---
+
+41. Adaptive execution
+
+Adaptive execution MAY:
+
+- inspect target conditions;
+- select among permitted strategies;
+- route differently;
+- schedule differently;
+- retry;
+- recover;
+- degrade where explicitly permitted;
+- migrate;
+- select simulation;
+- choose alternative implementations.
+
+Adaptive execution MUST NOT silently change semantic guarantees.
+
+It MUST respect policies and contracts.
+
+---
+
+42. Resilience
+
+The architecture recognizes execution states such as:
+
+Unknown
+Healthy
+Degraded
+Unstable
+Unavailable
+Recovering
+Quarantined
+Retired
+
+and outcomes such as:
+
+ACCEPT
+DEGRADED_ACCEPT
+RETRY
+RECOVER
+ESCALATE
+REJECT
+
+These are execution semantics, not grammar-level hardware limits.
+
+Resilience mechanisms MUST preserve source-level meaning wherever possible.
+
+---
+
+43. Deterministic and reproducible execution
+
+The language/toolchain SHOULD support reproducible compilation and execution.
+
+Where deterministic behavior is requested, the implementation MUST identify relevant sources of nondeterminism, including:
+
+- random seeds;
+- scheduling;
+- distributed ordering;
+- target selection;
+- optimization choices;
+- simulation state;
+- external data;
+- timestamps;
+- environment-dependent behavior.
+
+Reproducibility metadata SHOULD participate in provenance.
+
+---
+
+44. Security and sandboxing
+
+Sandboxing is a security/execution concern.
+
+The architecture MAY constrain:
+
+- filesystem effects;
+- network effects;
+- native execution;
+- foreign calls;
+- reflection;
+- code generation;
+- adaptation;
+- resources;
+- capabilities.
+
+A sandbox policy MUST be represented independently from ordinary application semantics.
+
+Example conceptual policy:
+
+sandbox {
+    forbid effect("network");
+    forbid capability("native.execute");
+}
+
+The exact syntax is owned by the security/policy specifications.
+
+---
+
+45. Application-specific functionality
+
+The core language MUST remain universal.
+
+Application concepts such as:
+
+- computer vision;
+- sentiment analysis;
+- robotics;
+- payments;
+- administration;
+- legal workflows;
+- blockchain applications;
+- VR/AR;
+- specialized AI taxonomies;
+- future application-specific systems
+
+MUST NOT become universal keywords merely because Zamani can support them.
+
+They SHOULD be implemented through:
+
+- libraries;
+- packages;
+- dialects;
+- capabilities;
+- policies;
+- services;
+- domain models;
+- applications.
+
+This keeps the core language extensible instead of continually expanding the keyword universe.
+
+---
+
+46. Lexer architecture
+
+The lexical architecture consists of:
+
+grammar/lexer/
+grammar/antlr/ZamaniLexer.g4
+src/lexer.rs
+
+"grammar/lexer/" defines lexical contracts.
+
+"grammar/antlr/ZamaniLexer.g4" defines ANTLR lexical behavior.
+
+"src/lexer.rs" implements current Rust lexical behavior.
+
+They MUST share conformance tests.
+
+---
+
+47. Token registry
+
+"grammar/lexer/tokens.g4" or the repository's designated token registry MUST define the canonical token vocabulary.
+
+Each token SHOULD have metadata describing:
+
+- name;
+- spelling;
+- category;
+- owner;
+- reserved status;
+- lexical context;
+- compatibility;
+- tests.
+
+A keyword MUST NOT be added solely because an external language used that keyword.
+
+If ordinary identifiers are sufficient, identifiers SHOULD remain identifiers.
+
+This prevents application-specific keyword explosion.
+
+---
+
+48. Lexer/Rust parser reconciliation
+
+The current Rust lexer/parser implementation is an independent executable frontend.
+
+Therefore every grammar change MUST answer:
+
+Does ANTLR accept it?
+Does Rust lexer recognize it?
+Does Rust parser parse it?
+Does the AST represent it?
+Does semantic analysis understand it?
+Does IR represent it?
+Are tests present?
+
+No feature is complete until the applicable answers are yes.
+
+---
+
+49. AST architecture
+
+The AST MUST be domain-neutral at its foundation.
+
+It MUST preserve:
+
+- source locations;
+- declarations;
+- expressions;
+- statements;
+- types;
+- names;
+- attributes;
+- modifiers;
+- domain-specific meaning where necessary;
+- diagnostics context.
+
+It MUST NOT directly embed:
+
+- physical CPU objects;
+- GPU vendor objects;
+- QPU device handles;
+- LLVM implementation objects;
+- hardware driver handles;
+- backend-specific scheduling structures.
+
+Target realization belongs downstream.
+
+---
+
+50. AST ownership
+
+"src/ast/mod.rs" is the current Rust AST integration authority.
+
+Every new syntax feature MUST define before implementation:
+
+AST node or representation
+source span behavior
+child nodes
+attributes
+modifiers
+semantic payload
+error recovery behavior
+compatibility representation
+
+AST changes MUST be accompanied by semantic and test integration plans.
+
+---
+
+51. Parser architecture
+
+"src/parser.rs" is the current executable parser.
+
+The parser MUST:
+
+- implement normative syntax;
+- preserve precedence;
+- preserve associativity;
+- preserve source spans;
+- produce deterministic diagnostics;
+- reject invalid structures;
+- avoid silently accepting unsupported features;
+- integrate new grammar constructs through explicit parser rules.
+
+The ANTLR grammar and Rust parser MUST be tested against shared syntax fixtures.
+
+---
+
+52. Canonical compiler pipeline
+
+The production pipeline is:
+
+Zamani Source
+      │
+      ▼
+Source Management
+      │
+      ▼
+Lexer
+      │
+      ▼
+Token Stream
+      │
+      ▼
+Parser
+      │
+      ▼
+Domain-Neutral AST
+      │
+      ▼
+Structural Validation
+      │
+      ├── Names
+      ├── Modules
+      ├── Types
+      ├── Effects
+      ├── Capabilities
+      ├── Resources
+      ├── Contracts
+      ├── Policies
+      └── Provenance
+      │
+      ▼
+Semantic Analysis
+      │
+      ▼
+Canonical Semantic Model
+      │
+      ├───────────────┬────────────────┐
+      ▼               ▼                ▼
+ Classical        Quantum            HDL
+ Semantics        Semantics          Intent
+      │               │                │
+      ▼               ▼                ▼
+Classical IR     quantum::ir       Hardware IR
+      │               │                │
+      └───────────────┼────────────────┘
+                      ▼
+                Optimization
+                      │
+                      ▼
+                   Lowering
+                      │
+                      ▼
+             Routing / Scheduling
+                      │
+                      ▼
+             Resilience / Recovery
+                      │
+                      ▼
+                    ZQN
+                      │
+                      ▼
+                     HAL
+                      │
+                      ▼
+             Target Realization
+
+Not every program needs every stage.
+
+Not every stage belongs physically inside "grammar/".
+
+"grammar/" defines the frontend architectural contracts and language syntax.
+
+---
+
+53. Domain integration model
+
+All major domains MUST integrate through common foundations.
+
+                    Universal Zamani Core
+                            │
+       ┌────────────────────┼────────────────────┐
+       │                    │                    │
+     Types                Effects             Values
+       │                    │                    │
+       ├──────────────┬─────┴─────┬──────────────┤
+       │              │           │              │
+ Resources       Capabilities  Contracts      Policies
+       │              │           │              │
+       └──────────────┴─────┬─────┴──────────────┘
+                            │
+                       Provenance
+                            │
+                     Semantic Model
+                            │
+       ┌──────────┬─────────┼──────────┬───────────┐
+       │          │         │          │           │
+   Classical   Quantum     HDL        AI        Distributed
+       │          │         │          │           │
+       └──────────┴─────────┼──────────┴───────────┘
+                            │
+                       Canonical IR
+
+No domain may bypass universal semantic validation merely because it has specialized syntax.
+
+---
+
+54. File ownership model
+
+Every grammar file MUST have an explicit owner.
+
+A feature file MUST document:
+
+Purpose
+Owns
+Does Not Own
+Dependencies
+Exports
+Lexer Dependencies
+Grammar Dependencies
+AST Contract
+Semantic Contract
+Type Contract
+Effect Contract
+Capability Contract
+Resource Contract
+Contract Integration
+Policy Integration
+Provenance Integration
+IR Contract
+Backend Boundary
+Diagnostics
+Positive Tests
+Negative Tests
+Boundary Tests
+Scalability Tests
+Compatibility
+Integration
+Completion Criteria
+
+This contract MUST be established before implementation is considered complete.
+
+---
+
+55. File dependency contract
+
+Every significant feature file SHOULD declare:
+
+DEPENDS_ON:
+EXPORTS:
+CONSUMED_BY:
+AST_OWNER:
+SEMANTIC_OWNER:
+IR_OWNER:
+SPEC_OWNER:
+TEST_OWNER:
+COMPATIBILITY_OWNER:
+
+Example:
+
+DEPENDS_ON:
+    lexer/tokens.g4
+    quantum/operations.g4
+    expressions/expressions.g4
+
+EXPORTS:
+    quantumMeasurement
+
+AST_OWNER:
+    src/ast/...
+
+SEMANTIC_OWNER:
+    quantum semantic layer
+
+IR_OWNER:
+    quantum::ir
+
+SPEC_OWNER:
+    specification/quantum.md
+
+TEST_OWNER:
+    tests/quantum/measurement/
+
+The exact paths MUST be adjusted to the repository's final ownership structure.
+
+---
+
+56. Independent-file-first implementation rule
+
+Features MUST be implemented in dependency order.
+
+A file is considered complete only when its own contract is satisfied.
+
+Later files MUST consume its published interface rather than requiring undocumented assumptions.
+
+A completed file SHOULD NOT require reopening merely because another downstream feature was subsequently added.
+
+If a downstream feature genuinely requires changing an established interface, that is an explicit architectural change and MUST be treated as such.
+
+---
+
+57. Specification authority
+
+"grammar/specification/" is the normative human-readable language specification.
+
+It owns:
+
+- language meaning;
+- syntax contracts;
+- semantic contracts;
+- domain semantics;
+- compatibility rules;
+- normative examples where applicable.
+
+It MUST NOT merely copy implementation source code.
+
+---
+
+58. Machine contracts
+
+"grammar/spec/" is the machine-oriented contract layer.
+
+It MAY contain:
+
+- schemas;
+- feature metadata;
+- conformance metadata;
+- ownership metadata;
+- compatibility declarations;
+- generated validation information.
+
+Machine contracts MUST be derived from or consistent with normative specifications.
+
+---
+
+59. "grammar/Zamani-Grammar.md"
+
+This document is not the final authority for language law.
+
+It MAY preserve:
+
+- historical grammar material;
+- extended proposals;
+- experimental constructs;
+- explanatory material;
+- compatibility references.
+
+Features MUST be classified as:
+
+stable
+proposed
+experimental
+deprecated
+historical
+not implemented
+
+A construct appearing there does not automatically become valid Zamani syntax.
+
+---
+
+60. "grammar/grammar.md"
+
+This document records implementation/conformance status.
+
+Feature status SHOULD distinguish:
 
 SPECIFIED
 LEXER_IMPLEMENTED
@@ -500,835 +2032,412 @@ STABLE
 EXPERIMENTAL
 DEPRECATED
 
-A status MUST be supported by implementation evidence.
-
-9.6 "grammar/specification/"
-
-Owns normative human-readable language specifications.
-
-9.7 "grammar/spec/"
-
-Owns machine-checkable contracts, schemas and validation metadata.
-
-The two directories MUST NOT silently contradict one another.
-
-9.8 Rust implementation
-
-The Rust implementation owns executable behavior.
-
-The lexer, parser, AST, semantic model and IR MUST agree with normative language specifications.
-
-A specification change does not automatically imply an implementation change.
-
-10. Canonical compiler pipeline
-
-The production architecture is:
-
-                  Zamani Source
-                        |
-                        v
-                Source Management
-                        |
-                        v
-                      Lexer
-                        |
-                        v
-                   Token Stream
-                        |
-                        v
-                      Parser
-                        |
-                        v
-                  Domain-neutral AST
-                        |
-                        v
-             Structural Validation
-                        |
-                        v
-                Name/Module Resolution
-                        |
-             +----------+----------+
-             |          |          |
-             v          v          v
-           Types      Effects    Contracts
-             |          |          |
-             +----------+----------+
-                        |
-                        v
-          Resources / Capabilities / Policies
-                        |
-                        v
-                 Semantic Analysis
-                        |
-                        v
-             Canonical Semantic Model
-                        |
-            +-----------+-----------+
-            |           |           |
-            v           v           v
-        Classical    Quantum       HDL/
-        Semantics    Semantics   Hardware Intent
-            |           |           |
-            +-----------+-----------+
-                        |
-                        v
-                 Canonical IR
-                        |
-                        v
-                 Domain IRs
-                        |
-                        v
-                 Optimization
-                        |
-                        v
-                   Lowering
-                        |
-                        v
-              Routing / Scheduling
-                        |
-                        v
-              Resilience / Recovery
-                        |
-                        v
-                    ZQN / HAL
-                        |
-                        v
-                Target Realization
-
-This is a conceptual ownership and data-flow architecture.
-
-It does not require every domain to execute every stage or require all stages to be implemented inside "grammar/".
-
-11. Frontend integration
-
-11.1 "src/lexer.rs"
+Status MUST be evidence-based.
 
-Owns tokenization in the current Rust implementation.
+A feature MUST NOT be marked implemented because documentation exists.
 
-It MUST:
+---
 
-- recognize the specified token vocabulary;
-- preserve source spans;
-- distinguish identifiers from reserved keywords;
-- handle lexical errors deterministically;
-- support the specified Unicode policy;
-- avoid silently accepting malformed literals;
-- maintain compatibility according to the language version;
-- expose stable token contracts to the parser.
+61. Generated artifacts
 
-The ANTLR lexer MUST be reconciled with this implementation.
+Generated grammar files MUST have clear ownership.
 
-Neither implementation may independently invent accepted syntax.
+Generated output MUST NOT become a second source of truth.
 
-11.2 "src/parser.rs"
+The architecture MUST distinguish:
 
-Owns current Rust parsing behavior.
+source specification
+      ↓
+source grammar
+      ↓
+generated artifact
 
-It MUST:
+Generated artifacts MUST be reproducible.
 
-- implement the normative syntax;
-- maintain defined precedence and associativity;
-- produce precise diagnostics;
-- preserve source spans;
-- recover from errors without corrupting subsequent parsing;
-- reject invalid structures;
-- avoid treating unsupported syntax as implemented.
+Manual edits to generated files MUST be prohibited unless the repository explicitly defines them as source files.
 
-The ANTLR grammar and Rust parser MUST be checked against shared conformance cases.
+---
 
-11.3 "src/ast/mod.rs"
+62. Diagnostics architecture
 
-Owns the current frontend AST representation.
+Diagnostics MUST be deterministic and structured.
 
-The AST MUST represent source-level meaning without embedding target-specific implementation decisions.
+A diagnostic SHOULD identify:
 
-It MUST NOT require:
+- severity;
+- error code;
+- source span;
+- primary message;
+- related locations;
+- cause;
+- semantic layer;
+- suggested correction where available;
+- provenance/context where appropriate.
 
-- LLVM-specific objects;
-- QIR-specific objects;
-- vendor-specific physical qubit identifiers;
-- calibrated physical topology;
-- target-specific routing;
-- hardware-specific instruction encodings;
-- runtime resource handles.
+Diagnostics MUST distinguish:
 
-Source spans and necessary semantic distinctions MUST be preserved.
+- syntax errors;
+- type errors;
+- effect violations;
+- capability failures;
+- resource failures;
+- contract failures;
+- policy violations;
+- unsupported target realization.
 
-11.4 AST evolution
+---
 
-Every AST change MUST document:
+63. Error recovery
 
-- the new or modified node;
-- construction sites;
-- parser integration;
-- semantic consumers;
-- serialization implications;
-- compatibility implications;
-- tests;
-- downstream migration requirements.
+Parser error recovery MUST preserve as much useful source structure as safely possible.
 
-An AST node MUST NOT be introduced merely to make a grammar production parse.
+Recovery MUST NOT:
 
-12. Canonical IR boundaries
+- fabricate valid semantics;
+- silently skip security-critical constructs;
+- convert unsupported constructs into unrelated constructs;
+- produce an AST that appears valid when the source is not valid.
 
-The frontend AST and compiler IR have different responsibilities.
+---
 
-The AST represents source structure and source-level distinctions.
+64. Compatibility
 
-The canonical semantic representation captures validated program meaning.
+Language compatibility MUST be explicit.
 
-Domain IRs represent domain-specific computation.
+Compatibility applies to:
 
-12.1 Quantum IR
+- lexical syntax;
+- parser syntax;
+- AST;
+- semantic representation;
+- IR;
+- dialects;
+- capabilities;
+- target interfaces;
+- generated artifacts.
 
-"quantum::ir" is the canonical quantum IR authority.
+A compatibility change MUST define:
 
-Zamani MUST NOT create a competing quantum IR merely because a new frontend or dialect is introduced.
+- old behavior;
+- new behavior;
+- migration;
+- diagnostics;
+- deprecation period where appropriate.
 
-All quantum source formats and quantum-language integrations MUST converge on the canonical quantum semantic boundary.
+---
 
-The intended flow is:
+65. Versioning
 
-Zamani source
-     |
-     v
-Frontend AST
-     |
-     v
-Quantum semantic validation
-     |
-     v
-quantum::ir
-     |
-     v
-Optimization
-     |
-     v
-Decomposition
-     |
-     v
-Routing
-     |
-     v
-Scheduling
-     |
-     v
-QEC / resilience
-     |
-     v
-ZQN
-     |
-     v
-HAL
-     |
-     v
-QPU / simulator / future target
+The architecture distinguishes:
 
-The exact implementation stages belong to the relevant compiler subsystems.
+language version
+grammar version
+lexer version
+AST version
+semantic model version
+IR version
+quantum::ir version
+dialect version
+capability schema version
+target interface version
 
-The grammar MUST NOT define physical quantum limits.
+These MUST NOT be conflated.
 
-12.2 Classical IR
+Version metadata SHOULD participate in provenance.
 
-Classical computation MUST have a corresponding target-independent semantic boundary.
+---
 
-12.3 HDL boundary
+66. Determinism
 
-HDL intent MUST be represented without confusing logical hardware declarations with physical synthesis results.
+Grammar processing MUST be deterministic.
 
-12.4 Hybrid boundary
+Given identical:
 
-Hybrid programs MUST preserve the relationships between classical control, quantum computation, measurement outcomes and subsequent classical decisions.
+- source;
+- language version;
+- grammar version;
+- compiler configuration;
+- relevant external inputs;
 
-12.5 Cross-domain operations
+the frontend SHOULD produce equivalent lexical, syntactic, and semantic results.
 
-Cross-domain constructs MUST have explicit semantic ownership.
+Maps and registries MUST NOT introduce observable nondeterministic ordering where ordering affects semantics or generated output.
 
-The frontend MUST NOT silently duplicate equivalent operations in different domains.
+---
 
-13. Universal syntax architecture
+67. Resource safety
 
-The grammar SHOULD be organized around existing repository directories.
+Resource exhaustion MUST be handled explicitly.
 
-Existing directories MUST be populated and consolidated before creating parallel alternatives.
+The compiler MUST NOT assume that:
 
-The principal owners are:
+- source files are small;
+- ASTs fit in a fixed universal size;
+- tensors have a fixed rank;
+- quantum programs have a fixed qubit count;
+- distributed programs have a fixed node count.
 
-Directory| Responsibility
-"core/"| Universal program structure, names and shared syntax
-"lexer/"| Token contracts and lexical specifications
-"antlr/"| ANTLR composition and generated grammar integration
-"types/"| Type syntax
-"expressions/"| Expression syntax
-"statements/"| Statement syntax
-"declarations/"| Declaration syntax
-"functions/"| Functions, parameters and callable declarations
-"modules/"| Modules and imports
-"effects/"| Effect declarations and effect-related syntax
-"resources/"| Resource requirements and capabilities
-"validation/"| Contracts and validation syntax
-"policies/"| Universal policy syntax and contracts
-"provenance/"| Provenance syntax and metadata
-"execution/"| Execution intent and modes
-"concurrency/"| Tasks, actors, synchronization and messages
-"classical/"| Classical domain syntax
-"quantum/"| Quantum domain syntax
-"hybrid/"| Cross-domain computation
-"hdl/"| Hardware description
-"hardware/"| Hardware intent and resource descriptions
-"ai/"| AI, learning, knowledge and reasoning
-"data/"| Data and query constructs
-"distributed/"| Distributed computation
-"networking/"| Network constructs
-"security/"| Security-related constructs
-"interoperability/"| Foreign interfaces and external formats
-"dialects/"| Explicit language extensions
-"metaprogramming/"| Compile-time and reflective facilities
-"compile/"| Compilation intent and compilation metadata
-"compatibility/"| Versioning and migration
-"specification/"| Normative human specifications
-"spec/"| Machine-checkable contracts
-"tests/"| Conformance and regression tests
+Implementation resource limits MAY exist, but they MUST be configurable where appropriate and diagnostically visible.
 
-A directory name does not automatically grant a file ownership over syntax, AST or semantics.
+---
 
-Every file MUST have an explicit ownership contract.
+68. Security boundaries
 
-14. UBUNTU integration
+Security-sensitive operations MUST have explicit boundaries.
 
-UBUNTU contributes useful language concepts, but its complete grammar MUST NOT be copied into Zamani.
+Particularly sensitive capabilities include:
 
-The following concepts are approved for architectural integration, subject to their individual specifications and implementation status.
-
-14.1 Reasoning
-
-Support a unified reasoning model capable of representing:
-
-- inference;
-- deduction;
-- induction;
-- abduction;
-- premises;
-- evidence;
-- conclusions;
-- derivations;
-- uncertainty.
-
-"infer", "deduce" and "reason" MUST converge on a coherent semantic model.
-
-They MUST NOT create independent reasoning languages.
-
-14.2 Knowledge
-
-Support:
-
-- knowledge assertions;
-- retraction;
-- querying;
-- relations;
-- evidence;
-- metadata;
-- provenance.
-
-Knowledge MUST be usable by AI and non-AI programs.
-
-14.3 Learning
-
-Learning MUST be a semantic operation with explicit inputs, outputs, objectives, effects, capabilities, resources and provenance.
-
-The core grammar MUST NOT enumerate every learning algorithm.
-
-14.4 Adaptation
-
-Adaptation MUST be controlled.
-
-It MUST NOT imply unrestricted self-modifying code.
-
-An adaptation operation MUST be subject to:
-
-- authorization;
-- policy;
-- declared effects;
-- capability checks;
-- resource constraints;
-- validation;
-- provenance.
-
-14.5 Uncertainty
-
-Support semantic representations for:
-
-- uncertainty;
-- probability;
-- distributions;
-- confidence;
-- beliefs.
-
-The language MUST NOT hard-code a particular probabilistic implementation.
-
-14.6 Explainability
-
-Explanations MUST be applicable to:
-
-- reasoning;
-- AI decisions;
-- compiler transformations;
-- resource allocation;
-- optimization;
-- quantum routing;
-- hardware placement;
-- security decisions.
-
-Explainability MUST NOT be limited to an AI-only subsystem.
-
-14.7 Evidence and provenance
-
-A shared evidence/provenance model MUST support:
-
-claim
-evidence
-source
-derivation
-verification
-decision
-transformation
-provenance
-
-The model MUST support traceability without requiring every execution to retain unlimited historical information.
-
-Retention and detail are governed by explicit policies.
-
-14.8 Agents
-
-AI agents MUST integrate with the existing concurrency and actor architecture.
-
-There MUST NOT be a competing actor runtime.
-
-The AI domain owns agent-specific meaning.
-
-The concurrency domain owns actor lifecycle, scheduling and message semantics.
-
-14.9 Neural-symbolic computation
-
-Neural and symbolic computation MUST compose through common types, operations, effects, resources and semantic interfaces.
-
-They MUST NOT become disconnected execution systems.
-
-14.10 Contracts
-
-Support a coherent contract model for:
-
-- requirements;
-- preconditions;
-- postconditions;
-- invariants;
-- assumptions;
-- guarantees;
-- properties;
-- evidence.
-
-Contracts MUST have defined evaluation and failure semantics.
-
-14.11 Policies and sandboxing
-
-Policies MUST express permissions, prohibitions, constraints, preferences and authorized fallbacks.
-
-Sandboxing MUST integrate with effects, capabilities, resources, foreign calls, reflection and adaptation.
-
-14.12 Simulation
-
-Simulation is an execution strategy, not a separate language.
-
-It may support classical, quantum, hybrid, hardware, distributed, AI and fault simulation.
-
-The simulator MUST preserve the specified semantics or explicitly document its approximation.
-
-14.13 Interoperability
-
-FFI, ABI, foreign types, calling conventions and external data formats belong in interoperability specifications.
-
-Foreign calls MUST participate in effect and capability analysis.
-
-14.14 Excluded application-specific syntax
-
-The following MUST NOT be added as universal core keywords merely because they appeared in UBUNTU:
-
-- payment operations;
-- administrative actions;
-- user blocking;
-- legal actions;
-- copyright enforcement;
-- sentiment-specific operations;
-- computer-vision-specific operations;
-- robotics-specific operations;
-- VR/AR-specific operations;
-- blockchain-specific operations;
-- application-specific AGI/ASI labels;
-- omnipotence or other non-computational claims.
-
-These MAY be implemented through libraries, dialects, services, policies and application-level APIs.
-
-15. Lexical architecture
-
-15.1 One canonical token contract
-
-The language MUST have one canonical lexical contract.
-
-The Rust lexer, ANTLR lexer, syntax highlighters and generated references MUST derive from or be validated against that contract.
-
-A token registry is metadata, not an independent runtime lexer.
-
-15.2 Keyword policy
-
-A word MUST become a reserved keyword only when the language specification requires dedicated syntax or a defined compatibility commitment.
-
-Otherwise it SHOULD remain an identifier.
-
-The UBUNTU concepts "infer", "deduce", "reason", "learn", "adapt", "retract", "query", "explain", "evidence", "provenance" and "policy" MUST be evaluated individually.
-
-They MUST NOT all be reserved automatically.
-
-15.3 Duplicate token definitions
-
-Equivalent token names MUST be reconciled.
-
-For example, "Question" and "QuestionMark", or "Ampersand" and "BitAnd", MUST NOT remain ambiguous duplicate representations unless their distinct meanings are specified and tested.
-
-15.4 Literal handling
-
-Numeric, string, character, Boolean, quantum, annotation, temporal and future literals MUST have explicit lexical contracts.
-
-A documented literal that the Rust lexer does not recognize MUST be reported as a conformance gap.
-
-No grammar document may mark it implemented merely because an ANTLR production exists.
-
-15.5 Unicode
-
-The language MUST specify:
-
-- identifier normalization policy;
-- valid Unicode categories;
-- escape behavior;
-- source encoding;
-- invalid-sequence diagnostics;
-- source-span accounting.
-
-The lexer MUST preserve correct source locations.
-
-16. Grammar composition
-
-The root grammar MUST be thin.
-
-The intended composition is:
-
-Zamani.g4
-    |
-    +-- lexical contract
-    |
-    +-- program and item dispatch
-    |
-    +-- declarations
-    |
-    +-- statements
-    |
-    +-- expressions
-    |
-    +-- types
-    |
-    +-- domain dispatch
-         |
-         +-- classical
-         +-- quantum
-         +-- hybrid
-         +-- HDL
-         +-- AI
-         +-- data
-         +-- distributed
-         +-- other domains
-
-Domain grammar files MUST import shared syntax instead of copying it.
-
-The grammar MUST avoid circular imports.
-
-Every public parser rule MUST have a documented owner.
-
-16.1 Generic operations
-
-Universal grammar MUST represent extensible operations through generic operation specifications where appropriate.
-
-It MUST NOT enumerate every possible mathematical, AI, quantum or vendor operation.
-
-Quantum operations MUST use an extensible operation representation with parameters, operands, results, attributes and modifiers.
-
-New operations MUST be addable through the appropriate semantic registry or extension mechanism without changing universal grammar for every new operation.
-
-16.2 ANTLR and Rust parser agreement
-
-ANTLR and the Rust parser MUST be tested against common valid and invalid source cases.
-
-If the implementations intentionally support different subsets during migration, the difference MUST be explicit and versioned.
-
-There MUST NOT be undocumented syntax that parses in one implementation but has a different meaning or is rejected in another.
-
-17. Type-system architecture
-
-The type system MUST be coherent across all domains.
-
-It SHOULD support, according to staged specifications:
-
-- primitive types;
-- composite types;
-- generic types;
-- functions;
-- tuples;
-- records;
-- sums;
-- options;
-- results;
-- arrays;
-- slices;
-- maps;
-- references;
-- ownership;
-- linear types;
-- affine types;
-- constraints;
-- associated types;
-- type classes or equivalent abstractions;
-- refinement types;
-- dependent types where implementation and decidability requirements are established;
-- uncertainty-aware types;
-- domain-specific types.
-
-Potential types such as:
-
-Uncertain<T>
-Probability<T>
-Distribution<T>
-Confidence<T>
-
-are semantic design candidates, not automatic reserved keywords.
-
-Type syntax MUST NOT impose physical capacity ceilings.
-
-Type checking MUST distinguish compile-time guarantees from runtime checks.
-
-The specification MUST define behavior for unsatisfied constraints, undecidable properties and representation overflow.
-
-18. Effects
-
-The effect system MUST provide one coherent model.
-
-Relevant effect categories may include:
-
-- IO;
-- filesystem;
-- network;
-- mutation;
-- randomness;
-- native;
-- foreign;
-- distributed;
-- measurement;
-- quantum;
-- learning;
-- adaptation;
+- native execution;
+- FFI;
+- filesystem access;
+- network access;
 - reflection;
 - code generation;
-- simulation;
-- resource allocation.
-
-The list MUST be extensible through controlled semantic registration.
-
-An effect MUST have a defined meaning.
-
-Merely introducing a keyword does not implement an effect.
-
-Learning, adaptation, measurement, network access, reflection and foreign calls MUST be checked according to their declared effects.
-
-Effects MUST integrate with functions, types, contracts, policies and execution.
-
-19. Contracts and validation
-
-Contracts MUST be domain-neutral.
-
-The common model is:
-
-Contract
-    |
-    +-- scope
-    +-- preconditions
-    +-- postconditions
-    +-- invariants
-    +-- assumptions
-    +-- guarantees
-    +-- properties
-    +-- evidence
-    +-- provenance
-
-Contract syntax belongs in the designated validation grammar.
-
-Contract semantics MUST define:
-
-- evaluation timing;
-- evaluation environment;
-- side-effect restrictions;
-- failure behavior;
-- diagnostic locations;
-- interaction with optimization;
-- interaction with concurrency;
-- interaction with probabilistic operations;
-- interaction with quantum measurement;
-- runtime enforcement requirements.
-
-A compiler MUST NOT claim a proof merely because a contract parses.
-
-20. Policy architecture
-
-Policies are universal semantic controls.
-
-They MUST NOT be limited to AI or security.
-
-The policy model SHOULD support:
-
-- scope;
-- permission;
-- prohibition;
-- requirement;
-- constraint;
-- preference;
-- fallback;
-- authorization;
-- resource selection;
-- execution;
 - adaptation;
-- simulation;
-- deployment;
+- external process execution.
+
+Such operations MUST participate in applicable:
+
+effects
+capabilities
+policies
+authorization
+provenance
+
+---
+
+69. No unrestricted self-modification
+
+The language MUST NOT provide unrestricted executable self-modification merely through adaptation, reflection, metaprogramming, or learning constructs.
+
+Any runtime modification of executable behavior MUST have an explicit semantic model and applicable authorization/policy requirements.
+
+---
+
+70. Dialect architecture
+
+Dialects allow domain-specific syntax without polluting the universal grammar.
+
+A dialect MUST define:
+
+- identity;
+- version;
+- syntax;
+- lexer requirements;
+- parser entry point;
+- semantic mapping;
+- capability requirements;
+- effects;
+- resource implications;
+- provenance;
+- compatibility;
+- registration.
+
+A dialect MUST lower into common Zamani semantic structures.
+
+---
+
+71. Extension architecture
+
+Future functionality SHOULD prefer:
+
+library
+dialect
+capability
+policy
+metadata
+semantic registry
+
+over adding a new universal keyword.
+
+A universal keyword requires justification that:
+
+1. it expresses a language-wide concept;
+2. ordinary identifiers are insufficient;
+3. contextual syntax is insufficient;
+4. a library/dialect cannot reasonably provide it;
+5. its semantics must be understood by the core compiler.
+
+---
+
+72. Quantum extension architecture
+
+New quantum operations SHOULD be registered through operation metadata or dialect mechanisms.
+
+The core grammar MUST NOT need modification merely because a new physical gate or future quantum operation appears.
+
+The semantic model MUST support:
+
+- parameters;
+- targets;
+- results;
+- modifiers;
+- attributes;
+- operation identity;
+- capabilities;
+- resource requirements;
 - provenance.
 
-A policy MUST have deterministic precedence and conflict-resolution rules.
+---
 
-Conflicting policies MUST produce a defined result.
+73. AI extension architecture
 
-A policy MUST NOT silently override program semantics.
+New AI algorithms SHOULD NOT require new universal keywords.
 
-21. Provenance and evidence
+For example, a future learning algorithm SHOULD be representable through the existing learning/model/operation abstraction.
 
-Provenance MUST be a shared semantic model.
+The same principle applies to:
 
-It SHOULD represent:
+- inference methods;
+- optimization algorithms;
+- model architectures;
+- reasoning strategies;
+- uncertainty models;
+- planning algorithms.
+
+---
+
+74. Generic computation architecture
+
+The language MUST distinguish:
+
+what computation means
+
+from:
+
+how one target implements it
+
+A matrix multiplication may therefore be realized through:
+
+- scalar CPU operations;
+- SIMD;
+- GPU tensor hardware;
+- FPGA logic;
+- ASIC;
+- accelerator;
+- distributed execution;
+- quantum-assisted strategy where semantically valid;
+- future hardware.
+
+The source meaning remains stable.
+
+---
+
+75. Target realization
+
+Target realization MAY consider:
+
+- capabilities;
+- resources;
+- topology;
+- performance;
+- power;
+- memory;
+- latency;
+- reliability;
+- security;
+- cost;
+- availability;
+- policy;
+- preferences.
+
+Target-specific information MUST NOT leak backward into universal source semantics unless the programmer explicitly requested target-specific behavior.
+
+---
+
+76. Resource negotiation
+
+Resource negotiation MUST occur downstream of source parsing.
+
+Conceptually:
+
+source requirement
+        ↓
+semantic requirement
+        ↓
+candidate targets
+        ↓
+capability discovery
+        ↓
+resource evaluation
+        ↓
+policy evaluation
+        ↓
+realization selection
+
+A failure MUST identify which requirement could not be satisfied.
+
+---
+
+77. Fallbacks
+
+Fallbacks MAY include:
+
+- alternative implementation;
+- decomposition;
+- simulation;
+- routing;
+- distribution;
+- scheduling;
+- retry;
+- recovery;
+- migration.
+
+Fallbacks MUST be explicitly permitted by semantic policy.
+
+The compiler MUST NOT silently choose a fallback that changes required semantics.
+
+---
+
+78. Contracts across lowering
+
+If a contract remains semantically relevant after lowering, the lowering process MUST preserve it or produce an equivalent validated representation.
+
+Compiler optimizations MUST NOT invalidate:
+
+- "requires";
+- "ensures";
+- "invariant";
+- "assume";
+- "guarantee";
+- "property".
+
+An optimization that changes a contract's interpretation is invalid.
+
+---
+
+79. Provenance across lowering
+
+Important transformations SHOULD be traceable:
 
 source
-derived_from
-generated_by
-transformed_by
-verified_by
-decision
-reason
-evidence
-version
-timestamp
+  ↓
+AST
+  ↓
+semantic fact
+  ↓
+optimization
+  ↓
+lowering
+  ↓
+routing
+  ↓
+scheduling
+  ↓
+target realization
 
-The representation MUST support source-to-artifact traceability.
+Provenance MUST identify the transformation or decision when the applicable specification requires traceability.
 
-Provenance MUST integrate with:
+---
 
-- compiler transformations;
-- AI reasoning;
-- learning;
-- adaptation;
-- security;
-- quantum compilation;
-- hardware realization;
-- reproducible builds;
-- diagnostics.
+80. Classical IR
 
-The implementation MUST define which provenance fields are mandatory, optional, redacted or retained under policy.
+Classical IR is the canonical target-independent representation for classical computation.
 
-Timestamps and nondeterministic identifiers MUST NOT be allowed to make deterministic artifacts nondeterministic unless explicitly requested.
+It SHOULD represent concepts such as:
 
-22. AI architecture
-
-"grammar/ai/" owns AI-specific source constructs.
-
-It does not own universal types, effects, policies, contracts, concurrency or provenance.
-
-AI grammar MUST integrate with:
-
-types/
-expressions/
-statements/
-effects/
-resources/
-validation/
-policies/
-provenance/
-concurrency/
-data/
-quantum/
-hybrid/
-execution/
-
-AI features SHOULD be grouped by semantic ownership:
-
-- inference;
-- reasoning;
-- knowledge;
-- learning;
-- adaptation;
-- uncertainty;
-- causality;
-- explanation;
-- evidence;
-- decisions;
-- neural-symbolic composition;
-- agents;
-- planning.
-
-Application-specific algorithms MUST be provided by libraries or registered extensions rather than universal grammar productions.
-
-23. Concurrency and distributed computation
-
-There MUST be one coherent concurrency model.
-
-Actors, tasks, messages, channels, synchronization, async operations and parallel execution MUST have explicit ownership.
-
-AI agents MUST reuse the existing actor architecture.
-
-Distributed execution MUST build on shared concurrency semantics rather than inventing an incompatible second task model.
-
-The language MUST NOT encode fixed maximum numbers of actors, tasks, processes, nodes, messages or devices.
-
-The runtime MAY impose documented resource policies.
-
-Those policies MUST NOT become universal grammar restrictions.
-
-Concurrency semantics MUST define:
-
-- ownership;
-- data races;
-- ordering;
-- synchronization;
-- cancellation;
-- failure;
-- recovery;
-- deterministic execution where applicable;
-- distributed failure behavior.
-
-24. Quantum architecture
-
-Quantum syntax MUST remain target-independent.
-
-The quantum subsystem owns logical quantum operations and quantum-specific source constructs.
-
-It MUST NOT own physical hardware discovery, calibration, placement or backend-specific instruction encoding.
-
-24.1 Generic operation model
-
-A quantum operation MUST be expressible through a generic semantic structure containing applicable:
-
-- operation identity;
-- namespace;
+- names;
+- namespaces;
 - operands;
 - parameters;
 - results;
@@ -1336,1057 +2445,3019 @@ A quantum operation MUST be expressible through a generic semantic structure con
 - modifiers;
 - effects;
 - capabilities;
-- source information.
-
-The grammar MUST NOT require every new gate or operation to be added as a new universal keyword.
-
-24.2 Logical and physical resources
-
-Logical qubits MUST be distinct from physical qubits.
-
-The language MUST NOT assume a fixed qubit count.
-
-Requirements MAY express resource needs symbolically.
-
-24.3 Quantum lifecycle
-
-Quantum source semantics MUST integrate with:
-
-- quantum types;
-- operations;
-- circuits;
-- measurements;
-- classical control;
-- dynamic circuits;
-- channels;
-- noise;
-- error correction;
-- resource analysis;
-- capability negotiation;
-- provenance;
-- hybrid execution.
-
-24.4 Canonical quantum boundary
-
-All supported quantum frontends MUST converge on "quantum::ir".
-
-There MUST NOT be a competing canonical quantum IR.
-
-24.5 Quantum measurement
-
-Measurement MUST be modeled as an operation with defined result semantics and appropriate effects.
-
-Measurement results MUST integrate with classical control through explicit semantic rules.
-
-24.6 Quantum simulation
-
-Simulation MUST be distinguishable from physical quantum execution.
-
-Approximation, noise assumptions and fidelity claims MUST be explicit.
-
-25. Hybrid computation
-
-Hybrid computation is a first-class composition of domains.
-
-It MUST support semantic relationships between:
-
-- classical computation and quantum operations;
-- quantum measurement and classical decisions;
-- AI operations and quantum operations;
-- CPU execution and accelerators;
-- host and device execution;
-- simulation and physical realization.
-
-The grammar MUST NOT define a separate hybrid type universe.
-
-Hybrid constructs MUST use shared types, effects, resources, policies and provenance.
-
-26. HDL and hardware/software co-design
-
-HDL MUST express hardware intent without embedding arbitrary physical limits in universal syntax.
-
-The HDL architecture MUST distinguish:
-
-- logical hardware design;
-- parameterization;
-- signals;
-- state;
-- timing;
-- constraints;
-- verification;
-- simulation;
-- synthesis;
-- physical realization.
-
-The grammar MUST NOT require fixed universal register widths or wire widths.
-
-A particular design MAY specify a width when it is part of that design's semantics.
-
-Synthesis and physical implementation belong downstream.
-
-Verification assertions MUST integrate with the common validation model where applicable.
-
-27. Classical and data computation
-
-Classical computation MUST remain the general-purpose foundation.
-
-Data computation MUST share the universal type, expression, effect, resource and provenance models.
-
-Graph operations, queries, datasets, schemas and pipelines MUST not require a second language.
-
-SQL, JSON and XML MUST be handled through explicit dialects, parsers, libraries or interoperability boundaries.
-
-They MUST NOT be inserted into the universal Zamani parser merely because they are useful formats.
-
-28. Interoperability
-
-Interoperability owns:
-
-- FFI;
-- ABI;
-- foreign declarations;
-- external types;
-- calling conventions;
-- data layouts;
-- linkage;
-- external functions;
-- external formats.
-
-The language MUST distinguish foreign declarations from verified native implementations.
-
-Foreign calls MUST be subject to:
-
-- type validation;
-- effect analysis;
-- capability checks;
-- safety policies;
-- ABI validation;
-- provenance where required.
-
-The compiler MUST NOT assume that all external functions are safe, pure or deterministic.
-
-29. Metaprogramming
-
-Metaprogramming MAY support:
-
-- reflection;
-- introspection;
-- compile-time computation;
-- syntax generation;
-- quotation;
-- syntax-tree manipulation;
-- type-level computation;
-- macros;
-- DSL construction.
-
-These facilities MUST have explicit phase boundaries.
-
-Compile-time execution MUST have resource limits governed by compiler policy, not arbitrary language-wide semantic ceilings.
-
-Reflection and generation MUST have defined effects and capability requirements.
-
-Generated syntax MUST pass the same validation and compatibility rules as ordinary source.
-
-30. Security and safe implementation
-
-30.1 Rust implementation
-
-All production Rust code MUST use safe Rust.
-
-The use of Rust "unsafe" is prohibited.
-
-This applies to:
-
-- lexer;
-- parser;
-- AST;
-- semantic analysis;
-- IR;
-- code generation;
-- runtime integration;
-- tests;
-- utilities.
-
-Third-party dependencies MUST be assessed for security, maintenance and safety.
-
-Where a dependency internally uses unsafe Rust, the project MUST document the dependency boundary and evaluate its safety implications.
-
-The project MUST NOT represent such a dependency as proving that the entire dependency graph contains no unsafe code.
-
-30.2 Zamani source-level unsafe
-
-The language-level "unsafe" construct is separate from Rust's "unsafe".
-
-Its status MUST be explicitly specified.
-
-It MUST NOT be accepted as a general escape hatch around memory safety, effect checks, resource checks or capability checks.
-
-Any source-level unsafe feature MUST define:
-
-- authorized operations;
-- safety obligations;
-- required capabilities;
-- effects;
-- diagnostics;
-- verification boundaries;
-- compatibility;
-- runtime behavior.
-
-If those requirements are not implemented, the construct MUST be marked unsupported or experimental.
-
-30.3 Sandbox
-
-Sandboxing MUST integrate with:
-
-- effects;
-- capabilities;
-- resource policies;
-- filesystem access;
-- network access;
-- foreign calls;
-- reflection;
-- code generation;
-- adaptation.
-
-The grammar describes sandbox intent.
-
-Enforcement belongs to the security/runtime implementation.
-
-A parsed sandbox declaration MUST NOT be represented as an enforced security boundary without runtime evidence.
-
-31. Execution, simulation and resilience
-
-Execution grammar MUST express portable execution intent.
-
-The runtime owns actual scheduling and recovery.
-
-Adaptive execution MUST NOT silently change the observable semantics of a program.
-
-Possible states and outcomes MUST be defined in the execution/resilience specification.
-
-The established quantum/runtime resilience vocabulary may include:
-
-Unknown
-Healthy
-Degraded
-Unstable
-Unavailable
-Recovering
-Quarantined
-Retired
-
-and:
-
-ACCEPT
-DEGRADED_ACCEPT
-RETRY
-RECOVER
-ESCALATE
-REJECT
-
-These are domain/runtime states, not automatically universal source-language keywords.
-
-The architecture MUST define how they are represented and exchanged.
-
-Simulation MUST preserve semantics or identify approximation.
-
-Fallback MUST be policy-authorized.
-
-32. Compatibility and versioning
-
-Zamani MUST have an explicit compatibility policy.
-
-Relevant version boundaries include:
-
-- language version;
-- grammar version;
-- lexer/token contract version;
-- AST version;
-- semantic model version;
-- IR version;
-- dialect version;
-- backend interface version.
-
-A change to syntax MUST be assessed for:
-
-- source compatibility;
-- lexical compatibility;
-- parser compatibility;
-- AST compatibility;
-- semantic compatibility;
-- tooling compatibility;
-- generated documentation;
-- existing programs.
-
-New syntax MUST NOT silently reinterpret existing valid programs.
-
-Deprecated syntax MUST have a migration policy.
-
-The language version MUST NOT be arbitrarily rewritten by a program at runtime.
-
-33. File-level completion contract
-
-Every independently maintained grammar or specification file MUST declare its responsibilities before implementation.
-
-The required contract is:
-
-FILE:
-STATUS:
-PURPOSE:
-OWNS:
-DOES_NOT_OWN:
-PUBLIC_RULES:
-PRIVATE_RULES:
-LEXER_DEPENDENCIES:
-GRAMMAR_DEPENDENCIES:
-DEPENDENCY_DIRECTION:
-EXPORTS:
-CONSUMED_BY:
-AST_OWNER:
-SEMANTIC_OWNER:
-TYPE_OWNER:
-EFFECT_OWNER:
-RESOURCE_OWNER:
-POLICY_OWNER:
-PROVENANCE_OWNER:
-IR_OWNER:
-SPEC_OWNER:
-TEST_OWNER:
-COMPATIBILITY:
-INTEGRATION:
-COMPLETION_CRITERIA:
-
-Not every field requires a separate implementation file.
-
-Where a concept is not applicable, the file MUST explicitly state "NOT_APPLICABLE" and explain why.
-
-33.1 Feature contract
-
-Every feature MUST additionally define:
-
-1. Purpose.
-2. Syntax.
-3. Lexical behavior.
-4. Valid forms.
-5. Invalid forms.
-6. AST representation.
-7. Semantic meaning.
-8. Type behavior.
-9. Effect behavior.
-10. Capability behavior.
-11. Resource behavior.
-12. Contract behavior.
-13. Policy behavior.
-14. Provenance behavior.
-15. IR destination.
-16. Backend boundary.
-17. Diagnostics.
-18. Positive tests.
-19. Negative tests.
-20. Boundary tests.
-21. Scalability tests.
-22. Compatibility tests.
-23. Determinism requirements.
-24. Integration dependencies.
-25. Completion criteria.
-
-33.2 Independent completion
-
-A file is independently complete when:
-
-- its ownership is unambiguous;
-- its dependencies are specified;
-- its public interface is stable;
-- its semantic contract is complete;
-- its AST and IR boundaries are known;
-- its integration points are declared;
-- its tests exist;
-- its downstream consumers can be implemented without changing the file's public contract.
-
-Independent completion does not prohibit a later versioned extension.
-
-It prohibits avoidable rework caused by undocumented dependencies or incomplete ownership.
-
-33.3 Dependency changes
-
-If another file changes, consumers MUST NOT need to be rewritten merely because an internal implementation detail changed.
-
-If a public contract must change, the change MUST include:
-
-- a documented version or compatibility decision;
-- impact analysis;
-- migration guidance;
-- updated tests;
-- affected consumer updates.
-
-No architecture can guarantee that public interfaces never change. It can guarantee that changes are explicit, controlled and traceable.
-
-34. Integration ownership matrix
-
-Concern| Primary owner| Consumers
-Language architecture| "grammar/DESIGN.md"| All grammar/specification files
-Navigation| "grammar/README.md"| Developers and tooling
-ANTLR root| "grammar/Zamani.g4"| ANTLR tooling
-Implemented syntax status| "grammar/grammar.md"| Developers and conformance tooling
-Extended history| "grammar/Zamani-Grammar.md"| Reference readers
-Tokenization| "src/lexer.rs" and lexical specification| Parser and tooling
-ANTLR lexical representation| ANTLR lexer| ANTLR parser
-Parsing| "src/parser.rs"| Frontend
-AST| "src/ast/"| Semantic analysis
-Types| Type specification and semantic implementation| Compiler
-Effects| Effects specification and semantic implementation| Compiler/runtime
-Resources| Resources specification and implementation| Planner/runtime
-Policies| Policy specification and implementation| Security/planner/runtime
-Contracts| Validation specification and implementation| Compiler/runtime
-Provenance| Provenance specification and implementation| Compiler/tooling/runtime
-Quantum IR| "quantum::ir"| Quantum frontends and backends
-Classical IR| Canonical classical IR owner| Classical backends
-HDL semantics| HDL semantic owner| Verification/synthesis
-Target realization| Backend/HAL| Execution environments
-
-A file may consume another owner's public contract but MUST NOT redefine it.
-
-35. UBUNTU migration ownership
-
-UBUNTU integration MUST be tracked in:
-
-"grammar/specification/ubuntu-integration.md"
-
-The migration matrix MUST contain:
-
-Field| Meaning
-UBUNTU concept| Original feature
-Zamani destination| Canonical owner
-Syntax status| Proposed/stable/etc.
-Lexer status| Actual implementation
-Parser status| Actual implementation
-AST representation| Exact node or expression
-Semantic owner| Responsible subsystem
-Effect requirements| Applicable effects
-Capability requirements| Applicable capabilities
-Resource requirements| Applicable resources
-IR destination| Canonical representation
-Tests| Conformance test locations
-Compatibility| Version implications
-Decision| Adopt, adapt, defer or reject
-
-The integration document MUST prevent duplicate ownership.
-
-36. Specification organization
-
-The following normative specifications SHOULD be maintained under existing directories:
-
-grammar/specification/
-    language-authority.md
-    poco-reaf.md
-    frontend.md
-    types.md
-    ai.md
-    quantum.md
-    hybrid.md
-    hdl.md
-    resources.md
-    effects.md
-    contracts.md
-    policies.md
-    provenance.md
-    compatibility.md
-    interoperability.md
-    ubuntu-integration.md
-
-This list defines intended specification responsibilities, not a claim that all these files already exist.
-
-Machine-checkable contracts belong under:
-
-grammar/spec/
-
-Machine-checkable files MUST have a documented schema/version and validation procedure.
-
-The human specification MUST remain understandable without requiring developers to infer semantics from generated metadata.
-
-37. Testing architecture
-
-Testing MUST cover the complete language pipeline.
-
-The conformance suite MUST distinguish:
-
-- lexical tests;
-- parser tests;
-- AST tests;
-- structural validation;
-- semantic tests;
-- type tests;
-- effect tests;
-- resource tests;
-- capability tests;
-- contract tests;
-- policy tests;
-- provenance tests;
-- IR tests;
-- backend integration tests;
-- compatibility tests;
-- diagnostics tests.
-
-37.1 Required test categories
-
-Every stable feature MUST have applicable:
-
-1. Positive tests.
-2. Negative tests.
-3. Boundary tests.
-4. Scalability tests.
-5. Cross-domain tests.
-6. Compatibility tests.
-7. Determinism tests.
-8. Diagnostics tests.
-
-Tests MUST verify behavior rather than merely search source files for keywords.
-
-37.2 Grammar implementation agreement
-
-ANTLR and Rust parser implementations MUST share conformance fixtures.
-
-The test suite MUST detect:
-
-- syntax accepted by one parser but rejected by the other;
-- different precedence;
-- different associativity;
-- different keyword interpretation;
-- inconsistent literal handling;
-- inconsistent error handling.
-
-37.3 Scalability tests
-
-Scalability tests MUST distinguish:
-
-- grammar recursion;
-- parser stack usage;
-- AST memory usage;
-- semantic analysis complexity;
-- IR construction;
-- compiler resource exhaustion;
-- runtime resource exhaustion.
-
-Tests MUST NOT require literal infinity.
-
-They MUST demonstrate the absence of arbitrary fixed ceilings and verify controlled behavior at implementation boundaries.
-
-37.4 Cross-domain tests
-
-The suite MUST include integrated programs combining relevant domains, including:
-
-- classical and quantum;
-- classical and HDL;
-- AI and symbolic reasoning;
-- learning and adaptation;
-- AI and quantum;
-- distributed and resource-aware computation;
-- effects and policies;
-- contracts and provenance;
-- simulation and execution;
-- FFI and security.
-
-37.5 End-to-end POCO-REAF test
-
-At least one integrated program MUST exercise:
-
-source
-  |
-  v
-lexer
-  |
-  v
-parser
-  |
-  v
-AST
-  |
-  v
-semantic validation
-  |
-  v
-type/effect/resource/capability analysis
-  |
-  v
-contracts/policies/provenance
-  |
-  v
-canonical semantic representation
-  |
-  +------ classical IR
-  |
-  +------ quantum::ir
-  |
-  +------ HDL intent
-  |
-  v
-execution planning
-  |
-  v
-target feasibility
-
-The test MUST verify that a change of target does not silently change source-level meaning.
-
-38. Hard-coding audit
-
-Every production milestone MUST include a hard-coding audit.
-
-The audit MUST search for:
-
-- universal capacity constants;
-- fixed resource arrays;
-- fixed device enumerations;
-- assumptions about physical qubit indices;
-- fixed tensor rank limits;
-- fixed network sizes;
-- fixed thread counts;
-- fixed memory ceilings;
-- hidden parser nesting limits;
-- undocumented integer truncation;
-- hard-coded backend assumptions;
-- hard-coded quantum gate catalogs;
-- domain-specific keyword duplication.
-
-A match is not automatically a defect.
-
-The reviewer MUST determine whether it represents:
-
-1. program data;
-2. a target-specific property;
-3. a documented implementation limit;
-4. a configurable policy;
-5. an accidental universal ceiling.
-
-The audit MUST record its decision.
-
-39. Determinism and reproducibility
-
-Where the language or build configuration promises deterministic behavior, the implementation MUST define:
-
-- stable ordering;
-- deterministic name resolution;
-- deterministic diagnostics where applicable;
-- reproducible semantic transformations;
-- reproducible compilation inputs;
-- controlled randomness;
-- provenance handling;
-- target-specific nondeterminism.
-
-Learning, probabilistic computation, concurrency and physical quantum execution may introduce nondeterminism.
-
-Such behavior MUST be explicitly represented rather than falsely described as deterministic.
-
-Reproducibility MUST distinguish:
-
-- identical source;
-- identical semantic meaning;
-- identical compiler inputs;
-- identical compilation artifact;
-- identical execution result.
-
-These are not equivalent guarantees.
-
-40. Rust implementation requirements
-
-The compiler MUST support Rust 1.97.1 as its declared baseline.
-
-The repository MUST validate:
-
-rustc --version
-cargo --version
-cargo check --all-targets
-cargo test --all-targets
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-
-Where the project has unsupported feature combinations, the CI matrix MUST document and test the supported combinations instead of claiming universal feature coverage.
-
-Production Rust MUST NOT use:
-
-unsafe
-
-The project SHOULD enforce this through code review, CI checks and dependency audits.
-
-The Rust version MUST be declared in a valid Cargo manifest format.
-
-The language's source-level "unsafe" syntax MUST NOT be confused with Rust implementation safety.
-
-41. Performance and resource behavior
-
-The grammar and frontend MUST be designed for predictable resource consumption.
-
-The implementation SHOULD avoid:
-
-- pathological grammar ambiguity;
-- uncontrolled backtracking;
-- exponential parsing behavior;
-- unbounded diagnostic accumulation;
-- unnecessary AST cloning;
-- uncontrolled recursive descent;
-- repeated semantic work;
-- accidental quadratic processing.
-
-Resource exhaustion MUST produce controlled errors where recoverable.
-
-The compiler MUST distinguish a resource budget imposed by configuration from a semantic limit imposed by the language.
-
-Incremental parsing and analysis MAY be implemented where beneficial.
-
-Performance optimizations MUST preserve specified semantics.
-
-42. Diagnostics
-
-Diagnostics MUST be structured and source-aware.
-
-They SHOULD identify:
-
-- source file;
-- span;
-- error category;
-- relevant construct;
-- expected condition;
-- actual condition;
-- related location;
-- suggested correction where reliable.
-
-The compiler MUST distinguish syntax errors from semantic, type, capability, resource, policy and target-feasibility errors.
-
-A missing target capability MUST NOT be reported as a grammar error.
-
-An unsupported feature MUST NOT be reported as valid merely because its syntax parses.
-
-43. Production readiness gates
-
-A feature is production-ready only when all applicable gates pass.
-
-Gate A — Authority
-
-- One normative specification exists.
-- Ownership is unambiguous.
-- No competing language definition exists.
-
-Gate B — Lexical and grammar
-
-- Token behavior is specified.
-- Grammar behavior is specified.
-- Rust and ANTLR behavior is reconciled.
-- Invalid syntax is rejected.
-
-Gate C — Frontend
-
-- AST representation exists.
-- Source locations are preserved.
-- Diagnostics are implemented.
-- Structural validation exists.
-
-Gate D — Semantics
-
-- Meaning is defined.
-- Types are checked.
-- Effects are checked.
-- Resources and capabilities are checked where applicable.
-- Policies and contracts are integrated where applicable.
-
-Gate E — IR
-
-- Canonical semantic representation exists.
-- Domain IR boundary is documented.
-- Quantum constructs reach "quantum::ir".
-- No competing canonical IR is introduced.
-
-Gate F — Execution
-
-- Backend/runtime integration exists where required.
-- Target feasibility is checked.
-- Failure and fallback semantics are defined.
-
-Gate G — Tests
-
-- Positive tests pass.
-- Negative tests pass.
-- Boundary tests pass.
-- Scalability tests pass.
-- Cross-domain tests pass.
-- Compatibility tests pass.
-- Diagnostics are verified.
-
-Gate H — Safety and maintainability
-
-- No Rust "unsafe" is introduced.
-- Hard-coding audit passes.
-- Dependency contracts are complete.
-- Public interfaces are documented.
-- Compatibility impact is reviewed.
-
-A feature MUST NOT be marked stable until all applicable gates pass.
-
-44. Implementation order
-
-Implementation MUST follow dependency order, not alphabetical order.
-
-Phase 0 — Authority and baseline
-
-- "grammar/DESIGN.md"
-- "grammar/README.md"
-- "grammar/grammar.md"
-- "grammar/Zamani-Grammar.md"
-- existing specifications;
-- actual frontend inventory;
-- Rust toolchain and build baseline.
-
-Phase 1 — Lexical contracts
-
-- token registry;
-- keyword policy;
-- operators;
-- delimiters;
-- identifiers;
-- literals;
-- comments;
-- Unicode;
-- diagnostics;
-- Rust/ANTLR conformance.
-
-Phase 2 — Universal syntax
-
-- core;
-- types;
-- expressions;
-- statements;
-- declarations;
-- functions;
-- modules;
-- patterns;
-- guards.
-
-Phase 3 — Universal semantics
-
 - resources;
-- capabilities;
+- source provenance.
+
+The IR MUST remain independent of a single backend.
+
+---
+
+81. Quantum IR
+
+"quantum::ir" is the canonical quantum IR.
+
+It MUST represent quantum semantic operations without requiring a specific physical QPU.
+
+It SHOULD preserve:
+
+- operation identity;
+- targets;
+- parameters;
+- results;
+- attributes;
+- modifiers;
 - effects;
-- contracts;
-- policies;
-- provenance;
-- semantic validation.
+- capabilities;
+- resources;
+- source/provenance information.
 
-Phase 4 — Execution foundations
+Physical mapping belongs downstream.
 
+---
+
+82. IR invariants
+
+IR MUST satisfy:
+
+- type correctness;
+- operand/result correctness;
+- effect correctness;
+- capability correctness;
+- resource correctness;
+- contract preservation;
+- provenance requirements;
+- deterministic serialization where specified;
+- version compatibility.
+
+Invalid IR MUST NOT be emitted as successful compiler output.
+
+---
+
+83. Optimization
+
+Optimization MUST preserve program semantics.
+
+Optimizations MAY exploit:
+
+- target capabilities;
+- resources;
+- topology;
+- parallelism;
+- data locality;
+- quantum connectivity;
+- hardware features;
+- execution policies.
+
+Optimization MUST NOT convert a preference into a semantic requirement or remove a required guarantee.
+
+---
+
+84. Routing
+
+Routing is a downstream realization concern.
+
+Examples include:
+
+- memory placement;
+- network routing;
+- quantum qubit mapping;
+- accelerator data movement;
+- distributed task placement.
+
+Routing MUST operate from semantic/IR requirements.
+
+It MUST NOT require source programs to enumerate every physical resource unless explicit target-specific programming is intended.
+
+---
+
+85. Scheduling
+
+Scheduling MAY account for:
+
+- dependencies;
+- effects;
+- resources;
+- topology;
+- timing;
+- power;
 - concurrency;
-- memory;
-- execution;
-- resilience;
-- simulation;
-- security.
+- reliability;
+- policy.
 
-Phase 5 — Classical and data
+The source language SHOULD remain independent of a specific scheduler.
 
-- classical;
-- numerical;
-- tensor;
-- data;
-- graph;
-- query;
-- scientific computation.
+---
 
-Phase 6 — Quantum and hybrid
+86. ZQN and HAL
 
-- quantum;
+The grammar subsystem MUST NOT redefine ZQN or HAL.
+
+It MUST provide the semantic information necessary for downstream systems to reach them.
+
+Conceptual boundary:
+
+Zamani source
+    ↓
+semantic model
+    ↓
+canonical IR
+    ↓
+optimization
+    ↓
+lowering
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+resilience
+    ↓
+ZQN
+    ↓
+HAL
+
+---
+
+87. Domain ownership boundaries
+
+The following ownership model applies.
+
+Domain| Primary owner
+Universal syntax| "core/"
+Types| "types/"
+Expressions| "expressions/"
+Statements| "statements/"
+Declarations| "declarations/"
+Functions| "functions/"
+Modules| "modules/"
+Memory| "memory/"
+Classical| "classical/"
+Quantum| "quantum/"
+Hybrid| "hybrid/"
+HDL| "hdl/"
+Hardware| "hardware/"
+AI| "ai/"
+Data| "data/"
+Concurrency| "concurrency/"
+Distributed| "distributed/"
+Networking| "networking/"
+Effects| "effects/"
+Resources| "resources/"
+Validation| "validation/"
+Policies| "policies/" where established
+Security| "security/"
+Execution| "execution/"
+Interoperability| "interoperability/"
+Dialects| "dialects/"
+Metaprogramming| "metaprogramming/"
+Macros| "macros/"
+Compatibility| "compatibility/"
+Tests| "tests/"
+
+No directory may silently become a second owner of another subsystem.
+
+---
+
+88. Recommended policy subsystem
+
+Where not already present, policy architecture SHOULD be centralized under:
+
+grammar/policies/
+
+Potential ownership:
+
+policy.g4
+scopes.g4
+requirements.g4
+constraints.g4
+permissions.g4
+prohibitions.g4
+preferences.g4
+fallbacks.g4
+adaptation.g4
+execution.g4
+security.g4
+resource.g4
+deployment.g4
+simulation.g4
+provenance.g4
+
+Existing security, execution, and resource grammars consume the common policy model rather than creating competing policy languages.
+
+---
+
+89. Recommended AI organization
+
+The AI subsystem SHOULD remain organized around generic computational capabilities:
+
+grammar/ai/
+├── ai.g4
+├── agents.g4
+├── models.g4
+├── inference.g4
+├── reasoning.g4
+├── deduction.g4
+├── induction.g4
+├── abduction.g4
+├── knowledge.g4
+├── facts.g4
+├── assertions.g4
+├── retraction.g4
+├── queries.g4
+├── learning.g4
+├── adaptation.g4
+├── feedback.g4
+├── uncertainty.g4
+├── probability.g4
+├── distributions.g4
+├── confidence.g4
+├── causality.g4
+├── explanations.g4
+├── evidence.g4
+├── decisions.g4
+├── provenance.g4
+├── transfer-learning.g4
+├── reinforcement.g4
+├── neural-symbolic.g4
+├── cognitive.g4
+├── multi-agent.g4
+├── planning.g4
+├── policies.g4
+└── ai-capabilities.g4
+
+The exact final inventory MUST follow actual repository ownership and avoid duplicate existing files.
+
+---
+
+90. Universal grammar versus semantic registry
+
+The grammar SHOULD describe structural categories.
+
+Registries SHOULD describe extensible entities.
+
+Examples suitable for registries include:
+
+- capabilities;
 - quantum operations;
-- measurement;
-- dynamic circuits;
-- quantum resources;
-- quantum::ir integration;
-- hybrid semantics;
-- QEC boundary.
+- dialects;
+- target features;
+- effect extensions;
+- AI algorithms;
+- hardware features;
+- protocol identifiers.
 
-Phase 7 — HDL and hardware
+This is essential for long-term scalability.
 
-- HDL intent;
-- hardware resources;
-- verification;
-- simulation;
-- synthesis boundary;
-- hardware/software co-design.
+---
 
-Phase 8 — UBUNTU-derived AI
+91. No physical enumeration in universal grammar
+
+The universal grammar MUST NOT enumerate every:
+
+- CPU;
+- GPU;
+- FPGA;
+- ASIC;
+- QPU;
+- accelerator;
+- network;
+- processor topology;
+- memory technology;
+- future device.
+
+The grammar describes categories and semantic requirements.
+
+Target registries describe available implementations.
+
+---
+
+92. No fixed tensor universe
+
+Tensor syntax MUST support symbolic or runtime dimensions where semantics allow.
+
+The grammar MUST NOT impose a universal tensor rank or dimension maximum.
+
+Implementation limits remain implementation concerns.
+
+---
+
+93. No fixed network universe
+
+Distributed/network syntax MUST NOT assume a fixed number of:
+
+- nodes;
+- services;
+- endpoints;
+- actors;
+- channels;
+- devices.
+
+Network topology is represented semantically and resolved against available infrastructure.
+
+---
+
+94. No fixed quantum universe
+
+The language MUST NOT assume:
+
+- a fixed maximum qubit count;
+- a fixed number of quantum registers;
+- a fixed gate inventory;
+- a fixed topology;
+- a fixed QPU architecture.
+
+The only limits that matter to execution are those established by actual semantics and target availability.
+
+---
+
+95. No fixed concurrency universe
+
+Concurrency MUST NOT assume:
+
+- fixed thread counts;
+- fixed actor counts;
+- fixed task counts;
+- fixed queue sizes.
+
+Resource-aware execution determines feasible realization.
+
+---
+
+96. Application of generic reasoning
+
+Reasoning constructs MUST integrate with normal expressions and statements where appropriate.
+
+The architecture should permit forms conceptually equivalent to:
+
+infer conclusion from evidence;
+deduce conclusion from premises;
+reason {
+    premises ...
+    evidence ...
+    conclusion ...
+}
+
+The final syntax belongs to the normative expression/statement specification.
+
+---
+
+97. Knowledge integration
+
+Knowledge operations SHOULD conceptually support:
+
+assert fact;
+retract fact;
+query pattern;
+
+Knowledge state MUST have explicit ownership and effect semantics.
+
+A knowledge mutation is not semantically equivalent to an ordinary pure expression.
+
+---
+
+98. Learning integration
+
+Learning MUST integrate with the effect system.
+
+For example:
+
+learning
+
+may imply:
+
+effect(learning)
+
+and may require:
+
+capability("learning.compute")
+
+or another registered capability.
+
+The exact capability vocabulary MUST remain extensible.
+
+---
+
+99. Adaptation integration
+
+Adaptation MUST integrate with:
+
+effects
+capabilities
+resources
+policies
+authorization
+contracts
+provenance
+
+Adaptation MUST be rejected if required policy authorization is absent.
+
+---
+
+100. Explanation integration
+
+Explanation SHOULD be available for any semantic decision that requires auditability.
+
+The compiler MAY explain:
+
+- why a target was selected;
+- why a fallback occurred;
+- why a quantum route was selected;
+- why an optimization was applied;
+- why a capability requirement failed;
+- why an adaptation was rejected.
+
+This information SHOULD be connected to provenance.
+
+---
+
+101. Evidence integration
+
+Evidence SHOULD be reusable by:
 
 - reasoning;
-- knowledge;
-- inference;
-- learning;
+- contracts;
+- AI;
+- validation;
+- security;
+- compiler decisions;
+- scientific computation.
+
+Evidence is not an AI-only abstraction.
+
+---
+
+102. Multi-agent integration
+
+Agent semantics MUST reuse concurrency.
+
+The architecture MUST NOT create:
+
+AI actor system
+
+separate from:
+
+Zamani actor system
+
+Instead:
+
+agent semantics
+      ↓
+actor semantics
+      ↓
+concurrency runtime
+
+---
+
+103. Neural-symbolic integration
+
+Neural-symbolic computation MUST combine:
+
+learned models
++
+symbolic representations
++
+reasoning
++
+knowledge
+
+within the same semantic framework.
+
+It MUST NOT create a second IR architecture.
+
+---
+
+104. Reflection and controlled introspection
+
+Reflection MUST distinguish:
+
+inspect
+
+from:
+
+mutate
+
+Inspection may be permitted under one capability.
+
+Mutation may require another.
+
+Generated code may require another.
+
+This separation is essential for security and deterministic compilation.
+
+---
+
+105. Compile-time computation
+
+Compile-time execution MUST be distinguishable from runtime execution.
+
+It MUST have:
+
+- defined inputs;
+- defined outputs;
+- resource policy;
+- effect restrictions;
+- determinism requirements where applicable;
+- provenance.
+
+Compile-time execution MUST NOT silently gain unrestricted runtime capabilities.
+
+---
+
+106. Language-level unsafe versus Rust safety
+
+The existence of an existing Zamani source-level construct representing an unsafe operation does not permit unsafe Rust implementation.
+
+The architecture distinguishes:
+
+Zamani source-language semantics
+
+from:
+
+Rust implementation safety
+
+The Rust compiler implementation MUST remain safe.
+
+Any source-level unsafe semantics MUST be explicitly specified, validated, diagnosed, and integrated with security policy.
+
+---
+
+107. FFI safety
+
+FFI MUST have a safe semantic abstraction.
+
+The compiler MUST validate:
+
+- type compatibility;
+- calling convention;
+- ABI;
+- data layout;
+- ownership requirements;
+- lifetime requirements where applicable;
+- effects;
+- capabilities;
+- policy.
+
+The implementation MUST NOT use unsafe Rust as a shortcut around semantic validation.
+
+---
+
+108. Testing architecture
+
+The grammar subsystem MUST maintain tests at multiple layers.
+
+Required categories include:
+
+lexical
+parser
+AST
+semantic
+type
+effect
+resource
+capability
+contract
+policy
+provenance
+classical
+quantum
+hybrid
+HDL
+AI
+concurrency
+distributed
+networking
+interoperability
+metaprogramming
+security
+simulation
+compatibility
+scalability
+portability
+boundary
+negative
+determinism
+
+---
+
+109. Positive tests
+
+Every implemented feature MUST have valid examples demonstrating intended behavior.
+
+---
+
+110. Negative tests
+
+Every implemented feature MUST have invalid examples proving that prohibited behavior is rejected.
+
+Negative tests are especially mandatory for:
+
+- policies;
+- capabilities;
+- resources;
+- effects;
+- contracts;
+- unsafe source operations;
 - adaptation;
-- uncertainty;
-- causality;
-- explanation;
-- evidence;
+- reflection;
+- FFI;
+- unsupported target features.
+
+---
+
+111. Boundary tests
+
+Boundary tests MUST verify interactions between domains.
+
+Examples:
+
+classical + quantum
+AI + quantum
+AI + concurrency
+AI + contracts
+AI + provenance
+HDL + simulation
+data + AI
+data + distributed
+quantum + resources
+quantum + policies
+network + security
+FFI + effects
+reflection + policy
+adaptation + provenance
+
+---
+
+112. Scalability tests
+
+Scalability tests MUST verify that the architecture does not contain artificial fixed capacities.
+
+Tests SHOULD use:
+
+- symbolic dimensions;
+- dynamically selected resource counts;
+- large generated structures;
+- nested domains;
+- large ASTs where practical;
+- large quantum descriptions;
+- large tensor descriptions;
+- large distributed descriptions.
+
+The purpose is to detect hidden limits rather than prove literal mathematical infinity.
+
+---
+
+113. Portability tests
+
+At minimum, conformance tests SHOULD demonstrate that identical source semantics can be lowered toward multiple classes of targets without modifying the source algorithm.
+
+Examples include:
+
+CPU
+GPU
+FPGA
+accelerator
+QPU
+simulator
+HPC
+distributed
+
+where the relevant backend exists.
+
+---
+
+114. Determinism tests
+
+The same input and configuration MUST produce equivalent frontend results.
+
+Tests MUST detect:
+
+- token-order instability;
+- nondeterministic diagnostics;
+- unstable AST generation;
+- unstable semantic resolution;
+- unstable registry ordering;
+- unstable serialization.
+
+---
+
+115. Integration fixtures
+
+The repository SHOULD maintain representative source fixtures including:
+
+minimal.zm
+classical.zm
+generic.zm
+quantum.zm
+hybrid.zm
+hdl.zm
+poco-reaf.zm
+
+Additional cross-domain fixtures SHOULD cover:
+
+reasoning
+knowledge
+learning
+adaptation
+contracts
+provenance
+policies
+uncertainty
+agents
+neural-symbolic
+sandbox
+simulation
+FFI
+patterns
+advanced types
+quantum learning
+AI + quantum hybrid execution
+
+Fixtures MUST be categorized by implementation status.
+
+---
+
+116. The POCO-REAF integration fixture
+
+At least one comprehensive integration fixture MUST combine, where supported:
+
+classical computation
++
+generic types
++
+data/tensor computation
++
+reasoning
++
+knowledge
++
+learning
++
+adaptation
++
+uncertainty
++
+contracts
++
+policies
++
+provenance
++
+resource requirements
++
+capability requirements
++
+effects
++
+concurrency
++
+distributed behavior
++
+quantum computation
++
+measurement
++
+hybrid control
++
+simulation
++
+hardware intent
+
+The fixture MUST be traceable through:
+
+source
+→ lexer
+→ parser
+→ AST
+→ structural validation
+→ semantic model
+→ resource analysis
+→ capability analysis
+→ effect analysis
+→ contract analysis
+→ policy analysis
+→ provenance
+→ classical IR
+→ quantum::ir
+→ optimization
+→ lowering
+→ routing
+→ scheduling
+→ resilience
+
+where the selected program actually requires those stages.
+
+---
+
+117. Completion contract for every grammar file
+
+Every production grammar file MUST have an associated completion contract.
+
+At minimum:
+
+PURPOSE:
+OWNERS:
+DOES_NOT_OWN:
+DEPENDS_ON:
+EXPORTS:
+LEXER_DEPENDENCIES:
+GRAMMAR_DEPENDENCIES:
+AST_CONTRACT:
+SEMANTIC_CONTRACT:
+TYPE_CONTRACT:
+EFFECT_CONTRACT:
+CAPABILITY_CONTRACT:
+RESOURCE_CONTRACT:
+CONTRACT_INTEGRATION:
+POLICY_INTEGRATION:
+PROVENANCE_INTEGRATION:
+IR_CONTRACT:
+BACKEND_BOUNDARY:
+DIAGNOSTICS:
+POSITIVE_TESTS:
+NEGATIVE_TESTS:
+BOUNDARY_TESTS:
+SCALABILITY_TESTS:
+DETERMINISM_TESTS:
+COMPATIBILITY:
+SPECIFICATION:
+IMPLEMENTATION:
+COMPLETION_CRITERIA:
+
+A file is not complete until every applicable field is resolved.
+
+---
+
+118. Completion means end-to-end completeness
+
+A grammar file MUST NOT be considered complete merely because:
+
+- its ".g4" rules compile;
+- the parser accepts its syntax;
+- documentation exists.
+
+Completion requires all applicable layers:
+
+Specification
+    ↓
+Lexer
+    ↓
+Parser
+    ↓
+AST
+    ↓
+Structural validation
+    ↓
+Semantic validation
+    ↓
+Type checking
+    ↓
+Effect checking
+    ↓
+Capability checking
+    ↓
+Resource checking
+    ↓
+Contract checking
+    ↓
+Policy checking
+    ↓
+Provenance
+    ↓
+IR
+    ↓
+Backend integration
+    ↓
+Tests
+
+Not every feature needs every downstream layer, but every omitted layer MUST be explicitly marked not applicable.
+
+---
+
+119. No hidden dependencies
+
+A grammar file MUST NOT depend on undocumented behavior from another grammar file.
+
+Dependencies MUST be explicit.
+
+Circular ownership MUST be avoided.
+
+If two subsystems require each other semantically, their shared abstraction MUST be moved to a lower-level common owner.
+
+---
+
+120. No duplicate semantic ownership
+
+The following MUST NOT have competing implementations:
+
+token vocabulary
+root program grammar
+pattern semantics
+actor semantics
+effect semantics
+resource semantics
+capability semantics
+policy semantics
+provenance semantics
+canonical classical IR
+canonical quantum IR
+
+Specialized consumers may exist, but one semantic owner MUST exist for each universal concept.
+
+---
+
+121. No duplicate quantum IR
+
+There MUST be exactly one canonical quantum IR boundary:
+
+quantum::ir
+
+Adapters and temporary forms are allowed only when they have documented lowering into it.
+
+---
+
+122. No domain bypass
+
+A domain grammar MUST NOT bypass:
+
+types
+effects
+capabilities
+resources
+contracts
+policies
+provenance
+
+when those concepts apply.
+
+For example, a quantum measurement cannot bypass effect/capability semantics merely because its syntax is in "quantum/".
+
+---
+
+123. Repository navigation authority
+
+"grammar/README.md" is navigation.
+
+It MUST tell developers:
+
+- where the architecture lives;
+- where language specifications live;
+- where machine contracts live;
+- where grammar composition lives;
+- where lexer authority lives;
+- where tests live;
+- where domain subsystems live.
+
+It MUST NOT become an independent language specification.
+
+---
+
+124. "grammar/DESIGN.md" scope boundary
+
+This file owns:
+
+- architecture;
+- ownership;
+- boundaries;
+- invariants;
+- integration contracts;
+- scalability principles;
+- compatibility principles;
+- production readiness criteria.
+
+It MUST NOT become an inventory of every implemented token.
+
+---
+
+125. Production migration rule
+
+Existing grammar files MUST be migrated incrementally.
+
+Migration MUST follow:
+
+inspect
+  ↓
+classify
+  ↓
+assign ownership
+  ↓
+define contract
+  ↓
+reconcile specification
+  ↓
+reconcile lexer
+  ↓
+reconcile parser
+  ↓
+reconcile AST
+  ↓
+reconcile semantics
+  ↓
+reconcile IR
+  ↓
+add tests
+  ↓
+mark status
+
+Existing functionality MUST NOT be deleted merely to make the architecture appear clean.
+
+---
+
+126. Conflict-resolution hierarchy
+
+When conflicts exist, resolve them in this order:
+
+1. grammar/DESIGN.md
+        ↓
+2. grammar/specification/
+        ↓
+3. grammar/spec/
+        ↓
+4. grammar/Zamani.g4
+        ↓
+5. grammar/antlr/
+        ↓
+6. Rust lexer/parser/AST implementation
+        ↓
+7. domain implementations
+        ↓
+8. tests and generated artifacts
+
+This hierarchy describes authority, not necessarily implementation dependency.
+
+An implementation that disagrees with a normative specification is an implementation defect unless the specification itself is deliberately changed.
+
+---
+
+127. Specification-to-implementation traceability
+
+Every stable feature MUST be traceable:
+
+SPECIFICATION
+      ↓
+TOKEN
+      ↓
+GRAMMAR RULE
+      ↓
+AST
+      ↓
+SEMANTIC MODEL
+      ↓
+VALIDATION
+      ↓
+IR
+      ↓
+BACKEND
+      ↓
+TEST
+
+The repository SHOULD maintain machine-readable traceability metadata where practical.
+
+---
+
+128. Feature lifecycle
+
+A feature progresses through:
+
+proposal
+    ↓
+architectural review
+    ↓
+semantic specification
+    ↓
+AST contract
+    ↓
+grammar contract
+    ↓
+lexer/parser implementation
+    ↓
+semantic implementation
+    ↓
+IR integration
+    ↓
+tests
+    ↓
+compatibility review
+    ↓
+stable
+
+Possible statuses include:
+
+PROPOSED
+SPECIFIED
+PARTIALLY_IMPLEMENTED
+IMPLEMENTED
+EXPERIMENTAL
+STABLE
+DEPRECATED
+HISTORICAL
+UNSUPPORTED
+
+---
+
+129. Production readiness gate
+
+The grammar subsystem MUST NOT be called production-ready until:
+
+1. ownership is unambiguous;
+2. normative specifications exist;
+3. lexer and parser agree;
+4. AST contracts exist;
+5. semantic contracts exist;
+6. type interactions are defined;
+7. effect interactions are defined;
+8. resource interactions are defined;
+9. capability interactions are defined;
+10. contract interactions are defined;
+11. policy interactions are defined;
+12. provenance behavior is defined;
+13. IR lowering exists where applicable;
+14. quantum constructs lower through "quantum::ir";
+15. target-independent semantics are preserved;
+16. scalability tests pass;
+17. negative tests pass;
+18. boundary tests pass;
+19. compatibility tests pass;
+20. determinism tests pass;
+21. Rust implementation uses no "unsafe";
+22. minimum Rust toolchain is supported;
+23. generated artifacts are reproducible;
+24. unsupported features are explicitly reported;
+25. no universal physical capacity is hard-coded.
+
+---
+
+130. Definition of "scalable to infinity"
+
+Zamani MUST NOT claim literal execution of mathematically infinite programs on finite machines.
+
+The correct architectural guarantee is:
+
+«The language places no arbitrary universal hardware ceiling on the semantic size of a valid program. Actual execution is bounded only by the requirements of the computation, implementation representation, target capabilities, policies, and resources available to the selected realization.»
+
+Therefore the architecture is open-ended with respect to:
+
+- qubits;
+- CPUs;
+- GPUs;
+- FPGAs;
+- ASICs;
+- nodes;
+- memory;
+- tensors;
+- devices;
 - agents;
-- neural-symbolic composition.
+- threads;
+- networks;
+- datasets;
+- program size.
 
-Phase 9 — Distributed and networking
+Any finite implementation limit is an implementation constraint, not a universal language limit.
 
-- actors;
-- distributed computation;
-- networking;
-- protocols;
-- fault tolerance;
-- topology abstractions.
+---
 
-Phase 10 — Interoperability and dialects
+131. Small-to-large execution model
+
+The same logical program MAY be realized differently depending on available resources.
+
+Conceptually:
+
+                    Same Zamani Program
+                            │
+                            ▼
+                  Semantic Requirements
+                            │
+             ┌──────────────┼──────────────┐
+             │              │              │
+          Tiny target    Large target   Distributed
+             │              │              │
+             ▼              ▼              ▼
+        compact plan    parallel plan   distributed plan
+             │              │              │
+             └──────────────┼──────────────┘
+                            ▼
+                       Same Meaning
+
+The compiler may specialize implementation without requiring the developer to rewrite the program.
+
+---
+
+132. Future hardware
+
+Future hardware MUST be able to integrate through:
+
+capability registration
+resource registration
+target description
+dialect registration where necessary
+lowering
+HAL integration
+
+A future device MUST NOT require rewriting universal source semantics simply because it did not exist when the language was designed.
+
+---
+
+133. Future computational paradigms
+
+The same rule applies to future computational paradigms.
+
+A future domain SHOULD integrate through:
+
+domain grammar
+      ↓
+domain semantic model
+      ↓
+common types/effects/resources/capabilities
+      ↓
+canonical semantic representation
+      ↓
+domain IR if necessary
+      ↓
+target realization
+
+The universal core evolves only when a truly universal language concept is discovered.
+
+---
+
+134. Library-first principle
+
+Functionality that does not require compiler-wide semantic knowledge SHOULD be implemented as libraries rather than grammar additions.
+
+Examples include application algorithms, domain models, specialized AI models, protocol implementations, and business logic.
+
+This keeps the language compact and extensible.
+
+---
+
+135. Dialect-first principle
+
+Functionality requiring specialized syntax but not universal language semantics SHOULD be implemented as a dialect.
+
+Dialect registration MUST include versioning and compatibility.
+
+---
+
+136. Capability-first principle
+
+Hardware or environment properties SHOULD be represented as capabilities.
+
+Examples:
+
+capability("quantum.measurement")
+capability("gpu.compute")
+capability("tensor.compute")
+capability("network.transport")
+capability("accelerator.matrix")
+
+Capability names are semantic identifiers, not physical device enumerations.
+
+---
+
+137. Policy-first principle
+
+Security, deployment, resource selection, adaptation, and execution restrictions SHOULD be represented as policies.
+
+Policies MUST NOT be encoded through scattered special-case keywords.
+
+---
+
+138. Metadata-first principle
+
+Extensible entities SHOULD use metadata when structural grammar is already sufficient.
+
+Examples include:
+
+- operation attributes;
+- capability descriptors;
+- dialect metadata;
+- target metadata;
+- provenance metadata;
+- model metadata.
+
+This prevents grammar proliferation.
+
+---
+
+139. Backward compatibility
+
+Existing valid Zamani programs MUST remain valid unless an explicitly approved breaking language change occurs.
+
+A breaking change MUST include:
+
+- migration guidance;
+- version behavior;
+- diagnostics;
+- compatibility tests;
+- deprecation policy where practical.
+
+---
+
+140. Forward compatibility
+
+Where practical, the architecture SHOULD permit unknown future metadata or extension identifiers to be handled without corrupting unrelated semantic information.
+
+Unsupported extensions MUST be diagnosed explicitly when execution requires them.
+
+---
+
+141. Unknown capabilities
+
+An unknown capability MUST NOT automatically be interpreted as:
+
+supported
+
+or:
+
+unsupported
+
+without the applicable target/capability protocol determining the state.
+
+The compiler SHOULD distinguish:
+
+known unavailable
+known available
+unknown
+not applicable
+
+where the target model supports those distinctions.
+
+---
+
+142. Resource units
+
+Resource comparisons MUST have defined units.
+
+For example, memory requirements MUST distinguish the appropriate unit and representation.
+
+The grammar MUST NOT assume a universal byte capacity.
+
+---
+
+143. Resource expressions
+
+Resource requirements SHOULD permit symbolic expressions.
+
+For example:
+
+requires memory >= required_memory;
+
+where "required_memory" is derived from program semantics.
+
+The compiler evaluates the expression against the selected realization.
+
+---
+
+144. Capability composition
+
+Capabilities MAY be hierarchical or compositional.
+
+For example:
+
+quantum
+quantum.measurement
+quantum.dynamic_circuit
+
+or:
+
+gpu
+gpu.compute
+gpu.tensor
+
+The capability system MUST define inheritance/implication explicitly rather than relying on string-prefix assumptions.
+
+---
+
+145. Effect composition
+
+Effects MAY compose.
+
+For example, an operation might involve:
+
+network
+foreign
+mutation
+
+The semantic model MUST retain the complete applicable effect set.
+
+---
+
+146. Contract composition
+
+Contracts MAY be inherited, composed, refined, or specialized according to the type/function/domain specification.
+
+Contradictory contracts MUST produce deterministic diagnostics.
+
+---
+
+147. Policy composition
+
+Policy precedence MUST be explicitly defined.
+
+Policies MUST NOT rely on undocumented source order.
+
+The policy model SHOULD distinguish:
+
+require
+allow
+deny
+forbid
+prefer
+fallback
+override
+
+only where each has formally specified semantics.
+
+---
+
+148. Provenance composition
+
+Provenance from independent transformations MAY be composed into a derivation graph.
+
+The representation MUST remain extensible.
+
+Implementations MAY compress provenance, but MUST preserve required semantic traceability.
+
+---
+
+149. Source spans
+
+Tokens, AST nodes, diagnostics, and semantic errors MUST preserve source-location information wherever meaningful.
+
+Source spans MUST remain valid across UTF-8 source handling.
+
+The Rust lexer/parser MUST maintain consistent byte-position and line/column semantics.
+
+---
+
+150. Unicode
+
+Unicode handling MUST be explicitly specified.
+
+The lexer MUST distinguish:
+
+- valid identifiers;
+- reserved words;
+- Unicode literals;
+- source punctuation;
+- invalid characters.
+
+Unicode support MUST NOT introduce ambiguous tokenization.
+
+---
+
+151. Literal architecture
+
+Literal forms MUST have explicit lexical and semantic ownership.
+
+Existing specialized literals, including quantum and nano-related forms, MUST be reconciled between:
+
+lexer
+ANTLR lexer
+parser
+AST
+semantic model
+tests
+
+A documented literal that is not emitted by the executable lexer is not considered implemented.
+
+---
+
+152. Lexer keyword policy
+
+Reserved keywords MUST be kept to a minimum.
+
+A token SHOULD be reserved only when compiler-wide syntax requires it.
+
+Application vocabulary SHOULD remain identifier-based.
+
+Contextual keywords MAY be used where they reduce compatibility impact and the parser semantics justify them.
+
+---
+
+153. Parser precedence
+
+Expression precedence and associativity MUST have one normative specification.
+
+The Rust parser and ANTLR grammar MUST implement the same precedence model.
+
+No domain subsystem may silently change universal expression precedence.
+
+---
+
+154. Module boundaries
+
+Modules MUST provide explicit namespace boundaries.
+
+Cross-module references MUST participate in:
+
+- name resolution;
+- visibility;
+- type checking;
+- capability/resource requirements;
+- provenance;
+- compatibility.
+
+---
+
+155. Names and identifiers
+
+Names MUST remain target-independent.
+
+Physical identifiers SHOULD be represented as target metadata rather than universal language names.
+
+For example, a source-level logical resource SHOULD not require a particular physical QPU identifier.
+
+---
+
+156. Attributes and modifiers
+
+Attributes and modifiers SHOULD provide extensibility without multiplying grammar productions.
+
+They MUST have explicit owners and semantics.
+
+Unknown attributes MUST be handled according to declared extension policy.
+
+---
+
+157. Contracts on hardware
+
+HDL constructs MAY have:
+
+requires
+ensures
+invariant
+property
+
+to support verification.
+
+Hardware contracts MUST integrate with the same contract architecture rather than creating a separate verification language.
+
+---
+
+158. Simulation and verification
+
+Simulation results SHOULD be distinguishable from proof/verification results.
+
+The compiler MUST NOT represent a simulation result as a formal proof unless the verification specification explicitly permits that interpretation.
+
+Provenance SHOULD record how a result was obtained.
+
+---
+
+159. AI confidence versus proof
+
+Confidence, probability, and evidence MUST NOT automatically imply formal correctness.
+
+The semantic model MUST distinguish:
+
+confidence
+probability
+evidence
+verification
+proof
+
+These concepts may interact but are not interchangeable.
+
+---
+
+160. Deterministic learning and randomness
+
+Learning algorithms that use randomness MUST expose the relevant randomness effect.
+
+Where reproducibility is requested, the applicable random state MUST be controlled and represented in the execution/provenance model.
+
+---
+
+161. Distributed determinism
+
+Distributed execution MUST define the semantics of ordering where ordering matters.
+
+The compiler MUST NOT assume that physical message delivery order is deterministic.
+
+---
+
+162. Resource-aware AI
+
+AI operations MUST use the universal resource model.
+
+A model may require:
+
+memory
+compute
+tensor capability
+accelerator capability
+network capability
+
+without defining fixed universal capacities.
+
+---
+
+163. Resource-aware quantum computation
+
+Quantum operations MAY require:
+
+qubits
+connectivity
+measurement
+coherence
+error correction
+dynamic circuits
+
+These requirements MUST be represented semantically and resolved against target capabilities.
+
+---
+
+164. Resource-aware HDL
+
+HDL realization MAY require:
+
+logic resources
+memory resources
+timing resources
+I/O capabilities
+fabric capabilities
+
+but universal limits MUST remain outside the language architecture.
+
+---
+
+165. Compiler knowledge
+
+The knowledge model MAY be reused internally by compiler systems.
+
+Examples:
+
+target supports operation
+target satisfies capability
+transformation preserves property
+
+Compiler knowledge MUST remain distinguishable from user program state.
+
+---
+
+166. Decision records
+
+Important compiler/runtime decisions MAY have structured decision records containing:
+
+decision
+alternatives
+selected_option
+reason
+evidence
+constraints
+provenance
+
+This supports explainability without requiring a special application-specific language.
+
+---
+
+167. Security auditability
+
+Security-sensitive decisions SHOULD be traceable through:
+
+request
+policy
+capability
+authorization
+decision
+provenance
+
+This is especially important for:
 
 - FFI;
-- ABI;
-- SQL;
-- JSON;
-- XML;
-- external formats;
-- dialect registration.
-
-Phase 11 — Metaprogramming
-
+- native operations;
+- adaptation;
 - reflection;
-- compile-time computation;
-- generation;
-- quotation;
-- syntax-tree operations.
+- code generation;
+- network access.
 
-Phase 12 — Conformance and production
+---
 
-- complete test matrix;
-- cross-domain integration;
-- hard-coding audit;
-- reproducibility;
+168. Compiler configuration
+
+Compiler configuration MUST NOT silently change language semantics.
+
+Configuration MAY select:
+
+- target;
+- optimization level;
+- resource policy;
+- execution strategy;
+- dialect;
+- compatibility mode.
+
+The effective configuration SHOULD participate in provenance where reproducibility requires it.
+
+---
+
+169. Target-specific programming
+
+Target-specific programming MAY exist.
+
+However, it MUST be explicit.
+
+Target-specific constructs MUST NOT become hidden assumptions of otherwise portable source code.
+
+The architecture SHOULD make target-specific behavior visibly distinct from portable semantics.
+
+---
+
+170. Portable default
+
+The default language model SHOULD favor portable intent.
+
+For example:
+
+requires capability("gpu.compute");
+
+is preferable to embedding a particular GPU model in universal grammar.
+
+---
+
+171. Compilation failure semantics
+
+When realization fails, the compiler MUST distinguish:
+
+program invalid
+
+from:
+
+program valid but target cannot satisfy requirements
+
+The second case is important to POCO-REAF.
+
+A valid program does not become invalid merely because one machine lacks the necessary resources.
+
+---
+
+172. Simulation fallback
+
+Simulation MAY be used where explicitly authorized.
+
+For example, a quantum program may be simulated if a QPU is unavailable and the policy permits simulation.
+
+The compiler MUST clearly identify that realization as simulation.
+
+It MUST NOT claim physical execution occurred.
+
+---
+
+173. Decomposition
+
+A computation MAY be decomposed to fit target resources.
+
+Decomposition MUST preserve semantics.
+
+Where decomposition weakens a guarantee, it MUST be rejected or explicitly represented as a different execution contract.
+
+---
+
+174. Distribution
+
+A program MAY be distributed across available resources.
+
+Distribution MUST respect:
+
+- effects;
+- contracts;
+- resource requirements;
+- consistency semantics;
+- ordering;
+- policies;
+- security.
+
+---
+
+175. Compilation once
+
+Compilation artifacts SHOULD preserve sufficient target-independent semantic information to enable later realization where the chosen artifact format supports this.
+
+A target-specific binary is not inherently portable.
+
+The architecture therefore distinguishes:
+
+portable compilation artifacts
+
+from:
+
+target executables
+
+---
+
+176. "Forever" in POCO-REAF
+
+"Forever" means architectural continuity rather than an impossible promise that all future hardware will execute every historical binary unchanged.
+
+Future systems MUST be able to preserve program meaning through:
+
+- compatibility layers;
+- migration;
+- IR versioning;
+- dialect evolution;
+- target adapters;
+- semantic preservation;
+- explicit deprecation.
+
+---
+
+177. Repository growth rule
+
+As the repository grows, new directories MAY be created when an existing directory has accumulated unrelated responsibilities.
+
+A new directory MUST have:
+
+- a clear owner;
+- README;
+- specification location;
+- integration boundary;
+- tests;
+- dependency contract.
+
+Directories MUST NOT be created merely for cosmetic organization.
+
+---
+
+178. Directory README requirements
+
+Each major subsystem README SHOULD state:
+
+Purpose
+Scope
+Owns
+Does Not Own
+Architecture Authority
+Specification Authority
+Grammar Authority
+AST Owner
+Semantic Owner
+IR Owner
+Dependencies
+Consumers
+Tests
+Compatibility
+Scalability
+Completion Criteria
+
+This keeps repository navigation consistent with "DESIGN.md".
+
+---
+
+179. Production documentation requirements
+
+Every production subsystem MUST document:
+
+- architecture;
+- ownership;
+- syntax;
+- semantics;
+- diagnostics;
 - compatibility;
-- performance;
-- security;
-- production acceptance.
+- examples;
+- tests;
+- implementation status.
 
-A phase MAY proceed independently only when its public dependencies are specified.
+Documentation MUST distinguish normative rules from examples.
 
-45. Required architectural invariants
+---
 
-The following invariants are mandatory.
+180. Implementation status discipline
 
-Invariant 1: Zamani is one language, not a collection of incompatible domain languages.
+A file MUST NOT claim:
 
-Invariant 2: Grammar defines syntax, not physical hardware realization.
+production-ready
 
-Invariant 3: The Rust frontend and ANTLR representation MUST agree on the normative language.
+unless the production readiness gate has been met.
 
-Invariant 4: AST is domain-neutral and target-independent.
+Terms such as:
 
-Invariant 5: Domain-specific semantics MUST have explicit ownership.
+planned
+prototype
+experimental
+partial
+specified
 
-Invariant 6: Quantum frontends converge on "quantum::ir".
+MUST be used honestly.
 
-Invariant 7: No artificial universal hardware ceiling is permitted.
+---
 
-Invariant 8: Actual resource limits MUST be observable and correctly diagnosed.
+181. Existing implementation reconciliation
 
-Invariant 9: UBUNTU features are integrated as shared semantic capabilities, not copied as a competing grammar.
+When existing implementation and architecture disagree, developers MUST:
 
-Invariant 10: Application-specific functionality belongs in libraries, dialects, services or policies.
+1. identify the disagreement;
+2. determine whether specification or implementation is authoritative;
+3. update the appropriate authority;
+4. update implementation;
+5. update tests;
+6. update conformance status.
 
-Invariant 11: Effects, capabilities, resources, contracts and policies MUST have distinct meanings.
+They MUST NOT silently maintain contradictory behavior.
 
-Invariant 12: Learning and adaptation MUST have explicit authorization and effects.
+---
 
-Invariant 13: Simulation MUST NOT be confused with physical execution.
+182. Repository-wide audit requirements
 
-Invariant 14: Parsing does not prove semantic correctness.
+Before declaring "grammar/" production-ready, audit for:
 
-Invariant 15: Syntax acceptance does not establish backend support.
+- duplicate tokens;
+- duplicate grammar ownership;
+- duplicate AST nodes;
+- duplicate semantic concepts;
+- duplicate resource models;
+- duplicate capability models;
+- duplicate effect models;
+- duplicate policy models;
+- duplicate provenance models;
+- duplicate quantum IRs;
+- fixed hardware constants;
+- hidden resource limits;
+- inconsistent keyword registries;
+- parser/lexer divergence;
+- undocumented dialects;
+- stale generated files;
+- unsafe Rust;
+- untested grammar productions.
 
-Invariant 16: Rust production implementation MUST NOT use "unsafe".
+---
 
-Invariant 17: Every stable feature MUST have conformance tests.
+183. Hard-coding audit
 
-Invariant 18: Every public file contract MUST declare dependencies and integration points.
+The following search categories MUST be checked throughout the repository:
 
-Invariant 19: Public contract changes MUST be explicit and versioned.
+MAX_
+maximum
+max_
+limit
+capacity
+qubits
+cpus
+gpus
+fpgas
+nodes
+threads
+memory
+tensor rank
+register width
+network size
+device count
 
-Invariant 20: No feature may be described as implemented without implementation evidence.
+The purpose is not to ban legitimate local implementation limits.
 
-46. Definition of architectural completion
+The purpose is to identify accidental universal language limits.
 
-The grammar architecture is ready for production implementation when:
+Every discovered limit MUST be classified as:
 
-1. Every existing grammar directory has an explicit responsibility.
-2. Existing files have been inventoried and their ownership reconciled.
-3. The normative specification hierarchy is unambiguous.
-4. The Rust lexer/parser and ANTLR grammar have a shared conformance model.
-5. AST and semantic ownership are documented.
-6. Classical, quantum, HDL, hybrid and AI boundaries are explicit.
-7. The canonical quantum IR boundary is preserved.
-8. UBUNTU migration is traceable.
-9. Resource and capability semantics are independent of physical target enumeration.
-10. No universal hardware ceilings exist.
-11. Every public file has a dependency and integration contract.
-12. The production test architecture exists.
-13. Rust 1.97.1 builds and tests are verified.
-14. The Rust implementation satisfies the no-"unsafe" requirement.
-15. Compatibility and versioning rules are defined.
-16. Production readiness is measured by implementation evidence rather than documentation volume.
+language semantic limit
+implementation limit
+target limit
+configuration limit
+test fixture
+documentation example
 
-47. Final architectural principle
+Only the appropriate category may remain.
 
-Zamani MUST describe computation in terms of stable meaning.
+---
 
-It MUST NOT force programmers to rewrite programs whenever a machine, accelerator, quantum processor, topology, memory system or execution environment changes.
+184. No artificial example capacities
 
-Its universal foundation is:
+Documentation MUST avoid presenting arbitrary hardware capacities as if they were language-wide limits.
 
-                    ZAMANI
-                       |
-          +------------+------------+
-          |                         |
-     UNIVERSAL CORE            DOMAIN SYSTEMS
-          |                         |
-     Types / Values            Classical
-     Operations                Quantum
-     Expressions               Hybrid
-     Effects                   HDL
-     Resources                 AI
-     Capabilities              Data
-     Contracts                 Distributed
-     Policies                  Networking
-     Provenance                Hardware
-          |                         |
-          +------------+------------+
-                       |
-                Semantic Model
-                       |
-                Canonical IR
-                       |
-              Domain-specific IR
-                       |
-                 Optimization
-                       |
-                   Lowering
-                       |
-             Routing / Scheduling
-                       |
-              Resilience / Recovery
-                       |
-                   ZQN / HAL
-                       |
-               Target Realization
-                       |
-          +------------+------------+
-          |            |            |
-         CPU          GPU          FPGA
-          |            |            |
-         ASIC         QPU       Accelerator
-          |            |            |
-          +------------+------------+
-                       |
-            HPC / Distributed / Cloud
-                       |
-                Future Targets
+Examples MAY use concrete values as ordinary data.
 
-The same source-level meaning must survive this process.
+For example:
 
-The language must scale from the smallest supported computation to the largest computation that its semantics, implementation and available resources can support.
+let n = 1024;
 
-POCO-REAF is achieved through semantic stability, explicit resource negotiation, target-independent representations, controlled specialization, verified compiler integration and compatibility—not through an infinitely large grammar or a promise that finite hardware has infinite capacity.
+is valid.
 
-This document is the architectural authority for those requirements. Individual specifications and implementations MUST conform to it.
+What is prohibited is defining:
+
+MAX_QUBITS = 1024
+
+as a universal language boundary.
+
+---
+
+185. API stability
+
+Public Rust structures used by frontend components SHOULD have explicit stability contracts.
+
+Changes to:
+
+- tokens;
+- AST;
+- semantic structures;
+- IR;
+- diagnostics
+
+MUST be reviewed for downstream impact.
+
+---
+
+186. Safe collection handling
+
+Rust implementations SHOULD use standard safe collections and checked operations.
+
+Where indexing or arithmetic may fail, the implementation SHOULD use:
+
+- checked arithmetic;
+- explicit validation;
+- safe indexing;
+- structured errors.
+
+Panics MUST NOT be the normal mechanism for handling malformed user programs.
+
+---
+
+187. No silent overflow
+
+Numeric/resource calculations MUST define overflow behavior.
+
+The compiler MUST NOT silently overflow values used to determine:
+
+- memory requirements;
+- tensor dimensions;
+- qubit counts;
+- resource budgets;
+- allocation sizes;
+- offsets;
+- program structure.
+
+Overflow MUST produce a defined diagnostic or use a representation whose semantics explicitly support the required range.
+
+---
+
+188. Large-number architecture
+
+Where language semantics require large symbolic or arbitrary-precision values, the implementation SHOULD use an appropriate safe representation rather than imposing an arbitrary small machine integer.
+
+The selected representation MUST be documented.
+
+---
+
+189. Memory scalability
+
+Compiler data structures SHOULD avoid unnecessary duplication.
+
+For very large programs, the implementation SHOULD support:
+
+- incremental processing;
+- lazy structures where appropriate;
+- compact representations;
+- streaming where semantics allow;
+- bounded diagnostic retention;
+- configurable resource policies.
+
+These are implementation optimizations and MUST NOT change language semantics.
+
+---
+
+190. Incremental compilation
+
+The architecture SHOULD support incremental compilation where practical.
+
+Incremental invalidation MUST respect:
+
+- modules;
+- dependencies;
+- semantic changes;
+- type changes;
+- capability changes;
+- resource changes;
+- policy changes;
+- dialect changes.
+
+---
+
+191. Parallel compilation
+
+Compilation MAY be parallelized.
+
+Parallel compiler execution MUST produce semantically equivalent results to serial execution.
+
+Ordering-sensitive diagnostics or generated artifacts MUST have deterministic ordering rules.
+
+---
+
+192. Domain-neutral AST requirement
+
+The AST MUST NOT become a collection of backend-specific data structures.
+
+Domain-specific nodes MAY exist where the source language has domain-specific semantics.
+
+However, those nodes MUST represent logical meaning rather than physical implementation.
+
+---
+
+193. Semantic normalization
+
+Equivalent source constructs SHOULD normalize into equivalent semantic structures where their semantics are identical.
+
+Normalization reduces downstream duplication.
+
+---
+
+194. Canonical semantic operations
+
+Operations SHOULD carry a common semantic shape where applicable:
+
+name
+namespace
+operands
+parameters
+results
+attributes
+modifiers
+effects
+capabilities
+resources
+contracts
+policies
+source
+provenance
+
+Domain-specific fields MAY extend this model.
+
+---
+
+195. Extensibility of operation metadata
+
+Operation metadata MUST be extensible.
+
+This is particularly important for:
+
+- quantum operations;
+- accelerators;
+- tensor operations;
+- future hardware;
+- domain dialects.
+
+The grammar MUST represent common structure rather than enumerating every operation.
+
+---
+
+196. Semantic ownership of operation identity
+
+An operation's semantic identity belongs to the semantic registry/domain specification.
+
+The lexer MUST NOT determine operation semantics.
+
+The parser MUST only establish syntactic structure.
+
+The semantic layer determines whether an operation exists and what it means.
+
+---
+
+197. Capability ownership
+
+Capability definitions belong to the capability/resource subsystem.
+
+Domain grammar files may consume capabilities.
+
+They MUST NOT redefine the global capability model independently.
+
+---
+
+198. Effect ownership
+
+Effect definitions belong to the effects subsystem.
+
+Domain files may declare effects.
+
+They MUST NOT create incompatible effect semantics independently.
+
+---
+
+199. Resource ownership
+
+Resource semantics belong to the resources subsystem.
+
+Domains declare requirements.
+
+The resource subsystem defines their common representation and validation.
+
+---
+
+200. Policy ownership
+
+Policy semantics belong to the policy/security architecture.
+
+Domains consume policy decisions.
+
+They MUST NOT silently invent incompatible policy precedence.
+
+---
+
+201. Provenance ownership
+
+Provenance semantics belong to the common provenance architecture.
+
+Every domain MAY attach domain-specific provenance fields, but the underlying model remains common.
+
+---
+
+202. Contract ownership
+
+Contract semantics belong to validation/specification.
+
+Domains MAY define domain-specific contract predicates, but the lifecycle remains common.
+
+---
+
+203. Testing ownership
+
+Every feature MUST identify its tests.
+
+A test that only checks parsing does not establish semantic implementation.
+
+A test that only checks runtime behavior does not establish lexical conformance.
+
+Conformance MUST be layered.
+
+---
+
+204. Conformance matrix
+
+The repository SHOULD maintain a feature matrix:
+
+Feature| Spec| Lexer| Parser| AST| Semantics| Types| Effects| Resources| Policies| Provenance| IR| Backend| Tests| Status
+
+This matrix MUST be generated or maintained consistently with "grammar/grammar.md".
+
+---
+
+205. Cross-file integration contract
+
+When a file is declared complete, its integration contract MUST already identify:
+
+upstream dependencies
+downstream consumers
+AST representation
+semantic representation
+IR destination
+tests
+compatibility
+diagnostics
+
+Later files MUST consume those published contracts.
+
+---
+
+206. Changes to completed files
+
+A completed file MAY be changed only when:
+
+- a specification defect is discovered;
+- a compatibility defect is discovered;
+- a security defect is discovered;
+- a scalability defect is discovered;
+- an integration contract was demonstrably incorrect;
+- a required language feature cannot be represented correctly.
+
+Such a change MUST update its completion evidence.
+
+---
+
+207. Avoiding architecture drift
+
+CI SHOULD check:
+
+- duplicate token declarations;
+- duplicate rule ownership;
+- undocumented grammar imports;
+- inconsistent status metadata;
+- missing feature contracts;
+- missing tests;
+- forbidden hard-coded capacities;
+- unsafe Rust;
+- stale generated artifacts.
+
+---
+
+208. CI production gates
+
+CI SHOULD include:
+
+format check
+lint
+minimum Rust build
+current stable Rust build
+unit tests
+grammar generation
+grammar validation
+frontend conformance
+semantic tests
+IR tests
+integration tests
+negative tests
+scalability tests
+determinism tests
+hard-coding audit
+unsafe-code audit
+
+---
+
+209. Unsafe-code CI gate
+
+The project SHOULD enforce a zero-unsafe policy for the Rust implementation.
+
+CI MUST fail if production Rust source introduces prohibited unsafe constructs.
+
+The exact mechanism may evolve with repository tooling.
+
+---
+
+210. Grammar generation CI
+
+CI MUST verify that generated grammar artifacts are reproducible.
+
+A clean generation followed by repository comparison SHOULD produce no unexpected changes.
+
+---
+
+211. Grammar/parser parity CI
+
+Shared fixtures SHOULD be parsed by:
+
+- ANTLR frontend;
+- Rust frontend;
+
+where both are supported.
+
+Differences MUST be investigated.
+
+---
+
+212. AST parity
+
+Where ANTLR and Rust frontends both produce AST-equivalent structures, conformance tests SHOULD verify semantic equivalence.
+
+Where they intentionally differ internally, both MUST converge on the same language semantics.
+
+---
+
+213. Semantic parity
+
+Different frontend representations MUST produce equivalent canonical semantic models for equivalent source programs.
+
+---
+
+214. IR parity
+
+Equivalent source programs MUST produce semantically equivalent canonical IR where normalization permits comparison.
+
+---
+
+215. Backend independence
+
+The grammar MUST remain usable even when no backend is available.
+
+A valid source program may reach:
+
+semantic validation successful
+target realization unavailable
+
+without becoming syntactically invalid.
+
+---
+
+216. Unsupported target behavior
+
+When no target can satisfy a program's requirements, diagnostics SHOULD report:
+
+- required capability;
+- required resource;
+- applicable policy;
+- selected target;
+- reason for failure;
+- possible permitted alternatives.
+
+---
+
+217. Target discovery
+
+Target discovery is not owned by universal grammar.
+
+It belongs to the compilation/runtime environment.
+
+The grammar expresses what is required.
+
+The environment reports what exists.
+
+---
+
+218. Capability negotiation
+
+Capability negotiation is not hard-coded into grammar.
+
+It is an interaction between:
+
+semantic requirements
+target capability registry
+policy
+resource model
+realization engine
+
+---
+
+219. Hardware abstraction
+
+HAL remains the final hardware abstraction boundary.
+
+The grammar MUST NOT import HAL-specific data structures into source semantics.
+
+---
+
+220. Compiler/runtime boundary
+
+The grammar subsystem defines source-language semantics.
+
+The compiler/runtime determines execution.
+
+Runtime behavior MUST NOT be retroactively used to define undocumented syntax.
+
+---
+
+221. Source compatibility with future hardware
+
+A source program should remain meaningful when:
+
+- processor count increases;
+- memory increases;
+- memory decreases but requirements remain satisfiable;
+- GPU changes;
+- QPU changes;
+- topology changes;
+- accelerator changes;
+- cluster size changes.
+
+The implementation may select different realizations.
+
+---
+
+222. Resource-aware specialization
+
+Specialization MAY generate target-specific variants.
+
+Specialization MUST preserve the source semantic contract.
+
+Specialized variants MUST retain provenance linking them to the original program.
+
+---
+
+223. Optimization provenance
+
+Optimizations SHOULD record:
+
+transformation
+reason
+preconditions
+result
+
+where required by provenance policy.
+
+---
+
+224. Quantum routing provenance
+
+Quantum routing SHOULD record:
+
+logical operation
+physical mapping
+routing transformation
+target topology
+reason
+
+when provenance is enabled.
+
+---
+
+225. AI decision provenance
+
+AI decision semantics SHOULD support:
+
+input
+model
+evidence
+reasoning
+confidence
+decision
+policy
+provenance
+
+without requiring a universal AI application vocabulary.
+
+---
+
+226. Knowledge provenance
+
+Assertions and derived knowledge SHOULD preserve origin information when required.
+
+Retraction SHOULD preserve sufficient provenance to explain why a fact ceased to participate in the knowledge state.
+
+---
+
+227. Adaptation provenance
+
+Every authorized adaptation SHOULD be traceable to:
+
+request
+policy
+authorization
+previous state
+change
+validation
+result
+
+where the applicable policy requires auditability.
+
+---
+
+228. Simulation provenance
+
+Simulation SHOULD identify:
+
+- simulated target/model;
+- relevant configuration;
+- input;
+- execution mode;
+- random state where applicable;
+- result;
+- provenance.
+
+---
+
+229. Reproducible compilation provenance
+
+A reproducible build SHOULD record:
+
+- source version;
+- language version;
+- compiler version;
+- grammar version;
+- AST/semantic/IR versions;
+- dialect versions;
+- target configuration;
+- relevant policies;
+- relevant capability information.
+
+---
+
+230. Semantic preservation
+
+The most important invariant is:
+
+«Lowering, optimization, routing, scheduling, specialization, simulation, distribution, and target realization MUST preserve the declared semantics unless the program explicitly permits an alternative semantic mode.»
+
+---
+
+231. No silent semantic degradation
+
+The compiler MUST NOT silently turn:
+
+requirement
+
+into:
+
+preference
+
+or:
+
+guarantee
+
+into:
+
+best effort
+
+or:
+
+physical execution
+
+into:
+
+simulation
+
+without an explicit semantic decision and policy.
+
+---
+
+232. Domain neutrality
+
+Domain-specific syntax MUST be translated into shared semantic structures.
+
+For example:
+
+AI reasoning
+quantum measurement
+HDL verification
+distributed messaging
+tensor computation
+
+may all use:
+
+effects
+capabilities
+resources
+contracts
+policies
+provenance
+
+without creating incompatible semantic systems.
+
+---
+
+233. Architectural test for new features
+
+Before adding a feature, ask:
+
+1. Is it truly universal?
+2. Can an existing construct express it?
+3. Can a library express it?
+4. Can a dialect express it?
+5. Can metadata express it?
+6. Does it require a new semantic concept?
+7. Does it require a new token?
+8. Does it require a new AST node?
+9. Does it require a new IR representation?
+10. What are its effects?
+11. What capabilities does it require?
+12. What resources does it require?
+13. What contracts apply?
+14. What policies apply?
+15. What provenance is required?
+16. How does it scale?
+17. How does it behave on unavailable targets?
+18. How is it tested?
+19. How is it versioned?
+
+A feature should enter the core only after these questions are answered.
+
+---
+
+234. Architectural test for new keywords
+
+A new keyword MUST demonstrate that:
+
+- it represents a compiler-wide language concept;
+- identifier syntax is insufficient;
+- contextual syntax is insufficient;
+- dialect/library mechanisms are insufficient;
+- its semantics require universal compiler understanding.
+
+Otherwise it SHOULD remain an identifier or extension-level construct.
+
+---
+
+235. Architectural test for new directories
+
+A new directory MUST demonstrate:
+
+- distinct ownership;
+- sufficient feature scope;
+- stable integration boundary;
+- independent tests;
+- specification needs;
+- maintainability benefit.
+
+Otherwise the feature SHOULD remain in its existing owner.
+
+---
+
+236. Architectural test for new IR
+
+A new IR MUST NOT be created merely because a domain is new.
+
+A new IR is justified only if:
+
+- the existing canonical IR cannot represent the semantics;
+- a domain-specific optimization boundary genuinely requires it;
+- explicit lowering into the canonical architecture exists.
+
+There MUST NOT be competing canonical IRs.
+
+---
+
+237. Architectural test for physical features
+
+A physical hardware feature SHOULD enter the language as:
+
+capability
+resource
+constraint
+policy
+attribute
+dialect
+
+before becoming a universal syntax construct.
+
+---
+
+238. Architectural test for AI features
+
+An AI feature SHOULD enter as:
+
+semantic operation
+library
+model
+dialect
+capability
+effect
+
+rather than a new universal application keyword.
+
+---
+
+239. Architectural test for quantum features
+
+A quantum feature SHOULD enter as:
+
+operation metadata
+capability
+resource requirement
+semantic operation
+
+rather than a hard-coded gate production when the generic operation model is sufficient.
+
+---
+
+240. Architectural test for interoperability features
+
+External formats SHOULD enter through:
+
+dialect
+parser
+adapter
+interoperability layer
+
+rather than becoming universal core syntax.
+
+---
+
+241. Final architecture
+
+The resulting architecture is:
+
+                         Zamani Language
+                               │
+                    ┌──────────┴──────────┐
+                    │                     │
+                Universal Core        Domain Systems
+                    │                     │
+          ┌─────────┼─────────┐     ┌─────┼─────┐
+          │         │         │     │     │     │
+        Types    Operations  Values Classical Quantum HDL
+          │         │         │     │     │     │
+          └─────────┼─────────┘     └─────┼─────┘
+                    │                     │
+          ┌─────────┴─────────────────────┴─────────┐
+          │                                          │
+       Effects   Capabilities   Resources   Contracts
+          │                                          │
+          └───────────────┬──────────────────────────┘
+                          │
+                       Policies
+                          │
+                      Provenance
+                          │
+                   Semantic Analysis
+                          │
+                  Canonical Semantic Model
+                          │
+             ┌────────────┴─────────────┐
+             │                          │
+       Classical IR                 quantum::ir
+             │                          │
+             └────────────┬─────────────┘
+                          │
+                     Optimization
+                          │
+                       Lowering
+                          │
+                  Routing / Scheduling
+                          │
+                  Resilience / Recovery
+                          │
+                          ZQN
+                          │
+                          HAL
+                          │
+          ┌───────────────┼────────────────┐
+          │               │                │
+         CPU             GPU              FPGA
+          │               │                │
+         ASIC         Accelerator          QPU
+          │               │                │
+       Embedded          HPC           Simulator
+          │               │                │
+          └───────────────┼────────────────┘
+                          │
+                 Cluster / Distributed
+                          │
+                     Future Targets
+
+---
+
+242. Final non-negotiable invariants
+
+The following are architectural invariants.
+
+Invariant 1 — One language
+
+There is one Zamani language, not a collection of competing languages.
+
+Invariant 2 — One architecture authority
+
+"grammar/DESIGN.md" owns grammar architecture.
+
+Invariant 3 — One normative specification authority
+
+"grammar/specification/" owns normative human-readable language meaning.
+
+Invariant 4 — One machine-contract layer
+
+"grammar/spec/" owns machine-oriented contracts and conformance metadata.
+
+Invariant 5 — One canonical grammar root
+
+"grammar/Zamani.g4" is the canonical ANTLR composition root.
+
+Invariant 6 — One lexical architecture
+
+"grammar/lexer/", "grammar/antlr/ZamaniLexer.g4", and "src/lexer.rs" MUST remain reconciled.
+
+Invariant 7 — One domain-neutral AST architecture
+
+ASTs MUST preserve language meaning rather than physical implementation.
+
+Invariant 8 — One canonical classical IR
+
+Classical semantics MUST converge through the canonical classical IR.
+
+Invariant 9 — One canonical quantum IR
+
+Quantum semantics MUST converge through "quantum::ir".
+
+Invariant 10 — No artificial universal limits
+
+The language MUST NOT hard-code universal physical capacity limits.
+
+Invariant 11 — Resource/capability separation
+
+Resources and capabilities MUST remain distinct concepts.
+
+Invariant 12 — Effect separation
+
+Effects MUST remain distinct from capabilities and resources.
+
+Invariant 13 — Contract separation
+
+Contracts MUST remain distinct from policies.
+
+Invariant 14 — Policy separation
+
+Policies MUST govern authorization and realization without replacing semantic meaning.
+
+Invariant 15 — Provenance
+
+Important semantic decisions and transformations MUST be traceable where required.
+
+Invariant 16 — Safe Rust
+
+Production Rust implementation MUST use no "unsafe".
+
+Invariant 17 — Target independence
+
+Portable source semantics MUST NOT depend on a specific physical target.
+
+Invariant 18 — Extensibility
+
+New hardware, quantum operations, AI algorithms, dialects, and computational paradigms MUST be addable without arbitrary universal grammar rewrites.
+
+Invariant 19 — Determinism
+
+Frontend and semantic processing MUST be deterministic for equivalent inputs and configuration.
+
+Invariant 20 — Explicit failure
+
+Unavailable resources or capabilities MUST produce explicit diagnostics rather than silent semantic degradation.
+
+Invariant 21 — Independent-file completion
+
+Every production grammar file MUST have a complete ownership, dependency, semantic, IR, testing, compatibility, and integration contract before being considered complete.
+
+Invariant 22 — No duplicate subsystem authority
+
+No subsystem may silently establish a second owner for a universal semantic concept.
+
+Invariant 23 — Application neutrality
+
+Application-specific functionality belongs in libraries, dialects, capabilities, policies, services, or applications rather than the universal keyword set.
+
+Invariant 24 — Semantic preservation
+
+Compilation, optimization, lowering, routing, scheduling, specialization, simulation, distribution, and target realization MUST preserve declared program meaning.
+
+Invariant 25 — Open-ended scale
+
+The language architecture MUST remain capable of expressing computations whose resource requirements grow with available resources rather than being bounded by arbitrary language-level constants.
+
+---
+
+243. Definition of DONE for "grammar/DESIGN.md"
+
+This document is complete when:
+
+- the repository authority hierarchy is unambiguous;
+- the lexer/parser/AST relationship is explicit;
+- the specification/implementation relationship is explicit;
+- resource/capability/effect/contract/policy/provenance ownership is explicit;
+- classical IR ownership is explicit;
+- "quantum::ir" ownership is explicit;
+- POCO-REAF semantics are explicit;
+- target realization is separated from source meaning;
+- artificial universal capacity limits are prohibited;
+- safe Rust requirements are explicit;
+- scalability semantics are explicit;
+- extensibility rules are explicit;
+- dialect rules are explicit;
+- application-specific functionality is kept outside the universal core;
+- independent-file completion contracts are mandatory;
+- testing and conformance requirements are explicit;
+- compatibility and versioning requirements are explicit;
+- production-readiness criteria are explicit.
+
+No downstream grammar file may contradict these architectural invariants.
+
+---
+
+244. Final architectural statement
+
+Zamani grammar is not intended to describe a fixed machine.
+
+It describes a portable computational language whose semantic meaning can be realized across different machines, scales, execution models, and future computational environments.
+
+The fundamental abstraction is therefore:
+
+Program Intent
+      +
+Types
+      +
+Operations
+      +
+Effects
+      +
+Capabilities
+      +
+Resources
+      +
+Constraints
+      +
+Contracts
+      +
+Policies
+      +
+Provenance
+      ↓
+Canonical Semantic Meaning
+      ↓
+Canonical IR
+      ↓
+Target-appropriate Realization
+
+The programmer expresses what the computation means.
+
+The compiler and runtime determine how that meaning can be realized under the available resources, capabilities, policies, topology, and target characteristics.
+
+Consequently:
+
+tiny machine
+      │
+      ├── same source semantics
+      │
+      ▼
+larger machine
+      │
+      ├── same source semantics
+      │
+      ▼
+heterogeneous accelerator
+      │
+      ├── same source semantics
+      │
+      ▼
+quantum system
+      │
+      ├── same source semantics
+      │
+      ▼
+HPC / cluster / distributed system
+      │
+      ├── same source semantics
+      │
+      ▼
+future computational target
+
+The physical realization changes.
+
+The program's declared meaning does not.
+
+That is the architectural foundation required for Program Once, Compile Once, Run Everywhere, Anywhere, Forever while retaining extensibility, safety, semantic correctness, resource awareness, quantum/classical/HDL integration, and long-term repository maintainability.
