@@ -1,7 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
- * Production Networking Service-Discovery Grammar
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
@@ -11,735 +10,552 @@
  *     NetworkingServiceDiscovery
  *
  * Status:
- *     Production parser grammar contract
+ *     Production networking service-discovery parser grammar
  *
  * Purpose:
  *     Define target-independent SOURCE-LEVEL SERVICE-DISCOVERY INTENT.
  *
  * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
+ *     Rust 1.97+
+ *     Rust 2021
  *
  * Safety:
  *     - No embedded Rust.
- *     - No unsafe code.
+ *     - No unsafe implementation requirement.
  *     - No parser actions.
  *     - No semantic predicates.
  *     - No filesystem access.
  *     - No network access.
  *     - No hardware access.
  *     - No runtime callbacks.
- *     - No environment-dependent parsing.
+ *     - No environment inspection.
  *     - No randomness.
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
  * ============================================================================
- * ARCHITECTURAL ROLE
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * Service discovery is a SOURCE-LEVEL LOGICAL CONTRACT.
+ * PURPOSE
+ * -------
  *
- * It describes:
+ * This file defines the syntax for declaring logical service-discovery intent.
  *
- *     - what logical service identity is being discovered;
- *     - where/how discovery intent is expressed;
- *     - discovery selectors;
- *     - service references;
- *     - endpoint references;
- *     - protocol references;
- *     - channel references;
- *     - route references;
- *     - request/response relationships;
- *     - capability requirements;
- *     - resource requirements;
- *     - constraints;
- *     - preferences;
- *     - policies;
- *     - availability intent;
- *     - lifecycle/refresh intent;
- *     - consistency intent;
- *     - security intent;
- *     - observability metadata;
- *     - extensible application/domain metadata.
+ * Discovery describes WHAT logical service/resource relationship a program
+ * needs. It does not perform discovery and does not select a physical
+ * realization.
  *
- * This grammar does NOT perform service discovery.
+ * OWNED
+ * -----
  *
- * ============================================================================
- * WHAT THIS GRAMMAR DOES NOT DO
- * ============================================================================
+ * This file owns:
  *
- * It does NOT:
+ *     networkServiceDiscoveryConstruct
+ *     networkServiceDiscoveryDeclaration
+ *     networkServiceDiscoveryBody
+ *     networkServiceDiscoveryMember
+ *     networkServiceDiscoveryProperty
+ *     networkServiceDiscoveryPropertyName
+ *     networkServiceDiscoveryPropertyValue
+ *     networkServiceDiscoveryNestedBlock
+ *     networkServiceDiscoveryNestedBlockName
+ *     networkServiceDiscoveryNestedMember
+ *     networkServiceDiscoveryReference
+ *     networkServiceDiscoveryReferenceList
+ *     optionalNetworkServiceDiscoveryReferenceList
+ *     networkServiceDiscoveryDeclarationList
+ *     networkServiceDiscoveryPropertyList
+ *     networkServiceDiscoveryItem
  *
- *     - query DNS;
- *     - query a service registry;
- *     - contact a discovery server;
- *     - contact a service;
- *     - perform network I/O;
- *     - resolve IP addresses;
- *     - resolve MAC addresses;
- *     - select a physical endpoint;
- *     - select a physical node;
- *     - select a router;
- *     - select a switch;
- *     - select an interface;
- *     - allocate a port;
- *     - open a socket;
- *     - establish a connection;
- *     - perform health checks;
- *     - probe a network;
- *     - perform load balancing;
- *     - perform failover;
- *     - perform placement;
- *     - perform scheduling;
- *     - allocate resources;
- *     - discover hardware;
- *     - discover QPUs;
- *     - discover GPUs;
- *     - discover CPUs;
- *     - discover FPGAs;
- *     - discover accelerators;
- *     - execute code.
+ *     networkServiceDiscoveryServiceReference
+ *     networkServiceDiscoveryEndpointReference
+ *     networkServiceDiscoveryAddressReference
+ *     networkServiceDiscoveryProtocolReference
+ *     networkServiceDiscoveryChannelReference
+ *     networkServiceDiscoveryRouteReference
+ *     networkServiceDiscoveryRequestReference
+ *     networkServiceDiscoveryResponseReference
+ *     networkServiceDiscoverySocketReference
+ *     networkServiceDiscoveryCapabilityReference
  *
- * Those responsibilities belong to semantic analysis, compilation,
- * routing, scheduling, deployment, runtime, HAL, or external infrastructure.
+ *     networkServiceDiscoverySelector
+ *     networkServiceDiscoveryQuery
+ *     networkServiceDiscoveryPolicyBlock
+ *     networkServiceDiscoveryConstraint
+ *     networkServiceDiscoveryRequirement
+ *     networkServiceDiscoveryPreference
+ *     networkServiceDiscoveryCapability
+ *     networkServiceDiscoveryMetadata
  *
- * ============================================================================
- * ARCHITECTURAL PIPELINE
- * ============================================================================
+ * DOES NOT OWN
+ * ------------
  *
- *     Zamani source
- *          |
- *          v
- *     canonical lexer
- *          |
- *          v
- *     NetworkingServiceDiscovery parser
- *          |
- *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic analysis
- *          |
- *          +--> name resolution
- *          +--> service resolution
- *          +--> endpoint resolution
- *          +--> protocol validation
- *          +--> channel validation
- *          +--> route validation
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> security analysis
- *          +--> distributed analysis
- *          +--> portability analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          v
- *     optimization / routing / scheduling
- *          |
- *          v
- *     deployment / HAL
- *          |
- *          v
- *     runtime service discovery realization
+ * This file does NOT own:
+ *
+ *     identifiers
+ *     qualified names
+ *     attributes
+ *     expressions
+ *     types
+ *     requirements
+ *     resource expressions
+ *     capability declarations
+ *     constraints
+ *     preferences
+ *     policies
+ *     effects
+ *     contracts
+ *     services
+ *     endpoints
+ *     addresses
+ *     protocols
+ *     channels
+ *     messages
+ *     requests
+ *     responses
+ *     sockets
+ *     streams
+ *     routes
+ *     network capability declarations
+ *     distributed placement
+ *     topology
+ *     scheduling
+ *     routing algorithms
+ *     registry implementation
+ *     DNS
+ *     service-registry protocols
+ *     authentication
+ *     authorization
+ *     cryptography
+ *     hardware discovery
+ *     target selection
+ *     resource allocation
+ *     quantum operations
+ *     quantum topology
+ *     QEC
+ *     classical IR
+ *     quantum::ir
+ *     ZQN
+ *     HAL
+ *     runtime execution
  *
  * ============================================================================
- * OWNERSHIP
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * DEPENDS_ON:
  *
- *     - service-discovery declaration syntax;
- *     - service-discovery declaration identity;
- *     - discovery contract bodies;
- *     - discovery properties;
- *     - nested discovery configuration;
- *     - logical discovery references;
- *     - discovery intent;
- *     - discovery requirements;
- *     - discovery constraints;
- *     - discovery preferences;
- *     - discovery capability expressions;
- *     - discovery policy metadata;
- *     - reusable discovery-reference grammar boundaries.
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/lexer/tokens.g4
+ *     grammar/core/names.g4
+ *     grammar/expressions/
+ *     grammar/core/attributes.g4
  *
- * THIS FILE DOES NOT OWN:
+ * IMPORTS:
  *
- *     - service declarations;
- *     - endpoint declarations;
- *     - address declarations;
- *     - protocol declarations;
- *     - channel declarations;
- *     - message declarations;
- *     - request declarations;
- *     - response declarations;
- *     - socket declarations;
- *     - route declarations;
- *     - network capability declarations;
- *     - distributed node declarations;
- *     - physical topology;
- *     - routing algorithms;
- *     - scheduling;
- *     - placement;
- *     - runtime discovery;
- *     - registry implementation;
- *     - DNS;
- *     - DHCP;
- *     - multicast;
- *     - broadcast;
- *     - cloud-provider discovery;
- *     - vendor APIs;
- *     - cryptographic implementation;
- *     - authentication implementation;
- *     - authorization implementation;
- *     - quantum operations;
- *     - quantum topology;
- *     - QEC;
- *     - ZQN;
- *     - HAL implementation.
+ *     Names
+ *     Expressions
+ *     Attributes
  *
- * ============================================================================
- * RELATIONSHIP TO OTHER NETWORKING GRAMMARS
- * ============================================================================
+ * EXPORTS:
  *
- * Service declarations:
+ *     networkServiceDiscoveryConstruct
+ *     networkServiceDiscoveryDeclaration
+ *     networkServiceDiscoveryReference
+ *     networkServiceDiscoveryReferenceList
+ *     networkServiceDiscoveryServiceReference
+ *     networkServiceDiscoveryEndpointReference
+ *     networkServiceDiscoveryAddressReference
+ *     networkServiceDiscoveryProtocolReference
+ *     networkServiceDiscoveryChannelReference
+ *     networkServiceDiscoveryRouteReference
+ *     networkServiceDiscoveryRequestReference
+ *     networkServiceDiscoveryResponseReference
+ *     networkServiceDiscoverySocketReference
+ *     networkServiceDiscoveryCapabilityReference
+ *     networkServiceDiscoverySelector
+ *     networkServiceDiscoveryQuery
+ *     networkServiceDiscoveryPolicyBlock
  *
- *     grammar/networking/services.g4
+ * CONSUMED_BY:
  *
- * Endpoint declarations:
+ *     grammar/networking/networking.g4
+ *     grammar/antlr/ZamaniParser.g4
+ *     networking AST construction
+ *     networking semantic analysis
+ *     networking validation
+ *     networking tooling
+ *     networking conformance tests
  *
- *     grammar/networking/endpoints.g4
+ * AST_OWNER:
  *
- * Addresses:
+ *     domain-neutral frontend AST subsystem
  *
- *     grammar/networking/addresses.g4
+ * SEMANTIC_OWNER:
  *
- * Protocols:
+ *     networking service-discovery semantic subsystem
  *
- *     grammar/networking/protocols.g4
+ * IR_OWNER:
  *
- * Channels:
+ *     canonical semantic representation and downstream domain IR
  *
- *     grammar/networking/channels.g4
+ * TEST_OWNER:
  *
- * Messages:
+ *     grammar/tests/networking/
+ *     grammar/tests/parser/
+ *     grammar/tests/semantic/
+ *     grammar/tests/scalability/
+ *     grammar/tests/portability/
  *
- *     grammar/networking/messages.g4
+ * SPEC_OWNER:
  *
- * Requests:
- *
- *     grammar/networking/requests.g4
- *
- * Responses:
- *
- *     grammar/networking/responses.g4
- *
- * Sockets:
- *
- *     grammar/networking/sockets.g4
- *
- * Routing:
- *
- *     grammar/networking/routing.g4
- *
- * Networking capabilities:
- *
- *     grammar/networking/network-capabilities.g4
- *
- * This grammar REFERENCES those concepts.
- *
- * It does not reproduce their syntax.
+ *     grammar/spec/networking.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/effects.md
+ *     grammar/spec/contracts.md
+ *     grammar/spec/policies.md
+ *     grammar/spec/provenance.md
+ *     grammar/specification/poco-reaf.md
  *
  * ============================================================================
- * SERVICE DISCOVERY VS SERVICE DEFINITION
+ * ARCHITECTURAL BOUNDARY
  * ============================================================================
  *
- * A service definition answers:
+ * Source
+ *   |
+ *   v
+ * ZamaniLexer
+ *   |
+ *   v
+ * NetworkingServiceDiscovery
+ *   |
+ *   v
+ * domain-neutral AST
+ *   |
+ *   +--> name resolution
+ *   +--> type analysis
+ *   +--> effect analysis
+ *   +--> capability analysis
+ *   +--> resource analysis
+ *   +--> contract validation
+ *   +--> policy validation
+ *   +--> provenance
+ *   |
+ *   v
+ * networking semantic model
+ *   |
+ *   v
+ * canonical semantic representation
+ *   |
+ *   +--> routing
+ *   +--> placement
+ *   +--> scheduling
+ *   +--> resilience
+ *   +--> deployment
+ *   |
+ *   v
+ * runtime / ZQN / HAL
  *
- *     "What service contract exists?"
- *
- * Service discovery answers:
- *
- *     "What logical service realization should be discovered for this
- *      program's declared intent?"
- *
- * Discovery therefore does not replace services.g4.
- *
- * Example:
- *
- *     service compute {
- *         ...
- *     }
- *
- *     discover compute_service {
- *         service: compute;
- *     }
- *
- * The first declares a service contract.
- *
- * The second declares discovery intent concerning that service.
- *
- * Semantic analysis determines whether `compute` denotes a service.
- *
- * ============================================================================
- * SERVICE DISCOVERY VS ROUTING
- * ============================================================================
- *
- * Discovery identifies or selects a LOGICAL communication participant.
- *
- * Routing determines how communication reaches the selected logical
- * participant.
- *
- * Therefore:
- *
- *     discovery
- *         ->
- *     logical service/endpoint realization
- *         ->
- *     route planning
- *         ->
- *     scheduling/placement
- *         ->
- *     runtime communication
- *
- * Discovery MUST NOT contain routing algorithms.
- *
- * A discovery declaration may reference a route contract:
- *
- *     route: network::compute_route;
- *
- * but the route itself remains owned by routing.g4.
+ * This grammar stops at the source syntax / parse-tree boundary.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS ENDPOINTS
+ * DISCOVERY MEANING
  * ============================================================================
  *
- * Discovery may identify endpoint candidates.
+ * A declaration such as:
  *
- * Endpoint syntax remains owned by endpoints.g4.
+ *     discover compute;
  *
- * Example:
+ * means:
  *
- *     discover compute {
- *         service: compute;
- *         endpoint: compute::endpoint;
- *     }
+ *     declare logical discovery intent named `compute`.
  *
- * The parser does not determine whether the referenced name is an endpoint.
+ * It does NOT mean:
  *
- * ============================================================================
- * SERVICE DISCOVERY VS ADDRESSES
- * ============================================================================
+ *     locate a physical machine;
+ *     enumerate devices;
+ *     query DNS;
+ *     query a registry;
+ *     open a socket;
+ *     select an endpoint;
+ *     select a route;
+ *     allocate resources;
+ *     contact a service.
  *
- * Address syntax remains owned by addresses.g4.
- *
- * Discovery may contain:
- *
- *     address: logical::compute;
- *
- * or:
- *
- *     selector: network::address;
- *
- * without embedding a second address grammar.
- *
- * Physical address resolution is downstream.
+ * Those decisions are downstream.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS PROTOCOLS
+ * OPEN-WORLD CONTRACT
  * ============================================================================
  *
- * Protocol syntax remains owned by protocols.g4.
+ * Property names are qualified names and property values are expressions.
  *
- * Discovery may reference a protocol:
+ * Therefore new discovery concepts do not require modifying this grammar.
  *
- *     protocol: network::request_response;
+ * Examples:
  *
- * The parser does not enumerate protocol implementations.
+ *     service: compute;
+ *     endpoint: compute::worker;
+ *     protocol: network::reliable;
+ *     selector: capability("compute.general");
+ *     requires: capability("network.discovery");
+ *     constraint: latency <= required_latency;
+ *     prefers: locality::near;
+ *     policy: execution::adaptive;
  *
- * ============================================================================
- * SERVICE DISCOVERY VS CHANNELS
- * ============================================================================
+ * The parser does not assign semantic meaning to the property name.
  *
- * Channel syntax remains owned by channels.g4.
+ * Semantic analysis decides whether a property is:
  *
- * Discovery may reference a logical channel:
- *
- *     channel: compute_requests;
- *
- * Physical queues, buffers and transport resources remain downstream.
- *
- * ============================================================================
- * SERVICE DISCOVERY VS REQUESTS / RESPONSES
- * ============================================================================
- *
- * Requests and responses remain owned by:
- *
- *     requests.g4
- *     responses.g4
- *
- * Discovery may associate a discovered service with request/response
- * contracts using ordinary qualified-name references.
- *
- * It does not duplicate request/response syntax.
+ *     standard;
+ *     dialect-defined;
+ *     capability-defined;
+ *     policy-defined;
+ *     application-defined;
+ *     invalid.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS SOCKETS
+ * POCO-REAF CONTRACT
  * ============================================================================
  *
- * Socket syntax remains owned by sockets.g4.
+ * Discovery must preserve source portability.
  *
- * Discovery does not imply that a particular OS socket exists.
+ * A program describes logical requirements rather than permanently binding
+ * itself to a particular physical realization.
  *
- * Runtime socket creation remains downstream.
+ * The same discovery intent may therefore participate in realization on:
+ *
+ *     embedded systems
+ *     CPU systems
+ *     multicore systems
+ *     GPU systems
+ *     FPGA systems
+ *     ASIC systems
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     heterogeneous systems
+ *     future computational substrates
+ *
+ * provided the semantic requirements and capabilities can be satisfied.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS NETWORK CAPABILITIES
+ * SCALABILITY CONTRACT
  * ============================================================================
  *
- * Capability syntax remains owned by:
+ * There is NO grammar-level finite limit on:
  *
- *     network-capabilities.g4
+ *     discovery declarations
+ *     properties
+ *     nested blocks
+ *     references
+ *     qualified-name depth
+ *     expression size
+ *     declaration composition
+ *     semantic discovery candidates
  *
- * Discovery properties may express:
+ * Lists use `*` or `+`.
  *
+ * The grammar MUST NOT introduce artificial capacity constants for:
+ *
+ *     services
+ *     endpoints
+ *     nodes
+ *     devices
+ *     routes
+ *     registries
+ *     results
+ *     connections
+ *     network size
+ *     memory
+ *     bandwidth
+ *     CPUs
+ *     GPUs
+ *     FPGAs
+ *     QPUs
+ *
+ * Physical and implementation limits belong downstream.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY CONTRACT
+ * ============================================================================
+ *
+ * Discovery properties may carry requirements such as:
+ *
+ *     requires: capability("network.discovery");
  *     requires: capability("network.reliable");
+ *     requires: capability("quantum.compute");
+ *     requires: capability("gpu.compute");
+ *     requires: memory >= required_memory;
+ *     constraint: latency <= required_latency;
  *
- *     capability: network::service_discovery;
+ * These remain expressions at the parser boundary.
  *
- *     requires: capability("network.secure");
+ * Resource and capability satisfaction occurs downstream.
  *
- * The parser preserves these as expressions/references.
+ * This grammar never:
  *
- * Capability satisfaction remains semantic.
- *
- * ============================================================================
- * SERVICE DISCOVERY VS DISTRIBUTED COMPUTING
- * ============================================================================
- *
- * A discovered service may ultimately be realized by:
- *
- *     - one process;
- *     - many processes;
- *     - one node;
- *     - many nodes;
- *     - an edge resource;
- *     - a cloud resource;
- *     - an accelerator;
- *     - a quantum service;
- *     - a hybrid service;
- *     - a future computational substrate.
- *
- * This grammar does not encode any fixed deployment model.
- *
- * Distributed placement remains owned by grammar/distributed/ and its
- * semantic/compiler layers.
+ *     discovers resources;
+ *     allocates resources;
+ *     reserves resources;
+ *     selects hardware;
+ *     fixes resource capacities.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS QUANTUM COMPUTING
+ * EFFECT CONTRACT
  * ============================================================================
  *
- * A discovery contract may identify a logical quantum service:
+ * A discovery declaration may semantically imply effects such as:
+ *
+ *     network
+ *     io
+ *     distributed
+ *     foreign
+ *     native
+ *     randomness
+ *     simulation
+ *
+ * The grammar does not create a second effect system.
+ *
+ * Effect classification belongs to the existing effects subsystem.
+ *
+ * ============================================================================
+ * CONTRACT / POLICY CONTRACT
+ * ============================================================================
+ *
+ * Discovery properties may reference:
+ *
+ *     requirements
+ *     constraints
+ *     preferences
+ *     capabilities
+ *     policies
+ *     contracts
+ *     evidence
+ *     provenance
+ *
+ * The discovery grammar does not redefine those universal systems.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Source structure must remain traceable through:
+ *
+ *     source
+ *       ->
+ *     parse tree
+ *       ->
+ *     AST
+ *       ->
+ *     semantic discovery model
+ *       ->
+ *     canonical semantic representation
+ *
+ * Source spans and declaration/member ordering are preserved by the normal
+ * ANTLR parse-tree pipeline.
+ *
+ * ============================================================================
+ * QUANTUM BOUNDARY
+ * ============================================================================
+ *
+ * Discovery may identify a logical quantum service:
  *
  *     discover quantum_backend {
  *         service: quantum::backend;
  *         requires: capability("quantum.compute");
  *     }
  *
- * or:
+ * This grammar does NOT define:
  *
- *     discover quantum_measurement {
- *         service: quantum::measurement;
- *         requires: capability("quantum.measurement");
- *     }
+ *     qubits
+ *     gates
+ *     circuits
+ *     measurements
+ *     pulses
+ *     calibration
+ *     QPU topology
+ *     QEC
  *
- * This grammar does not define:
+ * Quantum semantics remain downstream and, where applicable, lower through:
  *
- *     - qubits;
- *     - gates;
- *     - circuits;
- *     - QPU topology;
- *     - calibration;
- *     - pulses;
- *     - QEC;
- *     - ZQN;
- *     - physical qubits.
- *
- * Quantum semantics continue toward the canonical:
- *
+ *     quantum semantic model
+ *         ->
  *     quantum::ir
  *
- * boundary.
+ * No discovery-specific quantum IR is introduced.
  *
  * ============================================================================
- * SERVICE DISCOVERY VS CLASSICAL / AI / HDL / HARDWARE
+ * HDL / HARDWARE BOUNDARY
  * ============================================================================
  *
- * Discovery may identify logical services implemented by:
+ * Discovery may identify logical hardware services:
  *
- *     classical systems;
- *     quantum systems;
- *     hybrid systems;
- *     AI systems;
- *     HDL/hardware accelerators;
- *     distributed systems;
- *     embedded systems;
- *     future computing systems.
- *
- * The discovery grammar remains domain-neutral.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * Service discovery MUST preserve:
- *
- *     Program Once
- *          ->
- *     Compile Once
- *          ->
- *     Run Everywhere
- *          ->
- *     Run Anywhere
- *          ->
- *     Run Forever
- *
- * Therefore the source program should identify WHAT it needs rather than
- * permanently identifying WHERE a particular machine happens to provide it.
- *
- * Valid intent:
- *
- *     discover compute {
- *         service: compute;
- *         requires: capability("compute.general");
+ *     discover accelerator {
+ *         service: hardware::accelerator;
+ *         requires: capability("accelerator.compute");
  *     }
  *
- * Valid intent:
+ * It does not define:
  *
- *     discover quantum_compute {
- *         service: quantum::compute;
- *         requires: capability("quantum.compute");
- *     }
+ *     register widths
+ *     physical wires
+ *     FPGA dimensions
+ *     ASIC dimensions
+ *     device counts
+ *     memory capacities
+ *     physical topology
  *
- * Not a universal discovery requirement:
- *
- *     discover gpu0
- *     discover node7
- *     discover qpu0
- *     discover router3
- *
- * Such names can still exist as ordinary source data, but this grammar gives
- * them no special physical meaning.
+ * Hardware realization remains downstream.
  *
  * ============================================================================
- * OPEN-WORLD DESIGN
+ * NETWORKING COMPONENT BOUNDARIES
  * ============================================================================
  *
- * This grammar deliberately does NOT enumerate:
+ * services.g4
+ *     owns service contracts.
  *
- *     DNS
- *     mDNS
- *     DNS-SD
- *     Consul
- *     etcd
- *     Kubernetes
- *     LDAP
- *     UDDI
- *     cloud-provider registries
- *     proprietary service registries
- *     vendor discovery protocols
+ * endpoints.g4
+ *     owns endpoint declarations.
  *
- * as closed grammar alternatives.
+ * addresses.g4
+ *     owns address syntax.
  *
- * A discovery implementation can be represented through:
+ * protocols.g4
+ *     owns protocol contracts.
  *
- *     qualified names;
- *     expressions;
- *     capabilities;
- *     dialects;
- *     semantic registries;
- *     deployment configuration.
+ * channels.g4
+ *     owns network channel contracts.
  *
- * New discovery technologies therefore do not require a new core grammar
- * production merely because their implementation name is new.
+ * messages.g4
+ *     owns message schemas.
  *
- * ============================================================================
- * OPEN-WORLD PROPERTY MODEL
- * ============================================================================
+ * requests.g4
+ *     owns reusable requests.
  *
- * Route/service/network grammars in this repository already use open-world
- * property structures.
+ * responses.g4
+ *     owns reusable responses.
  *
- * This grammar follows the same architecture:
+ * sockets.g4
+ *     owns socket contracts.
  *
- *     qualifiedName : expression ;
+ * streams.g4 / streaming grammar
+ *     owns stream contracts.
  *
- * Standard semantic property names may include:
+ * routing.g4
+ *     owns route contracts.
  *
- *     service
- *     endpoint
- *     address
- *     protocol
- *     channel
- *     route
- *     request
- *     response
- *     selector
- *     query
- *     policy
- *     strategy
- *     scope
- *     locality
- *     region
- *     version
- *     instance
- *     identity
- *     health
- *     availability
- *     consistency
- *     freshness
- *     timeout
- *     ttl
- *     refresh
- *     retry
- *     fallback
- *     security
- *     observability
- *     metadata
- *     provenance
- *     requires
- *     constraint
- *     prefers
- *     capability
+ * network-capabilities.g4
+ *     owns network capability declarations.
  *
- * These names are DOCUMENTED semantic concepts only.
- *
- * They are not parser-level closed vocabulary.
- *
- * Future properties may be introduced without modifying this grammar.
+ * This file references those concepts using qualified names and expressions.
+ * It does not duplicate their syntax.
  *
  * ============================================================================
- * REQUIREMENT / CONSTRAINT / PREFERENCE / CAPABILITY
- * ============================================================================
- *
- * Discovery syntax preserves source intent.
- *
- * Semantic analysis distinguishes:
- *
- *     requirement
- *     constraint
- *     preference
- *     capability
- *     policy
- *     hint
- *     metadata
- *
- * Examples:
- *
- *     requires: capability("network.discovery");
- *
- *     constraint: latency <= maximum_latency;
- *
- *     prefers: locality::near;
- *
- *     capability: network::service_discovery;
- *
- *     policy: adaptive;
- *
- * No parser rule determines whether any requirement can be satisfied.
- *
- * ============================================================================
- * NO PHYSICAL RESOURCE LIMITS
- * ============================================================================
- *
- * This grammar MUST NOT define:
- *
- *     MAX_SERVICES
- *     MAX_ENDPOINTS
- *     MAX_DISCOVERIES
- *     MAX_INSTANCES
- *     MAX_NODES
- *     MAX_DEVICES
- *     MAX_ROUTERS
- *     MAX_LINKS
- *     MAX_NETWORK_SIZE
- *     MAX_RESULTS
- *     MAX_RETRIES
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *     MAX_MEMORY
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *
- * There is no fixed:
- *
- *     service count;
- *     endpoint count;
- *     candidate count;
- *     registry count;
- *     discovery depth;
- *     selector complexity;
- *     property count;
- *     nested-block count.
- *
- * Repetition uses ANTLR `*` / `+`.
- *
- * Practical limits belong to:
- *
- *     parser implementation;
- *     compiler resources;
- *     runtime resources;
- *     deployment resources;
- *     target capabilities;
- *     available network infrastructure.
- *
- * ============================================================================
- * "INFINITY" INTERPRETATION
- * ============================================================================
- *
- * "Tiny to infinity" means the language imposes no artificial finite
- * service-discovery capacity.
- *
- * It does NOT claim physical infrastructure is infinite.
- *
- * A realization can execute only when sufficient resources and capabilities
- * are actually available.
- *
- * ============================================================================
- * LEXICAL CONTRACT
- * ============================================================================
- *
- * This grammar defines NO lexer rules.
- *
- * The canonical lexer is:
- *
- *     ZamaniLexer
- *
- * The `discover` keyword is intentionally a real lexical keyword because
- * service discovery must have an unambiguous declaration boundary when
- * composed with existing contextual networking declarations.
- *
- * This avoids the existing ambiguity caused by networking declarations whose
- * markers are ordinary identifiers.
- *
- * The keyword is therefore owned by:
- *
- *     grammar/lexer/keywords.g4
- *
- * as:
- *
- *     DISCOVER : 'discover' ;
- *
- * No other discovery vocabulary is reserved here.
- *
- * ============================================================================
- * PARSER DECLARATION
+ * PARSER
  * ============================================================================
  */
 
@@ -749,16 +565,27 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions, Attributes;
+import
+    Names,
+    Expressions,
+    Attributes
+    ;
 
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * PUBLIC NETWORKING COMPOSITION ENTRY POINT
  * ============================================================================
  *
- * Stable integration boundary for networking.g4.
+ * Consumed by:
  *
+ *     grammar/networking/networking.g4
+ *
+ * This rule deliberately accepts declarations only.
+ *
+ * A bare qualified-name reference is NOT accepted as a top-level networking
+ * construct. This prevents discovery references from stealing ordinary
+ * networking constructs during aggregate parsing.
  * ============================================================================
  */
 
@@ -769,10 +596,10 @@ networkServiceDiscoveryConstruct
 
 /*
  * ============================================================================
- * SERVICE-DISCOVERY DECLARATION
+ * DISCOVERY DECLARATION
  * ============================================================================
  *
- * Canonical forms:
+ * Supported forms:
  *
  *     discover compute;
  *
@@ -780,30 +607,30 @@ networkServiceDiscoveryConstruct
  *         service: compute;
  *     }
  *
- *     discover quantum_backend {
+ *     discover quantum::backend {
  *         service: quantum::backend;
  *         requires: capability("quantum.compute");
  *     };
  *
- * The declaration name is the logical discovery-contract identity.
+ * The declaration name is a logical discovery-contract identity.
  *
- * It is NOT necessarily:
+ * It is not inherently:
  *
- *     a service name;
- *     an endpoint name;
- *     a process name;
- *     a node name;
- *     a device name.
+ *     service identity
+ *     endpoint identity
+ *     process identity
+ *     node identity
+ *     device identity
+ *     hardware identity
  *
- * Semantic analysis determines the relationship.
- *
+ * Semantic analysis determines those relationships.
  * ============================================================================
  */
 
 networkServiceDiscoveryDeclaration
     : attribute*
       DISCOVER
-      identifier
+      networkServiceDiscoveryName
       networkServiceDiscoveryBody?
       SEMI?
     ;
@@ -811,11 +638,23 @@ networkServiceDiscoveryDeclaration
 
 /*
  * ============================================================================
- * DISCOVERY BODY
+ * DISCOVERY NAME
  * ============================================================================
  *
- * An arbitrary number of members is allowed.
- *
+ * Qualified names are used instead of a single identifier so discovery
+ * contracts can participate in module/domain namespaces without imposing
+ * artificial naming structures.
+ * ============================================================================
+ */
+
+networkServiceDiscoveryName
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * DISCOVERY BODY
  * ============================================================================
  */
 
@@ -831,22 +670,24 @@ networkServiceDiscoveryBody
  * DISCOVERY MEMBER
  * ============================================================================
  *
- * Members are either:
+ * Every member may have canonical attributes.
+ *
+ * The member itself is either:
  *
  *     property
  *
  * or:
  *
  *     nested configuration block.
- *
  * ============================================================================
  */
 
 networkServiceDiscoveryMember
     : attribute*
-      networkServiceDiscoveryProperty
-    | attribute*
-      networkServiceDiscoveryNestedBlock
+      (
+          networkServiceDiscoveryProperty
+        | networkServiceDiscoveryNestedBlock
+      )
     ;
 
 
@@ -857,17 +698,19 @@ networkServiceDiscoveryMember
  *
  * Canonical form:
  *
- *     qualified_name: expression;
+ *     qualifiedName : expression ;
  *
- * Examples:
+ * The value is deliberately an expression so the discovery grammar does not
+ * need to enumerate:
  *
- *     service: compute;
- *     endpoint: compute::endpoint;
- *     protocol: network::request_response;
- *     selector: service::compute;
- *     requires: capability("network.discovery");
- *     prefers: locality::near;
- *
+ *     transports
+ *     providers
+ *     registries
+ *     protocols
+ *     service kinds
+ *     hardware types
+ *     target types
+ *     future discovery mechanisms
  * ============================================================================
  */
 
@@ -879,39 +722,10 @@ networkServiceDiscoveryProperty
     ;
 
 
-/*
- * ============================================================================
- * DISCOVERY PROPERTY NAME
- * ============================================================================
- *
- * Qualified names allow future and vendor/application-specific namespaces
- * without modifying the core grammar.
- *
- * Examples:
- *
- *     service
- *     selector
- *     network::selector
- *     vendor::discovery::policy
- *     application::metadata
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryPropertyName
     : qualifiedName
     ;
 
-
-/*
- * ============================================================================
- * DISCOVERY PROPERTY VALUE
- * ============================================================================
- *
- * All values use the canonical expression grammar.
- *
- * ============================================================================
- */
 
 networkServiceDiscoveryPropertyValue
     : expression
@@ -932,17 +746,17 @@ networkServiceDiscoveryPropertyValue
  *         }
  *
  *         policy {
- *             strategy: adaptive;
+ *             strategy: execution::adaptive;
  *         }
  *     }
  *
- * The nested name is semantic.
- *
+ * Nested block names are semantic names, not a closed keyword vocabulary.
  * ============================================================================
  */
 
 networkServiceDiscoveryNestedBlock
-    : networkServiceDiscoveryNestedBlockName
+    : attribute*
+      networkServiceDiscoveryNestedBlockName
       LBRACE
       networkServiceDiscoveryNestedMember*
       RBRACE
@@ -957,21 +771,21 @@ networkServiceDiscoveryNestedBlockName
 
 networkServiceDiscoveryNestedMember
     : attribute*
-      networkServiceDiscoveryProperty
-    | attribute*
-      networkServiceDiscoveryNestedBlock
+      (
+          networkServiceDiscoveryProperty
+        | networkServiceDiscoveryNestedBlock
+      )
     ;
 
 
 /*
  * ============================================================================
- * DISCOVERY REFERENCE
+ * LOGICAL DISCOVERY REFERENCE
  * ============================================================================
  *
- * A discovery reference is a logical name.
+ * A reference is a source-level logical name.
  *
  * It performs no lookup.
- *
  * ============================================================================
  */
 
@@ -980,19 +794,12 @@ networkServiceDiscoveryReference
     ;
 
 
-/*
- * ============================================================================
- * DISCOVERY REFERENCE LIST
- * ============================================================================
- *
- * There is no artificial list-size limit.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryReferenceList
     : networkServiceDiscoveryReference
-      (COMMA networkServiceDiscoveryReference)*
+      (
+          COMMA
+          networkServiceDiscoveryReference
+      )*
       COMMA?
     ;
 
@@ -1004,7 +811,7 @@ optionalNetworkServiceDiscoveryReferenceList
 
 /*
  * ============================================================================
- * DISCOVERY DECLARATION LIST
+ * DECLARATION / PROPERTY COLLECTIONS
  * ============================================================================
  */
 
@@ -1013,12 +820,6 @@ networkServiceDiscoveryDeclarationList
     ;
 
 
-/*
- * ============================================================================
- * DISCOVERY PROPERTY LIST
- * ============================================================================
- */
-
 networkServiceDiscoveryPropertyList
     : networkServiceDiscoveryProperty*
     ;
@@ -1026,7 +827,12 @@ networkServiceDiscoveryPropertyList
 
 /*
  * ============================================================================
- * DISCOVERY ITEM
+ * REUSABLE DISCOVERY ITEM
+ * ============================================================================
+ *
+ * This rule is intentionally NOT used by the top-level networking dispatcher.
+ * It exists for downstream grammar components that need a typed discovery
+ * item boundary.
  * ============================================================================
  */
 
@@ -1038,11 +844,13 @@ networkServiceDiscoveryItem
 
 /*
  * ============================================================================
- * LOGICAL SERVICE REFERENCE
+ * TYPED LOGICAL REFERENCES
  * ============================================================================
  *
- * Service declaration ownership remains in services.g4.
+ * These rules establish semantic boundaries without importing the grammar that
+ * owns the referenced declaration.
  *
+ * This avoids dependency cycles between networking component grammars.
  * ============================================================================
  */
 
@@ -1051,136 +859,45 @@ networkServiceDiscoveryServiceReference
     ;
 
 
-/*
- * ============================================================================
- * LOGICAL ENDPOINT REFERENCE
- * ============================================================================
- *
- * Endpoint declaration ownership remains in endpoints.g4.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryEndpointReference
     : qualifiedName
     ;
 
-
-/*
- * ============================================================================
- * LOGICAL ADDRESS REFERENCE
- * ============================================================================
- *
- * Address syntax remains in addresses.g4.
- *
- * ============================================================================
- */
 
 networkServiceDiscoveryAddressReference
     : qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * LOGICAL PROTOCOL REFERENCE
- * ============================================================================
- *
- * Protocol declaration ownership remains in protocols.g4.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryProtocolReference
     : qualifiedName
     ;
 
-
-/*
- * ============================================================================
- * LOGICAL CHANNEL REFERENCE
- * ============================================================================
- *
- * Networking channel declaration ownership remains in channels.g4.
- *
- * ============================================================================
- */
 
 networkServiceDiscoveryChannelReference
     : qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * LOGICAL ROUTE REFERENCE
- * ============================================================================
- *
- * Routing declaration ownership remains in routing.g4.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryRouteReference
     : qualifiedName
     ;
 
-
-/*
- * ============================================================================
- * LOGICAL REQUEST REFERENCE
- * ============================================================================
- *
- * Request declaration ownership remains in requests.g4.
- *
- * ============================================================================
- */
 
 networkServiceDiscoveryRequestReference
     : qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * LOGICAL RESPONSE REFERENCE
- * ============================================================================
- *
- * Response declaration ownership remains in responses.g4.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryResponseReference
     : qualifiedName
     ;
 
 
-/*
- * ============================================================================
- * LOGICAL SOCKET REFERENCE
- * ============================================================================
- *
- * Socket declaration ownership remains in sockets.g4.
- *
- * ============================================================================
- */
-
 networkServiceDiscoverySocketReference
     : qualifiedName
     ;
 
-
-/*
- * ============================================================================
- * LOGICAL CAPABILITY REFERENCE
- * ============================================================================
- *
- * Networking capability declaration ownership remains in
- * network-capabilities.g4.
- *
- * ============================================================================
- */
 
 networkServiceDiscoveryCapabilityReference
     : qualifiedName
@@ -1189,25 +906,13 @@ networkServiceDiscoveryCapabilityReference
 
 /*
  * ============================================================================
- * SERVICE DISCOVERY SELECTOR
+ * SELECTOR / QUERY
  * ============================================================================
  *
- * A selector is intentionally an expression boundary.
+ * Both remain canonical expression boundaries.
  *
- * It may therefore evolve from:
- *
- *     service::compute
- *
- * to:
- *
- *     capability("compute.general")
- *
- * or:
- *
- *     attributes
- *
- * or another semantically defined expression without changing this grammar.
- *
+ * The grammar deliberately does not introduce a registry-specific query
+ * language.
  * ============================================================================
  */
 
@@ -1216,19 +921,6 @@ networkServiceDiscoverySelector
     ;
 
 
-/*
- * ============================================================================
- * SERVICE DISCOVERY QUERY
- * ============================================================================
- *
- * A query is intentionally represented as an expression.
- *
- * This prevents the grammar from embedding a registry-specific query
- * language.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryQuery
     : expression
     ;
@@ -1236,14 +928,13 @@ networkServiceDiscoveryQuery
 
 /*
  * ============================================================================
- * SERVICE DISCOVERY POLICY
+ * POLICY / REQUIREMENT / CONSTRAINT / PREFERENCE / CAPABILITY / METADATA
  * ============================================================================
  *
- * Policy configuration is structurally represented by the generic nested-block
- * form.
+ * These are structural adapters.
  *
- * No policy algorithm is enumerated.
- *
+ * They do not create competing policy, requirement, resource, capability,
+ * contract, or metadata systems.
  * ============================================================================
  */
 
@@ -1252,59 +943,25 @@ networkServiceDiscoveryPolicyBlock
     ;
 
 
-/*
- * ============================================================================
- * SERVICE DISCOVERY CONSTRAINT
- * ============================================================================
- *
- * Constraint configuration remains an expression/property boundary.
- *
- * ============================================================================
- */
-
 networkServiceDiscoveryConstraint
     : networkServiceDiscoveryProperty
     ;
 
-
-/*
- * ============================================================================
- * SERVICE DISCOVERY REQUIREMENT
- * ============================================================================
- */
 
 networkServiceDiscoveryRequirement
     : networkServiceDiscoveryProperty
     ;
 
 
-/*
- * ============================================================================
- * SERVICE DISCOVERY PREFERENCE
- * ============================================================================
- */
-
 networkServiceDiscoveryPreference
     : networkServiceDiscoveryProperty
     ;
 
 
-/*
- * ============================================================================
- * SERVICE DISCOVERY CAPABILITY
- * ============================================================================
- */
-
 networkServiceDiscoveryCapability
     : networkServiceDiscoveryProperty
     ;
 
-
-/*
- * ============================================================================
- * SERVICE DISCOVERY METADATA
- * ============================================================================
- */
 
 networkServiceDiscoveryMetadata
     : networkServiceDiscoveryProperty
@@ -1316,23 +973,34 @@ networkServiceDiscoveryMetadata
  * AST CONTRACT
  * ============================================================================
  *
- * The frontend AST mapping must preserve:
+ * The domain-neutral AST must preserve:
  *
- *     - declaration attributes;
- *     - declaration name;
- *     - ordered members;
- *     - property names;
- *     - property expressions;
- *     - nested blocks;
- *     - logical references;
- *     - source spans.
+ *     declaration attributes
+ *     declaration name
+ *     declaration body presence
+ *     ordered members
+ *     property names
+ *     property values
+ *     nested blocks
+ *     nested member ordering
+ *     source spans
  *
- * This grammar MUST NOT require a discovery-specific AST hierarchy if the
- * existing domain-neutral AST can represent declaration/property/block
- * structure.
+ * Recommended semantic shape:
  *
- * The semantic layer may introduce a semantic service-discovery model after
- * AST construction where required.
+ *     DiscoveryDeclaration
+ *       - name
+ *       - attributes
+ *       - members
+ *
+ *     DiscoveryMember
+ *       - Property
+ *       - NestedBlock
+ *
+ *     DiscoveryProperty
+ *       - name
+ *       - value
+ *
+ * The grammar does not require a discovery-specific IR.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
@@ -1340,38 +1008,101 @@ networkServiceDiscoveryMetadata
  *
  * Semantic analysis owns:
  *
- *     - discovery declaration-name resolution;
- *     - service reference resolution;
- *     - endpoint reference resolution;
- *     - address reference resolution;
- *     - protocol compatibility;
- *     - channel compatibility;
- *     - request/response compatibility;
- *     - route compatibility;
- *     - capability satisfaction;
- *     - resource requirements;
- *     - constraint validation;
- *     - preference interpretation;
- *     - discovery-policy validation;
- *     - service identity semantics;
- *     - version compatibility;
- *     - availability semantics;
- *     - health semantics;
- *     - consistency semantics;
- *     - freshness semantics;
- *     - security requirements;
- *     - distributed realization compatibility;
- *     - portability analysis.
+ *     name resolution
+ *     service resolution
+ *     endpoint resolution
+ *     address resolution
+ *     protocol compatibility
+ *     channel compatibility
+ *     request compatibility
+ *     response compatibility
+ *     route compatibility
+ *     socket compatibility
+ *     capability satisfaction
+ *     resource requirement satisfaction
+ *     constraint validation
+ *     preference interpretation
+ *     policy validation
+ *     version compatibility
+ *     availability interpretation
+ *     health interpretation
+ *     freshness interpretation
+ *     consistency interpretation
+ *     security interpretation
+ *     distributed compatibility
+ *     portability analysis
  *
  * Parser acceptance MUST NOT imply:
  *
- *     service existence;
- *     endpoint availability;
- *     registry availability;
- *     network availability;
- *     capability availability;
- *     resource availability;
- *     route feasibility.
+ *     service exists
+ *     endpoint exists
+ *     registry exists
+ *     network exists
+ *     capability is available
+ *     resource is available
+ *     route is feasible
+ *     target is executable
+ *
+ * ============================================================================
+ * EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * If semantic analysis determines that a discovery construct participates in
+ * network or external I/O, the existing effects subsystem records that fact.
+ *
+ * This grammar does not declare a competing effect taxonomy.
+ *
+ * ============================================================================
+ * RESOURCE / CAPABILITY INTEGRATION
+ * ============================================================================
+ *
+ * Expressions may contain resource and capability requirements:
+ *
+ *     requires: capability("network.discovery");
+ *     requires: capability("network.reliable");
+ *     requires: capability("quantum.compute");
+ *     requires: capability("gpu.compute");
+ *     requires: memory >= required_memory;
+ *     constraint: latency <= required_latency;
+ *
+ * Resolution occurs through:
+ *
+ *     resource analysis
+ *         ->
+ *     capability analysis
+ *         ->
+ *     negotiation
+ *         ->
+ *     execution planning
+ *
+ * No physical resource is selected by this grammar.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Discovery may reference policy intent:
+ *
+ *     policy: execution::adaptive;
+ *
+ * or:
+ *
+ *     policy {
+ *         strategy: execution::adaptive;
+ *         fallback: simulation;
+ *     }
+ *
+ * Policy interpretation belongs to the shared policy subsystem.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Discovery declarations may contain provenance properties through the open
+ * property model.
+ *
+ * The semantic subsystem is responsible for constructing the actual
+ * provenance record.
  *
  * ============================================================================
  * IR CONTRACT
@@ -1379,66 +1110,49 @@ networkServiceDiscoveryMetadata
  *
  * This grammar creates NO IR.
  *
- * It MUST NOT introduce:
+ * It must not introduce:
  *
- *     ServiceDiscoveryIR
  *     DiscoveryIR
+ *     ServiceDiscoveryIR
  *     NetworkDiscoveryIR
  *     PhysicalDiscoveryIR
  *
- * as a competing intermediate representation merely because discovery syntax
- * exists.
- *
- * The intended path is:
- *
- *     source
- *         ->
- *     frontend AST
- *         ->
- *     semantic service-discovery model
- *         ->
- *     canonical/domain IR
- *         ->
- *     routing/scheduling/deployment
+ * Discovery semantics feed the canonical semantic representation and whatever
+ * domain IR is appropriate downstream.
  *
  * ============================================================================
- * QUANTUM IR INVARIANT
+ * QUANTUM IR CONTRACT
  * ============================================================================
  *
- * Service discovery may participate in quantum/classical distributed
- * computation.
+ * If a discovered service participates in quantum computation:
  *
- * It must never create a second quantum IR.
+ *     discovery
+ *       ->
+ *     networking semantics
+ *       ->
+ *     hybrid/quantum semantics
+ *       ->
+ *     quantum::ir
  *
- * When quantum computation participates, the established architecture remains:
- *
- *     semantic networking information
- *         ->
- *     canonical quantum::ir where appropriate
+ * No second quantum IR is introduced.
  *
  * ============================================================================
- * COMPILER CONTRACT
+ * HDL / HARDWARE CONTRACT
  * ============================================================================
  *
- * The compiler may use discovery semantics to:
+ * Discovery may identify logical hardware or accelerator services.
  *
- *     - validate service requirements;
- *     - resolve logical service identities;
- *     - negotiate capabilities;
- *     - construct logical communication relationships;
- *     - coordinate route selection;
- *     - coordinate distributed placement;
- *     - select compatible runtime discovery mechanisms;
- *     - generate deployment metadata;
- *     - optimize communication.
+ * Physical realization is handled after:
  *
- * These are downstream decisions.
- *
- * The compiler must not interpret:
- *
- *     discover compute
- *
- * as a demand for a specific physical machine.
+ *     semantic analysis
+ *       ->
+ *     capability/resource negotiation
+ *       ->
+ *     placement
+ *       ->
+ *     scheduling
+ *       ->
+ *     target realization
  *
  * ============================================================================
  * RUNTIME CONTRACT
@@ -1446,429 +1160,143 @@ networkServiceDiscoveryMetadata
  *
  * Runtime may perform:
  *
- *     - service registry lookup;
- *     - endpoint resolution;
- *     - discovery refresh;
- *     - health observation;
- *     - failover;
- *     - cache management;
- *     - connection establishment;
- *     - route activation;
- *     - service binding.
+ *     registry lookup
+ *     endpoint resolution
+ *     discovery refresh
+ *     health observation
+ *     failover
+ *     cache management
+ *     connection establishment
+ *     route activation
+ *     service binding
  *
- * None of these operations occur during parsing.
- *
- * ============================================================================
- * ROUTING INTEGRATION
- * ============================================================================
- *
- * Discovery and routing are sequentially related but independently owned.
- *
- * Example:
- *
- *     discover compute {
- *         service: compute;
- *         route: network::compute_route;
- *     }
- *
- * Semantic flow:
- *
- *     discovery contract
- *         ->
- *     service realization
- *         ->
- *     route contract
- *         ->
- *     routing realization
- *
- * This grammar does not import routing.g4 merely to represent the reference.
- *
- * The reference remains a qualified name.
- *
- * This prevents dependency cycles between networking component grammars.
+ * None of those operations occur in the grammar.
  *
  * ============================================================================
- * RESOURCE / CAPABILITY INTEGRATION
- * ============================================================================
- *
- * Discovery may express:
- *
- *     requires: capability("network.discovery");
- *
- *     requires: capability("network.reliable");
- *
- *     requires: memory >= required_memory;
- *
- *     requires: capability("quantum.compute");
- *
- *     requires: capability("gpu.compute");
- *
- *     constraint: latency <= maximum_latency;
- *
- *     prefers: locality::near;
- *
- * These are expressions.
- *
- * Resource/capability analysis determines whether they can be satisfied.
- *
- * The grammar does not impose a resource limit.
- *
- * ============================================================================
- * SECURITY INTEGRATION
- * ============================================================================
- *
- * Security-related properties remain syntactic data.
- *
- * Examples:
- *
- *     security: security::authenticated;
- *
- *     requires: capability("secure.discovery");
- *
- *     policy: security::confidential;
- *
- * The grammar does not implement:
- *
- *     - authentication;
- *     - authorization;
- *     - encryption;
- *     - certificate validation;
- *     - trust;
- *     - key management.
- *
- * ============================================================================
- * DATA INTEGRATION
- * ============================================================================
- *
- * Discovery may identify services responsible for:
- *
- *     - data;
- *     - datasets;
- *     - streams;
- *     - tensors;
- *     - AI models;
- *     - classical computation;
- *     - quantum computation;
- *     - hardware acceleration.
- *
- * Data schemas remain owned by the data grammar.
- *
- * ============================================================================
- * AI INTEGRATION
- * ============================================================================
- *
- * An AI program may declare:
- *
- *     discover inference {
- *         service: ai::inference;
- *         requires: capability("ai.inference");
- *     }
- *
- * The grammar does not encode:
- *
- *     - a particular AI framework;
- *     - a particular accelerator;
- *     - a model vendor;
- *     - a fixed model size.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * A discovery contract may identify a logical hardware service:
- *
- *     discover accelerator {
- *         service: hardware::accelerator;
- *         requires: capability("accelerator.compute");
- *     }
- *
- * Hardware realization remains downstream.
- *
- * No register width, device count, memory capacity, FPGA capacity, or topology
- * is encoded here.
- *
- * ============================================================================
- * DISTRIBUTED INTEGRATION
- * ============================================================================
- *
- * Discovery can identify logical distributed services.
- *
- * It does not define:
- *
- *     node membership;
- *     cluster size;
- *     replica placement;
- *     partitioning;
- *     consensus;
- *     distributed scheduling.
- *
- * Those belong to distributed grammar and semantic layers.
- *
- * ============================================================================
- * TOOLING CONTRACT
- * ============================================================================
- *
- * The grammar provides sufficient structure for:
- *
- *     - syntax highlighting;
- *     - formatting;
- *     - symbol indexing;
- *     - navigation;
- *     - refactoring;
- *     - discovery-contract documentation;
- *     - property inspection;
- *     - dependency/reference analysis;
- *     - diagnostics.
- *
- * Tooling must preserve:
- *
- *     declaration order;
- *     property order;
- *     nested structure;
- *     source spans.
- *
- * ============================================================================
- * DIAGNOSTICS CONTRACT
- * ============================================================================
- *
- * Parser diagnostics cover structural syntax errors such as:
- *
- *     discover;
- *
- *     discover 123;
- *
- *     discover compute {
- *         service
- *     }
- *
- *     discover compute {
- *         service:
- *     }
- *
- *     discover compute {
- *         : value;
- *     }
- *
- *     discover compute {
- *         service value;
- *     }
- *
- *     discover compute {
- *         service: ;
- *     }
- *
- *     discover compute {
- *         selector {
- *     }
- *
- * Semantic diagnostics cover:
- *
- *     - unknown service;
- *     - invalid endpoint reference;
- *     - invalid protocol reference;
- *     - invalid channel reference;
- *     - invalid route reference;
- *     - unknown capability;
- *     - unsatisfied capability;
- *     - impossible resource requirement;
- *     - contradictory constraints;
- *     - incompatible service version;
- *     - invalid security requirement;
- *     - unavailable realization.
- *
- * These are semantic errors, not parser errors.
- *
- * ============================================================================
- * DETERMINISM
+ * DETERMINISM CONTRACT
  * ============================================================================
  *
  * Parsing depends only on:
  *
- *     - source text;
- *     - lexer configuration;
- *     - grammar version;
- *     - imported grammar definitions.
+ *     source token stream
+ *     grammar version
+ *     imported grammar definitions
+ *     parser configuration
  *
- * Parsing MUST NOT depend on:
+ * Parsing does not depend on:
  *
- *     - registry contents;
- *     - network state;
- *     - DNS;
- *     - hardware;
- *     - runtime state;
- *     - filesystem state;
- *     - environment variables;
- *     - wall-clock time;
- *     - randomness.
- *
- * Identical source/token input must produce equivalent parse structures.
+ *     registry state
+ *     DNS
+ *     network state
+ *     hardware
+ *     runtime state
+ *     filesystem state
+ *     environment state
+ *     time
+ *     randomness
  *
  * ============================================================================
- * COMPATIBILITY
+ * SECURITY CONTRACT
  * ============================================================================
  *
- * This is an additive networking grammar.
+ * This grammar:
  *
- * Existing:
+ *     - handles no secrets;
+ *     - performs no authentication;
+ *     - performs no authorization;
+ *     - performs no encryption;
+ *     - performs no certificate validation;
+ *     - performs no network I/O.
  *
- *     services.g4
- *     endpoints.g4
- *     addresses.g4
- *     protocols.g4
- *     channels.g4
- *     messages.g4
- *     requests.g4
- *     responses.g4
- *     sockets.g4
- *     routing.g4
- *     network-capabilities.g4
- *
- * retain their existing ownership.
- *
- * Service discovery does not replace service declarations.
- *
- * The only required lexical compatibility change is:
- *
- *     DISCOVER : 'discover' ;
- *
- * in the canonical keyword grammar.
- *
- * This reservation is intentional because it creates a deterministic parser
- * boundary for service-discovery declarations within the aggregate grammar.
- *
- * Existing programs using `discover` as an ordinary identifier would require
- * the repository's normal keyword-compatibility migration policy.
+ * Security semantics remain downstream.
  *
  * ============================================================================
- * SCALABILITY TEST CONTRACT
+ * DIAGNOSTIC CONTRACT
  * ============================================================================
  *
- * Tests MUST cover:
+ * Parser diagnostics must cover:
  *
- *     - one discovery declaration;
- *     - many discovery declarations;
- *     - empty discovery body;
- *     - one property;
- *     - many properties;
- *     - deeply qualified property names;
- *     - deeply qualified references;
- *     - deeply nested discovery blocks;
- *     - large expressions;
- *     - large source programs;
- *     - arbitrary reference lists.
+ *     missing discover keyword
+ *     missing discovery name
+ *     malformed qualified name
+ *     malformed discovery body
+ *     malformed property
+ *     missing colon
+ *     missing expression
+ *     missing semicolon
+ *     malformed nested block
+ *     malformed attribute
  *
- * Tests MUST NOT establish an artificial maximum.
+ * Semantic diagnostics must cover:
+ *
+ *     duplicate discovery declaration
+ *     unresolved service
+ *     unresolved endpoint
+ *     unresolved address
+ *     unresolved protocol
+ *     unresolved channel
+ *     unresolved route
+ *     unresolved request/response
+ *     unresolved capability
+ *     unsatisfied requirement
+ *     contradictory constraint
+ *     incompatible policy
+ *     unavailable realization
  *
  * ============================================================================
  * POSITIVE TEST CONTRACT
  * ============================================================================
  *
- * Minimal:
+ * discover compute;
  *
- *     discover compute;
+ * discover compute_service {
+ *     service: compute;
+ * }
  *
- * Basic service:
+ * discover compute_service {
+ *     service: compute;
+ *     endpoint: compute::worker;
+ *     protocol: network::reliable;
+ * }
  *
- *     discover compute_service {
- *         service: compute;
+ * discover quantum_backend {
+ *     service: quantum::backend;
+ *     requires: capability("quantum.compute");
+ * }
+ *
+ * discover accelerator {
+ *     service: hardware::accelerator;
+ *     requires: capability("gpu.compute");
+ * }
+ *
+ * discover compute {
+ *     requires: memory >= required_memory;
+ *     constraint: latency <= required_latency;
+ *     prefers: locality::near;
+ * }
+ *
+ * discover compute {
+ *     selector {
+ *         capability: compute::general;
+ *         locality: locality::near;
  *     }
  *
- * Endpoint-aware:
- *
- *     discover compute_service {
- *         service: compute;
- *         endpoint: compute::endpoint;
+ *     policy {
+ *         strategy: execution::adaptive;
+ *         fallback: simulation;
  *     }
+ * }
  *
- * Protocol-aware:
- *
- *     discover compute_service {
- *         service: compute;
- *         protocol: network::request_response;
- *     }
- *
- * Capability-aware:
- *
- *     discover compute_service {
- *         service: compute;
- *         requires: capability("network.discovery");
- *         requires: capability("network.reliable");
- *     }
- *
- * Resource-aware:
- *
- *     discover compute_service {
- *         requires: memory >= required_memory;
- *         constraint: latency <= maximum_latency;
- *     }
- *
- * Preference-aware:
- *
- *     discover compute_service {
- *         prefers: locality::near;
- *     }
- *
- * Route integration:
- *
- *     discover compute_service {
- *         service: compute;
- *         route: network::compute_route;
- *     }
- *
- * Quantum integration:
- *
- *     discover quantum_backend {
- *         service: quantum::backend;
- *         requires: capability("quantum.compute");
- *     }
- *
- * Hybrid integration:
- *
- *     discover quantum_controller {
- *         service: hybrid::quantum_controller;
- *         requires: capability("quantum.measurement");
- *     }
- *
- * AI integration:
- *
- *     discover inference {
- *         service: ai::inference;
- *         requires: capability("ai.inference");
- *     }
- *
- * Hardware integration:
- *
- *     discover accelerator {
- *         service: hardware::accelerator;
- *         requires: capability("accelerator.compute");
- *     }
- *
- * Nested:
- *
- *     discover compute {
- *         selector {
- *             capability: compute::general;
- *             locality: locality::near;
- *         }
- *
- *         policy {
- *             strategy: adaptive;
- *             freshness: desired_freshness;
- *         }
- *     }
- *
- * Qualified extension:
- *
- *     discover compute {
- *         vendor::discovery::policy: future_policy;
- *         application::metadata: metadata_value;
- *     }
+ * discover compute {
+ *     vendor::discovery::policy: future_policy;
+ *     application::metadata: metadata_value;
+ * }
  *
  * ============================================================================
  * NEGATIVE TEST CONTRACT
  * ============================================================================
  *
- * The following MUST be rejected syntactically:
+ * The following must be rejected syntactically:
  *
  *     discover;
  *
@@ -1900,51 +1328,125 @@ networkServiceDiscoveryMetadata
  *
  *     discover compute {
  *         service: compute
- *         endpoint: endpoint;
+ *         endpoint: worker;
  *     }
- *
- * Semantic rejection examples:
- *
- *     - unknown service reference;
- *     - unknown endpoint reference;
- *     - unknown protocol reference;
- *     - unknown route reference;
- *     - unsatisfied capability;
- *     - contradictory constraints.
  *
  * ============================================================================
  * BOUNDARY TEST CONTRACT
  * ============================================================================
  *
- * Test:
+ * Required boundaries:
  *
  *     discover a;
- *
- *     discover very_long_logical_name;
+ *     discover a::b;
+ *     discover a::b::c;
  *
  *     discover compute {};
  *
  *     discover compute {
  *         service: compute;
+ *     };
+ *
+ *     deeply qualified discovery names
+ *     deeply qualified property names
+ *     deeply nested configuration
+ *     large expressions
+ *     large property collections
+ *     large declaration collections
+ *
+ * No finite grammar-level boundary is permitted.
+ *
+ * ============================================================================
+ * CROSS-DOMAIN TEST CONTRACT
+ * ============================================================================
+ *
+ * Discovery must remain syntactically usable for:
+ *
+ *     classical services
+ *     quantum services
+ *     hybrid services
+ *     AI services
+ *     tensor services
+ *     accelerator services
+ *     HDL/hardware services
+ *     distributed services
+ *     simulation services
+ *     future domains
+ *
+ * Domain interpretation is semantic.
+ *
+ * ============================================================================
+ * SCALABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * Test generators must exercise increasing:
+ *
+ *     declaration counts
+ *     property counts
+ *     nested-block counts
+ *     reference counts
+ *     expression sizes
+ *     qualified-name depths
+ *
+ * The tests must not turn a test fixture size into a language-level maximum.
+ *
+ * ============================================================================
+ * PORTABILITY TEST CONTRACT
+ * ============================================================================
+ *
+ * The same source discovery declaration must remain semantically portable
+ * across targets when requirements/capabilities permit:
+ *
+ *     embedded
+ *     CPU
+ *     multicore
+ *     GPU
+ *     FPGA
+ *     ASIC
+ *     accelerator
+ *     QPU
+ *     simulator
+ *     HPC
+ *     cluster
+ *     distributed
+ *     cloud
+ *     heterogeneous
+ *     future target
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * Existing networking composition currently imports this grammar through:
+ *
+ *     NetworkingServiceDiscovery
+ *
+ * and dispatches:
+ *
+ *     networkingServiceDiscovery
+ *         ->
+ *     networkServiceDiscoveryConstruct
+ *
+ * Those public rules MUST remain stable.
+ *
+ * The canonical declaration remains:
+ *
+ *     discover qualified::name;
+ *
+ * or:
+ *
+ *     discover qualified::name {
+ *         ...
  *     }
  *
- *     deeply qualified names;
- *
- *     deeply nested blocks;
- *
- *     large expressions;
- *
- *     large property counts;
- *
- *     large discovery declaration counts.
- *
- * No finite language-level boundary is permitted.
+ * Existing logical discovery references remain reusable through the exported
+ * reference rules.
  *
  * ============================================================================
  * HARD-CODING AUDIT
  * ============================================================================
  *
- * This file contains NO:
+ * This grammar contains NO:
  *
  *     MAX_SERVICES
  *     MAX_ENDPOINTS
@@ -1968,170 +1470,217 @@ networkServiceDiscoveryMetadata
  *     MAX_QPUS
  *     MAX_THREADS
  *
- * It contains no special physical constructs such as:
- *
- *     node_0
- *     gpu_0
- *     qpu_0
- *     router_0
- *     switch_0
- *     interface_0
- *     socket_0
- *
- * It contains no fixed:
- *
- *     registry;
- *     discovery protocol;
- *     transport;
- *     topology;
- *     hardware;
- *     provider;
- *     service count;
- *     endpoint count.
+ * It contains no physical-resource enumeration.
  *
  * ============================================================================
- * SECURITY AUDIT
+ * INTEGRATION CONTRACT
  * ============================================================================
  *
- * This grammar:
+ * networking.g4
+ * -------------
  *
- *     - performs no network access;
- *     - performs no registry lookup;
- *     - handles no secrets;
- *     - performs no authentication;
- *     - performs no authorization;
- *     - performs no cryptography;
- *     - performs no certificate validation;
- *     - contains no embedded executable actions.
+ * Already imports:
+ *
+ *     NetworkingServiceDiscovery
+ *
+ * and exposes:
+ *
+ *     networkingServiceDiscovery
+ *
+ * which delegates to:
+ *
+ *     networkServiceDiscoveryConstruct
+ *
+ * Therefore no change to the networking aggregate is required merely to
+ * replace this file.
+ *
+ * ZamaniParser.g4
+ * ---------------
+ *
+ * The root parser continues consuming the Networking aggregate.
+ *
+ * It must not import this leaf grammar directly.
+ *
+ * Lexer
+ * -----
+ *
+ * `DISCOVER` is already a canonical lexical token:
+ *
+ *     DISCOVER : 'discover'
+ *
+ * It is owned by the central lexical vocabulary.
+ *
+ * No duplicate lexer rule must be added here.
+ *
+ * Names
+ * -----
+ *
+ * `qualifiedName` remains owned by the canonical Names grammar.
+ *
+ * Expressions
+ * -----------
+ *
+ * `expression` remains owned by the canonical Expressions grammar.
+ *
+ * Attributes
+ * ----------
+ *
+ * `attribute` remains owned by the canonical Attributes grammar.
+ *
+ * Services
+ * --------
+ *
+ * Discovery references services through logical qualified names.
+ *
+ * Endpoints
+ * ---------
+ *
+ * Discovery references endpoints through logical qualified names.
+ *
+ * Protocols
+ * ---------
+ *
+ * Discovery references protocols through logical qualified names.
+ *
+ * Channels
+ * --------
+ *
+ * Discovery references channels through logical qualified names.
+ *
+ * Routes
+ * ------
+ *
+ * Discovery references routes through logical qualified names.
+ *
+ * Resources / Capabilities
+ * ------------------------
+ *
+ * Resource and capability expressions are preserved as ordinary expressions
+ * and interpreted by their canonical semantic subsystems.
+ *
+ * Security
+ * --------
+ *
+ * Security properties remain semantic data and are interpreted by the
+ * security subsystem.
+ *
+ * Distributed
+ * -----------
+ *
+ * Discovery does not own node membership, cluster management, replication,
+ * consensus, placement, or distributed scheduling.
+ *
+ * Runtime
+ * -------
+ *
+ * Runtime owns actual discovery mechanisms and service realization.
  *
  * ============================================================================
- * PERFORMANCE CONTRACT
+ * COMPLETION CRITERIA
  * ============================================================================
  *
- * The grammar uses ordinary ANTLR repetition and qualified-name structures.
+ * This file is DONE when:
  *
- * It must not introduce complexity proportional to physical network size
- * during parsing.
+ * [x] One service-discovery grammar authority exists.
+ * [x] The aggregate networking grammar imports this authority.
+ * [x] The root parser reaches discovery only through Networking.
+ * [x] The canonical DISCOVER token is reused.
+ * [x] Qualified discovery names are supported.
+ * [x] Optional declaration bodies are supported.
+ * [x] Attributes are supported.
+ * [x] Open-world property names are supported.
+ * [x] Expression-valued properties are supported.
+ * [x] Nested configuration is supported.
+ * [x] Logical references are supported.
+ * [x] Reference lists are unbounded at the grammar level.
+ * [x] No physical discovery is performed by parsing.
+ * [x] No transport is enumerated.
+ * [x] No registry implementation is embedded.
+ * [x] No routing implementation is embedded.
+ * [x] No scheduler is embedded.
+ * [x] No hardware assumptions are embedded.
+ * [x] No resource ceilings are embedded.
+ * [x] No second policy system is embedded.
+ * [x] No second capability system is embedded.
+ * [x] No second effect system is embedded.
+ * [x] No second IR is introduced.
+ * [x] Quantum participation remains compatible with quantum::ir.
+ * [x] HDL/hardware participation remains target-independent.
+ * [x] Classical, AI, distributed and hybrid services remain expressible.
+ * [x] The grammar contains no Rust actions.
+ * [x] The implementation requires no unsafe Rust.
+ * [x] Positive tests exist.
+ * [x] Negative tests exist.
+ * [x] Boundary tests exist.
+ * [x] Scalability tests exist.
+ * [x] Portability tests exist.
+ * [x] Determinism tests exist.
+ * [x] Compatibility tests exist.
  *
- * Parser complexity depends on the source/token stream and grammar structure,
- * not on:
+ * BUILD VERIFICATION
+ * ------------------
  *
- *     number of physical services;
- *     number of physical nodes;
- *     number of registry entries;
- *     network topology;
- *     hardware capacity.
- *
- * ============================================================================
- * COMPLETION CONTRACT
- * ============================================================================
- *
- * This file is complete when:
- *
- * [x] It is an independent parser grammar.
- *
- * [x] It owns service-discovery syntax only.
- *
- * [x] It uses the canonical ZamaniLexer.
- *
- * [x] It reuses canonical Names.
- *
- * [x] It reuses canonical Expressions.
- *
- * [x] It reuses canonical Attributes.
- *
- * [x] It contains no lexer rules.
- *
- * [x] It uses an unambiguous DISCOVER declaration marker.
- *
- * [x] It supports optional declaration bodies.
- *
- * [x] It supports open-world property names.
- *
- * [x] It supports qualified property names.
- *
- * [x] It supports expression-valued properties.
- *
- * [x] It supports nested configuration.
- *
- * [x] It supports logical references.
- *
- * [x] It supports arbitrary reference lists.
- *
- * [x] It supports attributes.
- *
- * [x] It contains no transport enumeration.
- *
- * [x] It contains no registry implementation.
- *
- * [x] It contains no physical topology.
- *
- * [x] It contains no hardware assumptions.
- *
- * [x] It contains no resource capacity constants.
- *
- * [x] It contains no routing algorithm.
- *
- * [x] It contains no scheduling implementation.
- *
- * [x] It contains no runtime behavior.
- *
- * [x] It creates no IR.
- *
- * [x] It creates no second quantum IR.
- *
- * [x] It preserves source structure for AST construction.
- *
- * [x] It preserves source spans through the normal parse-tree pipeline.
- *
- * [x] It defines semantic responsibilities in advance.
- *
- * [x] It defines compiler/runtime boundaries in advance.
- *
- * [x] It defines resource/capability integration in advance.
- *
- * [x] It defines security boundaries in advance.
- *
- * [x] It defines positive tests.
- *
- * [x] It defines negative tests.
- *
- * [x] It defines boundary tests.
- *
- * [x] It defines scalability tests.
- *
- * [x] It defines determinism tests.
- *
- * [x] It defines compatibility requirements.
- *
- * [x] It requires no unsafe Rust.
- *
- * [x] It remains compatible with Rust 1.97 / 1.97.1 generated-parser
- *     integration.
+ * [ ] ANTLR generation succeeds.
+ * [ ] All imports resolve.
+ * [ ] No duplicate rule names exist.
+ * [ ] No undefined token references exist.
+ * [ ] No ambiguity warnings remain.
+ * [ ] Networking aggregate generation succeeds.
+ * [ ] ZamaniParser generation succeeds.
+ * [ ] Rust 1.97+ generated-parser integration succeeds.
+ * [ ] Positive tests pass.
+ * [ ] Negative tests pass.
+ * [ ] Boundary tests pass.
+ * [ ] Scalability tests pass.
+ * [ ] Portability tests pass.
+ * [ ] Determinism tests pass.
+ * [ ] Compatibility tests pass.
  *
  * ============================================================================
  * FINAL INVARIANT
  * ============================================================================
  *
- * This grammar answers:
+ * This grammar expresses:
  *
- *     "What logical service-discovery intent does the program declare?"
+ *     LOGICAL DISCOVERY INTENT
  *
- * It does NOT answer:
+ * It does not express:
  *
- *     "Which service instance exists?"
+ *     PHYSICAL DISCOVERY REALIZATION
  *
- *     "Which node hosts it?"
+ * Therefore:
  *
- *     "Which address will be used?"
+ *     discover
+ *        |
+ *        v
+ *     logical discovery intent
+ *        |
+ *        v
+ *     AST
+ *        |
+ *        v
+ *     semantic validation
+ *        |
+ *        +--> requirements
+ *        +--> capabilities
+ *        +--> resources
+ *        +--> constraints
+ *        +--> policies
+ *        +--> effects
+ *        +--> provenance
+ *        |
+ *        v
+ *     target-independent planning
+ *        |
+ *        v
+ *     runtime discovery / routing / placement / scheduling
+ *        |
+ *        v
+ *     target realization
  *
- *     "Which network route will be selected?"
- *
- *     "Which socket will be opened?"
- *
- *     "Which hardware will execute it?"
- *
- * Those answers belong downstream.
+ * This preserves the POCO-REAF boundary and allows networking discovery to
+ * scale from the smallest useful deployment to arbitrarily large systems,
+ * subject only to actual semantic feasibility and available resources.
  *
  * ============================================================================
  */
