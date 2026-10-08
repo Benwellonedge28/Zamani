@@ -1,60 +1,51 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * Zamani Programming Language
  * ============================================================================
  *
- * File:
- *     grammar/networking/streaming.g4
+ * FILE
+ * ----
+ * grammar/networking/streaming.g4
  *
- * Grammar:
- *     NetworkingStreaming
+ * GRAMMAR
+ * -------
+ * NetworkingStreaming
  *
- * Status:
- *     Production-target canonical networking streaming grammar.
- *
- * Language:
- *     Zamani
- *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * Rust integration baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only
+ * STATUS
+ * ------
+ * CANONICAL / PRODUCTION
  *
  * ============================================================================
+ * FEATURE CONTRACT
+ * ============================================================================
+ *
  * PURPOSE
- * ============================================================================
+ * -------
  *
- * This grammar defines SOURCE-LEVEL LOGICAL STREAM CONTRACTS.
+ * This grammar owns the SOURCE-LEVEL LOGICAL STREAM CONTRACT.
  *
- * A stream represents an ordered or semantically related potentially
- * incremental sequence of values/events/data units communicated between
- * logical computational participants.
+ * A stream describes an unbounded, potentially incremental sequence/data-flow
+ * abstraction. It describes intent and relationships, not a physical
+ * transport or runtime object.
  *
- * A stream is a SOURCE-LEVEL COMMUNICATION ABSTRACTION.
+ * A stream may ultimately be realized through:
  *
- * It is not:
+ *     in-process data flow
+ *     shared memory
+ *     IPC
+ *     networking
+ *     distributed communication
+ *     accelerator fabrics
+ *     storage-backed pipelines
+ *     quantum/classical interfaces
+ *     hardware interfaces
+ *     future communication substrates
  *
- *     - a socket;
- *     - a TCP connection;
- *     - a UDP flow;
- *     - an HTTP connection;
- *     - a QUIC stream;
- *     - a file descriptor;
- *     - a physical network link;
- *     - a hardware DMA queue;
- *     - a GPU stream;
- *     - a CUDA stream;
- *     - a QPU transport;
- *     - an operating-system resource.
+ * The grammar deliberately remains independent of the eventual realization.
  *
- * Physical realization is determined downstream.
  *
- * ============================================================================
  * ARCHITECTURAL POSITION
- * ============================================================================
+ * ----------------------
  *
  *     Zamani source
  *          |
@@ -62,166 +53,183 @@
  *     canonical lexer
  *          |
  *          v
- *     canonical parser
- *          |
- *          v
  *     NetworkingStreaming
  *          |
  *          v
- *     domain-neutral frontend AST
- *          |
- *          v
- *     semantic analysis
+ *     domain-neutral AST
  *          |
  *          +--> name resolution
- *          +--> type analysis
- *          +--> effect analysis
+ *          +--> type checking
+ *          +--> effect checking
  *          +--> capability analysis
  *          +--> resource analysis
- *          +--> security analysis
- *          +--> networking analysis
- *          +--> distributed analysis
- *          +--> data-flow analysis
+ *          +--> contract validation
+ *          +--> policy validation
+ *          +--> provenance
  *          |
  *          v
- *     canonical semantic representation
+ *     networking semantic model
  *          |
- *          +--> networking semantics
- *          +--> data semantics
  *          +--> classical semantics
  *          +--> distributed semantics
+ *          +--> data semantics
  *          +--> hybrid semantics
  *          +--> hardware intent
  *          +--> quantum/classical communication metadata
  *          |
  *          v
+ *     canonical IR / semantic representation
+ *          |
+ *          +--> classical representation
+ *          +--> quantum::ir when quantum computation is involved
+ *          +--> HDL/hardware representation where appropriate
+ *          |
+ *          v
  *     optimization
+ *          |
+ *          v
+ *     lowering
  *          |
  *          v
  *     routing / placement / scheduling
  *          |
  *          v
- *     deployment
+ *     resilience / recovery
  *          |
  *          v
- *     runtime / HAL / target realization
+ *     ZQN / HAL / target realization
  *
- * THIS GRAMMAR NEVER:
  *
- *     - opens a stream;
- *     - closes a stream;
- *     - sends data;
- *     - receives data;
- *     - selects a transport;
- *     - selects a network interface;
- *     - selects a machine;
- *     - selects a CPU/GPU/FPGA/QPU;
- *     - selects a route;
- *     - allocates bandwidth;
- *     - allocates buffers;
- *     - performs flow control;
- *     - performs backpressure;
- *     - performs scheduling;
- *     - performs routing;
- *     - performs serialization;
- *     - performs authentication;
- *     - performs authorization;
- *     - constructs IR;
- *     - accesses hardware.
+ * OWNS
+ * ----
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - logical stream declarations;
- *     - stream declaration identity;
- *     - stream type intent;
+ *     - logical stream declaration;
+ *     - stream identity;
+ *     - stream type annotation;
  *     - stream properties;
  *     - stream nested configuration;
  *     - stream references;
- *     - source/sink relationships expressed as stream properties;
- *     - stream protocol relationships expressed as properties;
- *     - stream channel relationships expressed as properties;
- *     - stream request/response relationships expressed as properties;
- *     - stream requirements;
- *     - stream constraints;
- *     - stream capabilities;
- *     - stream preferences;
- *     - stream policies;
- *     - stream metadata;
- *     - stream-level semantic configuration syntax.
+ *     - source/destination relationships as stream metadata;
+ *     - channel/protocol/message/request/response relationships as references;
+ *     - stream-level declarative requirements;
+ *     - stream-level declarative constraints;
+ *     - stream-level preferences/capability metadata expressed as properties;
+ *     - stream attributes.
  *
- * THIS FILE DOES NOT OWN:
  *
- *     - endpoints;
+ * DOES NOT OWN
+ * ------------
+ *
+ *     - sockets;
  *     - addresses;
- *     - messages;
- *     - protocols;
+ *     - endpoints;
  *     - channels;
+ *     - messages;
  *     - requests;
  *     - responses;
  *     - services;
- *     - sockets;
- *     - transport implementations;
+ *     - protocols;
+ *     - service discovery;
  *     - routing;
  *     - scheduling;
- *     - distributed placement;
- *     - hardware topology;
- *     - network topology;
+ *     - placement;
+ *     - transport implementation;
  *     - serialization;
- *     - compression implementation;
- *     - cryptographic implementation;
- *     - authentication;
- *     - authorization;
+ *     - compression;
+ *     - encryption implementation;
+ *     - authentication implementation;
+ *     - authorization implementation;
  *     - runtime stream objects;
  *     - concurrency channels;
- *     - distributed channels;
- *     - quantum::ir;
+ *     - distributed actors;
+ *     - hardware resources;
+ *     - physical network topology;
+ *     - quantum operations;
+ *     - quantum state;
  *     - QEC;
  *     - ZQN;
- *     - HAL.
+ *     - HAL;
+ *     - a second IR.
  *
- * ============================================================================
- * RELATIONSHIP TO EXISTING NETWORKING FILES
- * ============================================================================
  *
- * This grammar complements:
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/names.g4
+ *     grammar/types/types.g4
+ *     grammar/expressions/expressions.g4
+ *     grammar/core/attributes.g4
+ *
+ *
+ * EXPORTS
+ * -------
+ *
+ *     networkStreamingConstruct
+ *     networkStreamDeclaration
+ *     networkStreamTypeAnnotation
+ *     networkStreamBody
+ *     networkStreamMember
+ *     networkStreamProperty
+ *     networkStreamPropertyName
+ *     networkStreamPropertyValue
+ *     networkStreamNestedBlock
+ *     networkStreamNestedBlockName
+ *     networkStreamNestedMember
+ *     networkStreamReference
+ *     networkStreamSourceReference
+ *     networkStreamDestinationReference
+ *     networkStreamChannelReference
+ *     networkStreamProtocolReference
+ *     networkStreamMessageReference
+ *     networkStreamRequestReference
+ *     networkStreamResponseReference
+ *     networkStreamTypeReference
+ *     optionalNetworkStreamBody
+ *     optionalNetworkStreamTypeAnnotation
+ *
+ *
+ * CONSUMED_BY
+ * -----------
+ *
+ *     grammar/networking/networking.g4
+ *
+ * The aggregate consumes:
+ *
+ *     networkStreamingConstruct
+ *
+ * The aggregate adapter remains:
+ *
+ *     networkingStream
+ *         : networkStreamingConstruct
+ *         ;
+ *
+ * No change to that boundary is required by this rewrite.
+ *
+ *
+ * RELATED NETWORKING OWNERS
+ * -------------------------
+ *
+ *     addresses.g4
+ *         address syntax
  *
  *     endpoints.g4
- *     addresses.g4
- *     messages.g4
- *     protocols.g4
- *     channels.g4
- *     requests.g4
- *     responses.g4
- *     services.g4
- *     sockets.g4
- *     network-capabilities.g4
- *
- * Ownership is intentionally separated:
- *
- *     endpoints.g4
- *         logical communication participants
- *
- *     addresses.g4
- *         logical/address syntax
- *
- *     messages.g4
- *         message schemas and message values
- *
- *     protocols.g4
- *         protocol contracts
+ *         logical communication endpoints
  *
  *     channels.g4
  *         logical networking channels
  *
+ *     messages.g4
+ *         message declarations and fields
+ *
+ *     protocols.g4
+ *         protocol contracts
+ *
  *     requests.g4
- *         reusable request contracts
+ *         request contracts
  *
  *     responses.g4
- *         reusable response contracts
+ *         response contracts
  *
  *     services.g4
  *         service contracts
@@ -229,230 +237,330 @@
  *     sockets.g4
  *         logical socket contracts
  *
- *     streaming.g4
- *         logical stream contracts
+ *     service-discovery.g4
+ *         discovery semantics
+ *
+ *     routing.g4
+ *         routing intent
  *
  *     network-capabilities.g4
  *         networking capability declarations
  *
- * Streaming may reference all of those concepts through ordinary names and
- * expressions, but does not duplicate their syntax.
+ * Streaming references these concepts by canonical names rather than
+ * reproducing their grammar.
  *
- * ============================================================================
- * STREAM VS CHANNEL
- * ============================================================================
  *
- * A networking channel and a stream are related but distinct concepts.
+ * AST CONTRACT
+ * ------------
  *
- * A CHANNEL describes a logical communication relationship.
+ * This grammar produces parser contexts only.
  *
- * A STREAM describes a logical sequence/data-flow contract that may be
- * realized through a channel, service, socket, shared memory, IPC,
- * distributed fabric, accelerator fabric, or another future substrate.
+ * The domain-neutral frontend AST owns the actual representation.
  *
- * Therefore:
+ * The AST representation for a stream must preserve:
  *
- *     stream
- *         may use
- *             channel
+ *     - declaration source span;
+ *     - stream name;
+ *     - optional type;
+ *     - attributes;
+ *     - ordered property declarations;
+ *     - nested configuration structure;
+ *     - property expressions;
+ *     - qualified references;
+ *     - source ordering.
  *
- * but:
+ * Property names remain symbolic until semantic analysis.
  *
- *     stream != channel
  *
- * This file MUST NOT redefine networking-channel syntax.
+ * SEMANTIC CONTRACT
+ * -----------------
  *
- * ============================================================================
- * STREAM VS CONCURRENCY CHANNEL
- * ============================================================================
+ * Semantic analysis determines:
  *
- * Zamani also contains:
+ *     - whether the stream name is valid;
+ *     - whether referenced symbols exist;
+ *     - whether a referenced object has the expected kind;
+ *     - whether the stream type is valid;
+ *     - whether properties are legal for the selected stream semantics;
+ *     - whether requirements can be satisfied;
+ *     - whether constraints are satisfiable;
+ *     - whether capabilities exist;
+ *     - whether policies permit the requested behavior;
+ *     - whether effects are compatible;
+ *     - whether provenance requirements are satisfied.
  *
- *     grammar/concurrency/channels.g4
+ * The parser deliberately does not perform these checks.
  *
- * That grammar owns language-level concurrency channels.
  *
- * This file owns networking stream semantics.
+ * TYPE CONTRACT
+ * -------------
  *
- * A networking stream MAY eventually be implemented using a concurrency
- * primitive, but that realization is downstream.
+ * Stream payload types use the canonical:
  *
- * ============================================================================
- * STREAM VS DISTRIBUTED COMMUNICATION
- * ============================================================================
+ *     typeExpression
  *
- * A stream can participate in distributed execution.
- *
- * This grammar does not own:
- *
- *     - node membership;
- *     - process placement;
- *     - replication;
- *     - distributed scheduling;
- *     - distributed recovery;
- *     - cluster membership.
- *
- * Those remain downstream/distributed responsibilities.
- *
- * ============================================================================
- * STREAM VS DATA
- * ============================================================================
- *
- * Streaming may carry:
- *
- *     - scalar values;
- *     - records;
- *     - messages;
- *     - tensors;
- *     - datasets;
- *     - events;
- *     - quantum/classical metadata;
- *     - hardware data;
- *     - future data structures.
- *
- * This grammar does not define their schemas.
- *
- * Data/message types are referenced through the canonical type/name system.
- *
- * ============================================================================
- * STREAM VS QUANTUM
- * ============================================================================
- *
- * Streaming may participate in quantum/classical systems.
- *
- * Examples include:
- *
- *     measurement-result streams;
- *     control streams;
- *     telemetry streams;
- *     hybrid computation streams;
- *     distributed quantum-classical communication.
+ * rule from `Types`.
  *
  * This grammar MUST NOT define:
  *
- *     Qubit;
- *     QuantumState;
- *     Gate;
- *     Circuit;
+ *     Stream<T>
+ *     Tensor<T>
+ *     Message<T>
+ *     Dataset<T>
+ *
+ * as independent universal type constructors.
+ *
+ * They remain ordinary canonical types resolved by the type system.
+ *
+ *
+ * EFFECT CONTRACT
+ * --------------
+ *
+ * A stream declaration has no parser-defined effect by itself.
+ *
+ * Semantic analysis may derive effects such as:
+ *
+ *     network
+ *     io
+ *     distributed
+ *     communication
+ *     mutation
+ *     randomness
+ *     foreign
+ *     measurement
+ *
+ * according to the stream's resolved meaning and downstream realization.
+ *
+ * This grammar does not define a second effect system.
+ *
+ *
+ * CAPABILITY CONTRACT
+ * ------------------
+ *
+ * Capability requirements are represented structurally through canonical
+ * expressions/properties and interpreted by semantic analysis.
+ *
+ * Examples include:
+ *
+ *     requires: capability("network.streaming");
+ *
+ *     capability: capability("network.backpressure");
+ *
+ *     requires: capability("network.reliable_delivery");
+ *
+ * The grammar does not inspect whether a target actually provides a
+ * capability.
+ *
+ *
+ * RESOURCE CONTRACT
+ * -----------------
+ *
+ * Stream requirements may express symbolic resource relationships, for
+ * example:
+ *
+ *     requires: memory >= required_memory;
+ *
+ *     requires: throughput >= required_throughput;
+ *
+ *     constraint: latency <= required_latency;
+ *
+ * No physical capacity is encoded by this grammar.
+ *
+ *
+ * CONTRACT CONTRACT
+ * -----------------
+ *
+ * Stream properties may participate in canonical contract analysis.
+ *
+ * This grammar does not create a competing contract language.
+ *
+ * `requires`, `ensures`, `invariant`, `assume`, `guarantee`, and `property`
+ * semantics remain owned by the repository's validation/contract subsystem.
+ *
+ * If such concepts occur as stream property names, semantic analysis decides
+ * whether the property is a valid contract attachment.
+ *
+ *
+ * POLICY CONTRACT
+ * ---------------
+ *
+ * Stream properties may reference policy concepts, for example:
+ *
+ *     policy: network::reliable;
+ *
+ *     security::policy: secure_stream;
+ *
+ * Policy interpretation belongs to the canonical policy/security subsystem.
+ *
+ * This file does not implement authorization or policy evaluation.
+ *
+ *
+ * PROVENANCE CONTRACT
+ * -------------------
+ *
+ * Attributes and symbolic properties may carry provenance metadata.
+ *
+ * Provenance semantics remain owned by the repository-wide provenance system.
+ *
+ * The parser preserves source structure; it does not manufacture provenance
+ * records.
+ *
+ *
+ * IR CONTRACT
+ * -----------
+ *
+ * This grammar owns NO IR.
+ *
+ * Streams are lowered into the canonical semantic/IR architecture.
+ *
+ * A stream carrying or coordinating quantum computation may contribute
+ * semantic information to the quantum pipeline, but this grammar never
+ * constructs `quantum::ir` directly.
+ *
+ *
+ * QUANTUM BOUNDARY
+ * ----------------
+ *
+ * Streams may represent:
+ *
+ *     measurement-result flow;
+ *     classical control flow;
+ *     quantum-classical coordination;
+ *     telemetry;
+ *     distributed quantum computation metadata.
+ *
+ * This grammar MUST NOT define:
+ *
+ *     qubit;
+ *     gate;
+ *     circuit;
+ *     quantum state;
  *     QEC;
- *     ZQN;
- *     physical qubit;
- *     quantum topology.
+ *     physical quantum topology.
  *
- * Quantum semantic lowering remains downstream and retains the canonical:
+ * Such semantics belong to the quantum subsystem.
  *
- *     quantum::ir
  *
- * boundary.
+ * HDL BOUNDARY
+ * ------------
  *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
+ * A stream may carry hardware/HDL data or metadata.
  *
- * A stream expresses logical communication intent.
+ * This grammar does not define:
  *
- * It must not permanently bind the program to:
+ *     signals;
+ *     clocks;
+ *     registers;
+ *     wires;
+ *     timing;
+ *     synthesis;
+ *     physical ports.
  *
- *     - one machine;
- *     - one operating system;
- *     - one network;
- *     - one provider;
- *     - one transport;
- *     - one interface;
- *     - one CPU;
- *     - one GPU;
- *     - one FPGA;
- *     - one QPU;
- *     - one node;
- *     - one topology.
+ * HDL ownership remains in `grammar/hdl/`.
  *
- * The same source stream contract may therefore be realized as:
  *
- *     in-process data flow;
- *     shared memory;
+ * BACKEND BOUNDARY
+ * ----------------
+ *
+ * Backends determine how a logical stream is realized.
+ *
+ * Possible realizations include:
+ *
+ *     local;
+ *     shared-memory;
  *     IPC;
- *     local messaging;
- *     network communication;
- *     distributed communication;
- *     accelerator communication;
- *     HPC communication;
- *     cloud communication;
- *     edge communication;
- *     future communication substrates.
+ *     network;
+ *     distributed;
+ *     accelerator;
+ *     hardware;
+ *     quantum-classical;
+ *     simulated;
+ *     future substrates.
  *
- * This supports:
+ * The stream grammar makes no realization choice.
  *
- *     Program Once
- *          ->
- *     Compile Once
- *          ->
- *     Run Everywhere
- *          ->
- *     Run Anywhere
- *          ->
- *     Run Forever
  *
- * subject to actual semantic requirements, implementation capabilities and
- * available resources.
+ * SCALABILITY CONTRACT
+ * --------------------
  *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
+ * All stream collections are unbounded at the language level.
  *
- * This grammar deliberately does NOT enumerate:
+ * There is no grammar-defined maximum for:
  *
- *     TCP
- *     UDP
- *     QUIC
- *     HTTP
- *     HTTP/2
- *     HTTP/3
- *     MQTT
- *     WebSocket
- *     gRPC
- *     MPI
- *     RDMA
- *     InfiniBand
- *     CUDA
- *     ROCm
- *     vendor transports
+ *     streams;
+ *     members;
+ *     nested blocks;
+ *     nesting depth;
+ *     qualified-name depth;
+ *     properties;
+ *     references;
+ *     payload size;
+ *     payload dimensions;
+ *     event count;
+ *     rate;
+ *     throughput;
+ *     buffering;
+ *     endpoints;
+ *     channels;
+ *     nodes;
+ *     devices;
+ *     processors;
+ *     memory;
+ *     network size.
  *
- * Such concepts may be represented as ordinary names/expressions.
+ * Repetition uses `*` or `+`.
  *
- * Examples:
+ * Practical limits are implementation/resource limits, never language
+ * semantics.
  *
- *     protocol: network::stream;
  *
- *     protocol: vendor::future_transport;
+ * HARD-CODING PROHIBITION
+ * -----------------------
  *
- *     capability: capability("network.streaming");
+ * This grammar contains no capacity constants and no target-specific IDs.
  *
- * Semantic analysis determines whether a referenced protocol or capability
- * exists and whether a realization can satisfy it.
+ * It MUST NOT introduce universal constants for:
  *
- * ============================================================================
- * PROPERTY MODEL
- * ============================================================================
+ *     stream count;
+ *     buffer count;
+ *     buffer size;
+ *     throughput;
+ *     bandwidth;
+ *     latency;
+ *     endpoint count;
+ *     channel count;
+ *     node count;
+ *     device count;
+ *     CPU count;
+ *     GPU count;
+ *     FPGA count;
+ *     QPU count;
+ *     memory;
+ *     tensor rank.
  *
- * Stream properties intentionally use an open-world structure:
  *
- *     name: expression;
+ * OPEN-WORLD CONTRACT
+ * -------------------
  *
- * This means future streaming concepts do not require parser changes merely
- * because a new property name is introduced.
+ * Stream property names are intentionally open-world:
  *
- * Common semantic property names may include:
+ *     qualifiedName : expression ;
  *
- *     type
+ * This allows future streaming concepts to be introduced by semantic
+ * registries, dialects, capabilities, policies, or specifications without
+ * creating a new parser branch for every property.
+ *
+ * Examples of possible semantic properties include:
+ *
  *     source
  *     destination
  *     producer
  *     consumer
- *     channel
+ *     message
  *     protocol
+ *     channel
  *     request
  *     response
- *     message
  *     ordering
  *     delivery
  *     reliability
@@ -473,136 +581,138 @@
  *     constraint
  *     prefer
  *     capability
- *     security
+ *     policy
+ *     provenance
  *     metadata
  *     observability
- *     provenance
  *
- * These names are NOT hard-coded parser categories.
+ * These names are deliberately NOT enumerated here.
  *
- * Their semantic meanings are resolved downstream.
+ *
+ * DETERMINISM
+ * -----------
+ *
+ * Parsing depends only on:
+ *
+ *     source text;
+ *     canonical lexer vocabulary;
+ *     grammar version;
+ *     selected language compatibility configuration.
+ *
+ * The grammar performs no:
+ *
+ *     filesystem access;
+ *     network access;
+ *     hardware discovery;
+ *     environment inspection;
+ *     random generation;
+ *     time-dependent decision;
+ *     target selection.
+ *
+ *
+ * SAFETY / RUST CONTRACT
+ * ----------------------
+ *
+ * This ANTLR grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no target-language actions;
+ *     - no semantic predicates;
+ *     - no unsafe operations;
+ *     - no runtime execution.
+ *
+ * The Rust frontend remains compatible with Rust 1.97+ / Edition 2021 and
+ * uses safe Rust.
+ *
+ *
+ * TEST CONTRACT
+ * -------------
+ *
+ * Positive tests must cover:
+ *
+ *     stream telemetry;
+ *     stream telemetry: Measurement;
+ *     stream telemetry { source: sensor; };
+ *     stream telemetry {
+ *         source: sensor;
+ *         destination: analyzer;
+ *         message: Measurement;
+ *         protocol: network::stream;
+ *         channel: telemetry_channel;
+ *     };
+ *
+ * Negative tests must cover:
+ *
+ *     missing stream name;
+ *     missing colon in a property;
+ *     missing property expression;
+ *     missing semicolon;
+ *     malformed qualified name;
+ *     malformed nested block;
+ *     malformed type annotation.
+ *
+ * Boundary tests must cover:
+ *
+ *     stream + channel;
+ *     stream + message;
+ *     stream + protocol;
+ *     stream + request;
+ *     stream + response;
+ *     stream + endpoint;
+ *     stream + service;
+ *     stream + capabilities;
+ *     stream + distributed computation;
+ *     stream + quantum/classical metadata;
+ *     stream + HDL/hardware metadata.
+ *
+ * Scalability tests must use:
+ *
+ *     arbitrarily many properties;
+ *     arbitrarily many nested blocks;
+ *     arbitrarily deep qualified names;
+ *     symbolic resource expressions;
+ *     symbolic throughput/latency requirements;
+ *     large cross-domain declarations.
+ *
+ * Compatibility tests must verify that adding a new semantic property does
+ * not require modifying this grammar.
+ *
+ *
+ * COMPLETION CRITERIA
+ * -------------------
+ *
+ * This file is complete when:
+ *
+ *     [x] exactly one parser grammar owns networking streams;
+ *     [x] exactly one public stream construction boundary exists;
+ *     [x] `networkStreamingConstruct` remains stable;
+ *     [x] the canonical STREAM lexer token is consumed;
+ *     [x] canonical names are reused;
+ *     [x] canonical types are reused;
+ *     [x] canonical expressions are reused;
+ *     [x] canonical attributes are reused;
+ *     [x] no lexer rules are defined;
+ *     [x] no duplicate parser rules exist;
+ *     [x] no transport grammar is duplicated;
+ *     [x] no endpoint grammar is duplicated;
+ *     [x] no channel grammar is duplicated;
+ *     [x] no message grammar is duplicated;
+ *     [x] no request grammar is duplicated;
+ *     [x] no response grammar is duplicated;
+ *     [x] no service grammar is duplicated;
+ *     [x] no protocol grammar is duplicated;
+ *     [x] no routing grammar is duplicated;
+ *     [x] no runtime behavior is encoded;
+ *     [x] no target capacity is encoded;
+ *     [x] no physical hardware assumption is encoded;
+ *     [x] no competing IR is introduced;
+ *     [x] the grammar remains open-world;
+ *     [x] all repetitions remain resource-unbounded at language level;
+ *     [x] the aggregate networking grammar can consume it unchanged.
+ *
  *
  * ============================================================================
- * REQUIREMENT / CAPABILITY / PREFERENCE / IMPLEMENTATION SEPARATION
- * ============================================================================
- *
- * Source syntax may express:
- *
- *     requires: capability("network.streaming");
- *
- *     requires: throughput >= required_throughput;
- *
- *     constraint: latency <= maximum_latency;
- *
- *     prefer: locality::near;
- *
- *     capability: capability("network.backpressure");
- *
- *     hint: implementation::buffered;
- *
- * These remain source-level declarations.
- *
- * They do not cause hardware discovery or resource allocation.
- *
- * ============================================================================
- * SCALABILITY CONTRACT
- * ============================================================================
- *
- * This grammar imposes NO language-level maximum on:
- *
- *     streams;
- *     stream members;
- *     nested stream blocks;
- *     qualified-name depth;
- *     source/sink relationships;
- *     stream declarations;
- *     stream references;
- *     stream types;
- *     payload dimensions;
- *     payload size;
- *     event count;
- *     throughput;
- *     rate;
- *     buffer capacity;
- *     topology size;
- *     node count;
- *     endpoint count;
- *     channel count;
- *     device count;
- *     CPU count;
- *     GPU count;
- *     FPGA count;
- *     QPU count;
- *     memory;
- *     tensor rank.
- *
- * Repetition uses ANTLR `*` / `+`.
- *
- * Any practical limit comes from the implementation, compiler, runtime,
- * deployment environment or available resources. Such limits are not encoded
- * as Zamani language grammar limits.
- *
- * ============================================================================
- * HARD-CODING PROHIBITION
- * ============================================================================
- *
- * This file MUST NOT define:
- *
- *     MAX_STREAMS
- *     MAX_STREAM_MEMBERS
- *     MAX_STREAM_DEPTH
- *     MAX_STREAM_ELEMENTS
- *     MAX_STREAM_SIZE
- *     MAX_BUFFER_SIZE
- *     MAX_THROUGHPUT
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *     MAX_CONNECTIONS
- *     MAX_ENDPOINTS
- *     MAX_CHANNELS
- *     MAX_NODES
- *     MAX_DEVICES
- *     MAX_CPUS
- *     MAX_GPUS
- *     MAX_FPGAS
- *     MAX_QPUS
- *     MAX_MEMORY
- *     MAX_TENSOR_RANK
- *
- * It also MUST NOT encode:
- *
- *     cpu_0
- *     gpu_0
- *     fpga_0
- *     qpu_0
- *     node_0
- *     interface_0
- *     socket_0
- *     stream_0
- *
- * as special language-level resources.
- *
- * ============================================================================
- * LEXICAL CONTRACT
- * ============================================================================
- *
- * The canonical declaration marker is:
- *
- *     stream
- *
- * It MUST be represented by the shared lexer vocabulary as:
- *
- *     STREAM
- *
- * This is a language-level syntactic word, not a transport implementation.
- *
- * `Stream` remains available as an ordinary case-sensitive type/name spelling
- * unless separately reserved by the language specification.
- *
- * The grammar defines NO lexer rules.
- *
- * ============================================================================
- * PARSER CONTRACT
+ * ANTLR GRAMMAR
  * ============================================================================
  */
 
@@ -617,20 +727,20 @@ import Names, Types, Expressions, Attributes;
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * PUBLIC COMPOSITION BOUNDARY
  * ============================================================================
  *
- * The networking aggregate consumes:
+ * This is the only rule the networking aggregate needs to consume.
  *
- *     networkStreamingConstruct
+ * A reference is intentionally NOT a top-level networking construct.
  *
- * This is the stable composition boundary.
+ * A bare qualified name is an expression/name and must not accidentally become
+ * a networking declaration merely because this grammar is active.
  * ============================================================================
  */
 
 networkStreamingConstruct
     : networkStreamDeclaration
-    | networkStreamReference
     ;
 
 
@@ -643,20 +753,21 @@ networkStreamingConstruct
  *
  *     stream telemetry;
  *
+ *     stream telemetry: Measurement;
+ *
  *     stream telemetry {
- *         type: Measurement;
  *         source: sensor;
  *         destination: analyzer;
- *     }
+ *     };
  *
  *     stream measurements: Stream<Measurement> {
  *         message: Measurement;
  *         protocol: network::stream;
- *         requires: capability("network.streaming");
- *     }
+ *     };
  *
- * The stream name is qualified-name compatible with the repository naming
- * architecture.
+ * The declaration body is optional.
+ *
+ * The declaration itself remains purely logical.
  * ============================================================================
  */
 
@@ -675,19 +786,7 @@ networkStreamDeclaration
  * STREAM TYPE ANNOTATION
  * ============================================================================
  *
- * The type is owned by the canonical type grammar.
- *
- * This grammar does not define Stream<T> itself.
- *
- * Examples:
- *
- *     stream values: Stream<Value>;
- *
- *     stream measurements: Stream<Measurement>;
- *
- *     stream tensors: Stream<Tensor>;
- *
- * Generic and dependent type semantics remain downstream.
+ * Type ownership remains entirely with Types.typeExpression.
  * ============================================================================
  */
 
@@ -700,6 +799,11 @@ networkStreamTypeAnnotation
 /*
  * ============================================================================
  * STREAM BODY
+ * ============================================================================
+ *
+ * A stream body contains zero or more declarative members.
+ *
+ * There is intentionally no fixed member count.
  * ============================================================================
  */
 
@@ -715,23 +819,22 @@ networkStreamBody
  * STREAM MEMBER
  * ============================================================================
  *
- * A stream member is either:
+ * Attributes can decorate either a property or nested configuration block.
  *
- *     property
- *
- * or:
- *
- *     nested configuration block
- *
- * Both structures remain open-world.
+ * The common attribute prefix is factored so both alternatives have the same
+ * attachment semantics.
  * ============================================================================
  */
 
 networkStreamMember
     : attribute*
-      networkStreamProperty
-    | attribute*
-      networkStreamNestedBlock
+      networkStreamMemberCore
+    ;
+
+
+networkStreamMemberCore
+    : networkStreamProperty
+    | networkStreamNestedBlock
     ;
 
 
@@ -740,34 +843,11 @@ networkStreamMember
  * STREAM PROPERTY
  * ============================================================================
  *
- * Canonical structure:
+ * Canonical property form:
  *
  *     name: expression;
  *
- * Examples:
- *
- *     source: sensor;
- *
- *     destination: processor;
- *
- *     message: Measurement;
- *
- *     protocol: network::stream;
- *
- *     channel: telemetry_channel;
- *
- *     ordering: ordered;
- *
- *     delivery: reliable;
- *
- *     requires: capability("network.streaming");
- *
- *     constraint: latency <= target_latency;
- *
- *     prefer: locality::near;
- *
- * Qualified names are accepted so extensions can be introduced without
- * modifying this grammar.
+ * The name is open-world and is resolved semantically.
  * ============================================================================
  */
 
@@ -795,16 +875,24 @@ networkStreamPropertyName
  * STREAM PROPERTY VALUE
  * ============================================================================
  *
- * All property values use the canonical expression language.
+ * The entire canonical Zamani expression language is available.
  *
- * This avoids creating a second:
+ * This permits:
  *
- *     - literal language;
- *     - arithmetic language;
- *     - boolean language;
- *     - comparison language;
- *     - function-call language;
- *     - collection language.
+ *     names;
+ *     literals;
+ *     arithmetic;
+ *     comparisons;
+ *     boolean expressions;
+ *     calls;
+ *     collections;
+ *     symbolic resource quantities;
+ *     capability expressions;
+ *     policy expressions;
+ *     uncertainty;
+ *     reasoning;
+ *     quantum/classical values;
+ *     future expression extensions.
  * ============================================================================
  */
 
@@ -818,22 +906,23 @@ networkStreamPropertyValue
  * NESTED STREAM BLOCK
  * ============================================================================
  *
- * Nested blocks permit extensible structures such as:
+ * Nested blocks provide structural extensibility without defining a finite
+ * catalogue of streaming features.
+ *
+ * Example:
  *
  *     stream telemetry {
  *         buffering {
  *             policy: adaptive;
- *             capacity: buffer_capacity;
- *         }
+ *             capacity: required_capacity;
+ *         };
  *
  *         flow_control {
  *             mode: dynamic;
- *         }
- *     }
+ *         };
+ *     };
  *
- * The grammar preserves structure.
- *
- * Semantic validation determines whether the nested configuration is legal.
+ * Meaning is resolved semantically.
  * ============================================================================
  */
 
@@ -853,9 +942,13 @@ networkStreamNestedBlockName
 
 networkStreamNestedMember
     : attribute*
-      networkStreamProperty
-    | attribute*
-      networkStreamNestedBlock
+      networkStreamNestedMemberCore
+    ;
+
+
+networkStreamNestedMemberCore
+    : networkStreamProperty
+    | networkStreamNestedBlock
     ;
 
 
@@ -864,15 +957,13 @@ networkStreamNestedMember
  * STREAM REFERENCE
  * ============================================================================
  *
- * A reference names an existing stream declaration.
+ * This rule is reusable by downstream grammars and tooling.
  *
- * It does not create or open a runtime stream.
+ * It is deliberately NOT an alternative of networkStreamingConstruct.
  *
- * Example:
+ * A stream reference names an already-declared logical stream.
  *
- *     network::telemetry
- *
- * Semantic analysis verifies that the referenced symbol is a stream.
+ * It does not open, close, send, receive, allocate, or execute anything.
  * ============================================================================
  */
 
@@ -886,10 +977,12 @@ networkStreamReference
  * STABLE SEMANTIC REFERENCE ADAPTERS
  * ============================================================================
  *
- * These wrappers allow downstream networking grammars to depend on stable
- * semantic rule names without copying qualified-name syntax.
+ * These adapters provide stable rule names to semantic/frontend consumers.
  *
- * They add no new syntax.
+ * They contain no duplicated syntax from the referenced networking grammars.
+ *
+ * Semantic analysis verifies that each name actually denotes the expected
+ * declaration kind.
  * ============================================================================
  */
 
@@ -933,9 +1026,7 @@ networkStreamResponseReference
  * STREAM TYPE REFERENCE
  * ============================================================================
  *
- * A stream type reference is a canonical type expression.
- *
- * This adapter exists for downstream tooling and semantic mapping.
+ * Adapter to the canonical type system.
  * ============================================================================
  */
 
@@ -946,10 +1037,12 @@ networkStreamTypeReference
 
 /*
  * ============================================================================
- * OPTIONAL STREAM BODY
+ * OPTIONAL WRAPPERS
  * ============================================================================
  *
- * Stable wrapper for consumers that need an explicit optional-body boundary.
+ * These wrappers are intentionally small compatibility/composition boundaries.
+ *
+ * They do not create additional syntax.
  * ============================================================================
  */
 
@@ -958,601 +1051,6 @@ optionalNetworkStreamBody
     ;
 
 
-/*
- * ============================================================================
- * OPTIONAL STREAM TYPE
- * ============================================================================
- */
-
 optionalNetworkStreamTypeAnnotation
     : networkStreamTypeAnnotation?
     ;
-
-
-/*
- * ============================================================================
- * COMPLETION CONTRACT
- * ============================================================================
- *
- * This grammar is complete when:
- *
- * [x] It has one clear streaming ownership boundary.
- *
- * [x] It uses the canonical Zamani lexer vocabulary.
- *
- * [x] It uses the canonical STREAM token.
- *
- * [x] It imports canonical Names.
- *
- * [x] It imports canonical Types.
- *
- * [x] It imports canonical Expressions.
- *
- * [x] It imports canonical Attributes.
- *
- * [x] It does not define lexer rules.
- *
- * [x] It does not duplicate identifier syntax.
- *
- * [x] It does not duplicate qualified-name syntax.
- *
- * [x] It does not duplicate expression syntax.
- *
- * [x] It does not duplicate type syntax.
- *
- * [x] It does not duplicate attribute syntax.
- *
- * [x] It does not duplicate channel syntax.
- *
- * [x] It does not duplicate message syntax.
- *
- * [x] It does not duplicate protocol syntax.
- *
- * [x] It does not duplicate endpoint syntax.
- *
- * [x] It does not duplicate service syntax.
- *
- * [x] It does not duplicate request syntax.
- *
- * [x] It does not duplicate response syntax.
- *
- * [x] It does not duplicate socket syntax.
- *
- * [x] It remains open-world for stream properties.
- *
- * [x] It supports qualified stream names.
- *
- * [x] It supports typed streams.
- *
- * [x] It supports optional stream bodies.
- *
- * [x] It supports nested stream configuration.
- *
- * [x] It supports arbitrary property values through expressions.
- *
- * [x] It supports attributes.
- *
- * [x] It supports stream references.
- *
- * [x] It does not enumerate network transports.
- *
- * [x] It does not enumerate providers.
- *
- * [x] It does not enumerate devices.
- *
- * [x] It does not enumerate hardware.
- *
- * [x] It does not enumerate stream operations.
- *
- * [x] It does not impose resource limits.
- *
- * [x] It contains no MAX_* resource constants.
- *
- * [x] It contains no physical resource identifiers.
- *
- * [x] It contains no parser actions.
- *
- * [x] It contains no semantic predicates.
- *
- * [x] It contains no runtime behavior.
- *
- * [x] It contains no network behavior.
- *
- * [x] It contains no hardware behavior.
- *
- * [x] It contains no unsafe Rust.
- *
- * [x] It preserves source structure for AST construction.
- *
- * [x] It preserves source spans through ordinary ANTLR parse-tree contexts.
- *
- * [x] It is deterministic for a fixed token stream and grammar version.
- *
- * [x] It can scale syntactically with source size and available implementation
- *     resources.
- *
- * [x] It preserves the canonical quantum::ir boundary.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should preserve at minimum:
- *
- *     stream declaration name
- *     optional stream type
- *     attributes
- *     ordered members
- *     property names
- *     property expressions
- *     nested blocks
- *     stream references
- *     source spans
- *
- * Conceptual representation:
- *
- *     NetworkStreamDecl
- *         name
- *         type
- *         attributes[]
- *         members[]
- *         source_span
- *
- *     NetworkStreamMember
- *         Property
- *         NestedBlock
- *
- *     NetworkStreamProperty
- *         name
- *         value
- *         source_span
- *
- *     NetworkStreamReference
- *         name
- *         source_span
- *
- * Exact Rust AST type names remain owned by:
- *
- *     src/frontend/ast/
- *
- * This grammar MUST NOT create or require a networking-specific competing AST.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis must:
- *
- *     - resolve the stream name;
- *     - resolve referenced types;
- *     - validate stream property names;
- *     - validate property value types;
- *     - resolve endpoint references;
- *     - resolve message references;
- *     - resolve protocol references;
- *     - resolve channel references;
- *     - resolve request/response references;
- *     - validate capability requirements;
- *     - validate resource requirements;
- *     - validate constraints;
- *     - validate preferences;
- *     - validate security requirements;
- *     - determine ordering semantics;
- *     - determine delivery semantics;
- *     - determine flow-control semantics;
- *     - determine backpressure semantics;
- *     - determine lifecycle semantics;
- *     - determine portability;
- *     - reject impossible or unsupported contracts.
- *
- * Parsing alone MUST NOT establish any of those semantic facts.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * Streaming syntax lowers through:
- *
- *     parse tree
- *         ->
- *     frontend AST
- *         ->
- *     semantic networking model
- *         ->
- *     canonical semantic representation / networking IR
- *         ->
- *     optimization
- *         ->
- *     routing / placement / scheduling
- *         ->
- *     target realization
- *
- * This grammar MUST NOT create:
- *
- *     StreamIR
- *
- * merely as a parser-owned parallel IR.
- *
- * If a stream requires quantum semantic integration, the downstream semantic
- * representation may contribute metadata to the canonical:
- *
- *     quantum::ir
- *
- * boundary.
- *
- * No second quantum IR is permitted.
- *
- * ============================================================================
- * RUNTIME CONTRACT
- * ============================================================================
- *
- * Runtime responsibilities include:
- *
- *     - stream creation;
- *     - stream opening;
- *     - stream closure;
- *     - buffering;
- *     - flow control;
- *     - backpressure;
- *     - transport realization;
- *     - serialization;
- *     - scheduling;
- *     - routing;
- *     - failure recovery;
- *     - resource allocation;
- *     - security enforcement.
- *
- * None of those behaviors occur during parsing.
- *
- * ============================================================================
- * RESOURCE CONTRACT
- * ============================================================================
- *
- * A source program may express:
- *
- *     requires: capacity >= required_capacity;
- *
- *     requires: capability("network.streaming");
- *
- *     requires: capability("network.backpressure");
- *
- *     constraint: latency <= acceptable_latency;
- *
- *     prefer: locality::near;
- *
- * These are semantic requirements/constraints/preferences.
- *
- * They MUST NOT be converted by the parser into physical resource allocation.
- *
- * ============================================================================
- * CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * Classical:
- *
- *     Stream<T>
- *
- * may carry classical values.
- *
- * Quantum:
- *
- * streams may carry measurement results, control information or other
- * semantically valid quantum/classical communication data.
- *
- * Hybrid:
- *
- * streams may connect classical and quantum computation stages.
- *
- * HDL/hardware:
- *
- * streams may describe logical data-flow between hardware/software components.
- *
- * AI:
- *
- * streams may carry model inputs, inference results, training data or events.
- *
- * Data:
- *
- * streams may carry records, tensors, datasets and incremental transformations.
- *
- * Distributed:
- *
- * streams may span distributed participants.
- *
- * Security:
- *
- * stream properties may express security requirements.
- *
- * All cross-domain meaning remains downstream semantic responsibility.
- *
- * ============================================================================
- * DIAGNOSTICS CONTRACT
- * ============================================================================
- *
- * Parser diagnostics should identify:
- *
- *     - malformed stream declaration;
- *     - missing stream name;
- *     - malformed type annotation;
- *     - malformed property;
- *     - malformed nested block;
- *     - missing property value;
- *     - malformed qualified name;
- *     - unexpected token.
- *
- * Semantic diagnostics should identify:
- *
- *     - unknown stream;
- *     - duplicate declaration;
- *     - unknown property;
- *     - invalid property value;
- *     - invalid type;
- *     - invalid endpoint;
- *     - invalid channel;
- *     - invalid protocol;
- *     - invalid message;
- *     - unsatisfied capability;
- *     - unsatisfied resource requirement;
- *     - invalid security requirement;
- *     - incompatible ordering/delivery contract.
- *
- * Syntax and semantic diagnostics MUST remain distinct.
- *
- * ============================================================================
- * SECURITY CONTRACT
- * ============================================================================
- *
- * Stream syntax is untrusted source input.
- *
- * Parsing MUST NOT:
- *
- *     - connect to a network;
- *     - open a socket;
- *     - access credentials;
- *     - inspect environment variables;
- *     - access files;
- *     - invoke commands;
- *     - select devices;
- *     - establish trust.
- *
- * A successfully parsed stream declaration does not grant:
- *
- *     - network capability;
- *     - endpoint access;
- *     - authorization;
- *     - credentials;
- *     - hardware access.
- *
- * ============================================================================
- * DETERMINISM CONTRACT
- * ============================================================================
- *
- * For identical:
- *
- *     source;
- *     language version;
- *     lexer configuration;
- *     parser grammar;
- *     dialect configuration;
- *
- * the parse result MUST be deterministic.
- *
- * Parsing MUST NOT depend on:
- *
- *     - CPU availability;
- *     - GPU availability;
- *     - FPGA availability;
- *     - QPU availability;
- *     - network state;
- *     - filesystem state;
- *     - runtime state;
- *     - wall-clock time;
- *     - randomness;
- *     - hardware topology.
- *
- * ============================================================================
- * PERFORMANCE CONTRACT
- * ============================================================================
- *
- * The grammar uses ordinary ANTLR repetition and hierarchical parsing.
- *
- * It MUST NOT introduce:
- *
- *     - parser-time network access;
- *     - parser-time filesystem access;
- *     - parser-time hardware discovery;
- *     - parser-time semantic lookup;
- *     - parser-time resource negotiation.
- *
- * Practical parser memory/time usage is an implementation concern and must
- * not be represented as a Zamani language maximum.
- *
- * ============================================================================
- * TEST CONTRACT
- * ============================================================================
- *
- * POSITIVE TESTS
- * --------------------------------------------------------------------------
- *
- * stream telemetry;
- *
- * stream telemetry {
- *     type: Measurement;
- *     source: sensor;
- *     destination: analyzer;
- * };
- *
- * stream measurements: Stream<Measurement> {
- *     message: Measurement;
- *     protocol: network::stream;
- *     channel: telemetry;
- * };
- *
- * stream results: Stream<Result> {
- *     source: compute;
- *     destination: collector;
- *     requires: capability("network.streaming");
- * };
- *
- * stream data {
- *     buffering {
- *         policy: adaptive;
- *         capacity: required_capacity;
- *     }
- * };
- *
- * stream vendor::future {
- *     vendor::property: future_value;
- * };
- *
- * stream telemetry {
- *     requires: throughput >= required_throughput;
- *     constraint: latency <= acceptable_latency;
- *     prefer: locality::near;
- * };
- *
- *
- * NEGATIVE TESTS
- * --------------------------------------------------------------------------
- *
- * stream;
- *
- * stream {
- * };
- *
- * stream telemetry: ;
- *
- * stream telemetry {
- *     source:;
- * };
- *
- * stream telemetry {
- *     source
- * };
- *
- * stream telemetry {
- *     source: value
- * };
- *
- * malformed:: {
- * };
- *
- *
- * BOUNDARY TESTS
- * --------------------------------------------------------------------------
- *
- *     empty stream body;
- *     one property;
- *     many properties;
- *     nested blocks;
- *     deeply nested blocks;
- *     long qualified stream names;
- *     long property names;
- *     arbitrary expression values;
- *     typed stream;
- *     untyped stream;
- *     qualified stream name;
- *     stream reference.
- *
- *
- * SCALABILITY TESTS
- * --------------------------------------------------------------------------
- *
- * Test increasingly large source programs containing:
- *
- *     - many stream declarations;
- *     - many stream members;
- *     - many nested configuration blocks;
- *     - long qualified names;
- *     - large expressions;
- *     - large type expressions;
- *     - large mixed networking programs.
- *
- * Tests MUST NOT establish a language maximum.
- *
- * The purpose is to verify that no artificial grammar ceiling exists.
- *
- *
- * DETERMINISM TESTS
- * --------------------------------------------------------------------------
- *
- * Parse identical token streams repeatedly and verify equivalent parse-tree
- * structures and diagnostics.
- *
- *
- * COMPATIBILITY TESTS
- * --------------------------------------------------------------------------
- *
- * Verify coexistence with:
- *
- *     endpoints;
- *     addresses;
- *     channels;
- *     messages;
- *     protocols;
- *     requests;
- *     responses;
- *     services;
- *     sockets;
- *     network capabilities;
- *     classical constructs;
- *     quantum constructs;
- *     hybrid constructs;
- *     HDL constructs;
- *     distributed constructs;
- *     AI constructs;
- *     data constructs.
- *
- * ============================================================================
- * FINAL INVARIANT
- * ============================================================================
- *
- * The stream grammar describes:
- *
- *     WHAT a logical stream means.
- *
- * It does not describe:
- *
- *     WHERE the stream runs.
- *
- *     WHICH machine runs it.
- *
- *     WHICH network carries it.
- *
- *     WHICH transport realizes it.
- *
- *     WHICH hardware implements it.
- *
- *     HOW routing occurs.
- *
- *     HOW scheduling occurs.
- *
- *     HOW flow control is implemented.
- *
- *     HOW resources are allocated.
- *
- *     HOW security is enforced.
- *
- * Those decisions belong downstream.
- *
- * Therefore this grammar remains compatible with:
- *
- *     tiny systems
- *     embedded systems
- *     CPUs
- *     multicore systems
- *     GPUs
- *     FPGAs
- *     ASICs
- *     QPUs
- *     accelerators
- *     HPC
- *     distributed systems
- *     cloud
- *     edge
- *     future computational substrates
- *
- * without introducing a language-level resource ceiling.
- *
- * ============================================================================
- */
