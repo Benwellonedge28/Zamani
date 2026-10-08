@@ -1,590 +1,49 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
- * Production Networking Service Grammar
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
- * File:
- *     grammar/networking/services.g4
+ * FILE
+ * ----
+ * grammar/networking/services.g4
  *
- * Grammar:
- *     NetworkingServices
+ * GRAMMAR
+ * -------
+ * NetworkingServices
  *
- * Purpose:
- *     Canonical source-level grammar for network-facing service contracts.
+ * STATUS
+ * ------
+ * CANONICAL PRODUCTION NETWORKING SERVICE GRAMMAR
  *
- * Rust baseline:
- *     Rust 1.97 / Rust 1.97.1
- *     Edition 2021
- *     Safe Rust only
+ * IMPLEMENTATION BASELINE
+ * -----------------------
+ * Rust 1.97+
+ * Rust 2021
+ * Safe Rust only
+ * No unsafe implementation required
  *
- * Grammar technology:
- *     ANTLR4 parser grammar
- *
- * ============================================================================
- * ARCHITECTURAL ROLE
- * ============================================================================
- *
- * This grammar owns the SYNTAX of a logical network-facing service contract.
- *
- * A network service describes:
- *
- *     - a communication-facing interface;
- *     - operations exposed through communication;
- *     - accepted/request messages;
- *     - produced/response messages;
- *     - protocol references;
- *     - channel references;
- *     - endpoint roles;
- *     - capabilities;
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - communication policies;
- *     - service metadata;
- *     - semantic lifecycle intent;
- *
- * A network service is a SOURCE-LEVEL CONTRACT.
- *
- * It is NOT a runtime service instance.
- *
- * It is NOT a process.
- *
- * It is NOT a node.
- *
- * It is NOT a machine.
- *
- * It is NOT a socket.
- *
- * It is NOT an IP address.
- *
- * It is NOT a transport implementation.
- *
- * It is NOT a deployment description.
+ * GRAMMAR TECHNOLOGY
+ * ------------------
+ * ANTLR4 parser grammar
  *
  * ============================================================================
- * ARCHITECTURAL PIPELINE
+ * PURPOSE
  * ============================================================================
  *
- *     Zamani source
- *          |
- *          v
- *     ZamaniLexer
- *          |
- *          v
- *     NetworkingServices
- *          |
- *          v
- *     Frontend AST
- *          |
- *          +--> name resolution
- *          +--> type analysis
- *          +--> effect analysis
- *          +--> capability analysis
- *          +--> resource analysis
- *          +--> security analysis
- *          +--> networking analysis
- *          +--> distributed analysis
- *          |
- *          v
- *     canonical semantic representation
- *          |
- *          +--> classical IR
- *          +--> quantum::ir
- *          +--> distributed representation
- *          +--> hardware representation
- *          +--> networking representation
- *          |
- *          v
- *     optimization
- *          |
- *          v
- *     routing / scheduling / placement
- *          |
- *          v
- *     target realization
- *          |
- *          v
- *     runtime
+ * This file is the SINGLE SOURCE-LEVEL GRAMMAR OWNER for logical NETWORK
+ * SERVICE CONTRACTS.
  *
- * This grammar NEVER constructs IR.
+ * A network service describes a logical communication-facing interface.
  *
- * `quantum::ir` remains the canonical quantum semantic boundary.
+ * It may describe:
  *
- * ============================================================================
- * OWNERSHIP
- * ============================================================================
- *
- * THIS FILE OWNS:
- *
- *     - network-facing service declarations;
- *     - service operation contracts;
- *     - service request/response contracts;
- *     - service message references;
- *     - service protocol references;
- *     - service channel references;
- *     - service endpoint-role references;
- *     - service capability requirements;
- *     - service semantic requirements;
- *     - service constraints;
- *     - service preferences;
- *     - service communication policies;
- *     - service lifecycle intent;
- *     - service metadata;
- *     - service extension points.
- *
- * THIS FILE DOES NOT OWN:
- *
- *     - generic distributed service declarations;
- *     - distributed node declarations;
- *     - endpoint declarations;
- *     - channel declarations;
- *     - protocol declarations;
- *     - message schemas;
- *     - serialization;
- *     - networking transport;
- *     - sockets;
- *     - ports;
- *     - IP/MAC addresses;
- *     - routing;
- *     - scheduling;
- *     - placement;
- *     - hardware discovery;
- *     - resource discovery;
- *     - security implementation;
- *     - cryptographic implementation;
- *     - authentication implementation;
- *     - authorization implementation;
- *     - QEC;
- *     - ZQN;
- *     - quantum::ir;
- *     - classical IR;
- *     - runtime service instances;
- *     - service discovery implementation;
- *     - load balancing;
- *     - replication;
- *     - consensus;
- *     - resilience;
- *     - deployment.
- *
- * ============================================================================
- * DISTRIBUTED SERVICE BOUNDARY
- * ============================================================================
- *
- * `grammar/distributed/services.g4` owns distributed computational services.
- *
- * This file MUST NOT redefine that grammar.
- *
- * Instead:
- *
- *     distributed service
- *          |
- *          +--> may expose a network service contract
- *                         |
- *                         v
- *                    networking service
- *
- * A network service may reference a distributed service symbolically.
- *
- * A network service does not create a distributed node or placement.
- *
- * ============================================================================
- * NETWORKING BOUNDARY
- * ============================================================================
- *
- * Endpoint declarations are owned by:
- *
- *     grammar/networking/endpoints.g4
- *
- * Protocol declarations are owned by:
- *
- *     grammar/networking/protocols.g4
- *
- * Channel declarations are owned by:
- *
- *     grammar/networking/channels.g4
- *
- * Message declarations are owned by:
- *
- *     grammar/networking/messages.g4
- *
- * This grammar references those concepts.
- *
- * It does not redefine them.
- *
- * ============================================================================
- * POCO-REAF
- * ============================================================================
- *
- * A network service describes WHAT communication interface exists.
- *
- * It does not permanently describe WHERE the interface executes.
- *
- * Therefore this grammar does NOT require:
- *
- *     - a specific machine;
- *     - a specific node;
- *     - a specific CPU;
- *     - a specific GPU;
- *     - a specific FPGA;
- *     - a specific QPU;
- *     - a specific network;
- *     - a specific address;
- *     - a specific port;
- *     - a specific transport;
- *     - a specific cloud provider;
- *     - a specific cluster;
- *     - a specific topology;
- *     - a fixed number of replicas;
- *     - a fixed number of clients;
- *     - a fixed number of servers.
- *
- * This preserves:
- *
- *     Program_Once
- *         ->
- *     Compile_Once
- *         ->
- *     Run_Everywhere
- *         ->
- *     Run_Anywhere
- *         ->
- *     Run_Forever
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * There are NO grammar-level limits on:
- *
- *     - number of services;
- *     - number of operations;
- *     - number of parameters;
- *     - number of messages;
- *     - number of protocols;
- *     - number of channels;
- *     - number of endpoints;
- *     - number of requirements;
- *     - number of capabilities;
- *     - number of constraints;
- *     - number of preferences;
- *     - number of policies;
- *     - number of lifecycle clauses;
- *     - number of metadata entries;
- *     - number of extensions;
- *     - qualified-name depth;
- *     - generic nesting depth.
- *
- * All source collections use ANTLR repetition operators.
- *
- * Practical limits belong to:
- *
- *     - parser resource policies;
- *     - compiler resource policies;
- *     - target capabilities;
- *     - deployment;
- *     - runtime;
- *     - resource management.
- *
- * They are NOT language limits.
- *
- * ============================================================================
- * OPEN-WORLD DESIGN
- * ============================================================================
- *
- * This grammar deliberately does not enumerate:
- *
- *     TCP
- *     UDP
- *     QUIC
- *     HTTP
- *     HTTP2
- *     HTTP3
- *     MQTT
- *     gRPC
- *     MPI
- *     RDMA
- *     InfiniBand
- *
- * or any other finite protocol universe.
- *
- * Protocols are referenced through canonical qualified names.
- *
- * Future protocols therefore do not require a grammar rewrite merely because
- * a new transport or communication technology is invented.
- *
- * ============================================================================
- * MESSAGE MODEL
- * ============================================================================
- *
- * This grammar does not define message schemas.
- *
- * It references logical message types/names owned by the networking/data
- * grammar layers.
- *
- * A service may therefore express:
- *
- *     request MessageType
- *     response MessageType
- *     event MessageType
- *
- * without defining:
- *
- *     serialization;
- *     binary encoding;
- *     packet format;
- *     compression;
- *     wire layout.
- *
- * ============================================================================
- * TYPE MODEL
- * ============================================================================
- *
- * Service operation parameters and return values use the canonical type
- * grammar.
- *
- * This prevents the networking service grammar from creating a second type
- * system.
- *
- * ============================================================================
- * EXPRESSION MODEL
- * ============================================================================
- *
- * Generic semantic values use the canonical expression grammar.
- *
- * Expressions may appear in:
- *
- *     - requirements;
- *     - constraints;
- *     - preferences;
- *     - policies;
- *     - metadata;
- *     - capability arguments;
- *     - lifecycle guards;
- *     - defaults;
- *     - operation contracts.
- *
- * This grammar does not redefine expression syntax.
- *
- * ============================================================================
- * QUANTUM INTEGRATION
- * ============================================================================
- *
- * A network service may expose or transport quantum-related operations.
- *
- * Examples include:
- *
- *     remote quantum execution;
- *     measurement services;
- *     distributed quantum coordination;
- *     quantum-classical communication;
- *     quantum resource services.
- *
- * None of the following are defined here:
- *
- *     QubitId
- *     PhysicalQubitId
- *     GateKind
- *     circuit representation
- *     calibration
- *     topology
- *     QEC code
- *     noise model
- *     ZQN fault model
- *
- * If an operation eventually contains quantum computation:
- *
- *     networking service syntax
- *          ->
- *     semantic analysis
- *          ->
- *     quantum lowering
- *          ->
- *     quantum::ir
- *
- * The grammar never constructs `quantum::ir`.
- *
- * ============================================================================
- * HDL / HARDWARE INTEGRATION
- * ============================================================================
- *
- * A service may expose a hardware or accelerator interface.
- *
- * It does not define:
- *
- *     - pins;
- *     - wires;
- *     - clocks;
- *     - FPGA routing;
- *     - ASIC cells;
- *     - physical buses;
- *     - fixed device counts;
- *     - physical addresses.
- *
- * Those belong to HDL and hardware grammars.
- *
- * ============================================================================
- * SECURITY INTEGRATION
- * ============================================================================
- *
- * A service may reference security capabilities or requirements using ordinary
- * qualified names.
- *
- * Examples:
- *
- *     requires security::authentication;
- *     requires security::confidentiality;
- *
- * Security implementation remains outside this grammar.
- *
- * No cryptographic algorithm is hard-coded here.
- *
- * ============================================================================
- * RESOURCE INTEGRATION
- * ============================================================================
- *
- * Requirements, constraints and preferences are deliberately separate.
- *
- * Requirement:
- *     mandatory semantic condition.
- *
- * Constraint:
- *     restricts legal realization.
- *
- * Preference:
- *     advisory optimization objective.
- *
- * Capability:
- *     describes a required/provided ability.
- *
- * None of these inherently selects a physical machine.
- *
- * ============================================================================
- * LIFECYCLE MODEL
- * ============================================================================
- *
- * Lifecycle syntax expresses semantic intent only.
- *
- * It does NOT execute:
- *
- *     start;
- *     stop;
- *     restart;
- *     migrate;
- *     destroy;
- *     failover.
- *
- * Runtime and resilience layers own those actions.
- *
- * ============================================================================
- * FAILURE / RESILIENCE BOUNDARY
- * ============================================================================
- *
- * The grammar may describe failure-related requirements such as:
- *
- *     requires reliability::durable;
- *
- * but does not implement:
- *
- *     retries;
- *     failover;
- *     checkpointing;
- *     rollback;
- *     recovery;
- *     quarantine;
- *     backend switching.
- *
- * Those belong to runtime/resilience.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * This grammar contains:
- *
- *     - no embedded actions;
- *     - no semantic predicates;
- *     - no filesystem access;
- *     - no network access;
- *     - no runtime calls;
- *     - no hardware inspection;
- *     - no randomness;
- *     - no environment-dependent parsing.
- *
- * Equal token streams under the same grammar version produce the same parse
- * structure.
- *
- * ============================================================================
- * LEXER CONTRACT
- * ============================================================================
- *
- * This is a PARSER grammar.
- *
- * The canonical lexer is:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * This grammar therefore MUST NOT define lexer rules.
- *
- * Structural service vocabulary is consumed through canonical lexical tokens
- * where the lexer already defines them, and otherwise through identifiers/
- * qualified names.
- *
- * This file must not introduce a second lexer authority.
- *
- * ============================================================================
- * IMPORT CONTRACT
- * ============================================================================
- *
- * Canonical dependencies:
- *
- *     Core
- *         - attributes
- *         - visibility
- *         - identifier
- *         - qualifiedName
- *         - genericParameters
- *         - whereClause
- *
- *     Types
- *         - typeExpression
- *
- *     Expressions
- *         - expression
- *         - argumentList
- *
- * Networking grammars:
- *
- *     Protocols
- *         - protocol references
- *
- *     Channels
- *         - channel references
- *
- *     Endpoints
- *         - endpoint references
- *
- *     Messages
- *         - message references
- *
- * The networking service grammar MUST consume those contracts rather than
- * redefine their syntax.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The frontend AST should preserve:
- *
- *     - declaration kind;
- *     - attributes;
- *     - visibility;
- *     - service name;
+ *     - service identity;
  *     - generic parameters;
  *     - service refinement;
- *     - operation ordering;
- *     - parameter ordering;
- *     - request/response ordering;
+ *     - operations;
+ *     - request relationships;
+ *     - response relationships;
+ *     - event relationships;
  *     - protocol references;
  *     - channel references;
  *     - endpoint references;
@@ -592,94 +51,592 @@
  *     - capabilities;
  *     - constraints;
  *     - preferences;
+ *     - contracts;
  *     - policies;
- *     - lifecycle clauses;
+ *     - effects;
+ *     - lifecycle intent;
  *     - metadata;
- *     - extensions;
+ *     - extensibility declarations.
+ *
+ * This file describes SOURCE-LEVEL INTENT.
+ *
+ * It does NOT describe physical deployment or runtime implementation.
+ *
+ * ============================================================================
+ * OWNERSHIP
+ * ============================================================================
+ *
+ * THIS FILE OWNS:
+ *
+ *     networkServiceConstruct
+ *     networkServiceDeclaration
+ *     networkServiceReference
+ *
+ *     networkServiceBody
+ *     networkServiceMember
+ *
+ *     networkServiceOperationDeclaration
+ *     networkServiceParameterList
+ *     networkServiceParameter
+ *     networkServiceParameterDefault
+ *     networkServiceReturnClause
+ *     networkServiceOperationClause
+ *
+ *     networkServiceRequestDeclaration
+ *     networkServiceRequestReference
+ *
+ *     networkServiceResponseDeclaration
+ *     networkServiceResponseReference
+ *
+ *     networkServiceEventDeclaration
+ *
+ *     networkServiceProtocolReference
+ *     networkServiceChannelReference
+ *     networkServiceEndpointReference
+ *
+ *     networkServiceRequirement
+ *     networkServiceCapability
+ *     networkServiceConstraint
+ *     networkServicePreference
+ *
+ *     networkServiceContract
+ *     networkServicePolicy
+ *     networkServiceEffect
+ *
+ *     networkServiceLifecycle
+ *     networkServiceMetadata
+ *     networkServiceExtension
+ *
+ *     network-service-specific structural wrappers needed by the above.
+ *
+ * THIS FILE DOES NOT OWN:
+ *
+ *     - identifiers;
+ *     - qualified names;
+ *     - attributes;
+ *     - types;
  *     - expressions;
- *     - source spans.
+ *     - generic type syntax;
+ *     - messages;
+ *     - protocols;
+ *     - channels;
+ *     - endpoints;
+ *     - requests as reusable top-level networking contracts;
+ *     - responses as reusable top-level networking contracts;
+ *     - service discovery;
+ *     - sockets;
+ *     - streams;
+ *     - routing;
+ *     - addressing;
+ *     - transport implementation;
+ *     - serialization;
+ *     - authentication;
+ *     - authorization;
+ *     - cryptography;
+ *     - distributed placement;
+ *     - scheduling;
+ *     - resource allocation;
+ *     - hardware discovery;
+ *     - quantum operations;
+ *     - quantum states;
+ *     - quantum topology;
+ *     - QEC;
+ *     - ZQN;
+ *     - classical IR;
+ *     - quantum::ir;
+ *     - runtime execution;
+ *     - deployment.
  *
- * The AST must preserve source order.
+ * ============================================================================
+ * SINGLE-AUTHORITY RULE
+ * ============================================================================
  *
- * The parser does not resolve semantic identities.
+ * This file MUST NOT recreate syntax owned by another canonical grammar.
+ *
+ * Canonical ownership:
+ *
+ *     identifiers / names
+ *         -> grammar/core/names.g4
+ *
+ *     attributes
+ *         -> grammar/core/attributes.g4
+ *
+ *     types
+ *         -> grammar/types/
+ *
+ *     expressions
+ *         -> grammar/expressions/
+ *
+ *     standalone contracts
+ *         -> grammar/statements/contract.g4
+ *
+ *     reusable policies
+ *         -> grammar/core/policies.g4
+ *
+ *     requirements
+ *         -> grammar/core/requirements.g4
+ *
+ *     constraints
+ *         -> grammar/core/constraints.g4
+ *
+ *     capabilities
+ *         -> grammar/core/capabilities.g4
+ *
+ *     reusable network requests
+ *         -> grammar/networking/requests.g4
+ *
+ *     reusable network responses
+ *         -> grammar/networking/responses.g4
+ *
+ *     message schemas
+ *         -> grammar/networking/messages.g4
+ *
+ *     protocols
+ *         -> grammar/networking/protocols.g4
+ *
+ *     channels
+ *         -> grammar/networking/channels.g4
+ *
+ *     endpoints
+ *         -> grammar/networking/endpoints.g4
+ *
+ *     networking composition
+ *         -> grammar/networking/networking.g4
+ *
+ * Service-local syntax in this file is allowed only where the construct
+ * specifically belongs to the service contract boundary.
+ *
+ * ============================================================================
+ * SERVICE VERSUS DISTRIBUTED SERVICE
+ * ============================================================================
+ *
+ * `grammar/distributed/services.g4` owns distributed computational service
+ * semantics.
+ *
+ * This file owns NETWORK-FACING SERVICE CONTRACTS.
+ *
+ * A distributed service may expose a network service.
+ *
+ * A network service may refer to a distributed service through a qualified
+ * symbolic name.
+ *
+ * This grammar MUST NOT redefine:
+ *
+ *     nodes;
+ *     processes;
+ *     workers;
+ *     actors;
+ *     replicas;
+ *     placement;
+ *     distributed scheduling;
+ *     consensus;
+ *     distributed state;
+ *     distributed lifecycle implementation.
+ *
+ * ============================================================================
+ * NETWORKING COMPONENT BOUNDARIES
+ * ============================================================================
+ *
+ * Protocol syntax:
+ *
+ *     grammar/networking/protocols.g4
+ *
+ * Channel syntax:
+ *
+ *     grammar/networking/channels.g4
+ *
+ * Endpoint syntax:
+ *
+ *     grammar/networking/endpoints.g4
+ *
+ * Message syntax:
+ *
+ *     grammar/networking/messages.g4
+ *
+ * Reusable request contracts:
+ *
+ *     grammar/networking/requests.g4
+ *
+ * Reusable response contracts:
+ *
+ *     grammar/networking/responses.g4
+ *
+ * Service discovery:
+ *
+ *     grammar/networking/service-discovery.g4
+ *
+ * This file references those concepts.
+ *
+ * It does not duplicate their declaration grammars.
+ *
+ * ============================================================================
+ * POCO-REAF
+ * ============================================================================
+ *
+ * A network service specifies WHAT communication contract is offered.
+ *
+ * It does not permanently specify WHERE that contract executes.
+ *
+ * Therefore this grammar MUST remain independent of:
+ *
+ *     - machine identity;
+ *     - processor identity;
+ *     - accelerator identity;
+ *     - QPU identity;
+ *     - FPGA identity;
+ *     - node identity as physical placement;
+ *     - physical address;
+ *     - physical port;
+ *     - network provider;
+ *     - cloud provider;
+ *     - fixed transport;
+ *     - fixed topology;
+ *     - fixed replica count;
+ *     - fixed client count;
+ *     - fixed server count.
+ *
+ * The same service source may be realized through:
+ *
+ *     local execution
+ *     embedded execution
+ *     IPC
+ *     shared memory
+ *     actor communication
+ *     distributed execution
+ *     network transport
+ *     accelerator communication
+ *     quantum/classical infrastructure
+ *     HPC communication
+ *     cluster infrastructure
+ *     cloud infrastructure
+ *     future computational substrates
+ *
+ * provided that downstream semantic analysis establishes feasibility.
+ *
+ * ============================================================================
+ * SCALABILITY
+ * ============================================================================
+ *
+ * This grammar introduces NO artificial language-level finite limit for:
+ *
+ *     services
+ *     operations
+ *     parameters
+ *     request references
+ *     response references
+ *     event declarations
+ *     protocol references
+ *     channel references
+ *     endpoint references
+ *     requirements
+ *     capabilities
+ *     constraints
+ *     preferences
+ *     contracts
+ *     policies
+ *     effects
+ *     lifecycle members
+ *     metadata
+ *     extensions
+ *     generic parameters
+ *     qualified-name depth
+ *     expression size
+ *     source size
+ *
+ * Repetition is represented using ANTLR repetition operators.
+ *
+ * "Infinity" means:
+ *
+ *     no artificial finite capacity ceiling is imposed by this grammar.
+ *
+ * It does NOT mean physically infinite memory, compute, network capacity,
+ * compilation resources, or execution resources.
+ *
+ * Resource exhaustion belongs to the implementation/resource policy layer.
+ *
+ * ============================================================================
+ * OPEN-WORLD DESIGN
+ * ============================================================================
+ *
+ * This grammar MUST NOT enumerate:
+ *
+ *     TCP
+ *     UDP
+ *     QUIC
+ *     HTTP
+ *     HTTP/2
+ *     HTTP/3
+ *     MQTT
+ *     gRPC
+ *     MPI
+ *     RDMA
+ *     InfiniBand
+ *     vendor transports
+ *     cloud providers
+ *     hardware vendors
+ *     AI models
+ *     quantum operation catalogs.
+ *
+ * Such identities remain names, expressions, capabilities, or dialect-defined
+ * semantic entities.
+ *
+ * Adding a new transport or provider MUST NOT require a universal service
+ * grammar rewrite merely because the technology is new.
+ *
+ * ============================================================================
+ * LEXER CONTRACT
+ * ============================================================================
+ *
+ * The canonical lexer is:
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *
+ * Lexical vocabulary is ultimately owned by:
+ *
+ *     grammar/lexer/
+ *
+ * This parser grammar consumes canonical tokens.
+ *
+ * Important canonical networking tokens include:
+ *
+ *     SERVICE
+ *     ASYNC
+ *     FN
+ *     REQUIRES
+ *     CAPABILITY
+ *     CONSTRAINT
+ *     PREFER
+ *     POLICY
+ *     EFFECT
+ *     CONTRACT
+ *     EVENT
+ *     PROTOCOL
+ *     CHANNEL
+ *     ENDPOINT
+ *
+ * where those tokens exist in the canonical lexer.
+ *
+ * This file MUST NOT define lexer rules.
+ *
+ * ============================================================================
+ * AST CONTRACT
+ * ============================================================================
+ *
+ * The frontend AST must preserve:
+ *
+ *     - declaration kind;
+ *     - source span;
+ *     - source order;
+ *     - attributes;
+ *     - visibility;
+ *     - service name;
+ *     - generic parameters;
+ *     - refinement names;
+ *     - where expression;
+ *     - operation order;
+ *     - parameter order;
+ *     - parameter names;
+ *     - parameter types;
+ *     - defaults;
+ *     - return type;
+ *     - operation clauses;
+ *     - request relationships;
+ *     - response relationships;
+ *     - event declarations;
+ *     - protocol references;
+ *     - channel references;
+ *     - endpoint references;
+ *     - requirements;
+ *     - capabilities;
+ *     - constraints;
+ *     - preferences;
+ *     - contracts;
+ *     - policies;
+ *     - effects;
+ *     - lifecycle intent;
+ *     - metadata;
+ *     - extensions.
+ *
+ * Name resolution MUST remain downstream.
+ *
+ * The parser MUST NOT manufacture semantic identities.
  *
  * ============================================================================
  * SEMANTIC CONTRACT
  * ============================================================================
  *
- * Semantic analysis determines:
+ * Semantic analysis is responsible for:
  *
- *     - service-name uniqueness;
- *     - operation uniqueness;
- *     - parameter validity;
- *     - return validity;
- *     - protocol existence;
- *     - channel existence;
- *     - endpoint-role validity;
- *     - message compatibility;
+ *     - service identity resolution;
+ *     - duplicate declaration detection;
+ *     - operation identity resolution;
+ *     - overload legality;
+ *     - parameter/type compatibility;
+ *     - request compatibility;
+ *     - response compatibility;
+ *     - event compatibility;
+ *     - protocol compatibility;
+ *     - channel compatibility;
+ *     - endpoint-role compatibility;
+ *     - effect compatibility;
  *     - capability satisfaction;
  *     - requirement satisfaction;
- *     - constraint validity;
- *     - preference validity;
- *     - security compatibility;
- *     - effect compatibility;
- *     - distributed-service compatibility;
+ *     - constraint satisfiability;
+ *     - preference interpretation;
+ *     - policy applicability;
+ *     - contract validity;
+ *     - provenance;
+ *     - portability;
  *     - target feasibility.
  *
- * The parser does none of these.
+ * None of these decisions are performed by this grammar.
+ *
+ * ============================================================================
+ * EFFECT CONTRACT
+ * ============================================================================
+ *
+ * Network-facing service declarations may carry effects through the canonical
+ * effect system.
+ *
+ * Networking commonly participates in effects such as:
+ *
+ *     network
+ *     distributed
+ *     io
+ *     foreign
+ *     native
+ *     mutation
+ *     randomness
+ *     measurement
+ *     learning
+ *     adaptation
+ *     reflection
+ *     code_generation
+ *     simulation
+ *
+ * This file does not create a second effect taxonomy.
+ *
+ * Effect meaning is resolved by the existing effects subsystem.
+ *
+ * ============================================================================
+ * CAPABILITY / RESOURCE CONTRACT
+ * ============================================================================
+ *
+ * A service may express semantic requirements such as:
+ *
+ *     requires capability("network.reliable");
+ *
+ *     requires capability("security.authentication");
+ *
+ *     requires memory >= required_memory;
+ *
+ *     requires bandwidth >= required_bandwidth;
+ *
+ * These are source-level semantic requirements.
+ *
+ * They do NOT select hardware.
+ *
+ * They do NOT impose universal resource ceilings.
+ *
+ * Target capability negotiation belongs downstream.
+ *
+ * ============================================================================
+ * CONTRACT CONTRACT
+ * ============================================================================
+ *
+ * Service contracts use the canonical contract semantics.
+ *
+ * The six universal contract forms remain:
+ *
+ *     requires
+ *     ensures
+ *     invariant
+ *     assume
+ *     guarantee
+ *     property
+ *
+ * This file MUST NOT implement a competing contract language.
+ *
+ * ============================================================================
+ * POLICY CONTRACT
+ * ============================================================================
+ *
+ * Policies are semantic governance structures.
+ *
+ * This file may attach or reference policy information at the service boundary,
+ * but policy evaluation remains owned by the policy subsystem.
+ *
+ * The service grammar does not implement:
+ *
+ *     authorization;
+ *     admission;
+ *     enforcement;
+ *     conflict resolution;
+ *     policy evaluation.
+ *
+ * ============================================================================
+ * PROVENANCE CONTRACT
+ * ============================================================================
+ *
+ * Every service construct must remain traceable through:
+ *
+ *     source
+ *       ->
+ *     parser context
+ *       ->
+ *     AST
+ *       ->
+ *     semantic service model
+ *       ->
+ *     canonical semantic representation
+ *
+ * Downstream transformations may record:
+ *
+ *     generated_by
+ *     transformed_by
+ *     verified_by
+ *     evidence
+ *     decision
+ *
+ * This grammar itself does not construct provenance records.
  *
  * ============================================================================
  * IR CONTRACT
  * ============================================================================
  *
- * This grammar creates NO service IR.
+ * This grammar creates NO IR.
  *
- * Semantic analysis may lower the AST into the repository's canonical semantic
- * representation.
+ * The pipeline is:
  *
- * Where an operation contains quantum computation:
+ *     source
+ *       ->
+ *     lexer
+ *       ->
+ *     NetworkingServices
+ *       ->
+ *     domain-neutral AST
+ *       ->
+ *     structural validation
+ *       ->
+ *     semantic service model
+ *       ->
+ *     effects/capabilities/resources/contracts/policies/provenance
+ *       ->
+ *     canonical semantic representation
+ *       ->
+ *     applicable IR
  *
- *     service AST
- *          ->
- *     semantic model
- *          ->
- *     quantum semantic lowering
- *          ->
+ * Classical service computation may ultimately lower through the classical
+ * semantic/IR pipeline.
+ *
+ * Quantum computation participating in a service MUST continue through:
+ *
+ *     quantum semantic model
+ *         ->
  *     quantum::ir
  *
- * Where an operation is classical:
- *
- *     service AST
- *          ->
- *     semantic model
- *          ->
- *     canonical/classical IR
- *
- * Where an operation targets hardware:
- *
- *     service AST
- *          ->
- *     semantic model
- *          ->
- *     HDL/hardware semantic representation
- *
- * ============================================================================
- * COMPILER CONTRACT
- * ============================================================================
- *
- * Compiler stages may use service semantics to determine:
- *
- *     - interface lowering;
- *     - message compatibility;
- *     - communication requirements;
- *     - effect requirements;
- *     - resource requirements;
- *     - target compatibility;
- *     - serialization strategy;
- *     - routing strategy;
- *     - scheduling constraints.
- *
- * The grammar itself must remain independent of those implementation choices.
+ * HDL/hardware communication intent remains target-independent until the HDL/
+ * hardware semantic boundary.
  *
  * ============================================================================
  * RUNTIME CONTRACT
@@ -687,66 +644,118 @@
  *
  * Runtime owns:
  *
+ *     - service registration;
  *     - service discovery;
  *     - binding;
+ *     - endpoint resolution;
  *     - dispatch;
  *     - transport;
- *     - endpoint resolution;
+ *     - connection management;
  *     - scheduling;
  *     - placement;
- *     - lifecycle execution;
- *     - failure recovery.
+ *     - retry/recovery;
+ *     - replication;
+ *     - failover;
+ *     - migration;
+ *     - lifecycle execution.
  *
- * This grammar defines none of those runtime mechanisms.
+ * This grammar does not execute any of those operations.
  *
  * ============================================================================
  * TOOLING CONTRACT
  * ============================================================================
  *
- * This grammar must support:
+ * The grammar must provide enough structure for:
  *
  *     - syntax highlighting;
  *     - formatting;
- *     - documentation generation;
+ *     - service documentation;
+ *     - interface extraction;
  *     - symbol indexing;
- *     - service interface extraction;
  *     - API documentation;
- *     - diagnostics;
+ *     - semantic navigation;
  *     - refactoring;
- *     - semantic navigation.
+ *     - diagnostics;
+ *     - provenance;
+ *     - source mapping.
  *
  * ============================================================================
- * COMPATIBILITY
+ * DEPENDENCY CONTRACT
  * ============================================================================
  *
- * The existing networking aggregate currently exposes:
+ * DEPENDS_ON:
  *
- *     serviceDeclaration
+ *     grammar/antlr/ZamaniLexer.g4
+ *     grammar/core/
+ *     grammar/types/
+ *     grammar/expressions/
  *
- * That generic rule MUST be migrated to this grammar.
+ *     canonical networking component grammars where their public reference
+ *     rules are consumed.
  *
- * The new authoritative public rule is:
+ * CONSUMED_BY:
  *
- *     networkServiceConstruct
+ *     grammar/networking/networking.g4
  *
- * Existing distributed:
+ *     grammar/antlr/ZamaniParser.g4
+ *         indirectly through Networking.
  *
- *     distributedServiceDeclaration
+ * AST_OWNER:
  *
- * remains owned by:
+ *     domain-neutral frontend AST implementation.
  *
- *     grammar/distributed/services.g4
+ * SEMANTIC_OWNER:
  *
- * This distinction is intentional and prevents a generic `serviceDeclaration`
- * rule from becoming ambiguous across language domains.
+ *     networking semantic subsystem plus shared semantic infrastructure.
+ *
+ * IR_OWNER:
+ *
+ *     canonical semantic/IR pipeline.
+ *
+ * TEST_OWNER:
+ *
+ *     grammar/tests/networking/
+ *
+ * SPEC_OWNER:
+ *
+ *     grammar/spec/networking.md
+ *     grammar/spec/resources.md
+ *     grammar/spec/effects.md
+ *     grammar/spec/contracts.md
+ *     grammar/spec/policies.md
+ *     grammar/spec/provenance.md
  *
  * ============================================================================
- */
-
-
-/*
+ * IMPORTS
  * ============================================================================
- * PARSER DECLARATION
+ *
+ * Core supplies:
+ *
+ *     identifier
+ *     qualifiedName
+ *     attributes
+ *     visibility
+ *     genericParameters
+ *     whereExpression / where-related canonical constructs
+ *     requirements
+ *     constraints
+ *     capabilities
+ *     policies
+ *     metadata where exposed by the canonical Core composition.
+ *
+ * Types supplies:
+ *
+ *     typeExpression
+ *
+ * Expressions supplies:
+ *
+ *     expression
+ *     argument lists
+ *     block expressions
+ *
+ * Contract syntax is intentionally consumed through the canonical
+ * ContractStatements grammar rather than duplicated here.
+ *
  * ============================================================================
  */
 
@@ -756,15 +765,28 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Core, Types, Expressions;
+import
+    Core,
+    Types,
+    Expressions,
+    ContractStatements
+    ;
 
 
 /*
  * ============================================================================
- * PUBLIC ENTRY POINT
+ * PUBLIC SERVICE CONSTRUCT
  * ============================================================================
  *
- * Networking aggregates should consume this rule.
+ * This is the stable public rule consumed by:
+ *
+ *     grammar/networking/networking.g4
+ *
+ * It distinguishes a service declaration from a symbolic service reference.
+ *
+ * A reference is intentionally restricted to a qualified name.
+ *
+ * ============================================================================
  */
 
 networkServiceConstruct
@@ -775,57 +797,40 @@ networkServiceConstruct
 
 /*
  * ============================================================================
- * NETWORK SERVICE DECLARATION
+ * SERVICE DECLARATION
  * ============================================================================
  *
- * Canonical conceptual forms:
+ * Canonical form:
  *
- *     service_api;
- *
- *     service_api {
+ *     service Name {
  *         ...
  *     }
  *
- *     service_api<T> {
- *         ...
- *     }
+ * Optional forms:
  *
- * The exact contextual spelling used by the language's service declaration
- * surface is resolved by the canonical lexer/parser composition.
+ *     public service Name { ... }
  *
- * The rule itself remains independent of physical deployment.
+ *     service Name<T> { ... }
+ *
+ *     service Name extends Base { ... }
+ *
+ *     service Name<T> extends Base where condition { ... }
+ *
+ * The SERVICE token is authoritative.
+ *
+ * ============================================================================
  */
 
 networkServiceDeclaration
     : attribute*
       visibility?
-      networkServiceMarker
-      identifier
+      SERVICE
+      qualifiedName
       genericParameters?
       networkServiceRefinementClause?
       networkServiceWhereClause?
-      networkServiceBody?
+      networkServiceBody
       SEMI?
-    ;
-
-
-/*
- * ============================================================================
- * SERVICE MARKER
- * ============================================================================
- *
- * The current lexer does not establish a separate canonical SERVICE token in
- * the same way it establishes core tokens such as FN, EFFECT, REQUIRES, etc.
- *
- * Therefore this grammar deliberately keeps service-marker recognition behind
- * a dedicated integration rule rather than inventing a new lexer authority.
- *
- * The networking aggregate/lexer integration MUST bind the canonical service
- * spelling to this rule.
- */
-
-networkServiceMarker
-    : identifier
     ;
 
 
@@ -834,9 +839,12 @@ networkServiceMarker
  * SERVICE REFERENCE
  * ============================================================================
  *
- * A reference names a service owned elsewhere.
+ * A service reference is a symbolic reference to a service defined elsewhere.
  *
- * This is NOT a declaration.
+ * It is NOT a service declaration.
+ *
+ * Semantic analysis resolves the referenced service.
+ * ============================================================================
  */
 
 networkServiceReference
@@ -849,13 +857,16 @@ networkServiceReference
  * SERVICE REFINEMENT
  * ============================================================================
  *
- * Refinement composes logical contracts.
+ * Refinement composes service contracts.
  *
- * It does not mean:
+ * It does not imply:
  *
- *     class inheritance;
  *     process inheritance;
- *     runtime implementation inheritance.
+ *     machine inheritance;
+ *     node inheritance;
+ *     deployment inheritance.
+ *
+ * ============================================================================
  */
 
 networkServiceRefinementClause
@@ -867,7 +878,12 @@ networkServiceRefinementClause
 
 /*
  * ============================================================================
- * SERVICE WHERE CLAUSE
+ * SERVICE WHERE
+ * ============================================================================
+ *
+ * The condition is a canonical expression.
+ *
+ * Type checking and constraint validation are downstream.
  * ============================================================================
  */
 
@@ -881,6 +897,11 @@ networkServiceWhereClause
  * ============================================================================
  * SERVICE BODY
  * ============================================================================
+ *
+ * A service body is structurally ordered.
+ *
+ * The AST must preserve source order.
+ * ============================================================================
  */
 
 networkServiceBody
@@ -892,51 +913,64 @@ networkServiceBody
 
 /*
  * ============================================================================
- * SERVICE MEMBERS
+ * SERVICE MEMBER DISPATCH
+ * ============================================================================
+ *
+ * Explicit lexical markers are preferred wherever canonical tokens exist.
+ *
+ * Generic extensions remain available through networkServiceExtension.
+ *
+ * This prevents future networking concepts from requiring a permanent
+ * universal keyword for every possible capability.
  * ============================================================================
  */
 
 networkServiceMember
     : networkServiceOperationDeclaration
-    | networkServiceProtocolReference
-    | networkServiceChannelReference
-    | networkServiceEndpointReference
     | networkServiceRequestDeclaration
     | networkServiceResponseDeclaration
     | networkServiceEventDeclaration
-    | networkServiceRequirementDeclaration
-    | networkServiceCapabilityDeclaration
-    | networkServiceConstraintDeclaration
-    | networkServicePreferenceDeclaration
-    | networkServicePolicyDeclaration
-    | networkServiceLifecycleDeclaration
-    | networkServicePropertyDeclaration
-    | networkServiceContractDeclaration
-    | networkServiceExtensionDeclaration
+    | networkServiceProtocolReference
+    | networkServiceChannelReference
+    | networkServiceEndpointReference
+    | networkServiceRequirement
+    | networkServiceCapability
+    | networkServiceConstraint
+    | networkServicePreference
+    | networkServiceContract
+    | networkServicePolicy
+    | networkServiceEffect
+    | networkServiceLifecycle
+    | networkServiceMetadata
+    | networkServiceExtension
     ;
 
 
 /*
  * ============================================================================
- * SERVICE OPERATIONS
+ * OPERATION DECLARATION
  * ============================================================================
  *
- * Operations describe logical callable communication contracts.
+ * The canonical operation form accepts:
  *
- * They do not prescribe:
+ *     fn operation(...)
  *
- *     transport;
- *     socket;
- *     thread;
- *     CPU;
- *     machine;
- *     node;
- *     accelerator.
+ * and:
+ *
+ *     async fn operation(...)
+ *
+ * A legacy/contextual bare operation form is deliberately NOT accepted.
+ *
+ * This makes service-member parsing deterministic and prevents arbitrary
+ * identifiers from being interpreted as operations.
+ *
+ * ============================================================================
  */
 
 networkServiceOperationDeclaration
     : attribute*
       ASYNC?
+      FN
       identifier
       genericParameters?
       LPAREN
@@ -964,7 +998,8 @@ networkServiceParameterList
 
 
 networkServiceParameter
-    : identifier
+    : attribute*
+      identifier
       COLON
       typeExpression
       networkServiceParameterDefault?
@@ -979,7 +1014,7 @@ networkServiceParameterDefault
 
 /*
  * ============================================================================
- * OPERATION RETURN
+ * OPERATION RETURN TYPE
  * ============================================================================
  */
 
@@ -993,6 +1028,12 @@ networkServiceReturnClause
  * ============================================================================
  * OPERATION CLAUSES
  * ============================================================================
+ *
+ * Service operations may attach logical communication relationships and
+ * semantic obligations.
+ *
+ * These clauses do not execute communication.
+ * ============================================================================
  */
 
 networkServiceOperationClause
@@ -1000,9 +1041,14 @@ networkServiceOperationClause
     | networkServiceResponseReference
     | networkServiceProtocolReference
     | networkServiceChannelReference
-    | networkServiceRequirementDeclaration
-    | networkServiceCapabilityDeclaration
-    | networkServiceContractDeclaration
+    | networkServiceEndpointReference
+    | networkServiceRequirement
+    | networkServiceCapability
+    | networkServiceConstraint
+    | networkServicePreference
+    | networkServiceContract
+    | networkServicePolicy
+    | networkServiceEffect
     ;
 
 
@@ -1011,12 +1057,11 @@ networkServiceOperationClause
  * OPERATION BODY
  * ============================================================================
  *
- * The body is optional because a network service grammar may describe either:
+ * A service operation may be interface-only or may contain an implementation
+ * body.
  *
- *     - a pure interface;
- *     - a source-level service implementation contract.
- *
- * Actual execution remains outside this grammar.
+ * Runtime behavior remains downstream.
+ * ============================================================================
  */
 
 networkServiceOperationBody
@@ -1026,40 +1071,120 @@ networkServiceOperationBody
 
 /*
  * ============================================================================
- * REQUEST DECLARATION
+ * SERVICE-LOCAL REQUEST DECLARATION
  * ============================================================================
  *
- * A request references an existing logical message/type.
+ * A service-local request binds a symbolic request name to an existing message
+ * or type.
  *
- * Message schema ownership remains elsewhere.
+ * Reusable first-class request contracts remain owned by requests.g4.
+ *
+ * Example:
+ *
+ *     request GetUser : api::GetUser;
+ *
+ * The semantic layer determines whether the referenced entity is a legal
+ * request/message/type.
+ * ============================================================================
  */
 
 networkServiceRequestDeclaration
     : attribute*
       networkServiceRequestMarker
-      qualifiedName
-      networkServiceRequestOptions*
+      identifier
+      networkServiceMessageTypeClause?
+      networkServiceCommunicationReference*
       SEMI
     ;
 
 
 networkServiceRequestMarker
-    : identifier
-    ;
-
-
-networkServiceRequestOptions
-    : networkServiceMessageTypeClause
-    | networkServiceChannelReference
-    | networkServiceProtocolReference
+    : REQUEST
     ;
 
 
 networkServiceRequestReference
-    : networkServiceRequestMarker
+    : REQUEST
       qualifiedName
+      SEMI?
     ;
 
+
+/*
+ * ============================================================================
+ * SERVICE-LOCAL RESPONSE DECLARATION
+ * ============================================================================
+ *
+ * Example:
+ *
+ *     response GetUserResult : api::User;
+ * ============================================================================
+ */
+
+networkServiceResponseDeclaration
+    : attribute*
+      networkServiceResponseMarker
+      identifier
+      networkServiceMessageTypeClause?
+      networkServiceCommunicationReference*
+      SEMI
+    ;
+
+
+networkServiceResponseMarker
+    : RESPONSE
+    ;
+
+
+networkServiceResponseReference
+    : RESPONSE
+      qualifiedName
+      SEMI?
+    ;
+
+
+/*
+ * ============================================================================
+ * SERVICE EVENT
+ * ============================================================================
+ *
+ * Events describe outbound logical communication.
+ *
+ * They do not imply:
+ *
+ *     multicast;
+ *     broadcast;
+ *     queueing;
+ *     persistence;
+ *     transport;
+ *     replication.
+ *
+ * Those meanings remain semantic/runtime concerns.
+ * ============================================================================
+ */
+
+networkServiceEventDeclaration
+    : attribute*
+      EVENT
+      identifier
+      networkServiceMessageTypeClause?
+      networkServiceCommunicationReference*
+      networkServiceRequirement*
+      networkServiceCapability*
+      networkServiceContract*
+      networkServiceProperty*
+      SEMI
+    ;
+
+
+/*
+ * ============================================================================
+ * MESSAGE TYPE CLAUSE
+ * ============================================================================
+ *
+ * Type ownership remains with Types.
+ * ============================================================================
+ */
 
 networkServiceMessageTypeClause
     : COLON
@@ -1069,108 +1194,90 @@ networkServiceMessageTypeClause
 
 /*
  * ============================================================================
- * RESPONSE DECLARATION
+ * COMMUNICATION REFERENCES
+ * ============================================================================
+ *
+ * These are service-local relationships to independently owned networking
+ * constructs.
  * ============================================================================
  */
 
-networkServiceResponseDeclaration
-    : attribute*
-      networkServiceResponseMarker
-      qualifiedName
-      networkServiceResponseOptions*
-      SEMI
-    ;
-
-
-networkServiceResponseMarker
-    : identifier
-    ;
-
-
-networkServiceResponseOptions
-    : networkServiceMessageTypeClause
+networkServiceCommunicationReference
+    : networkServiceProtocolReference
     | networkServiceChannelReference
-    | networkServiceProtocolReference
-    ;
-
-
-networkServiceResponseReference
-    : networkServiceResponseMarker
-      qualifiedName
+    | networkServiceEndpointReference
     ;
 
 
 /*
  * ============================================================================
- * EVENT DECLARATION
+ * PROTOCOL REFERENCE
  * ============================================================================
  *
- * Events are outbound communication contracts.
+ * The protocol itself is owned by networking/protocols.g4.
  *
- * They do not imply:
- *
- *     multicast;
- *     broadcast;
- *     queueing;
- *     persistence;
- *     transport.
- *
- * Those are semantic/runtime properties.
- */
-
-networkServiceEventDeclaration
-    : attribute*
-      networkServiceEventMarker
-      identifier
-      networkServiceEventTypeClause?
-      networkServiceEventOption*
-      SEMI
-    ;
-
-
-networkServiceEventMarker
-    : identifier
-    ;
-
-
-networkServiceEventTypeClause
-    : COLON
-      typeExpression
-    ;
-
-
-networkServiceEventOption
-    : networkServiceChannelReference
-    | networkServiceProtocolReference
-    | networkServiceRequirementDeclaration
-    | networkServicePropertyDeclaration
-    ;
-
-
-/*
+ * This rule records a reference only.
  * ============================================================================
- * PROTOCOL REFERENCES
- * ============================================================================
- *
- * Protocol definitions are owned by networking/protocols.g4.
- *
- * This grammar only references them.
  */
 
 networkServiceProtocolReference
-    : networkServiceProtocolMarker
+    : PROTOCOL
       qualifiedName
-      networkServiceReferenceValue?
+      networkServiceReferenceAssignment?
       SEMI?
     ;
 
 
-networkServiceProtocolMarker
-    : identifier
+networkServiceProtocolName
+    : qualifiedName
     ;
 
 
-networkServiceReferenceValue
+/*
+ * ============================================================================
+ * CHANNEL REFERENCE
+ * ============================================================================
+ *
+ * Channel declarations are owned by networking/channels.g4.
+ * ============================================================================
+ */
+
+networkServiceChannelReference
+    : CHANNEL
+      qualifiedName
+      networkServiceReferenceAssignment?
+      SEMI?
+    ;
+
+
+networkServiceChannelName
+    : qualifiedName
+    ;
+
+
+/*
+ * ============================================================================
+ * ENDPOINT REFERENCE
+ * ============================================================================
+ *
+ * Endpoint declarations are owned by networking/endpoints.g4.
+ * ============================================================================
+ */
+
+networkServiceEndpointReference
+    : ENDPOINT
+      qualifiedName
+      networkServiceReferenceAssignment?
+      SEMI?
+    ;
+
+
+networkServiceEndpointName
+    : qualifiedName
+    ;
+
+
+networkServiceReferenceAssignment
     : ASSIGN
       expression
     ;
@@ -1178,175 +1285,155 @@ networkServiceReferenceValue
 
 /*
  * ============================================================================
- * CHANNEL REFERENCES
+ * REQUIREMENT
  * ============================================================================
  *
- * Channel definitions are owned by networking/channels.g4.
+ * Requirement syntax is intentionally attached to the canonical REQUIRES
+ * token and canonical expression grammar.
  *
- * This grammar does not create channels.
+ * Semantic interpretation belongs to the resource/requirement subsystem.
+ * ============================================================================
  */
 
-networkServiceChannelReference
-    : networkServiceChannelMarker
-      qualifiedName
-      networkServiceReferenceValue?
-      SEMI?
-    ;
-
-
-networkServiceChannelMarker
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * ENDPOINT REFERENCES
- * ============================================================================
- *
- * Endpoint definitions are owned by networking/endpoints.g4.
- *
- * An endpoint reference is logical.
- *
- * It does not encode an address.
- */
-
-networkServiceEndpointReference
-    : networkServiceEndpointMarker
-      qualifiedName
-      networkServiceReferenceValue?
-      SEMI?
-    ;
-
-
-networkServiceEndpointMarker
-    : identifier
-    ;
-
-
-/*
- * ============================================================================
- * REQUIREMENTS
- * ============================================================================
- *
- * Requirements are mandatory semantic conditions.
- */
-
-networkServiceRequirementDeclaration
+networkServiceRequirement
     : attribute*
-      networkServiceRequirementMarker
+      REQUIRES
       expression
       SEMI
     ;
 
 
-networkServiceRequirementMarker
-    : REQUIRES
-    ;
-
-
 /*
  * ============================================================================
- * CAPABILITIES
+ * CAPABILITY
  * ============================================================================
  *
- * Capability names remain open-world qualified names.
+ * Capability names are open-world qualified names.
+ *
+ * Optional assignment allows capability arguments/conditions without requiring
+ * a new keyword for every capability family.
+ * ============================================================================
  */
 
-networkServiceCapabilityDeclaration
+networkServiceCapability
     : attribute*
-      networkServiceCapabilityMarker
+      CAPABILITY
       qualifiedName
-      networkServiceReferenceValue?
+      networkServiceReferenceAssignment?
       SEMI
-    ;
-
-
-networkServiceCapabilityMarker
-    : identifier
     ;
 
 
 /*
  * ============================================================================
- * CONSTRAINTS
+ * CONSTRAINT
  * ============================================================================
- *
- * Constraints restrict legal realization.
  */
 
-networkServiceConstraintDeclaration
+networkServiceConstraint
     : attribute*
-      networkServiceConstraintMarker
+      CONSTRAINT
       expression
       SEMI
     ;
 
 
-networkServiceConstraintMarker
-    : identifier
-    ;
-
-
 /*
  * ============================================================================
- * PREFERENCES
+ * PREFERENCE
  * ============================================================================
  *
- * Preferences are advisory.
+ * Preferences remain advisory.
  *
- * They must never silently become hard requirements.
+ * They MUST NOT silently become mandatory requirements.
+ * ============================================================================
  */
 
-networkServicePreferenceDeclaration
+networkServicePreference
     : attribute*
-      networkServicePreferenceMarker
+      PREFER
       expression
       SEMI
     ;
 
 
-networkServicePreferenceMarker
-    : identifier
-    ;
-
-
 /*
  * ============================================================================
- * POLICIES
+ * CONTRACT
  * ============================================================================
  *
- * Policies express semantic policy intent.
+ * A service-local contract block reuses the canonical six contract statements.
  *
- * The grammar does not implement policy enforcement.
+ * Example:
+ *
+ *     contract {
+ *         requires(condition);
+ *         ensures(condition);
+ *         invariant(condition);
+ *     }
+ *
+ * The contract statements themselves remain owned by ContractStatements.
+ * ============================================================================
  */
 
-networkServicePolicyDeclaration
+networkServiceContract
     : attribute*
-      networkServicePolicyMarker
-      identifier?
-      networkServicePolicyBody
-    ;
-
-
-networkServicePolicyMarker
-    : identifier
-    ;
-
-
-networkServicePolicyBody
-    : LBRACE
-      networkServicePolicyMember*
+      CONTRACT
+      networkServiceContractName?
+      LBRACE
+      contractStatement*
       RBRACE
+      SEMI?
     ;
 
 
-networkServicePolicyMember
-    : networkServiceRequirementDeclaration
-    | networkServiceConstraintDeclaration
-    | networkServicePreferenceDeclaration
-    | networkServicePropertyDeclaration
-    | networkServiceExtensionDeclaration
+networkServiceContractName
+    : identifier
+    ;
+
+
+/*
+ * ============================================================================
+ * POLICY
+ * ============================================================================
+ *
+ * A service may attach a named policy reference or a local policy body.
+ *
+ * The universal policy declaration itself remains owned by ZamaniPolicies.
+ *
+ * This wrapper is intentionally reference-oriented and does not recreate the
+ * policy language.
+ * ============================================================================
+ */
+
+networkServicePolicy
+    : attribute*
+      POLICY
+      qualifiedName
+      networkServiceReferenceAssignment?
+      SEMI?
+    ;
+
+
+/*
+ * ============================================================================
+ * EFFECT
+ * ============================================================================
+ *
+ * Service/operation effect annotations remain generic.
+ *
+ * The effect name is open-world.
+ *
+ * The semantic effect system determines validity.
+ * ============================================================================
+ */
+
+networkServiceEffect
+    : attribute*
+      EFFECT
+      qualifiedName
+      networkServiceReferenceAssignment?
+      SEMI
     ;
 
 
@@ -1355,21 +1442,24 @@ networkServicePolicyMember
  * LIFECYCLE
  * ============================================================================
  *
- * Lifecycle is semantic intent.
+ * Lifecycle is declarative intent only.
  *
- * Runtime owns actual process/service lifecycle execution.
+ * It does not execute start/stop/restart/migrate/failover operations.
+ *
+ * Lifecycle vocabulary remains open-world and is represented structurally.
+ * ============================================================================
  */
 
-networkServiceLifecycleDeclaration
+networkServiceLifecycle
     : attribute*
-      networkServiceLifecycleMarker
+      lifecycleMarker
       identifier?
       networkServiceLifecycleBody?
       SEMI?
     ;
 
 
-networkServiceLifecycleMarker
+lifecycleMarker
     : identifier
     ;
 
@@ -1383,117 +1473,87 @@ networkServiceLifecycleBody
 
 networkServiceLifecycleMember
     : networkServiceLifecycleClause
-    | networkServiceRequirementDeclaration
-    | networkServiceConstraintDeclaration
-    | networkServicePropertyDeclaration
-    | networkServiceExtensionDeclaration
+    | networkServiceRequirement
+    | networkServiceCapability
+    | networkServiceConstraint
+    | networkServicePreference
+    | networkServiceProperty
+    | networkServiceExtension
     ;
 
 
 networkServiceLifecycleClause
     : identifier
-      (COLON expression)?
+      networkServiceLifecycleValue?
       SEMI
+    ;
+
+
+networkServiceLifecycleValue
+    : COLON
+      expression
     ;
 
 
 /*
  * ============================================================================
- * CONTRACTS
+ * METADATA
  * ============================================================================
  *
- * Contracts express semantic guarantees.
+ * Metadata is source-level descriptive information.
  *
- * They are not executable implementations.
+ * Semantic metadata schemas remain outside this grammar.
+ * ============================================================================
  */
 
-networkServiceContractDeclaration
+networkServiceMetadata
     : attribute*
-      networkServiceContractMarker
-      identifier?
-      networkServiceContractBody?
-      SEMI?
-    ;
-
-
-networkServiceContractMarker
-    : identifier
-    ;
-
-
-networkServiceContractBody
-    : LBRACE
-      networkServiceContractMember*
-      RBRACE
-    ;
-
-
-networkServiceContractMember
-    : networkServicePrecondition
-    | networkServicePostcondition
-    | networkServiceInvariant
-    | networkServiceGuarantee
-    | networkServiceRequirementDeclaration
-    | networkServiceConstraintDeclaration
-    | networkServicePropertyDeclaration
-    | networkServiceExtensionDeclaration
-    ;
-
-
-networkServicePrecondition
-    : identifier
-      expression
-      SEMI
-    ;
-
-
-networkServicePostcondition
-    : identifier
-      expression
-      SEMI
-    ;
-
-
-networkServiceInvariant
-    : identifier
-      expression
-      SEMI
-    ;
-
-
-networkServiceGuarantee
-    : identifier
-      expression
-      SEMI
-    ;
-
-
-/*
- * ============================================================================
- * PROPERTIES
- * ============================================================================
- *
- * Properties are generic extensibility points.
- *
- * They do not create a fixed universe of networking concepts.
- */
-
-networkServicePropertyDeclaration
-    : attribute*
-      networkServicePropertyMarker
+      metadataMarker
       identifier
-      networkServicePropertyTypeClause?
+      networkServiceMetadataValue
+      SEMI
+    ;
+
+
+metadataMarker
+    : identifier
+    ;
+
+
+networkServiceMetadataValue
+    : COLON expression
+    | ASSIGN expression
+    ;
+
+
+/*
+ * ============================================================================
+ * GENERIC PROPERTY
+ * ============================================================================
+ *
+ * Generic service properties provide an open-world extension point without
+ * reserving a new keyword for every future networking feature.
+ *
+ * Property names are ordinary identifiers or qualified names.
+ * ============================================================================
+ */
+
+networkServiceProperty
+    : attribute*
+      networkServicePropertyName
+      networkServicePropertyType?
       networkServicePropertyInitializer?
       SEMI
     ;
 
 
-networkServicePropertyMarker
+networkServicePropertyName
     : identifier
+    | qualifiedName
     ;
 
 
-networkServicePropertyTypeClause
+networkServicePropertyType
     : COLON
       typeExpression
     ;
@@ -1507,26 +1567,24 @@ networkServicePropertyInitializer
 
 /*
  * ============================================================================
- * EXTENSIONS
+ * EXTENSION
  * ============================================================================
  *
- * Extension syntax allows future networking/domain dialects to attach
- * information without modifying this core service grammar.
+ * Extensions are explicitly named semantic extension points.
  *
- * Semantic validation determines whether an extension is valid.
+ * They do not define a new language-wide subsystem.
+ *
+ * Semantic validation determines whether the extension is registered and
+ * valid for the current language/dialect configuration.
+ * ============================================================================
  */
 
-networkServiceExtensionDeclaration
+networkServiceExtension
     : attribute*
-      networkServiceExtensionMarker
+      EXTENSION
       qualifiedName
       networkServiceExtensionBody?
       SEMI?
-    ;
-
-
-networkServiceExtensionMarker
-    : identifier
     ;
 
 
@@ -1538,21 +1596,27 @@ networkServiceExtensionBody
 
 
 networkServiceExtensionMember
-    : networkServicePropertyDeclaration
-    | networkServiceRequirementDeclaration
-    | networkServiceConstraintDeclaration
-    | networkServicePreferenceDeclaration
-    | networkServiceExtensionDeclaration
+    : networkServiceProperty
+    | networkServiceRequirement
+    | networkServiceCapability
+    | networkServiceConstraint
+    | networkServicePreference
+    | networkServiceContract
+    | networkServicePolicy
+    | networkServiceEffect
+    | networkServiceExtension
     ;
 
 
 /*
  * ============================================================================
- * PUBLIC SERVICE REFERENCE HELPERS
+ * HELPER REFERENCES
  * ============================================================================
  *
- * These rules provide stable semantic categories without introducing
- * additional type systems.
+ * These are syntactic helper boundaries only.
+ *
+ * They do not perform name lookup.
+ * ============================================================================
  */
 
 networkServiceMessageReference
@@ -1560,23 +1624,774 @@ networkServiceMessageReference
     ;
 
 
-networkServiceProtocolName
+networkServiceProtocolReferenceName
     : qualifiedName
     ;
 
 
-networkServiceChannelName
+networkServiceChannelReferenceName
     : qualifiedName
     ;
 
 
-networkServiceEndpointName
+networkServiceEndpointReferenceName
     : qualifiedName
     ;
 
 
 /*
  * ============================================================================
- * END
+ * HARD-CODING AUDIT
+ * ============================================================================
+ *
+ * This grammar contains NO:
+ *
+ *     MAX_SERVICES
+ *     MAX_OPERATIONS
+ *     MAX_PARAMETERS
+ *     MAX_MESSAGES
+ *     MAX_PROTOCOLS
+ *     MAX_CHANNELS
+ *     MAX_ENDPOINTS
+ *     MAX_CLIENTS
+ *     MAX_SERVERS
+ *     MAX_NODES
+ *     MAX_CONNECTIONS
+ *     MAX_NETWORK_SIZE
+ *     MAX_BANDWIDTH
+ *     MAX_LATENCY
+ *     MAX_MEMORY
+ *     MAX_THREADS
+ *     MAX_CPUS
+ *     MAX_GPUS
+ *     MAX_FPGAS
+ *     MAX_ASICS
+ *     MAX_QPUS
+ *     MAX_QUBITS
+ *     MAX_DEVICE_COUNT
+ *
+ * It contains no fixed:
+ *
+ *     - transport;
+ *     - provider;
+ *     - topology;
+ *     - machine;
+ *     - hardware;
+ *     - physical address;
+ *     - physical port;
+ *     - replica count.
+ *
+ * ============================================================================
+ * DETERMINISM CONTRACT
+ * ============================================================================
+ *
+ * Parsing depends only on:
+ *
+ *     - source token stream;
+ *     - grammar version;
+ *     - parser configuration;
+ *     - explicitly selected dialect configuration where applicable.
+ *
+ * Parsing MUST NOT depend on:
+ *
+ *     - network state;
+ *     - filesystem state;
+ *     - hardware availability;
+ *     - runtime state;
+ *     - wall-clock time;
+ *     - randomness;
+ *     - scheduler state;
+ *     - target selection.
+ *
+ * ============================================================================
+ * SAFETY CONTRACT
+ * ============================================================================
+ *
+ * This grammar contains:
+ *
+ *     - no embedded Rust;
+ *     - no semantic predicates;
+ *     - no parser actions;
+ *     - no filesystem access;
+ *     - no network access;
+ *     - no hardware access;
+ *     - no runtime callbacks;
+ *     - no unsafe implementation requirement.
+ *
+ * The consuming Zamani frontend remains compatible with:
+ *
+ *     Rust 1.97+
+ *     Rust 2021
+ *     safe Rust only.
+ *
+ * ============================================================================
+ * DIAGNOSTIC CONTRACT
+ * ============================================================================
+ *
+ * Parser diagnostics should identify:
+ *
+ *     - invalid service declaration;
+ *     - missing service name;
+ *     - malformed generic parameters;
+ *     - malformed refinement;
+ *     - malformed operation;
+ *     - malformed parameter;
+ *     - malformed return type;
+ *     - malformed request;
+ *     - malformed response;
+ *     - malformed event;
+ *     - malformed protocol reference;
+ *     - malformed channel reference;
+ *     - malformed endpoint reference;
+ *     - malformed requirement;
+ *     - malformed capability;
+ *     - malformed constraint;
+ *     - malformed preference;
+ *     - malformed contract;
+ *     - malformed policy reference;
+ *     - malformed effect;
+ *     - malformed lifecycle;
+ *     - malformed metadata;
+ *     - malformed extension.
+ *
+ * Semantic diagnostics remain downstream and should distinguish:
+ *
+ *     unresolved service;
+ *     duplicate operation;
+ *     incompatible types;
+ *     incompatible request/response;
+ *     unavailable capability;
+ *     unsatisfied resource requirement;
+ *     invalid effect;
+ *     invalid policy;
+ *     invalid contract;
+ *     invalid endpoint;
+ *     invalid channel;
+ *     invalid protocol;
+ *     invalid portability requirement.
+ *
+ * ============================================================================
+ * TEST CONTRACT
+ * ============================================================================
+ *
+ * POSITIVE SERVICE DECLARATIONS
+ * -----------------------------
+ *
+ *     service telemetry {
+ *     }
+ *
+ *     public service telemetry {
+ *     }
+ *
+ *     service compute<T> {
+ *     }
+ *
+ *     service api extends base::Service {
+ *     }
+ *
+ *
+ * POSITIVE OPERATIONS
+ * -------------------
+ *
+ *     service compute {
+ *         fn run(input: Data) -> Result;
+ *     }
+ *
+ *     service compute {
+ *         async fn run(input: Data) -> Result;
+ *     }
+ *
+ *     service compute {
+ *         fn run(input: Data = default_value) -> Result;
+ *     }
+ *
+ *
+ * POSITIVE COMMUNICATION REFERENCES
+ * ---------------------------------
+ *
+ *     service api {
+ *         protocol network::reliable;
+ *         channel telemetry::results;
+ *         endpoint compute::worker;
+ *     }
+ *
+ *
+ * POSITIVE REQUEST / RESPONSE
+ * ---------------------------
+ *
+ *     service api {
+ *         request GetData: data::GetData;
+ *         response GetDataResult: data::GetDataResult;
+ *     }
+ *
+ *
+ * POSITIVE EVENTS
+ * ---------------
+ *
+ *     service telemetry {
+ *         event Measurement: telemetry::Measurement;
+ *     }
+ *
+ *
+ * POSITIVE REQUIREMENTS
+ * ---------------------
+ *
+ *     service quantum_api {
+ *         requires capability("quantum.measurement");
+ *         requires memory >= required_memory;
+ *     }
+ *
+ *
+ * POSITIVE CAPABILITY
+ * -------------------
+ *
+ *     service compute {
+ *         capability compute::tensor;
+ *         capability quantum::measurement;
+ *     }
+ *
+ *
+ * POSITIVE CONSTRAINTS / PREFERENCES
+ * ----------------------------------
+ *
+ *     service compute {
+ *         constraint topology.supports(required_topology);
+ *         prefer resource::latency;
+ *     }
+ *
+ *
+ * POSITIVE CONTRACT
+ * -----------------
+ *
+ *     service compute {
+ *         contract {
+ *             requires(input.is_valid());
+ *             ensures(result.is_valid());
+ *             invariant(state.is_consistent());
+ *             assume(environment.is_valid());
+ *             guarantee(output.is_valid());
+ *             property(result.is_reproducible());
+ *         }
+ *     }
+ *
+ *
+ * POSITIVE EFFECTS
+ * ----------------
+ *
+ *     service remote {
+ *         effect network;
+ *         effect distributed;
+ *     }
+ *
+ *
+ * POSITIVE GENERIC EXTENSIONS
+ * ---------------------------
+ *
+ *     service future {
+ *         future::property: expression;
+ *     }
+ *
+ *
+ * POSITIVE HYBRID / QUANTUM
+ * -------------------------
+ *
+ *     service quantum_compute {
+ *         requires capability("quantum.measurement");
+ *         requires capability("network.quantum");
+ *
+ *         fn execute(circuit: QuantumCircuit)
+ *             -> MeasurementResult;
+ *     }
+ *
+ *
+ * POSITIVE HARDWARE / ACCELERATOR
+ * ------------------------------
+ *
+ *     service accelerator {
+ *         requires capability("accelerator.compute");
+ *         requires capability("tensor.compute");
+ *
+ *         fn execute(input: Tensor) -> Tensor;
+ *     }
+ *
+ *
+ * NEGATIVE TESTS
+ * --------------
+ *
+ *     service;
+ *
+ *     service {
+ *     }
+ *
+ *     service api
+ *
+ *     service api {
+ *         fn;
+ *     }
+ *
+ *     service api {
+ *         fn run;
+ *     }
+ *
+ *     service api {
+ *         fn run(input);
+ *     }
+ *
+ *     service api {
+ *         fn run(input:);
+ *     }
+ *
+ *     service api {
+ *         fn run(input: Data) ->;
+ *     }
+ *
+ *     service api {
+ *         requires;
+ *     }
+ *
+ *     service api {
+ *         capability;
+ *     }
+ *
+ *     service api {
+ *         protocol;
+ *     }
+ *
+ *
+ * SCALABILITY TESTS
+ * -----------------
+ *
+ * Generate services with progressively increasing:
+ *
+ *     - service count;
+ *     - operation count;
+ *     - parameter count;
+ *     - reference count;
+ *     - contract count;
+ *     - policy count;
+ *     - metadata count;
+ *     - extension count;
+ *     - qualified-name depth;
+ *     - expression size;
+ *     - generic nesting.
+ *
+ * No grammar change is permitted merely to accommodate larger valid inputs.
+ *
+ *
+ * CROSS-DOMAIN TESTS
+ * ------------------
+ *
+ * Services must be tested with:
+ *
+ *     classical computation;
+ *     quantum computation;
+ *     hybrid computation;
+ *     AI/model computation;
+ *     tensor computation;
+ *     HDL/hardware intent;
+ *     accelerator computation;
+ *     concurrency;
+ *     distributed execution;
+ *     data processing;
+ *     security;
+ *     simulation;
+ *     deterministic execution;
+ *     reproducible execution.
+ *
+ *
+ * DETERMINISM TESTS
+ * -----------------
+ *
+ * Parse identical token streams repeatedly under the same:
+ *
+ *     lexer version;
+ *     grammar version;
+ *     parser configuration;
+ *
+ * and verify equivalent parse-tree structure and source spans.
+ *
+ *
+ * PORTABILITY TESTS
+ * -----------------
+ *
+ * The same service source must remain syntactically valid regardless of
+ * whether the eventual target is:
+ *
+ *     embedded;
+ *     CPU;
+ *     multicore;
+ *     GPU;
+ *     FPGA;
+ *     ASIC;
+ *     accelerator;
+ *     QPU;
+ *     simulator;
+ *     HPC;
+ *     cluster;
+ *     distributed infrastructure;
+ *     cloud infrastructure;
+ *     future computational substrate.
+ *
+ * Target feasibility is a downstream semantic concern.
+ *
+ * ============================================================================
+ * INTEGRATION CONTRACT
+ * ============================================================================
+ *
+ * UPSTREAM
+ * --------
+ *
+ *     grammar/antlr/ZamaniLexer.g4
+ *         ->
+ *     canonical lexical vocabulary
+ *
+ *     grammar/core/
+ *         ->
+ *     names, attributes, visibility, generics, requirements, constraints,
+ *     capabilities, policies, metadata
+ *
+ *     grammar/types/
+ *         ->
+ *     typeExpression
+ *
+ *     grammar/expressions/
+ *         ->
+ *     expression and blockExpression
+ *
+ *     grammar/statements/contract.g4
+ *         ->
+ *     contractStatement
+ *
+ *
+ * SIDEWAYS NETWORKING REFERENCES
+ * ------------------------------
+ *
+ *     grammar/networking/protocols.g4
+ *     grammar/networking/channels.g4
+ *     grammar/networking/endpoints.g4
+ *     grammar/networking/messages.g4
+ *     grammar/networking/requests.g4
+ *     grammar/networking/responses.g4
+ *
+ * These grammars remain separate authorities.
+ *
+ *
+ * DOWNSTREAM
+ * ----------
+ *
+ *     grammar/networking/networking.g4
+ *         ->
+ *     networkingService
+ *
+ *     frontend domain-neutral AST
+ *         ->
+ *     structural validation
+ *
+ *     structural validation
+ *         ->
+ *     semantic service model
+ *
+ *     semantic service model
+ *         ->
+ *     name/type/effect/capability/resource/contract/policy/provenance analysis
+ *
+ *     semantic service model
+ *         ->
+ *     canonical semantic representation
+ *
+ *     canonical semantic representation
+ *         ->
+ *     classical IR
+ *     quantum::ir where applicable
+ *     HDL/hardware semantic representation where applicable
+ *
+ *     downstream compiler
+ *         ->
+ *     optimization
+ *     lowering
+ *     routing
+ *     scheduling
+ *     resilience
+ *     ZQN
+ *     HAL
+ *     target realization
+ *
+ * ============================================================================
+ * QUANTUM INTEGRATION
+ * ============================================================================
+ *
+ * A service may expose quantum computation, but this grammar does not define
+ * quantum operations.
+ *
+ * Example:
+ *
+ *     service quantum_compute {
+ *         requires capability("quantum.execute");
+ *
+ *         fn execute(circuit: QuantumCircuit)
+ *             -> MeasurementResult;
+ *     }
+ *
+ * The semantic path is:
+ *
+ *     service AST
+ *       ->
+ *     semantic service model
+ *       ->
+ *     quantum semantic analysis
+ *       ->
+ *     quantum::ir
+ *       ->
+ *     optimization
+ *       ->
+ *     decomposition
+ *       ->
+ *     routing
+ *       ->
+ *     scheduling
+ *       ->
+ *     resilience/QEC
+ *       ->
+ *     ZQN
+ *       ->
+ *     HAL
+ *
+ * This file MUST NOT enumerate quantum gates or physical qubits.
+ *
+ * ============================================================================
+ * HDL / HARDWARE INTEGRATION
+ * ============================================================================
+ *
+ * A service may expose hardware or accelerator operations through ordinary
+ * types, names, expressions, properties, and capabilities.
+ *
+ * This file does not define:
+ *
+ *     pins;
+ *     wires;
+ *     physical buses;
+ *     FPGA routing;
+ *     ASIC cells;
+ *     clock implementations;
+ *     device identifiers.
+ *
+ * Those belong to HDL/hardware semantic layers.
+ *
+ * ============================================================================
+ * RESOURCE INTEGRATION
+ * ============================================================================
+ *
+ * Service requirements participate in:
+ *
+ *     requirement analysis
+ *       ->
+ *     capability negotiation
+ *       ->
+ *     resource analysis
+ *       ->
+ *     execution planning
+ *       ->
+ *     target realization
+ *
+ * No resource is allocated during parsing.
+ *
+ * ============================================================================
+ * POLICY INTEGRATION
+ * ============================================================================
+ *
+ * Policy references participate in:
+ *
+ *     service AST
+ *       ->
+ *     policy semantic model
+ *       ->
+ *     applicability
+ *       ->
+ *     authorization/admission where relevant
+ *       ->
+ *     execution planning
+ *
+ * This grammar never evaluates a policy.
+ *
+ * ============================================================================
+ * EFFECT INTEGRATION
+ * ============================================================================
+ *
+ * Effect declarations participate in:
+ *
+ *     service AST
+ *       ->
+ *     effect analysis
+ *       ->
+ *     capability/resource/security analysis
+ *       ->
+ *     semantic service model
+ *
+ * Effect semantics remain globally owned.
+ *
+ * ============================================================================
+ * PROVENANCE INTEGRATION
+ * ============================================================================
+ *
+ * Every service declaration and member must remain source-traceable.
+ *
+ * The AST builder should associate:
+ *
+ *     service declaration
+ *     member
+ *     operation
+ *     parameter
+ *     communication reference
+ *     requirement
+ *     capability
+ *     contract
+ *     policy
+ *     effect
+ *     extension
+ *
+ * with their exact source spans.
+ *
+ * ============================================================================
+ * COMPATIBILITY CONTRACT
+ * ============================================================================
+ *
+ * The service declaration spelling is now canonical:
+ *
+ *     service Name { ... }
+ *
+ * `SERVICE` is consumed directly from the canonical lexer.
+ *
+ * The old pattern:
+ *
+ *     identifier identifier ...
+ *
+ * MUST NOT be retained as the service declaration mechanism because it permits
+ * arbitrary source words to masquerade as declaration markers.
+ *
+ * Service operations are canonical:
+ *
+ *     fn name(...)
+ *
+ *     async fn name(...)
+ *
+ * A bare identifier operation syntax is intentionally not accepted.
+ *
+ * This is a deliberate grammar-hardening change.
+ *
+ * ============================================================================
+ * COMPLETION CRITERIA
+ * ============================================================================
+ *
+ * This file is DONE when:
+ *
+ *     [ ] NetworkingServices is the grammar name.
+ *     [ ] tokenVocab = ZamaniLexer is present.
+ *     [ ] Core is reused.
+ *     [ ] Types is reused.
+ *     [ ] Expressions is reused.
+ *     [ ] ContractStatements is reused.
+ *     [ ] SERVICE is consumed as the service declaration marker.
+ *     [ ] service identity uses canonical qualifiedName.
+ *     [ ] service body is structurally bounded by braces.
+ *     [ ] operation syntax uses canonical FN/ASYNC tokens.
+ *     [ ] operation parameters use canonical typeExpression.
+ *     [ ] operation defaults use canonical expression.
+ *     [ ] return types use canonical typeExpression.
+ *     [ ] service-local requirements use canonical REQUIRES.
+ *     [ ] service-local capabilities use canonical CAPABILITY.
+ *     [ ] service-local constraints use canonical CONSTRAINT.
+ *     [ ] service-local preferences use canonical PREFER.
+ *     [ ] service contracts delegate to contractStatement.
+ *     [ ] no competing contract grammar is implemented.
+ *     [ ] policy handling remains policy-subsystem compatible.
+ *     [ ] effects remain globally owned.
+ *     [ ] protocol syntax is referenced rather than reimplemented.
+ *     [ ] channel syntax is referenced rather than reimplemented.
+ *     [ ] endpoint syntax is referenced rather than reimplemented.
+ *     [ ] message schemas are not reimplemented.
+ *     [ ] reusable request contracts remain owned by requests.g4.
+ *     [ ] reusable response contracts remain owned by responses.g4.
+ *     [ ] no transport catalog exists.
+ *     [ ] no hardware catalog exists.
+ *     [ ] no quantum operation catalog exists.
+ *     [ ] no physical topology is encoded.
+ *     [ ] no machine capacity is encoded.
+ *     [ ] no fixed networking capacity is encoded.
+ *     [ ] no embedded Rust exists.
+ *     [ ] no unsafe implementation is required.
+ *     [ ] no semantic predicates exist.
+ *     [ ] no runtime behavior exists.
+ *     [ ] no IR is constructed.
+ *     [ ] AST ownership remains downstream.
+ *     [ ] semantic ownership remains downstream.
+ *     [ ] provenance remains traceable.
+ *     [ ] positive tests exist.
+ *     [ ] negative tests exist.
+ *     [ ] scalability tests exist.
+ *     [ ] determinism tests exist.
+ *     [ ] portability tests exist.
+ *     [ ] cross-domain tests exist.
+ *
+ * ============================================================================
+ * FINAL ARCHITECTURAL GUARANTEE
+ * ============================================================================
+ *
+ *     SERVICE SOURCE
+ *          |
+ *          v
+ *     NETWORKING SERVICES GRAMMAR
+ *          |
+ *          v
+ *     DOMAIN-NEUTRAL AST
+ *          |
+ *          v
+ *     STRUCTURAL VALIDATION
+ *          |
+ *          +-------------------------------+
+ *          |                               |
+ *          v                               v
+ *     SEMANTIC SERVICE MODEL       PROVENANCE
+ *          |
+ *          +----------+----------+----------+
+ *          |          |          |          |
+ *          v          v          v          v
+ *        TYPES      EFFECTS   CAPABILITIES RESOURCES
+ *          |          |          |          |
+ *          +----------+----------+----------+
+ *                     |
+ *                     v
+ *                  CONTRACTS
+ *                     |
+ *                     v
+ *                  POLICIES
+ *                     |
+ *                     v
+ *          CANONICAL SEMANTIC MODEL
+ *                     |
+ *          +----------+----------+
+ *          |                     |
+ *          v                     v
+ *     classical IR          quantum::ir
+ *          |                     |
+ *          +----------+----------+
+ *                     |
+ *                     v
+ *             optimization
+ *                     |
+ *             lowering/routing
+ *                     |
+ *                scheduling
+ *                     |
+ *               resilience
+ *                     |
+ *                ZQN / HAL
+ *                     |
+ *                     v
+ *              TARGET REALIZATION
+ *
+ * The service source remains independent of the physical realization.
+ *
+ * ============================================================================
+ * END OF FILE
  * ============================================================================
  */
