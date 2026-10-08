@@ -2,13 +2,13 @@ Zamani Type System Specification
 
 Path: "grammar/spec/type-system.md"
 Language: Zamani
-Specification status: Normative
-Specification layer: Static semantics / type system
-Specification role: Canonical type-system contract
-Implementation baseline: Rust 1.97 / Rust 1.97.1
-Rust edition: Rust 2021
-Safety requirement: No "unsafe" Rust
-Language objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Status: Normative
+Specification role: Canonical type-system semantic contract
+Implementation baseline: Rust 1.97 or later
+Rust edition: 2021
+Rust safety: Safe Rust only; production Zamani compiler code MUST NOT use "unsafe"
+Architecture: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Scope: Source types, semantic typing, genericity, constraints, ownership, linearity, affinity, dependent typing, associated types, type-level values, refinements, effects/capabilities/resource integration, quantum typing, hardware/HDL typing, interoperability, diagnostics, determinism, scalability, compatibility, and IR integration
 
 ---
 
@@ -16,209 +16,347 @@ Language objective: Program Once, Compile Once, Run Everywhere, Anywhere, Foreve
 
 0.1 Purpose
 
-This document defines the normative type system of the Zamani programming language.
+This document is the normative specification for the Zamani type system.
 
 It defines:
 
 - what a Zamani type means;
+- how source-level type expressions are interpreted;
 - how types are formed;
-- how types are identified;
-- how type equality and compatibility work;
-- how generic and dependent/parametric information is represented;
-- how dimensions and shapes are represented;
-- how ownership, linearity and resource usage interact with types;
-- how quantum resources are typed;
-- how classical, quantum, hybrid, HDL, distributed, AI, data, networking and other domains share one type system;
-- how effects and capabilities interact with function and computation types;
-- how type inference works;
-- how type errors are diagnosed;
-- how types lower into the canonical semantic representation and IR;
-- how the type system remains independent of target hardware;
-- how scalability is preserved from tiny systems to arbitrarily large systems subject only to actual resource availability and explicit implementation policies.
+- how types are resolved;
+- how type identity works;
+- how type equality works;
+- how compatibility works;
+- how generic parameters work;
+- how generic bounds work;
+- how associated types work;
+- how type classes/interfaces work;
+- how type-level values work;
+- how shapes and dimensions work;
+- how refinement constraints work;
+- how dependent types work;
+- how ownership interacts with types;
+- how linear and affine resources are typed;
+- how references and lifetimes are typed;
+- how effects interact with function types;
+- how capabilities and resources constrain typed computation;
+- how contracts interact with types;
+- how policies constrain type-dependent operations;
+- how quantum values are typed;
+- how classical, HDL, hardware, distributed, networking, AI/data, and hybrid domains use the same type foundation;
+- how types are represented in the canonical AST;
+- how types become semantic types;
+- how validated types reach canonical IR;
+- how type semantics remain independent of target hardware;
+- how type semantics remain scalable without artificial machine ceilings;
+- how the type system is implemented safely in Rust;
+- how production conformance is established.
 
-This document does not define:
+The type system is a semantic layer.
 
-- lexical tokenization;
-- source parsing;
-- AST implementation details;
-- runtime object layouts;
-- physical hardware topology;
-- routing;
-- scheduling algorithms;
-- calibration;
-- QEC algorithms;
-- ZQN implementation;
-- backend-specific register allocation;
-- vendor-specific ABI behavior;
-- machine-specific resource limits.
-
-Those belong to their respective contracts.
+It is not a hardware allocator, scheduler, router, runtime, calibration system, QEC implementation, or device-discovery system.
 
 ---
 
-1. Authority and Integration
+1. Normative Language
 
-The normative architecture is:
+The following words have normative meaning.
+
+MUST
+
+A mandatory requirement.
+
+MUST NOT
+
+A prohibited behavior.
+
+SHOULD
+
+A strong recommendation. Deviations require documented justification.
+
+SHOULD NOT
+
+Normally prohibited unless documented justification exists.
+
+MAY
+
+Permitted behavior.
+
+IMPLEMENTATION-DEFINED
+
+Determined by the implementation but required to be documented and stable for the applicable implementation profile.
+
+RESOURCE-DEPENDENT
+
+Dependent on resources available to a compiler or execution environment.
+
+TARGET-DEPENDENT
+
+Dependent on the selected realization target.
+
+SEMANTICALLY INVALID
+
+Violates the language's type or semantic rules.
+
+RESOURCE-UNSATISFIABLE
+
+The program is semantically meaningful, but the requested realization cannot satisfy its resource requirements.
+
+CAPABILITY-UNAVAILABLE
+
+The requested realization lacks a required capability.
+
+UNREPRESENTABLE
+
+A valid semantic meaning cannot be represented by the selected realization under the requested constraints.
+
+UNDEFINED BEHAVIOR
+
+Behavior for which the language supplies no semantic definition.
+
+Zamani MUST minimize undefined behavior.
+
+Ordinary valid programs MUST NOT depend on undefined behavior.
+
+---
+
+2. Authority and Repository Integration
+
+The authoritative relationship is:
 
 grammar/DESIGN.md
         │
         ▼
-grammar/spec/lexical.md
+grammar/specification/
         │
-        ▼
-grammar/spec/syntax.md
+        ├── language.md
+        ├── syntax.md
+        └── domain specifications
         │
         ▼
 grammar/spec/type-system.md
         │
-        ▼
-grammar/spec/semantics.md
+        ├── grammar/types/
+        ├── grammar/declarations/
+        ├── grammar/functions/
+        ├── grammar/expressions/
+        ├── grammar/resources/
+        ├── grammar/effects/
+        ├── grammar/validation/
+        ├── grammar/policies/
+        └── grammar/compatibility/
         │
-        ├───────────────┬──────────────────┐
-        ▼               ▼                  ▼
-resources          effects            capabilities
-        │               │                  │
-        └───────────────┼──────────────────┘
-                        ▼
-                 Canonical AST
-                        │
-                        ▼
-               Semantic type model
-                        │
-                        ▼
-                  Canonical IR
-                        │
-          ┌─────────────┼─────────────┐
-          ▼             ▼             ▼
-    classical IR    quantum::ir     HDL/target IR
-          │             │             │
-          └─────────────┼─────────────┘
-                        ▼
-                   Optimization
-                        │
-             ┌──────────┼──────────┐
-             ▼          ▼          ▼
-          routing   scheduling   resilience
-             │          │          │
-             └──────────┼──────────┘
-                        ▼
-                       ZQN
-                        │
-                       HAL
-                        │
-                        ▼
-               target realization
+        ▼
+grammar/Zamani.g4
+        │
+        ▼
+canonical lexer/parser
+        │
+        ▼
+src/frontend/ast/
+        │
+        ▼
+structural validation
+        │
+        ▼
+name resolution
+        │
+        ▼
+type resolution
+        │
+        ▼
+constraint solving
+        │
+        ├── ownership
+        ├── effects
+        ├── capabilities
+        ├── resources
+        ├── contracts
+        └── policies
+        │
+        ▼
+canonical semantic model
+        │
+        ├── classical semantic representation
+        ├── quantum semantic representation
+        ├── HDL/hardware semantic representation
+        └── other domain representations
+        │
+        ▼
+canonical IR boundaries
+        │
+        ├── Classical IR
+        └── quantum::ir
+        │
+        ▼
+optimization
+        │
+        ▼
+lowering
+        │
+        ▼
+routing / scheduling / resilience / QEC
+        │
+        ▼
+ZQN
+        │
+        ▼
+HAL
+        │
+        ▼
+target realization
 
-1.1 Authority hierarchy
+2.1 Authority rules
 
-The following hierarchy is mandatory:
+This document is authoritative for type semantics.
 
-1. normative language specifications;
-2. normative AST contracts;
-3. normative semantic-model contracts;
-4. normative IR contracts;
-5. implementation;
-6. generated/reference documentation;
-7. historical/proposed material.
+"grammar/types/" owns type syntax.
 
-Therefore:
+"grammar/Zamani.g4" owns grammar composition only.
 
-- "grammar/spec/type-system.md" is normative for type semantics;
-- "grammar/types/" owns type syntax;
-- "grammar/Zamani.g4" composes syntax but does not redefine type semantics;
-- "grammar/grammar.md" records implementation conformance;
-- "grammar/Zamani-Grammar.md" is historical/design material unless a feature has been formally promoted;
-- "src/lexer.rs" recognizes lexical forms;
-- "src/parser.rs" constructs syntax;
-- "src/frontend/ast/" represents source structure;
-- semantic analysis validates type meaning;
-- canonical IR owns lowered semantic representation;
-- "quantum::ir" remains the canonical quantum semantic boundary.
+The canonical frontend "TypeExpr" owns the source-level AST representation.
 
-No lower layer may silently redefine the meaning of a type.
+Semantic analysis owns type resolution and validation.
+
+Canonical IR owns validated lowered semantics.
+
+"quantum::ir" remains the canonical quantum semantic boundary.
+
+"grammar/grammar.md" records implementation/conformance status.
+
+Historical or aspirational documentation MUST NOT silently override this document.
+
+If two normative documents conflict, the conflict MUST be resolved explicitly through the language-versioning process.
 
 ---
 
-2. Ownership Contract
+3. Ownership Contract
 
-2.1 This document owns
+3.1 This file owns
 
 This specification owns:
 
+- type meaning;
 - type formation;
 - type identity;
 - type equality;
 - type compatibility;
+- type normalization;
 - type inference rules;
-- generic constraints;
-- shape and dimensional typing;
-- numeric typing;
-- collection typing;
-- function typing;
-- ownership/linearity semantics;
-- resource-sensitive types;
-- capability-sensitive types;
-- effect-sensitive computation types;
+- generic semantics;
+- generic bounds;
+- associated type semantics;
+- type-class/interface constraints;
+- variance;
+- type-level values;
+- shape semantics;
+- refinement semantics;
+- dependent type semantics;
+- ownership typing;
+- reference typing;
+- lifetime relationships;
+- linearity;
+- affinity;
+- resource-sensitive typing;
 - quantum type semantics;
-- classical type semantics;
 - hardware-intent type semantics;
-- distributed type semantics;
-- temporal type semantics;
-- proof/verification type semantics;
-- type-level expressions;
-- coercion rules;
-- conversion rules;
-- type error categories;
-- type-system portability rules;
-- type-system scalability rules.
+- domain-neutral type composition;
+- type-level computation requirements;
+- type conversion semantics;
+- coercion semantics;
+- subtyping semantics where supported;
+- diagnostics required for type failures;
+- type-system determinism;
+- type-system scalability;
+- type-system compatibility.
 
-2.2 This document does not own
+3.2 This file does not own
 
-It does not own:
+This file does not own:
 
-- token definitions;
-- parser rules;
-- AST storage layout;
-- runtime values;
-- hardware discovery;
-- physical qubit assignment;
+- lexical token definitions;
+- parser implementation;
+- concrete ANTLR syntax;
+- AST storage implementation;
+- source locations;
+- runtime object layouts;
+- ABI layouts;
+- target instruction selection;
+- register allocation;
+- physical memory placement;
+- physical qubit placement;
+- quantum routing;
+- scheduling;
+- calibration;
+- pulse generation;
 - QEC implementation;
 - ZQN implementation;
-- scheduler implementation;
-- router implementation;
-- calibration;
-- vendor-specific device models;
-- target-specific machine widths.
+- hardware discovery;
+- target discovery;
+- resource inventory;
+- device selection;
+- runtime scheduling.
+
+Those responsibilities belong to their respective subsystems.
 
 ---
 
-3. Type-System Design Principles
+4. Fundamental Invariant
 
-The Zamani type system MUST be:
+The central type-system invariant is:
 
-1. sound;
-2. deterministic where semantics permit;
-3. explicitly nondeterministic where required;
-4. compositional;
-5. target-independent;
-6. resource-aware;
-7. capability-aware;
-8. effect-aware;
-9. quantum-safe;
-10. ownership-aware;
-11. extensible;
-12. representable in canonical IR;
-13. independently verifiable;
-14. implementable in safe Rust;
-15. independent of physical machine dimensions;
-16. scalable without language-level artificial limits;
-17. compatible with POCO-REAF.
+«A type describes semantic meaning and valid relationships between values and computations. A type does not prescribe the physical machine on which the computation must execute.»
 
-A Zamani type describes semantic meaning and requirements, not the accidental properties of the machine executing the program.
+Therefore:
+
+Type
+≠ Machine
+
+Type
+≠ Physical Device
+
+Type
+≠ Hardware Topology
+
+Type
+≠ Physical Address
+
+Type
+≠ Register Allocation
+
+Type
+≠ Scheduling Decision
+
+Type
+≠ Routing Decision
+
+Type
+≠ Calibration
+
+Type
+≠ QEC Implementation
+
+Instead:
+
+Type
+=
+semantic identity
++
+validity conditions
++
+relationships
++
+constraints
++
+ownership
++
+effects where applicable
++
+resource/capability requirements where applicable
 
 ---
 
-4. POCO-REAF Type-System Contract
+5. POCO-REAF Type-System Contract
 
 POCO-REAF means:
 
@@ -230,277 +368,459 @@ Run Everywhere
       ↓
 Run Anywhere
       ↓
-Run Forever
+Forever
 
 subject to:
 
 - semantic validity;
-- target capability;
+- declared requirements;
+- available capabilities;
 - available resources;
-- declared portability requirements;
 - compatibility policy;
-- execution feasibility.
+- target feasibility;
+- implementation policy.
 
-The type system MUST NOT require source programs to encode:
+POCO-REAF does not mean that every physical machine can execute every program.
 
-- a specific CPU;
-- a specific GPU;
-- a specific FPGA;
-- a specific QPU;
-- a specific physical qubit;
-- a fixed node count;
-- a fixed core count;
-- a fixed thread count;
-- a fixed memory size;
-- a fixed accelerator count;
-- a fixed topology;
-- a fixed SIMD width;
-- a fixed register width;
-- a fixed tensor size.
+A target that lacks a required capability MAY reject a program.
 
-A type may express a requirement.
-
-It must not accidentally become a physical placement decision.
+A target MUST NOT silently change the program's type meaning merely to make execution possible.
 
 For example:
 
-requires capability("quantum.mid_circuit_measurement")
+requires capability("quantum.measurement")
 
-is semantic/resource intent.
+is a semantic requirement.
 
-This:
+It does not mean:
 
-map q0 -> physical_qubit(17)
+use QPU #7
 
-is physical realization and belongs downstream.
+Likewise:
+
+QRegister<N>
+
+does not mean:
+
+allocate physical qubits 0 through N-1
+
+Physical allocation occurs downstream.
 
 ---
 
-5. No Artificial Universal Limits
+6. Scalability and the Meaning of "Unbounded"
 
-The type system MUST NOT define universal constants such as:
+Zamani type semantics MUST be open-ended.
+
+The language MUST NOT impose artificial finite ceilings on:
+
+- number of type parameters;
+- number of generic arguments;
+- tuple arity;
+- function parameter count;
+- type nesting;
+- array cardinality;
+- tensor rank;
+- tensor dimensions;
+- quantum-register cardinality;
+- distributed topology size;
+- number of devices;
+- number of nodes;
+- number of actors;
+- number of channels;
+- memory size;
+- storage size;
+- network size;
+- accelerator count.
+
+"Unbounded" means:
+
+«No artificial finite maximum is imposed by the language semantics where the underlying semantic domain has no such maximum.»
+
+It does not mean that physical computers possess infinite resources.
+
+A compiler MAY impose an invocation-specific resource budget for:
+
+- memory;
+- CPU time;
+- diagnostic output;
+- recursion;
+- type-solving work;
+- type-level evaluation;
+- AST size;
+- intermediate representation size.
+
+Such a budget is an implementation policy.
+
+It MUST NOT redefine the language's semantic type universe.
+
+A semantically valid type may therefore fail compilation with:
+
+COMPILER_RESOURCE_EXHAUSTED
+
+without becoming:
+
+TYPE_INVALID
+
+---
+
+7. No Universal Hardware Constants
+
+The type system MUST NOT define language-semantic constants such as:
 
 MAX_QUBITS
-MAX_CLASSICAL_BITS
-MAX_REGISTER_SIZE
-MAX_TENSOR_RANK
-MAX_VECTOR_LENGTH
-MAX_MATRIX_SIZE
-MAX_MEMORY
-MAX_THREADS
+MAX_CPUS
 MAX_CORES
+MAX_THREADS
 MAX_GPUS
 MAX_FPGAS
+MAX_ACCELERATORS
 MAX_QPUS
 MAX_NODES
+MAX_MEMORY
+MAX_STORAGE
+MAX_REGISTER_WIDTH
+MAX_TENSOR_RANK
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
 MAX_AGENTS
-MAX_TIMELINES
 MAX_CHANNELS
 MAX_GENERIC_PARAMETERS
+MAX_TUPLE_ARITY
 MAX_FUNCTION_PARAMETERS
-MAX_RECURSION_DEPTH
 MAX_TYPE_DEPTH
 
-as language-semantic restrictions.
+A number appearing in a program is program semantics.
 
-An implementation may have:
+For example:
 
-- parser memory limits;
-- compiler memory limits;
-- compilation-time limits;
-- recursion guards;
-- diagnostic budgets;
-- execution budgets;
-- security budgets;
-- target resource limits.
+Vector<1024, Float>
 
-Those are implementation/resource policies, not type-system semantics.
+is valid type-level information.
 
-A program can therefore be semantically valid while an implementation reports:
-
-RESOURCE_EXHAUSTED
-
-The compiler must not incorrectly report:
-
-TYPE_ERROR
-
-merely because the implementation lacks enough resources.
+The number "1024" is not a language capacity declaration.
 
 ---
 
-6. Unbounded Semantic Quantities
+8. Semantic Quantities
 
-Zamani semantic quantities include:
+Type-level quantities include:
 
-- dimensions;
 - cardinalities;
-- resource counts;
-- tensor ranks;
+- dimensions;
+- widths;
+- precisions;
+- ranks;
 - symbolic indices;
-- iteration domains;
-- quantum-register sizes;
-- distributed topology sizes;
+- resource quantities;
+- timing quantities;
+- capacities;
+- iteration bounds;
 - generic value parameters;
-- compile-time quantities.
+- proof parameters.
 
-These quantities MUST be representable semantically without requiring them to fit in a host "usize".
+A semantic quantity MUST NOT silently overflow.
 
-The semantic model MUST support:
+The implementation MUST distinguish:
 
-1. arbitrary finite values;
-2. symbolic values;
-3. constrained values;
-4. dependent values where supported;
-5. implementation-independent equality and ordering where mathematically defined.
+semantic quantity
 
-A Rust implementation may use:
+from:
+
+host implementation index
+
+"usize" MAY be used internally for indexing Rust collections.
+
+"usize" MUST NOT define a universal Zamani cardinality.
+
+Where a semantic quantity can exceed host integer width, the implementation MUST use an appropriate representation such as:
 
 - arbitrary-precision integers;
 - canonical symbolic expressions;
-- interned semantic terms;
-- DAG-based expression representations;
-- segmented representations.
-
-But a semantic quantity MUST NOT silently overflow.
-
-"usize" is an implementation indexing type.
-
-It is not the universal Zamani cardinality type.
+- interned terms;
+- DAG representations;
+- segmented representations;
+- another explicitly specified representation.
 
 ---
 
-7. Formal Typing Judgments
+9. Core Typing Judgment
 
-The core typing judgment is:
+The conceptual typing judgment is:
 
-Γ ; Δ ; Ε ; Κ ; R ⊢ e : T
+Γ ; Δ ; Ε ; Κ ; R ; C ⊢ e : T
 
 where:
 
-- "Γ" = lexical/name/type environment;
-- "Δ" = ownership and linear-resource environment;
-- "Ε" = effect environment;
-- "Κ" = capability environment;
-- "R" = resource/constraint environment;
-- "e" = expression;
-- "T" = resulting type.
+Γ = name/type environment
+Δ = ownership/resource environment
+Ε = effect environment
+Κ = capability environment
+R = resource environment
+C = semantic constraints
+e = expression
+T = resulting type
 
 Statements:
 
-Γ ; Δ ; Ε ; Κ ; R ⊢ s ✓
+Γ ; Δ ; Ε ; Κ ; R ; C ⊢ s ✓
 
 Declarations:
 
-Γ ; Δ ; Ε ; Κ ; R ⊢ d ✓
+Γ ; Δ ; Ε ; Κ ; R ; C ⊢ d ✓
 
 Functions:
 
-Γ ; Δ ; Ε ; Κ ; R ⊢ f : FunctionType
+Γ ; Δ ; Ε ; Κ ; R ; C ⊢ f : F
 
-Canonical IR:
+A program is type-valid when all required judgments can be established.
 
-IR ⊢ valid
-
-A type checker MUST reject a program when a required semantic judgment cannot be established.
+A target is feasible only after type validation and subsequent capability/resource analysis.
 
 ---
 
-8. Type Identity
+10. Type-System Phases
 
-Every semantic type has a canonical identity.
+Type processing MUST conceptually occur in the following order.
 
-Type identity MUST NOT depend on:
+source syntax
+    ↓
+AST construction
+    ↓
+structural AST validation
+    ↓
+name resolution
+    ↓
+type-expression resolution
+    ↓
+generic binding
+    ↓
+associated-type resolution
+    ↓
+constraint collection
+    ↓
+constraint normalization
+    ↓
+unification / inference
+    ↓
+subtyping / compatibility
+    ↓
+ownership / linearity / affinity
+    ↓
+effect checking
+    ↓
+capability checking
+    ↓
+resource checking
+    ↓
+contract/policy validation
+    ↓
+semantic type finalization
+    ↓
+canonical semantic representation
+    ↓
+IR lowering
 
+A parser MUST NOT perform semantic type checking.
+
+A type grammar MUST NOT perform resource discovery.
+
+A type checker MUST NOT perform physical placement.
+
+---
+
+11. Canonical Source AST
+
+There MUST be exactly one canonical source-level type-expression representation.
+
+The repository's canonical "TypeExpr" is that representation.
+
+The canonical representation includes source-level constructs corresponding to:
+
+Identifier
+Generic
+Tuple
+Array
+Slice
+Function
+Reference
+Pointer
+Optional
+Result
+Never
+Unit
+SelfType
+Infer
+GenericParameter
+Union
+Intersection
+Associated
+TypeApplication
+Quantum
+Linear
+Affine
+Temporal
+Pi
+Sigma
+Identity
+Hkt
+Extension
+
+The semantic specification MUST describe these constructs rather than introducing another AST hierarchy.
+
+Convenience types such as:
+
+ArrayType
+TupleType
+FunctionType
+ReferenceType
+ResultType
+
+MAY exist as safe APIs/facades.
+
+They MUST NOT become competing AST authorities.
+
+---
+
+12. Source Type vs Semantic Type
+
+The following distinction is mandatory.
+
+TypeExpr
+=
+source-level type structure
+
+while:
+
+SemanticType
+=
+resolved and validated type meaning
+
+and:
+
+IR type
+=
+validated type information represented at an IR boundary
+
+Therefore:
+
+TypeExpr
+≠
+SemanticType
+≠
+IR Type
+
+A source type may contain unresolved:
+
+- names;
+- generic parameters;
+- inference variables;
+- symbolic dimensions;
+- associated projections;
+- extensions.
+
+Semantic analysis resolves or validates them.
+
+---
+
+13. Type Identity
+
+Semantic type identity MUST NOT depend on:
+
+- whitespace;
+- comments;
 - source formatting;
-- source file location;
-- compiler memory address;
-- host pointer address;
+- source file path;
+- parser node address;
 - process ID;
 - thread ID;
-- physical device ID;
-- backend-specific numbering;
-- hardware topology;
-- compilation order.
+- compiler memory address;
+- allocation address;
+- compilation order;
+- hardware ID;
+- device ID;
+- backend implementation;
+- vendor.
 
-Equivalent semantic types MUST have equivalent canonical identities.
-
-Internal implementation identifiers may include:
+Internal identifiers MAY include:
 
 TypeId
-TypeVarId
-GenericId
+TypeVariableId
+SymbolId
+GenericParameterId
 ShapeId
 EffectId
 CapabilityId
 ResourceId
 RegionId
+LifetimeId
 
 These are implementation identities.
 
-They must not accidentally become source-language semantic values.
+They MUST NOT become source-language identities.
 
 ---
 
-9. Type Categories
+14. Type Equality
 
-Zamani provides one unified type system with the following semantic categories:
+Zamani distinguishes at least:
 
-Primitive
-Numeric
-Textual
-Unit
-Never
-Option
-Result
-Tuple
-Array
-Slice
-Sequence
-Map
-Set
-Record
-Struct
-Enum
-Nominal
-Structural
-Reference
-Pointer
-Function
-Generic
-Parametric
-Dependent
-Linear
-Affine
-Resource
-Capability
-Effect
-Quantum
-Classical
-HDL
-HardwareIntent
-Distributed
-Temporal
-Agent
-Model
-Tensor
-Proof
-Opaque
-Existential
-Dynamic
+syntactic equality
+structural equality
+definitional equality
+semantic equality
+compatibility
+subtyping
+conversion
 
-A category does not necessarily require a keyword.
+These MUST NOT be conflated.
 
-For example:
+14.1 Syntactic equality
 
-List<T>
+Two source type expressions are syntactically equal when their canonical syntax trees are equivalent.
 
-is a collection type even if "List" is implemented as a library/standard semantic type rather than a core keyword.
+14.2 Structural equality
+
+Two types are structurally equal when their normalized structures are equal.
+
+14.3 Definitional equality
+
+Two types are definitionally equal when normalization and language-defined type computation establish that they denote the same semantic type.
+
+14.4 Semantic equality
+
+Two resolved types are semantically equal when the language's canonical semantic model identifies them as the same type.
+
+14.5 Compatibility
+
+Two types are compatible when a permitted operation allows one to be used where the other is expected.
+
+Compatibility does not imply equality.
 
 ---
 
-10. Primitive Types
+15. Type Normalization
 
-The minimum primitive semantic types are:
+Before semantic equality is tested, the compiler MAY normalize:
+
+- aliases;
+- transparent wrappers;
+- equivalent qualified names;
+- type applications;
+- associated projections;
+- normalized unions;
+- normalized intersections;
+- equivalent refinement expressions.
+
+Normalization MUST be deterministic.
+
+Normalization MUST NOT change observable program meaning.
+
+---
+
+16. Primitive Types
+
+The core primitive semantic types include:
 
 Bool
 Char
@@ -508,83 +828,81 @@ String
 Unit
 Never
 
-Numeric types are defined separately.
+Numeric families are specified separately.
 
-No primitive type may silently acquire host-dependent semantics.
+Primitive types MUST have target-independent semantic meaning.
 
 ---
 
-11. Boolean
+17. Boolean Type
 
 "Bool" has exactly two semantic values:
 
 true
 false
 
-Logical operators have deterministic semantics.
+Boolean operations MUST have deterministic semantics.
 
-For effectful expressions:
+For short-circuiting operations, evaluation order is part of the language semantics.
 
-a && b
-a || b
-
-are short-circuiting according to the expression semantics contract.
-
-The second operand MUST NOT execute when the first operand determines the result.
+A backend MUST preserve this behavior.
 
 ---
 
-12. Unit
+18. Unit Type
 
-"Unit" represents successful completion without a meaningful result value.
+"Unit" represents successful completion with no meaningful result value.
 
-Conceptually:
+It is distinct from:
 
-()
+Never
 
-A function returning "Unit" completes normally without producing a semantic result.
+and from arbitrary tuple types.
 
----
-
-13. Never
-
-"Never" represents computation that cannot produce a normal value.
-
-Examples:
-
-- explicit non-returning termination;
-- trap;
-- unrecoverable divergence;
-- infinite computation when statically known to be non-returning.
-
-"Never" may coerce to an expected type because the computation never produces a value.
-
-This coercion does not manufacture a value.
+A function returning "Unit" completes normally and produces no meaningful result value.
 
 ---
 
-14. Option
+19. Never Type
 
-Optional values use:
+"Never" represents a computation that cannot produce a normal value.
+
+Examples include:
+
+- non-returning termination;
+- explicit language-defined trap;
+- divergence where the language semantics classify the computation as non-returning.
+
+"Never" MAY participate in control-flow typing.
+
+Compiler resource exhaustion MUST NOT automatically be treated as a "Never" result.
+
+---
+
+20. Option Types
+
+Optional values are represented semantically as:
 
 Option<T>
 
-with semantic constructors:
+with:
 
 Some(T)
 None
 
-"None" is not a null pointer.
+If shorthand syntax is provided, it MUST canonicalize to "Option<T>".
 
-It is an explicit algebraic value.
+"None" MUST NOT be represented semantically as:
 
-There is no implicit nullability.
+- an invalid pointer;
+- uninitialized memory;
+- arbitrary sentinel bits.
 
 ---
 
-15. Result
+21. Result Types
 
-Fallible computations use:
+Fallible computation is represented as:
 
 Result<T, E>
 
@@ -593,221 +911,222 @@ with:
 Ok(T)
 Err(E)
 
-Recoverable failure must not be represented through undefined behavior.
+Ordinary recoverable failure MUST be represented explicitly.
 
-Compiler and runtime interfaces should prefer explicit result semantics over unchecked failure.
+Undefined behavior MUST NOT be used as an ordinary failure mechanism.
 
 ---
 
-16. Integer Types
+22. Integer Types
 
-Zamani integer types are semantic rather than host-dependent.
+Zamani distinguishes semantic integer types from implementation-sized integers.
 
-Conceptual forms:
+Language-defined fixed-width types MAY include:
 
 i8
 i16
 i32
 i64
 i128
+
 u8
 u16
 u32
 u64
 u128
 
-and arbitrary-width semantic integers:
+where defined by the language specification.
 
-SignedInteger<W>
-UnsignedInteger<W>
+The semantic meaning of each fixed-width type is independent of host architecture.
+
+The language MAY also provide:
+
 Integer
 Natural
+SignedInteger<W>
+UnsignedInteger<W>
 
-where "W" is a semantic width expression.
-
-The type:
-
-usize
-
-if exposed at all, represents a platform/implementation-sized integer and MUST NOT be used to define universal Zamani cardinalities.
-
-Portable source code should use semantic integer types when width matters.
+where "W" is a semantic width.
 
 ---
 
-17. Integer Overflow
+23. Integer Overflow
 
-Integer arithmetic MUST have defined semantics.
+Integer overflow behavior MUST be explicit and deterministic.
 
-Implicit target-dependent wrapping is forbidden.
+Possible semantic operations include:
 
-A fixed-width operation that overflows must have one of these explicitly defined outcomes:
+checked
+wrapping
+saturating
+trapping
+widening
+arbitrary-precision
 
-1. compile-time rejection when statically provable;
-2. checked runtime failure;
-3. explicit wrapping;
-4. explicit saturating arithmetic;
-5. operation in a wider/unbounded semantic domain.
-
-The meaning of:
-
-+
--
-*
-
-must not change merely because a program is compiled for another machine.
+The compiler MUST NOT silently change overflow semantics because a different target was selected.
 
 ---
 
-18. Arbitrary-Precision Integers
+24. Arbitrary-Precision Integers
 
-"Integer" and "Natural" represent mathematical integer domains.
+Where the semantic type represents mathematical integers, its meaning MUST NOT be limited to a host primitive width.
 
-Their semantic meaning is not limited to Rust primitive widths.
+The implementation MAY use:
 
-A compiler may represent them using:
-
-- arbitrary-precision storage;
-- compiler-managed big integers;
-- symbolic values;
+- big integers;
+- symbolic expressions;
+- segmented integers;
 - optimized target representations.
 
-The compiler MUST NOT silently wrap them at "u64", "u128", or "usize".
+The implementation MUST NOT silently wrap a semantic integer because an internal machine integer overflowed.
 
 ---
 
-19. Floating-Point Types
+25. Floating-Point Types
 
-Zamani supports semantic floating-point types such as:
-
-f16
-f32
-f64
-f128
-Float<P>
-
-where "P" represents semantic precision.
-
-Floating-point semantics must define:
+Floating-point types MUST specify:
 
 - precision;
+- range;
 - rounding;
-- exceptional values;
-- NaN;
-- infinity;
+- NaN semantics;
+- infinity semantics;
 - comparison;
 - conversion;
-- reproducibility profile.
+- reproducibility behavior.
 
-Where exact reproducibility is required, a strict numerical profile must be selected.
+Target-specific native floating-point formats MAY be used only as valid realizations of the requested semantic type.
 
-A backend must not silently change semantic precision.
+A target MUST NOT silently change declared precision semantics.
 
 ---
 
-20. Complex Types
+26. Exact Numeric Types
 
-Complex values are represented conceptually as:
+Zamani MAY provide exact numerical types such as:
+
+Integer
+Natural
+Rational
+ExactDecimal
+Complex<Exact>
+
+Exact semantics MUST remain exact unless an explicit conversion permits approximation.
+
+---
+
+27. Complex Types
+
+Complex values use:
 
 Complex<T>
 
-where "T" is an appropriate real numeric type.
+where "T" is an appropriate scalar numeric type.
 
-Examples:
-
-Complex<f32>
-Complex<f64>
-Complex<ArbitraryPrecision>
-
-The type system must preserve the distinction between:
-
-Float
-Complex<Float>
-
-because they have different mathematical semantics.
+Quantum amplitudes MAY use complex semantic values, but quantum semantics MUST NOT depend on a particular host floating-point representation.
 
 ---
 
-21. Character and String
+28. Numeric Conversion
 
-"Char" represents one semantic Unicode scalar value.
+Conversions MUST be classified.
+
+A conversion is:
+
+lossless
+potentially lossy
+explicitly lossy
+representation-changing
+semantic-changing
+
+Potentially lossy conversions MUST be explicit unless a language rule establishes that they are safe and lossless.
+
+---
+
+29. Character and String Types
+
+"Char" represents a semantic Unicode scalar value according to the language's lexical/unicode specification.
 
 "String" represents a sequence of characters.
 
 String representation is implementation-defined.
 
-String type semantics must not depend on:
+String semantics MUST NOT depend on:
 
-- machine word size;
-- memory allocator;
+- pointer width;
 - operating system;
-- pointer width.
+- allocator;
+- machine word size.
 
 ---
 
-22. Tuples
+30. Tuples
 
-For types:
+A tuple type is:
 
 (T1, T2, ..., Tn)
 
-tuple equality is structural.
+Tuple arity is semantic.
 
-The tuple arity is a semantic property of the type.
+There is no language-defined maximum tuple arity.
 
-There is no language-level maximum tuple arity.
+Compiler resource budgets MAY limit an individual compilation.
 
-An implementation may impose compiler resource limits.
+Such a budget is not a type-system maximum.
 
 ---
 
-23. Arrays
+31. Arrays
 
-An array may be represented as:
+An array type is conceptually:
 
 Array<T, N>
 
 where:
 
-- "T" is the element type;
-- "N" is the semantic cardinality.
+T = element type
+N = semantic cardinality
 
-"N" may be:
+"N" MAY be:
 
-- a literal;
-- a constant;
-- a generic parameter;
-- a symbolic expression;
-- a dependent value;
-- a runtime-known value where the selected array abstraction permits it.
+- literal;
+- constant;
+- generic parameter;
+- symbolic expression;
+- dependent value;
+- another statically validated cardinality.
 
-The type system must distinguish:
+Array semantics MUST distinguish:
 
-logical length
-physical allocation
+logical cardinality
 storage representation
+physical allocation
+
+Physical allocation is downstream.
 
 ---
 
-24. Slices and Dynamic Sequences
+32. Slices and Views
 
-A slice represents a view over an existing sequence:
+A slice/view represents a view over another sequence:
 
 Slice<T>
 
-A dynamically sized sequence may be represented as:
+Its semantics MUST NOT imply ownership unless explicitly qualified.
+
+Dynamic collections MAY include:
 
 Sequence<T>
 List<T>
 Vector<T>
 
-The semantic distinction between fixed-size and dynamically sized collections must be preserved.
+as library or standard semantic types.
 
-A dynamic sequence must not acquire a hidden fixed maximum.
+No dynamic collection may acquire a hidden universal maximum.
 
 ---
 
-25. Maps and Sets
+33. Maps and Sets
 
 Maps:
 
@@ -817,3394 +1136,3684 @@ Sets:
 
 Set<T>
 
-require their key/equality/hash semantics to be explicit.
+Their semantics depend on:
 
-The type system must not assume a particular implementation such as:
+- key equality;
+- value equality where applicable;
+- ordering where applicable;
+- hashing where applicable.
 
-- hash table;
-- tree;
-- distributed map;
-- accelerator memory.
-
-Those are implementation choices.
+The type system MUST NOT require a particular data structure implementation.
 
 ---
 
-26. Shape-Parametric Types
+34. Named and Qualified Types
 
-Scientific and mathematical structures use semantic shapes.
+Named types are resolved from qualified paths.
 
 Examples:
 
-Vector<N, T>
-Matrix<M, N, T>
-Tensor<Shape, T>
+Int
+std::collections::Map
+quantum::State
+module::submodule::Type
 
-A shape may contain symbolic dimensions:
+A name in source syntax is not a resolved type until semantic name resolution succeeds.
 
-Shape<N, M, K>
-
-or dependent expressions.
-
-Shape expressions are semantic terms.
-
-They are not Rust "usize" values by definition.
+Qualified naming MUST remain target-independent.
 
 ---
 
-27. Shape Compatibility
+35. Nominal and Structural Typing
 
-For matrix multiplication:
+Zamani distinguishes nominal identity from structural compatibility.
 
-Matrix<M, N, A>
-×
-Matrix<N, K, B>
+A nominal type's identity comes from its declaration identity.
 
-is valid because the inner dimensions unify.
+A structural type's compatibility comes from its normalized structure.
 
-The result is:
+Two distinct nominal types MUST NOT become interchangeable merely because their fields happen to match.
 
-Matrix<M, K, ResultElementType>
+Structural compatibility MAY be defined for explicitly structural constructs.
 
-The operation:
-
-Matrix<M, N, A>
-×
-Matrix<K, P, B>
-
-is valid only if the type constraints establish:
-
-N = K
-
-This checking occurs during semantic analysis.
-
-The parser does not perform shape reasoning.
+The compiler MUST NOT silently switch a type from nominal to structural interpretation.
 
 ---
 
-28. Symbolic Dimensions
+36. Type Aliases
 
-Dimensions may be symbolic.
+A transparent alias preserves the underlying semantic type.
 
 For example:
 
-Vector<N, Float>
+type UserId = Integer
 
-does not require "N" to be a literal.
+if declared as a transparent alias, has the same semantic type as its target.
 
-"N" may be introduced through:
+A nominal declaration MUST instead create a distinct type identity.
 
-- a generic parameter;
-- a constant;
-- a dependent value;
-- a symbolic constraint;
-- a runtime dimension in an appropriate dynamic type.
-
-The type checker preserves symbolic constraints rather than prematurely converting them to machine integers.
+The declaration syntax determines which model applies.
 
 ---
 
-29. Tensor Types
+37. Newtype/Nominal Wrappers
 
-A tensor is conceptually:
+A nominal wrapper creates a distinct type even if its representation is equivalent to another type.
 
-Tensor<Shape, T>
+This is required for:
 
-where "Shape" is a semantic shape.
+- domain safety;
+- units;
+- identifiers;
+- security labels;
+- resource handles;
+- hardware intent;
+- quantum abstractions.
 
-The type system supports:
-
-- scalar tensors;
-- vectors;
-- matrices;
-- arbitrary-rank tensors;
-- symbolic-rank representations where the selected type abstraction supports them;
-- dynamic shapes.
-
-There is no language-level maximum tensor rank.
+Representation equivalence does not imply type equality.
 
 ---
 
-30. Generic Types
+38. Generic Types
 
 Zamani supports parametric polymorphism.
 
 Examples:
 
-List<T>
 Option<T>
 Result<T, E>
+Map<K, V>
 Vector<N, T>
 Matrix<M, N, T>
 Tensor<S, T>
+Model<I, O>
 
-Generic implementation strategy is not semantic.
+Generic application syntax is owned by:
 
-The compiler may use:
+grammar/types/generic.g4
 
-- monomorphization;
-- specialization;
-- dictionary passing;
-- type erasure;
-- interpretation;
-- JIT;
-- AOT compilation.
-
-The source-level meaning remains identical.
+Generic semantics are owned by this specification.
 
 ---
 
-31. Generic Parameters
+39. Generic Parameter Kinds
 
-Generic parameters may represent:
+A generic parameter MUST have a semantic category.
+
+Supported categories include:
 
 Type
 Value
 Shape
-Resource
-Capability
+Lifetime
 Effect
+Capability
+Resource
 
-Conceptually:
+A generic parameter MUST NOT silently acquire a physical-machine interpretation.
+
+For example:
+
+<N>
+
+does not inherently mean:
+
+number of physical CPU cores
+
+It means whatever semantic parameter its declaration establishes.
+
+---
+
+40. Generic Declarations vs Applications
+
+Generic declaration and generic application are different constructs.
+
+The declaration side defines parameters:
 
 <T>
 <N>
 <S>
-<R>
-<C>
-<E>
 
-A generic parameter must have an explicit semantic category.
+and their constraints.
 
-The compiler must not infer that a generic value corresponds to a particular physical machine property.
+The application side supplies arguments:
+
+Vector<N, Float>
+Map<Key, Value>
+
+"grammar/types/generic.g4" owns generic application syntax.
+
+Generic declaration syntax remains owned by the appropriate declaration/function generic grammar.
+
+No grammar file may create a second generic system.
 
 ---
 
-32. Generic Constraints
+41. Generic Bounds
 
-Generic constraints are semantic predicates.
+Bounds constrain generic parameters.
 
 Examples:
 
 T : Numeric
 T : Serializable
+T : Ordered
 T : QuantumCompatible
-T : Cloneable
-N : ShapeDimension
-C : Capability
 
-A generic definition is valid for every instantiation satisfying its declared constraints.
+A bound is a semantic constraint.
 
-The compiler must not add undocumented target constraints.
+A bound MUST NOT be interpreted as a machine-selection directive.
 
 ---
 
-33. Where Constraints
-
-Constraints may be attached through a "where"-style contract.
-
-Conceptually:
-
-where
-    N = M,
-    T : Numeric
-
-The constraint set must be preserved through:
-
-AST
-→ semantic model
-→ canonical IR
-
-Constraints must never be silently discarded.
-
----
-
-34. Type Aliases
-
-An alias creates another name for the same semantic type.
-
-Conceptually:
-
-type UserId = Integer
-
-does not create a new nominal identity.
-
-Where a distinct type is required, a nominal declaration must be used.
-
-Example:
-
-type UserId = new Integer
-
-or the equivalent canonical nominal-type syntax.
-
----
-
-35. Nominal Types
-
-A nominal type has its own semantic identity.
-
-Two nominal types with identical structure are not automatically equal.
-
-Example:
-
-type UserId = new Integer
-type ProductId = new Integer
-
-"UserId" and "ProductId" are distinct even if both use integer representation.
-
-This prevents accidental interchangeability.
-
----
-
-36. Structural Types
-
-Structural compatibility may be used where explicitly defined.
-
-For a structural type, compatibility is determined by the required structure and semantic contracts.
-
-Structural compatibility must not accidentally erase nominal identity.
-
-The language must clearly distinguish:
-
-nominal equality
-
-from:
-
-structural compatibility
-
----
-
-37. Records, Structs, Classes, Interfaces and Traits
-
-The language may expose:
-
-record
-struct
-class
-interface
-trait
-impl
-
-These must not create independent type systems.
-
-They map into the unified semantic model:
-
-data structure
-behavioral contract
-implementation relationship
-nominal identity
-
-A trait/interface primarily establishes behavioral requirements.
-
-A struct/record/class primarily establishes data/state structure according to its declaration semantics.
-
----
-
-38. Recursive Types
-
-Recursive types are valid when their semantic representation is well-founded.
-
-Examples:
-
-List<T>
-Tree<T>
-Graph<T>
-Expression
-AST
-
-There is no language-level recursion-depth maximum.
-
-Compiler stack/resource exhaustion is an implementation limitation, not a type-system rule.
-
-Recursive types must be represented without requiring infinite eager expansion.
-
----
-
-39. Function Types
-
-A function type contains all semantically relevant information.
-
-Conceptually:
-
-Fn<
-    Parameters,
-    Return,
-    Effects,
-    Resources,
-    Capabilities
->
-
-For example:
-
-Fn<(A, B), C, E, R, K>
-
-Two functions with identical parameters and return type are not necessarily semantically identical if their:
-
-- effects;
-- resource requirements;
-- capabilities;
-
-differ.
-
----
-
-40. Function Variance
-
-Function compatibility must follow explicit variance rules.
-
-For a function:
-
-Fn<(A), R>
-
-parameter compatibility is contravariant where the relevant type relation permits it.
-
-Return compatibility is covariant where safe.
-
-Effect/resource/capability constraints must not be ignored during function compatibility.
-
-No backend may weaken these rules.
-
----
-
-41. Async and Concurrent Functions
-
-An asynchronous computation is a semantic computation type.
-
-It must not be defined as:
-
-Fn -> operating_system_thread
-
-Instead, the type describes asynchronous behavior.
-
-The runtime determines whether the computation is realized through:
-
-- threads;
-- tasks;
-- fibers;
-- event loops;
-- accelerators;
-- distributed execution;
-- hardware engines.
-
----
-
-42. References
-
-References provide access to existing values/resources.
-
-A reference does not imply ownership.
-
-The type system must preserve:
-
-- lifetime;
-- aliasing;
-- ownership;
-- mutability;
-- capability constraints.
-
-Invalid references must be rejected before execution.
-
----
-
-43. Ownership
+42. Constraint Model
 
 Zamani distinguishes:
 
-Owned<T>
-Borrowed<T>
-Shared<T>
-Linear<T>
-Affine<T>
+type equality
+value equality
+type compatibility
+subtyping
+trait/interface satisfaction
+shape equality
+shape inequality
+resource constraints
+capability constraints
+effect constraints
+refinement predicates
+policy constraints
 
-where these categories are semantically relevant.
+The compiler MUST preserve these distinctions.
 
-Ownership is part of the static resource model.
-
-Ownership must not depend on the physical memory allocator.
-
----
-
-44. Copyability
-
-A type is copyable only when its semantic contract permits duplication.
-
-Copying a resource-sensitive value must not silently duplicate an external resource.
-
-For example, copying:
-
-Integer
-
-is fundamentally different from copying:
-
-Qubit
-DeviceHandle
-Socket
-Process
-Timeline
-HardwareResource
+Constraint solving MUST be deterministic for the same semantic input and compiler profile.
 
 ---
 
-45. Linear Types
+43. Constraint Solving
 
-A linear resource must be consumed exactly according to its declared linearity contract.
+Constraint solving may involve:
 
-Linear semantics are particularly important for:
+- unification;
+- normalization;
+- substitution;
+- trait/interface resolution;
+- associated-type resolution;
+- arithmetic reasoning;
+- shape reasoning;
+- refinement checking;
+- capability validation;
+- resource validation.
 
-- quantum resources;
-- unique hardware handles;
-- exclusive resources;
-- cryptographic secrets where the chosen security model requires linear use;
-- transactional resources.
+The type checker MUST distinguish:
 
-A linear resource cannot be silently duplicated.
+UNSATISFIABLE_CONSTRAINT
 
----
+from:
 
-46. Affine Types
+SOLVER_RESOURCE_EXHAUSTED
 
-An affine resource may be used at most once.
-
-An affine value may be consumed before scope exit.
-
-Affine semantics are appropriate where duplication is forbidden but unused destruction is permitted.
-
----
-
-47. Quantum Types
-
-The quantum type system is target-independent.
-
-Core semantic quantum types include:
-
-Qubit
-LogicalQubit
-PhysicalQubit
-QRegister
-QuantumState
-Observable
-QuantumChannel
-QuantumOperation
-QuantumCircuit
-
-The exact source spelling is controlled by:
-
-grammar/quantum/
-grammar/spec/quantum.md
-
-The semantic boundary is the canonical:
-
-quantum::ir
-
-No second quantum semantic IR may be introduced merely because a source-level quantum construct exists.
+The latter is not automatically a language-level type error.
 
 ---
 
-48. Logical and Physical Qubits
+44. Inference Variables
 
-A logical qubit represents a semantic computational resource.
+Inference variables represent unresolved semantic quantities.
 
-A physical qubit represents a physical realization vocabulary.
+Examples:
 
-These are distinct.
+?
+T
+N
+S
+E
 
-LogicalQubit
+Inference variables MUST NOT survive into a finalized monomorphic semantic type unless the language explicitly permits unresolved existential/dynamic semantics.
 
-does not mean:
-
-physical qubit 0
-
-and:
-
-PhysicalQubit
-
-does not guarantee that a target actually provides such a resource.
-
-Existence and availability are downstream resource/HAL concerns.
-
-The canonical quantum IR already follows this separation and intentionally imports canonical "QubitId" and "PhysicalQubitId" rather than defining duplicate identifiers.
+An unresolved required type variable is a diagnostic error.
 
 ---
 
-49. Quantum Resource Linearity
+45. Type Inference
 
-Qubits are resource-sensitive.
+Type inference MUST be:
 
-The type system must prevent semantic duplication of a qubit resource.
+- deterministic;
+- scope-aware;
+- constraint-driven;
+- independent of target hardware;
+- independent of hash-map iteration order;
+- independent of backend selection.
 
-This does not mean the type system prevents valid quantum operations such as:
+Inference MUST NOT depend on:
 
-- entanglement;
-- measurement;
-- unitary transformation;
-- controlled operations.
-
-It means that the same unique semantic resource cannot be silently copied as though it were an ordinary integer.
-
----
-
-50. No Fixed Qubit Limit
-
-The type system MUST NOT contain:
-
-MAX_QUBITS
-MAX_LOGICAL_QUBITS
-MAX_PHYSICAL_QUBITS
-
-A type such as:
-
-QRegister<N>
-
-is valid for any semantically representable "N".
-
-Actual execution feasibility is determined later from:
-
-resource requirements
-+
-capabilities
-+
-hardware state
-+
-routing
-+
-scheduling
-+
-QEC
-+
-ZQN
-+
-HAL
+- available CPU count;
+- available GPU count;
+- available QPU count;
+- memory layout;
+- compilation machine identity.
 
 ---
 
-51. Quantum Register Types
+46. Subtyping
 
-A register can be represented semantically as:
+Zamani MAY support subtyping for explicitly defined semantic relations.
 
-QRegister<N>
+Subtyping MUST NOT be inferred merely from representation similarity.
 
-where "N" is a semantic cardinality.
+Where subtyping exists, the specification MUST define:
 
-"N" may be:
+reflexivity
+transitivity
+variance interaction
+function variance
+generic variance
+ownership interaction
+effect interaction
+capability interaction
 
-- constant;
-- generic;
-- symbolic;
-- dynamically established.
-
-The type system must not require physical contiguous qubits.
-
-Logical register layout is distinct from physical topology.
-
----
-
-52. Quantum State Types
-
-Quantum state types must preserve semantic distinction between:
-
-Qubit
-QRegister<N>
-QuantumState
-
-A "QuantumState" may represent the state associated with a collection of quantum resources without exposing its physical storage layout.
-
-The implementation may use:
-
-- state vectors;
-- stabilizer representations;
-- tensor networks;
-- sparse representations;
-- hardware state;
-- other valid representations.
-
-The representation is not part of source type identity.
+A target backend MUST NOT invent new source-level subtype relations.
 
 ---
 
-53. Quantum Operations
+47. Variance
 
-A quantum operation type expresses:
+For a generic constructor "F<T>", variance MUST be explicitly declared or derived according to language rules.
 
-- operation identity;
-- input quantum resources;
-- classical parameters;
-- output/resource effects;
-- control conditions;
-- required capabilities;
-- relevant effects.
+Supported variance classifications MAY include:
 
-The grammar must not enumerate every possible gate as a distinct type.
+covariant
+contravariant
+invariant
+bivariant
 
-This permits:
+Variance MUST be semantic.
 
-- standard operations;
-- user-defined operations;
-- future operations;
-- vendor operations through explicit interoperability;
-- composite operations.
+It MUST NOT depend on backend representation.
 
 ---
 
-54. Quantum Parameters
+48. Function Types
 
-Angles and other quantum parameters should use semantic types where appropriate.
+A function type includes all semantically relevant information.
 
-For example:
+Conceptually:
 
-Angle
-Phase
-Frequency
-Duration
-Amplitude
+fn(
+    P1,
+    P2,
+    ...
+) -> R
 
-These are semantic quantities rather than arbitrary floating-point aliases.
+with optional semantic qualifiers for:
 
-A backend may lower them into a supported numerical representation.
-
----
-
-55. Measurement Types
-
-Measurement is not ordinary copying.
-
-A measurement operation may:
-
-- consume or transform quantum state;
-- produce classical information;
-- introduce an explicit effect;
-- change resource state.
-
-Therefore measurement must be represented by an appropriate effect/type contract.
-
-The result type must explicitly distinguish classical observation from quantum state.
-
----
-
-56. Classical/Quantum Hybrid Types
-
-Hybrid computation is represented in one unified type system.
-
-A computation may have:
-
-classical inputs
-quantum resources
-classical outputs
-quantum outputs
+generics
 effects
 capabilities
-resource requirements
+resources
+ownership
+constraints
+contracts
 
-A hybrid function is not a separate language.
+Function syntax is owned by:
 
-Example semantic shape:
+grammar/types/function.g4
+grammar/functions/
 
-Fn<
-    (ClassicalInput, QRegister<N>),
-    ClassicalOutput,
-    Effects,
-    Resources,
-    Capabilities
->
-
-The exact source syntax belongs to the hybrid grammar.
+Function type meaning is owned here.
 
 ---
 
-57. Classical Types
+49. Function Variance
 
-Classical computation uses the same base type system for:
+For a function:
 
-- integers;
-- floats;
-- booleans;
-- records;
-- arrays;
-- tensors;
-- functions;
-- references;
-- resources;
-- effects.
+fn(A) -> B
 
-The "classical/" grammar adds syntax where necessary but must not introduce an independent type system.
+parameter and return compatibility MUST follow the language-defined variance rules.
+
+A backend MUST NOT alter function type compatibility according to ABI calling conventions.
+
+ABI adaptation is a downstream conversion.
 
 ---
 
-58. HDL Types
+50. Closures
 
-HDL constructs use the same semantic type system.
+Closure types MUST preserve the semantic types of:
+
+- parameters;
+- return value;
+- captured values;
+- capture ownership;
+- effects;
+- capabilities;
+- resource usage.
+
+A closure MUST NOT silently capture a linear resource multiple times.
+
+---
+
+51. References
+
+A reference type may contain:
+
+mutability
+lifetime
+referenced type
+
+Conceptually:
+
+&T
+&mut T
+&'a T
+&'a mut T
+
+Reference validity is governed by ownership and lifetime analysis.
+
+The source type does not expose physical addresses.
+
+---
+
+52. Raw Pointers
+
+Raw pointer types are distinct from safe references.
+
+Conceptually:
+
+*const T
+*mut T
+
+Their legality and operations are constrained by the language's memory-safety rules.
+
+The production Rust compiler implementation MUST remain safe Rust.
+
+Zamani raw-pointer semantics MUST NOT require "unsafe" Rust in the compiler implementation.
+
+---
+
+53. Ownership
+
+Zamani ownership semantics describe responsibility for values and resources.
+
+The type system MUST distinguish at least:
+
+owned
+borrowed
+shared
+mutable borrowed
+linear
+affine
+
+Ownership is semantic.
+
+It is not an allocation-address model.
+
+---
+
+54. Move Semantics
+
+Moving an owned value transfers ownership.
+
+After a move, the original binding MUST NOT be used in a way prohibited by the ownership rules.
+
+The compiler MUST detect invalid use after move.
+
+---
+
+55. Borrowing
+
+A borrowed reference does not transfer ownership.
+
+The borrow checker MUST establish that:
+
+- the referent remains valid;
+- mutable and immutable access rules are respected;
+- lifetimes are compatible;
+- linear/affine resource rules remain satisfied.
+
+---
+
+56. Lifetimes
+
+Lifetimes express validity relationships between references.
+
+A lifetime is a semantic region relationship.
+
+It MUST NOT be interpreted as a wall-clock duration.
+
+The type system MUST NOT require lifetime names to correspond to runtime timestamps.
+
+---
+
+57. Linear Types
+
+A linear type represents a value that must be consumed exactly according to the language's linearity rules.
+
+A linear value MUST NOT be silently duplicated.
 
 Examples include:
 
-Bit
-BitVector<N>
-Signal<T>
-Clock
-Reset
-Port<T>
-Net<T>
-Register<T>
-Memory<T, Shape>
+- certain quantum resources;
+- exclusive resource handles;
+- ownership tokens;
+- unique capabilities.
 
-Widths are semantic parameters.
-
-A declaration such as:
-
-BitVector<N>
-
-must not impose a universal "N".
-
-Physical synthesis determines actual implementation resources.
+The linearity checker is semantic.
 
 ---
 
-59. Hardware-Intent Types
+58. Affine Types
 
-Hardware intent is represented separately from concrete hardware realization.
+An affine type represents a value that may be consumed at most once.
 
-Examples:
+Unlike a linear value, an affine value MAY be dropped if the semantic type permits dropping.
 
-HardwareResource
-ComputeResource
-MemoryResource
-Accelerator
-Interconnect
-QuantumDevice
+The distinction between:
 
-These types represent semantic resource classes.
+linear
 
-They do not mean:
+and:
 
-GPU #0
-CPU core #7
-QPU #2
-physical qubit #17
+affine
 
-unless a downstream realization layer explicitly introduces such identities.
+MUST remain explicit.
 
 ---
 
-60. Resource Types
+59. Quantum Ownership
 
-Resource types describe computational resources.
+Quantum resources MUST be subject to explicit ownership semantics.
+
+A logical qubit value MUST NOT be duplicated as an ordinary copyable value merely because the host machine can copy a data structure representing it.
+
+The type system must distinguish:
+
+logical quantum resource
+
+from:
+
+classical description of a quantum resource
+
+The latter may be copyable where its type permits it.
+
+---
+
+60. Quantum Type Boundary
+
+Quantum-specific source types are owned syntactically by:
+
+grammar/quantum/
+grammar/types/quantum.g4
+grammar/quantum/types.g4
+
+according to the repository's single-owner grammar contract.
+
+This specification owns their semantics.
+
+The semantic pipeline is:
+
+quantum source type
+        ↓
+TypeExpr
+        ↓
+resolved quantum semantic type
+        ↓
+quantum semantic validation
+        ↓
+quantum::ir
+        ↓
+optimization
+        ↓
+routing
+        ↓
+scheduling
+        ↓
+resilience / QEC
+        ↓
+ZQN
+        ↓
+HAL
+
+The type system MUST NOT:
+
+- select physical qubits;
+- select a QPU;
+- choose a coupling map;
+- choose calibration;
+- choose a pulse implementation;
+- choose a QEC code;
+- assign device IDs.
+
+---
+
+61. Quantum Type Examples
+
+Portable semantic types MAY include:
+
+Qubit
+LogicalQubit
+QRegister<N>
+QuantumState<S>
+Observable<O>
+QuantumChannel<I, O>
+
+These names are semantic constructors, not physical inventories.
+
+For example:
+
+QRegister<N>
+
+means a register whose semantic cardinality is "N".
+
+It does not mean a particular number of physical qubits.
+
+---
+
+62. Quantum Type Compatibility
+
+Quantum types MUST preserve distinctions between:
+
+classical bit
+quantum bit
+logical qubit
+physical qubit
+quantum state
+measurement result
+observable
+quantum operation
+quantum channel
+
+A classical "Bool" MUST NOT silently become a "Qubit".
+
+A "Qubit" MUST NOT silently become a classical Boolean merely because measurement exists.
+
+Measurement is a semantic operation with its own result and effect rules.
+
+---
+
+63. Quantum Resource Constraints
+
+Quantum type validity and quantum resource feasibility are distinct.
+
+This:
+
+QRegister<N>
+
+is a type-level semantic construct.
+
+This:
+
+requires qubits >= N
+
+is a resource requirement.
+
+This:
+
+capability("quantum.measurement")
+
+is a capability requirement.
+
+This:
+
+physical_qubit = 17
+
+is downstream realization.
+
+These MUST NOT be conflated.
+
+---
+
+64. Shape Types
+
+Scientific, numerical, tensor, and hardware data types MAY use semantic shape parameters.
 
 Examples:
+
+Vector<N, T>
+Matrix<M, N, T>
+Tensor<S, T>
+
+Shape expressions are semantic values.
+
+They are not necessarily host integers.
+
+---
+
+65. Shape Equality
+
+Two dimensions are equal when the semantic constraint system establishes:
+
+A = B
+
+A literal equality is only one way to establish this.
+
+Equality may also arise from:
+
+- generic parameters;
+- aliases;
+- normalized arithmetic expressions;
+- dependent parameters;
+- compile-time definitions.
+
+---
+
+66. Shape Constraints
+
+A matrix multiplication constraint is:
+
+Matrix<M, N, A>
+×
+Matrix<N, K, B>
+
+The result has shape:
+
+Matrix<M, K, Result>
+
+A multiplication:
+
+Matrix<M, N, A>
+×
+Matrix<K, P, B>
+
+requires a proof/constraint:
+
+N = K
+
+If that constraint cannot be established, the operation is rejected.
+
+The parser does not perform this reasoning.
+
+---
+
+67. Tensor Types
+
+Tensor semantics support:
+
+- scalar tensors;
+- vectors;
+- matrices;
+- arbitrary-rank tensors;
+- symbolic dimensions;
+- dynamic dimensions;
+- symbolic shapes.
+
+There is no universal maximum tensor rank.
+
+Compiler resource budgets remain implementation policies.
+
+---
+
+68. Dependent Values
+
+A dependent type may contain a type-level value.
+
+Examples:
+
+Array<T, N>
+Vector<N, T>
+
+where "N" is a validated semantic value.
+
+A dependent value MUST be distinguishable from an ordinary runtime value when compile-time proof is required.
+
+---
+
+69. Type-Level Values
+
+The source AST already supports a type-level value representation.
+
+A type-level value MAY represent:
+
+- integer literal;
+- symbolic identifier;
+- generic value parameter;
+- registered extension value.
+
+The type-level value system MUST remain separate from ordinary runtime expression evaluation unless an explicit compile-time evaluation bridge is defined.
+
+---
+
+70. Compile-Time Evaluation
+
+Type-level evaluation MUST be:
+
+- deterministic;
+- side-effect controlled;
+- resource bounded by compiler policy;
+- independent of target hardware;
+- reproducible under the same semantic profile.
+
+Compile-time evaluation MUST NOT perform unrestricted:
+
+- network access;
+- filesystem access;
+- device discovery;
+- hardware mutation;
+- secret access;
+- uncontrolled code generation.
+
+Any permitted external capability requires an explicit metaprogramming/effect contract.
+
+---
+
+71. Dependent Pi Types
+
+A dependent function type is conceptually:
+
+Π(x : A). B(x)
+
+It represents a function whose result type depends on a parameter value.
+
+The canonical AST representation is:
+
+TypeExpr::Pi
+
+The type checker MUST validate:
+
+1. the parameter name;
+2. the parameter type;
+3. the scope of the parameter;
+4. the body type;
+5. substitution;
+6. dependency validity.
+
+---
+
+72. Dependent Sigma Types
+
+A dependent pair is conceptually:
+
+Σ(x : A). B(x)
+
+The canonical AST representation is:
+
+TypeExpr::Sigma
+
+The semantic type represents a value containing:
+
+x : A
+
+and a second component whose type depends on "x".
+
+---
+
+73. Type Identity Propositions
+
+The canonical source representation supports identity propositions:
+
+Identity<A, B>
+
+Identity propositions MUST be interpreted as semantic equality propositions.
+
+They MUST NOT be treated as arbitrary runtime Boolean values unless an explicit proposition-to-value conversion is defined.
+
+---
+
+74. Refinement Types
+
+A refinement type represents:
+
+T where P
+
+where "P" is a predicate over values of "T".
+
+The predicate MUST be semantically well-formed.
+
+A refinement MAY be discharged through:
+
+- compile-time proof;
+- constraint solving;
+- trusted verifier;
+- explicit runtime validation.
+
+If the compiler cannot establish the refinement statically and runtime checking is permitted, the runtime check MUST remain explicit in the semantic model.
+
+---
+
+75. Proof Obligations
+
+Type checking may generate proof obligations.
+
+Examples:
+
+N = M
+N > 0
+index < length
+capability satisfies requirement
+resource budget satisfies requirement
+
+A proof obligation is not automatically true merely because it is syntactically present.
+
+Unproven required obligations MUST cause a diagnostic unless the language explicitly permits runtime validation or another declared proof mode.
+
+---
+
+76. Type Classes / Interfaces
+
+Zamani MAY express semantic capabilities of types through type classes, interfaces, traits, or equivalent constraint constructs.
+
+A constraint such as:
+
+T : Numeric
+
+means that "T" satisfies the semantic contract named "Numeric".
+
+It does not imply a particular machine implementation.
+
+---
+
+77. Type-Class Resolution
+
+Resolution MUST be:
+
+- deterministic;
+- scope-aware;
+- version-aware;
+- ambiguity-detecting;
+- independent of hardware;
+- independent of hash-map iteration.
+
+If multiple unrelated implementations satisfy the same required constraint and no resolution rule selects one, compilation MUST report an ambiguity.
+
+---
+
+78. Associated Types
+
+Associated types represent type members attached to a type-level abstraction.
+
+Conceptually:
+
+Iterator::Item
+
+The canonical source representation is:
+
+TypeExpr::Associated
+
+Associated-type resolution MUST occur during semantic analysis.
+
+An unresolved required associated type is a type error.
+
+---
+
+79. Associated-Type Equality
+
+Constraints may establish:
+
+Iterator::Item = T
+
+Such equality is a semantic constraint.
+
+The compiler MUST NOT compare only textual names.
+
+---
+
+80. Higher-Kinded Types
+
+The type system MAY support type constructors as values at the type level.
+
+A constructor may have a kind conceptually analogous to:
+
+Type -> Type
+Type -> Type -> Type
+
+Kinds MUST be checked before type application.
+
+A type constructor and a fully applied type are distinct semantic entities.
+
+---
+
+81. Type Application
+
+The canonical AST supports:
+
+TypeApplication
+
+This exists to represent type-level constructor application beyond ordinary nominal generic syntax.
+
+The semantic checker MUST distinguish:
+
+generic type application
+
+from:
+
+type-level function application
+
+where their semantics differ.
+
+---
+
+82. Type Extensions
+
+The canonical AST supports an extensible type form.
+
+An extension type MUST identify:
+
+namespace
+name
+arguments
+attributes
+version/registration identity where required
+
+An extension MUST declare:
+
+- semantic meaning;
+- compatibility;
+- type parameters;
+- constraints;
+- effects if relevant;
+- capabilities if relevant;
+- resource requirements if relevant;
+- IR mapping.
+
+An extension MUST NOT silently redefine an existing stable core type.
+
+---
+
+83. Open-World Type Extension
+
+The core type system MUST be open to future computational domains.
+
+A new domain SHOULD be expressible through:
+
+- named types;
+- qualified types;
+- generic applications;
+- associated types;
+- type classes;
+- extensions;
+- dialect registration.
+
+The addition of a new domain MUST NOT require adding a new universal enum branch merely because the domain introduces a new semantic type family, unless the type genuinely requires core language semantics unavailable through existing mechanisms.
+
+---
+
+84. Resource-Aware Types
+
+A type MAY carry semantic resource information.
+
+Examples include:
 
 Resource<T>
-MemoryResource
-ComputeResource
-CommunicationResource
-QuantumResource
-StorageResource
-EnergyResource
+Linear<T>
+Affine<T>
+Capability<T>
 
-Resource types are connected to:
+The type system verifies the structural resource relationship.
 
-grammar/resources/
-grammar/hardware/
-grammar/compile/
-grammar/execution/
+The resource subsystem determines actual availability.
 
-The type system establishes semantic relationships.
+Therefore:
 
-Resource feasibility remains downstream.
+type validity
+
+and:
+
+resource availability
+
+are distinct checks.
 
 ---
 
-61. Capability Types
+85. Capability-Aware Types
 
-A capability describes what a target or execution environment can provide.
+Capabilities represent permission or ability to perform a class of computation.
 
 Examples:
 
 Capability<"quantum.measurement">
+Capability<"gpu.compute">
 Capability<"tensor.compute">
-Capability<"distributed.collective">
-Capability<"hdl.synthesis">
+Capability<"network">
 
-Capabilities are not hardware identities.
+Capability identifiers are semantic identifiers.
 
-A capability requirement can be satisfied by multiple implementations.
+They do not identify physical devices.
 
----
-
-62. Requirement vs Capability vs Preference
-
-The type/resource system must distinguish:
-
-requirement
-capability
-constraint
-preference
-hint
-implementation decision
-
-For example:
-
-requires capability("quantum.mid_circuit_measurement")
-
-is a requirement.
-
-prefer capability("gpu.tensor")
-
-is a preference.
-
-map q0 -> physical_qubit(17)
-
-is a target-specific implementation decision.
-
-These must not be conflated.
+Actual capability satisfaction belongs to capability analysis and target realization.
 
 ---
 
-63. Effect Types
+86. Effects and Types
 
-Effects describe observable computational behavior.
+Effects are not automatically types.
 
-Examples include:
+The effect subsystem owns effect vocabulary and effect semantics.
 
-IO
-State
-Mutation
-Allocation
-Async
-Concurrency
-Quantum
-Measurement
-Randomness
-Nondeterminism
-Network
-FileSystem
-Device
-Hardware
-UnsafeExternal
-
-The stable core must not provide an unrestricted "unsafe" escape hatch.
-
-Effects must be represented explicitly where their semantics matter.
-
----
-
-64. Effect Polymorphism
-
-Functions may be generic over effects.
+A function type MAY carry an effect set or effect row when the language's function-type model supports it.
 
 Conceptually:
 
-Fn<T, E>
+fn(A) -> B ! {io, network}
 
-where "E" is an effect parameter or effect set.
+The exact source spelling is owned by the effect grammar.
 
-This permits abstractions that remain portable across execution environments.
+This document specifies only that:
 
-A function requiring no effects should not silently acquire them because of a backend.
+- effectful function compatibility must account for effects;
+- effect information must not be silently discarded;
+- effect polymorphism must be represented where required;
+- target selection must not alter effect meaning.
 
 ---
 
-65. Capability-Effect Separation
+87. Effect Polymorphism
 
-A capability is not an effect.
+A generic computation MAY quantify over effects.
+
+Conceptually:
+
+F<E>
+
+where "E" is an effect parameter.
+
+Effect substitution MUST preserve the semantic meaning of the function.
+
+An implementation MUST NOT erase an effect that is required for safety, security, determinism, or policy enforcement.
+
+---
+
+88. Capability Constraints
+
+A type-dependent computation may require a capability.
 
 For example:
 
-Capability<"quantum.compute">
+requires capability("quantum.measurement")
 
-means the environment can provide a capability.
+The type system records the relationship where the capability is part of the semantic contract.
 
-An effect:
-
-Quantum
-
-describes what the computation does.
-
-A program may require a capability without itself producing the corresponding effect in every control path.
-
-The semantic analyzer must preserve this distinction.
+Capability discovery remains outside the type checker.
 
 ---
 
-66. Temporal Types
+89. Resource Constraints
 
-Temporal computation may introduce types such as:
-
-Time
-Duration
-Instant
-Interval
-Timeline
-Event
-TemporalState
-
-A temporal type does not prescribe a physical clock implementation.
-
-Clock precision, synchronization and hardware realization are downstream concerns.
-
----
-
-67. Distributed Types
-
-Distributed computation may use semantic types such as:
-
-Node
-Process
-Service
-Actor
-Channel<T>
-Message<T>
-Replica<T>
-Partition<T>
-DistributedCollection<T>
-
-The type system must not impose:
-
-MAX_NODES
-MAX_PROCESSES
-
-The runtime determines placement and available resources.
-
----
-
-68. Agent and AI Types
-
-AI/ML features share the common type system.
-
-Semantic types may include:
-
-Tensor<S, T>
-Dataset<T>
-Model<I, O>
-Agent<I, O>
-Distribution<T>
-Probability<T>
-Gradient<T>
-
-Framework-specific types must remain outside the core semantic type system unless deliberately promoted into a stable Zamani abstraction.
-
----
-
-69. Data Types
-
-Data-domain constructs use:
-
-Schema
-Record
-Dataset<T>
-Stream<T>
-Table<T>
-Tensor<S, T>
-Query<I, O>
-
-Data representation may be:
-
-- local;
-- distributed;
-- persistent;
-- streamed;
-- accelerator-resident.
-
-The type does not prescribe storage location unless storage location is itself part of explicit semantic type intent.
-
----
-
-70. Networking Types
-
-Networking types may include:
-
-Endpoint
-Address
-Protocol
-Socket
-Connection
-Request
-Response
-Stream<T>
-
-A network type must not imply a specific physical interface.
-
-The network runtime determines realization.
-
----
-
-71. Security and Cryptographic Types
-
-Security-sensitive semantic types may include:
-
-Secret<T>
-Key
-PublicKey
-PrivateKey
-Signature
-Digest
-Identity
-Credential
-CapabilityToken
-
-Secret material must not be implicitly copyable if the selected security contract forbids duplication.
-
-Cryptographic algorithms are semantic operations or library capabilities, not arbitrary type-system keywords.
-
----
-
-72. Opaque Types
-
-An opaque type hides representation while exposing semantic contracts.
-
-This is essential for portability.
-
-Example:
-
-opaque Device
-opaque HardwareResource
-opaque ForeignHandle
-
-An opaque type may be implemented differently on different targets while preserving the same source-level contract.
-
----
-
-73. Existential Types
-
-Where supported, existential types represent:
-
-there exists T satisfying constraints
-
-The hidden representation must not leak across the abstraction boundary unless permitted by the type contract.
-
-Existential implementation is not required to use any particular runtime mechanism.
-
----
-
-74. Dynamic Types
-
-A dynamic type may exist only as an explicit language feature.
-
-Omitted type information does not mean:
-
-Any
-
-If inference cannot establish a unique type, the compiler must issue an explicit inference diagnostic.
-
-There is no implicit dynamic escape.
-
----
-
-75. Type Inference
-
-Zamani may support type inference.
-
-Inference must be:
-
-- deterministic;
-- constraint-based;
-- context-sensitive where required;
-- target-independent;
-- semantically stable;
-- bounded by implementation resources rather than arbitrary language constants.
-
-The same valid source program must not infer different types merely because it is compiled for:
-
-- CPU;
-- GPU;
-- FPGA;
-- QPU;
-- simulator;
-- distributed target.
-
----
-
-76. Inference Failure
-
-When inference cannot determine a unique valid type, compilation must fail with an explicit diagnostic such as:
-
-TYPE_INFERENCE_AMBIGUOUS
-
-The compiler must explain:
-
-- unresolved type variable;
-- relevant constraints;
-- candidate types where useful;
-- source span;
-- suggested explicit annotation when possible.
-
----
-
-77. Type Unification
-
-The semantic analyzer uses unification or an equivalent constraint-solving mechanism.
-
-Unification must support:
-
-- ordinary types;
-- generic variables;
-- symbolic dimensions;
-- shape constraints;
-- effect variables;
-- capability constraints;
-- resource constraints where represented at type level.
-
-The implementation must not eagerly expand recursive structures without necessity.
-
----
-
-78. Subtyping
-
-Subtyping exists only where explicitly defined.
-
-The type system must distinguish:
-
-type equality
-type compatibility
-subtyping
-coercion
-conversion
-capability satisfaction
-
-These concepts must not be collapsed into one operation.
-
----
-
-79. Coercions
-
-Implicit coercions must be:
-
-- deterministic;
-- semantics-preserving;
-- non-lossy unless explicitly defined as safe;
-- target-independent.
-
-Potentially lossy conversions require explicit syntax.
-
-Examples include:
-
-Integer → Float
-Float → Integer
-Wide → Narrow
-Exact → Approximate
-Quantum → Classical
-Resource-owning → Borrowed
-
-where the conversion may lose information or change semantics.
-
----
-
-80. Numeric Promotion
-
-Numeric promotion must never depend on host architecture.
-
-For example:
-
-i32 + i64
-
-must have one language-defined result.
-
-The compiler may lower the result differently on different targets.
-
----
-
-81. No Silent Semantic Narrowing
-
-The compiler must not silently narrow:
-
-i128 → i32
-
-or:
-
-Tensor<large_shape> → Tensor<smaller_shape>
-
-or:
-
-QRegister<N> → QRegister<M>
-
-unless a valid explicit semantic transformation exists.
-
----
-
-82. Type-Level Values
-
-Type-level values may include:
-
-- natural numbers;
-- integers;
-- symbolic dimensions;
-- shapes;
-- labels;
-- capabilities;
-- resource quantities;
-- effect sets.
-
-They must have canonical semantic representation.
-
-A type-level value must not be confused with a runtime value.
-
----
-
-83. Type-Level Arithmetic
-
-Where supported:
-
-N + M
-N * M
-N = M
-N >= M
-
-are semantic constraints.
-
-They must not require host execution of arbitrary source programs during parsing.
-
-The type checker evaluates or reasons about type-level expressions using a safe semantic mechanism.
-
----
-
-84. Dependent Types
-
-Zamani may support dependent types where the feature is formally promoted.
-
-A dependent type may depend on semantic values such as:
-
-Vector<N, T>
-Matrix<M, N, T>
-QRegister<N>
-BitVector<N>
-Tensor<S, T>
-
-The dependent information must remain canonical through semantic lowering.
-
-Dependent typing must not become an implicit hardware-binding mechanism.
-
----
-
-85. Resource-Dependent Types
-
-A type may express resource requirements where that requirement is semantically meaningful.
-
-For example:
-
-Requires<Capability<C>, T>
-
-or an equivalent canonical representation.
-
-However:
-
-Requires<GPU0, T>
-
-must not be part of the portable semantic type system unless explicitly inside a target-specific realization boundary.
-
----
-
-86. Type-Level Hardware Intent
-
-Hardware-related type information must describe intent.
-
-Allowed concepts include:
-
-Accelerator<T>
-RequiresCapability<C>
-MemoryClass<M>
-ComputeClass<C>
-CommunicationClass<C>
-
-The source language must not silently bind these to physical addresses, device IDs or topology positions.
-
----
-
-87. Type Equality Across Targets
-
-For POCO-REAF:
-
-Type(program, target A)
-==
-Type(program, target B)
-
-must hold at the source semantic level unless target-specific conditional compilation or explicit target-dependent semantics are requested.
-
-Backend lowering may differ.
-
-Source meaning must not.
-
----
-
-88. Conditional Target Specialization
-
-Target-specific specialization may exist through explicit mechanisms.
-
-It must be:
-
-- declared;
-- versioned;
-- capability-aware;
-- semantically checked;
-- isolated from the portable core.
-
-A target specialization must never silently change the meaning of the portable program.
-
----
-
-89. Interoperability Types
-
-Foreign interfaces may introduce opaque or externally defined types.
+A type may introduce a resource requirement.
 
 Examples:
 
-extern type CHandle
-extern type QIRValue
-extern type HDLSignal
+QRegister<N>
 
-Foreign types must be mapped through an explicit interoperability contract.
+may induce:
 
-They must not leak target-specific assumptions into ordinary Zamani types.
+requires qubits >= N
+
+and:
+
+Tensor<Shape, T>
+
+may induce resource requirements based on the selected realization.
+
+The type system MAY generate resource obligations.
+
+It MUST NOT decide physical allocation.
 
 ---
 
-90. Type Representation vs Runtime Representation
+90. Contracts
 
-A semantic type is not a promise about memory layout.
+Type semantics integrate with:
+
+requires
+ensures
+invariant
+assume
+guarantee
+property
+assert
+
+The validation subsystem owns contract syntax and verification semantics.
+
+The type system consumes contracts when they constrain type validity.
+
+For example:
+
+Array<T, N>
+
+combined with:
+
+requires N > 0
+
+may establish a refinement needed for a later operation.
+
+---
+
+91. Policies
+
+Policies may constrain type-dependent operations.
+
+Examples include:
+
+- permitted conversions;
+- permitted resource use;
+- permitted capabilities;
+- allowed effects;
+- adaptation permissions;
+- foreign calls;
+- reflection.
+
+A policy MUST NOT silently change type equality.
+
+It may instead make an otherwise type-valid operation disallowed in a given execution context.
+
+---
+
+92. Provenance
+
+Type resolution MAY produce provenance describing:
+
+source type
+resolved declaration
+generic substitution
+constraint evidence
+associated-type resolution
+refinement proof
+conversion
+
+Provenance MUST NOT alter type identity.
+
+Provenance belongs to the semantic/provenance subsystem.
+
+---
+
+93. Determinism
+
+For identical:
+
+source
+language version
+dialect set
+semantic configuration
+type environment
+
+type checking MUST produce deterministic:
+
+- type resolution;
+- constraint results;
+- type equality results;
+- generic substitutions;
+- diagnostics ordering;
+- semantic type identity.
+
+Hash-map iteration order MUST NOT influence semantic results.
+
+---
+
+94. Error Classification
+
+The compiler MUST distinguish at least:
+
+TYPE_INVALID
+TYPE_NAME_UNRESOLVED
+TYPE_ARITY_MISMATCH
+TYPE_KIND_MISMATCH
+TYPE_INFERENCE_FAILED
+TYPE_CONSTRAINT_UNSATISFIED
+TYPE_SUBTYPE_MISMATCH
+TYPE_CONVERSION_INVALID
+TYPE_COERCION_INVALID
+TYPE_ASSOCIATED_UNRESOLVED
+TYPE_AMBIGUOUS
+TYPE_REFINEMENT_UNPROVEN
+TYPE_OWNERSHIP_VIOLATION
+TYPE_LINEARITY_VIOLATION
+TYPE_AFFINITY_VIOLATION
+TYPE_LIFETIME_VIOLATION
+TYPE_EFFECT_MISMATCH
+CAPABILITY_UNAVAILABLE
+RESOURCE_UNAVAILABLE
+POLICY_VIOLATION
+TARGET_UNSUPPORTED
+COMPILER_RESOURCE_EXHAUSTED
+IR_INVALID
+
+These MUST NOT be collapsed into one generic type error.
+
+---
+
+95. Resource Exhaustion During Type Checking
+
+If the compiler runs out of configured resources while solving a valid or potentially valid type problem, the compiler MUST distinguish:
+
+solver did not finish
+
+from:
+
+constraint proven false
+
+For example:
+
+TYPE_CONSTRAINT_UNSATISFIED
+
+means the constraint is known to be false.
+
+COMPILER_RESOURCE_EXHAUSTED
+
+means the implementation could not complete the requested analysis under its configured budget.
+
+This distinction is essential for scalable semantics.
+
+---
+
+96. Type-Level Evaluation Limits
+
+Type-level computation MUST be resource-bounded operationally.
+
+A compiler MAY configure:
+
+type evaluation budget
+constraint solving budget
+memory budget
+diagnostic budget
+recursion budget
+
+Such budgets are invocation policies.
+
+They MUST NOT become language-level semantic maxima.
+
+---
+
+97. Recursive Types
+
+Recursive types are valid where the language's declaration rules permit them.
+
+Examples include:
+
+List<T>
+Tree<T>
+Graph<T>
+
+Recursive semantic definitions MUST be represented without imposing a language-defined maximum recursion depth.
+
+The implementation MAY use iterative algorithms, memoization, graph interning, or explicit worklists to avoid unnecessary host-stack limitations.
+
+---
+
+98. Type-Graph Scalability
+
+The semantic type model MUST conceptually support arbitrary finite type graphs.
+
+Implementations SHOULD avoid algorithms whose correctness depends on:
+
+- fixed recursion depth;
+- fixed collection capacity;
+- fixed generic arity;
+- fixed type nesting depth.
+
+Where a compiler safety policy imposes a budget, the failure MUST identify the budget as an implementation limit.
+
+---
+
+99. No Silent Host Integer Narrowing
+
+A semantic quantity MUST NOT be silently converted:
+
+BigInt → u64
+BigInt → u32
+BigInt → usize
+
+unless the conversion is explicitly checked and proven valid.
+
+This applies to:
+
+- dimensions;
+- cardinalities;
+- resource quantities;
+- generic values;
+- array lengths;
+- quantum counts;
+- topology sizes.
+
+---
+
+100. No Hidden Target Specialization
+
+The type checker MUST NOT change:
+
+T
+
+into a target-specific type merely because a target happens to be available.
+
+Specialization occurs downstream.
 
 For example:
 
 Tensor<S, Float>
 
-does not promise:
+may later lower to:
 
-- contiguous memory;
-- row-major order;
-- GPU memory;
-- CPU memory;
-- SIMD layout.
+CPU implementation
+GPU implementation
+FPGA implementation
+accelerator implementation
 
-Representation becomes fixed only when required by an explicit ABI or interoperability contract.
-
----
-
-91. ABI and Calling Convention
-
-ABI details are downstream.
-
-A Zamani function type describes semantic calling behavior.
-
-It does not inherently specify:
-
-- stack layout;
-- register assignment;
-- calling convention;
-- binary symbol encoding;
-- machine instruction ABI.
-
-Those belong to compiler/backend/interoperability contracts.
+without changing the source-level type.
 
 ---
 
-92. Ownership and Effects in Function Types
+101. Classical Domain Integration
 
-Function compatibility must consider:
+Classical computation consumes the universal type system.
 
-parameters
-returns
-ownership
-effects
+Classical types MUST participate in:
+
+- generics;
+- ownership;
+- effects;
+- capabilities;
+- resources;
+- contracts;
+- policies;
+- provenance.
+
+Classical numeric and data types MUST NOT create a separate incompatible type system.
+
+---
+
+102. Quantum Domain Integration
+
+Quantum types use the universal type foundation.
+
+Quantum semantics add:
+
+- quantum resource identity;
+- measurement semantics;
+- quantum state semantics;
+- quantum operation compatibility;
+- quantum ownership;
+- quantum effects;
+- quantum resource requirements.
+
+Quantum types MUST converge through:
+
+quantum::ir
+
+after semantic validation.
+
+---
+
+103. Hybrid Classical/Quantum Integration
+
+Hybrid computation uses one type system.
+
+Examples include:
+
+classical value
+    ↓
+quantum parameter
+
+quantum measurement
+    ↓
+classical value
+
+classical control
+    ↓
+quantum operation
+
+quantum result
+    ↓
+classical decision
+
+The type checker MUST validate the boundary conversions explicitly.
+
+---
+
+104. HDL Integration
+
+HDL types remain semantically distinct from ordinary software values where their meanings differ.
+
+Examples include:
+
+Signal<T>
+Net<T>
+Register<T>
+Port<T>
+Clock
+Reset
+Interface<T>
+
+An HDL signal containing bits is not automatically equivalent to an ordinary integer merely because both have a bit representation.
+
+Timing and hardware realization remain downstream.
+
+---
+
+105. Hardware Intent Integration
+
+Hardware intent types describe:
+
+- computation capability;
+- storage;
+- interconnect;
+- signal structure;
+- accelerator intent;
+- timing requirements;
+- resource classes.
+
+They MUST NOT encode vendor-specific devices as universal core types.
+
+Hardware-specific properties belong to:
+
 capabilities
-resource requirements
-
-For example:
-
-pure fn f(...)
-
-is not semantically equivalent to:
-
-fn f(...) effects IO
-
-even if both return "Unit".
+resources
+dialects
+target descriptions
+interoperability
+backend contracts
 
 ---
 
-93. Resource Consumption
+106. Distributed Type Integration
 
-A function may consume resources.
+Distributed semantic types MAY include:
 
-Resource consumption must be explicit in semantic analysis.
+Node<T>
+Process<T>
+Actor<T>
+Channel<T>
+Replica<T>
+Distributed<T>
+
+These types describe distributed semantics.
+
+They do not select physical nodes.
+
+Topology realization is downstream.
+
+---
+
+107. Networking Type Integration
+
+Networking types MAY include:
+
+Endpoint<T>
+Channel<T>
+Stream<T>
+Message<T>
+Protocol<P>
+Service<I, O>
+
+The type system validates semantic compatibility.
+
+The networking subsystem determines the transport realization.
+
+---
+
+108. Data and AI Integration
+
+The universal type system supports:
+
+Tensor<S, T>
+Dataset<T>
+Model<I, O>
+Distribution<T>
+Agent<I, O>
+Graph<N, E>
+Schema<S>
+
+These are semantic abstractions.
+
+Application-specific algorithms remain libraries or registered semantic extensions.
+
+---
+
+109. Probabilistic and Uncertain Types
+
+The type system MAY support semantic constructs such as:
+
+Probability
+Distribution<T>
+Uncertain<T>
+Confidence<T>
+
+The type system MUST distinguish:
+
+value
+probability
+distribution
+confidence
+uncertainty metadata
+
+A confidence value MUST NOT automatically imply truth.
+
+---
+
+110. Security-Sensitive Types
+
+Security-sensitive values MAY be represented by nominal types or capability-qualified types.
+
+Examples include:
+
+Secret<T>
+Credential<T>
+Key<T>
+Token<T>
+
+Security policies MUST NOT be bypassed by type conversion.
+
+A backend MUST NOT silently weaken a security type.
+
+---
+
+111. Foreign and ABI Types
+
+Foreign types are explicitly marked as interoperability types.
+
+The type system MUST preserve the distinction between:
+
+portable Zamani type
+
+and:
+
+foreign representation
+
+FFI/ABI compatibility belongs to:
+
+grammar/interoperability/
+
+and downstream implementation contracts.
+
+The type system validates declarations but does not choose a vendor ABI.
+
+---
+
+112. Type Conversion
+
+A conversion is permitted only when a language-defined rule exists.
+
+Conversions are categorized as:
+
+identity
+widening
+narrowing
+representation
+nominal
+structural
+ownership
+effect
+capability
+resource
+foreign
+
+Every non-identity conversion MUST have a defined semantic meaning.
+
+---
+
+113. Coercions
+
+A coercion is an implicit conversion permitted by the language.
+
+Coercions MUST be:
+
+- deterministic;
+- limited to explicitly defined relations;
+- non-ambiguous;
+- target-independent.
+
+A compiler MUST NOT introduce a target-specific coercion merely because a backend can implement it.
+
+---
+
+114. Explicit Conversion
+
+Potentially lossy or semantically significant conversions SHOULD require explicit source syntax.
 
 Examples:
 
+Float → Integer
+Approximate → Exact
+Classical → Quantum
+Quantum → Classical
+Nominal A → Nominal B
+Portable → Foreign ABI
+
+where applicable.
+
+---
+
+115. Quantum Measurement Conversion
+
+Quantum measurement is not an ordinary type coercion.
+
+Conceptually:
+
 Qubit
-MemoryResource
-DeviceHandle
-File
-Socket
-Process
-Timeline
+   ↓
+measurement operation
+   ↓
+classical result
 
-The type system verifies ownership/linearity.
+The conversion is an operation with defined quantum effects.
 
-Resource availability is checked by resource analysis and target realization.
+The type checker MUST NOT model measurement as an implicit cast.
 
 ---
 
-94. Resource Requirements vs Type Errors
+116. Type Compatibility and Resources
 
-A program can be type-correct but resource-infeasible.
-
-Example:
-
-QRegister<N>
-
-may be perfectly valid.
-
-A target with insufficient quantum resources may later report:
-
-INSUFFICIENT_RESOURCE
-
-This must not become:
-
-TYPE_ERROR
-
-The distinction is fundamental.
-
----
-
-95. Capability Satisfaction
-
-A capability requirement is satisfied if the selected execution environment provides a compatible capability.
-
-The type system records the requirement.
-
-The resource/capability layer determines whether it is satisfiable.
-
-Hardware discovery and HAL remain outside the type checker.
-
----
-
-96. Type Effects of Measurement
-
-Measurement may transform quantum resources and produce classical values.
-
-Therefore:
-
-measure : Qubit → ClassicalResult
-
-must not be treated as an ordinary pure function unless the language explicitly models the measurement effect.
-
-The type/effect system must preserve:
-
-- quantum effect;
-- state transition;
-- classical output;
-- resource semantics.
-
----
-
-97. Type Effects of Allocation
-
-Allocation is an effect when allocation has observable resource semantics.
+A type may be semantically valid while a target lacks the resources necessary to realize it.
 
 For example:
 
-allocate<T>
-
-may produce:
-
-Resource<T>
-
-and an allocation effect.
-
-The type checker must not assume infinite resources.
-
-It must distinguish:
-
-semantically valid allocation
-
-from:
-
-execution feasibility
-
----
-
-98. Type Effects of Concurrency
-
-Concurrency introduces effects such as:
-
-Async
-Spawn
-SharedState
-Synchronization
-Nondeterminism
-
-The type system must preserve relevant concurrency guarantees.
-
-No source-level type may assume a fixed number of threads.
-
----
-
-99. Determinism
-
-Type checking itself must be deterministic.
-
-Given the same:
-
-- source;
-- specification version;
-- dependency versions;
-- declared compilation profile;
-
-the semantic type result must be identical.
-
-Hardware availability must not alter whether a purely semantic type is valid.
-
----
-
-100. Nondeterministic Types
-
-If a type or computation intentionally permits nondeterminism, that must be explicit through:
-
-- effects;
-- capability requirements;
-- semantic annotations;
-- domain contracts.
-
-Nondeterminism must not enter merely because a backend happens to parallelize execution.
-
----
-
-101. Type Errors
-
-At minimum, the compiler must distinguish:
-
-UNKNOWN_TYPE
-TYPE_MISMATCH
-TYPE_INFERENCE_AMBIGUOUS
-UNDEFINED_TYPE
-INVALID_GENERIC_ARGUMENT
-UNSATISFIED_TYPE_CONSTRAINT
-INVALID_CONVERSION
-LOSSY_CONVERSION
-INVALID_SHAPE
-SHAPE_MISMATCH
-INVALID_OWNERSHIP
-LINEAR_RESOURCE_REUSED
-AFFINE_RESOURCE_REUSED
-RESOURCE_NOT_CONSUMED
-INVALID_CAPABILITY
-UNSATISFIED_CAPABILITY
-INVALID_EFFECT
-EFFECT_MISMATCH
-INVALID_QUANTUM_TYPE
-INVALID_QUANTUM_RESOURCE_USE
-INVALID_HARDWARE_INTENT
-INVALID_DEPENDENCY
-RECURSIVE_TYPE_ERROR
-
-Resource exhaustion must not be mislabeled as a type error.
-
----
-
-102. Diagnostics
-
-Every type diagnostic should provide:
-
-- error code;
-- source span;
-- primary message;
-- relevant type;
-- expected type;
-- actual type;
-- constraints;
-- ownership/effect information where relevant;
-- related source spans;
-- actionable suggestion where possible.
-
-For shape errors:
-
-expected inner dimension N
-found K
-constraint N = K cannot be established
-
-For ownership errors:
-
-linear quantum resource q was already consumed
-
----
-
-103. Source Spans
-
-Every semantically meaningful type expression must preserve source-span information from the AST.
-
-This includes:
-
-- generic arguments;
-- type parameters;
-- dimensions;
-- constraints;
-- function types;
-- resource types;
-- capability types.
-
-Type errors must point to source locations rather than synthesized locations.
-
----
-
-104. AST Contract
-
-The type system consumes the domain-neutral AST.
-
-The AST must preserve:
-
-type syntax
-generic parameters
-generic arguments
-constraints
-shape expressions
-resource annotations
-capability annotations
-effect annotations
-source spans
-
-The AST must not prematurely lower:
-
-Qubit
-Tensor
-HardwareResource
-
-into backend-specific representations.
-
----
-
-105. Type AST vs Semantic Type
-
-The source AST representation and semantic type representation are distinct.
-
-Example:
-
-Vector<N, Float>
-
-may be represented syntactically as:
-
-TypeApplication(
-    Vector,
-    [N, Float]
-)
-
-The semantic analyzer resolves it to a canonical semantic type.
-
-This prevents parser-level assumptions from becoming type semantics.
-
----
-
-106. Canonical Semantic Type Representation
-
-The semantic model must provide a canonical representation equivalent to:
-
-Type =
-    Primitive
-  | Integer
-  | Float
-  | Complex
-  | Tuple
-  | Array
-  | Slice
-  | Map
-  | Set
-  | Function
-  | Reference
-  | Generic
-  | Parametric
-  | Dependent
-  | Nominal
-  | Structural
-  | Resource
-  | Capability
-  | Effect
-  | Quantum
-  | Tensor
-  | HardwareIntent
-  | Distributed
-  | Temporal
-  | Opaque
-  | Never
-  | Unit
-  | Option
-  | Result
-  | Existential
-  | Dynamic
-
-The exact Rust enum is an implementation contract, not source grammar.
-
----
-
-107. Canonical Quantum IR Integration
-
-Quantum source types must lower into the existing canonical quantum IR type boundary.
-
-The pipeline is:
-
-Zamani quantum type syntax
-        ↓
-domain-neutral AST type
-        ↓
-semantic quantum type
-        ↓
-quantum::ir
-
-No source grammar feature may create:
-
-ZamaniQuantumIR
-
-as a competing semantic layer.
-
-"quantum::ir::core::types" already establishes itself as the canonical target-independent quantum semantic type layer and explicitly excludes hardware topology, routing, scheduling and calibration from its ownership.
-
----
-
-108. Canonical Qubit Identity
-
-The type system must not define duplicate:
-
-QubitId
-PhysicalQubitId
-
-implementations.
-
-The canonical quantum IR identifiers remain authoritative.
-
-The type system defines:
-
-Qubit
-PhysicalQubit
-
-as semantic types.
-
-Identity belongs to the canonical quantum IR identity layer.
-
----
-
-109. Classical IR Integration
-
-Classical semantic types lower into the canonical classical IR boundary.
-
-The type system must preserve:
-
-- integer width;
-- floating precision;
-- signedness;
-- shape;
-- ownership;
-- effects;
-- capability requirements.
-
-The lowering process may choose a target representation later.
-
----
-
-110. HDL IR Integration
-
-HDL types lower through the HDL/hardware semantic pipeline.
-
-The type system preserves:
-
-- bit width;
-- signal semantics;
-- timing-relevant types;
-- memory shapes;
-- interface types.
-
-Synthesis chooses physical implementation.
-
----
-
-111. Hybrid IR Integration
-
-Hybrid types lower into coordinated classical and quantum semantic representations.
-
-The boundary must preserve:
-
-classical data
-quantum resources
-measurement results
-control dependencies
-effects
-capabilities
-resource requirements
-
----
-
-112. Resource and Capability Integration
-
-Type checking may produce semantic obligations such as:
-
-RequiresCapability(C)
-RequiresResource(R)
-RequiresConstraint(C)
-
-These are passed to:
-
-grammar/resources/
-grammar/hardware/
-compiler resource analysis
-HAL
-deployment
-runtime
-
-The type system does not discover hardware itself.
-
----
-
-113. Scheduling Integration
-
-Types do not schedule operations.
-
-The type system may establish resource relationships needed by scheduling.
-
-Scheduling subsequently determines:
-
-- ordering;
-- timing;
-- resource sharing;
-- parallel execution;
-- delays;
-- placement.
-
----
-
-114. Routing Integration
-
-Types do not route quantum operations.
-
-A type such as:
-
 QRegister<N>
 
-contains no physical topology assumption.
+may be type-valid.
 
-Routing maps logical operations to available physical resources downstream.
-
----
-
-115. QEC Integration
-
-The type system does not implement quantum error correction.
-
-It may carry semantic information such as:
-
-LogicalQubit
-FaultTolerant<T>
-ErrorCorrected<T>
-
-where those abstractions are formally defined.
-
-QEC determines the actual encoding and correction strategy.
-
----
-
-116. ZQN Integration
-
-ZQN remains responsible for fault/noise semantics.
-
-The type system may preserve:
-
-NoiseAware<T>
-FaultTolerant<T>
-ReliabilityConstraint
-
-when formally defined.
-
-It must not duplicate ZQN's fault model.
-
----
-
-117. HAL Integration
-
-HAL is responsible for target/device capability and state.
-
-The type system may express:
-
-RequiresCapability<C>
-
-but must not resolve:
-
-physical device = X
-
-during ordinary source type checking.
-
----
-
-118. Compiler Integration
-
-The compiler must consume validated semantic types.
-
-Compilation stages include:
-
-parse
-→ AST
-→ structural validation
-→ name resolution
-→ type inference
-→ type checking
-→ effect checking
-→ resource/capability analysis
-→ semantic lowering
-→ IR verification
-→ optimization
-→ target lowering
-
-A backend must never reinterpret an invalid type as valid merely because it can implement it.
-
----
-
-119. Runtime Integration
-
-Runtime types must correspond to validated semantic contracts.
-
-Runtime may report:
+A target may still fail:
 
 RESOURCE_UNAVAILABLE
-CAPABILITY_UNAVAILABLE
-DEVICE_FAILURE
-EXECUTION_FAILURE
 
-when a semantically valid program cannot currently execute.
+because it cannot satisfy:
 
-Those are not necessarily type errors.
+qubits >= N
+
+This MUST NOT be reported as:
+
+TYPE_INVALID
+
+unless the type itself violates a semantic rule.
 
 ---
 
-120. Serialization
+117. Capability Negotiation
 
-Canonical semantic types used across serialization boundaries must have stable representations.
+Capability negotiation occurs after type semantics are established.
 
-Serialization must not depend on:
+The conceptual flow is:
 
-- pointer addresses;
-- hash-map iteration order;
-- compiler memory layout;
-- process-local IDs.
+typed program
+    ↓
+required capabilities
+    ↓
+capability environment
+    ↓
+target negotiation
+    ↓
+realization
 
-Versioned type schemas must be used where persistent representation is required.
+Type checking does not perform device discovery.
+
+---
+
+118. Resource Negotiation
+
+Resource negotiation follows the same separation:
+
+type/resource intent
+    ↓
+resource requirements
+    ↓
+available resources
+    ↓
+feasibility
+    ↓
+specialization
+    ↓
+realization
+
+The source type remains unchanged.
+
+---
+
+119. Target Independence
+
+The type system MUST NOT depend on:
+
+CPU ISA
+GPU architecture
+FPGA vendor
+ASIC vendor
+QPU vendor
+specific physical qubit
+specific memory address
+specific node
+specific network topology
+specific operating system
+specific ABI
+
+Target-specific realization MUST be represented downstream.
+
+---
+
+120. Dialect Types
+
+A dialect may define additional types.
+
+Every registered dialect type MUST specify:
+
+identifier
+version
+namespace
+parameters
+constraints
+semantic meaning
+compatibility
+AST mapping
+semantic resolution
+IR mapping
+capabilities
+effects
+resources
+provenance
+
+A dialect MUST NOT silently redefine stable core type semantics.
 
 ---
 
 121. Type Versioning
 
-Existing type meanings must not silently change.
+Changes to type semantics are language compatibility events.
 
-Breaking type changes require:
+Potentially breaking changes include:
 
-- language-version change;
-- compatibility declaration;
-- migration rule;
-- diagnostics;
-- explicit deprecation where appropriate.
+- changing equality;
+- changing subtyping;
+- changing ownership;
+- changing generic compatibility;
+- changing numeric overflow semantics;
+- changing quantum resource semantics;
+- changing effect compatibility;
+- changing associated-type resolution;
+- changing dependent-type normalization.
 
-Additive type features should not alter existing type equality.
-
----
-
-122. Generic Compatibility
-
-A generic type parameter's semantic meaning must remain stable.
-
-Adding a new implementation strategy must not alter the generic contract.
-
-For example:
-
-Tensor<S, T>
-
-must retain the same semantic shape/type meaning whether implemented on:
-
-- CPU;
-- GPU;
-- FPGA;
-- distributed cluster;
-- quantum-classical accelerator;
-- future target.
+Such changes MUST be versioned according to the repository compatibility specification.
 
 ---
 
-123. Type Hashing and Interning
+122. Serialization and Type Identity
 
-Implementations may intern types for efficiency.
+Serialized semantic types MUST carry enough schema/version information to prevent accidental interpretation under an incompatible schema.
 
-If type interning is used:
+Internal IDs MUST NOT be interpreted as portable semantic identities.
 
-- IDs must be compiler-local;
-- canonical semantic equality must remain independent of allocation order;
-- hash randomization must not change semantic equality;
-- serialized semantic identity must not use pointer identity.
+A serialized type MUST remain meaningful only under a compatible language/type schema.
 
 ---
 
-124. Recursion and Cycles
+123. AST Schema Compatibility
 
-The semantic type graph may contain cycles.
+The canonical source AST schema and the language semantic version are distinct.
 
-The implementation must represent recursive types through stable references or equivalent indirection.
+An AST schema change does not automatically mean a language semantic change.
 
-It must not recursively allocate an infinite structure.
-
-No universal "MAX_TYPE_DEPTH" may be encoded into language semantics.
+Conversely, a semantic change MUST NOT be hidden merely by preserving the same AST structure.
 
 ---
 
-125. Compiler Resource Limits
+124. Grammar Integration
 
-Compiler limits are permitted.
+The type grammar hierarchy is:
 
-Examples:
+grammar/types/types.g4
+        │
+        ├── primitive
+        ├── named
+        ├── generic
+        ├── function
+        ├── tuple
+        ├── array
+        ├── slice
+        ├── reference
+        ├── pointer
+        ├── option/result
+        ├── bounds/constraints
+        ├── associated types
+        ├── linear/affine
+        ├── dependent
+        ├── classical
+        ├── quantum
+        ├── hardware
+        ├── resource/capability
+        └── extensions
 
-maximum memory available to compiler
-maximum diagnostic count
-maximum inference work budget
-maximum compilation time
-maximum recursion guard
+Only "typeExpression" is the universal public type entry point.
 
-These must be represented as implementation policies.
-
-They must not alter the semantic definition of the type system.
-
----
-
-126. Scalability Contract
-
-The type system must scale conceptually from:
-
-one value
-
-to:
-
-one qubit
-
-to:
-
-large quantum systems
-
-to:
-
-large tensor systems
-
-to:
-
-large distributed systems
-
-to:
-
-heterogeneous systems
-
-to:
-
-future computational substrates
-
-subject only to actual semantic and resource constraints.
-
-No artificial universal maximum may be introduced.
+No specialized grammar may define another universal type-expression rule.
 
 ---
 
-127. Tiny-System Contract
+125. Generic Grammar Integration
 
-A minimal program must not require heavyweight type declarations.
+"grammar/types/generic.g4" owns generic application syntax.
 
-Examples:
+It MUST integrate with:
 
-let x = 1;
+typeExpression
 
-let q = qubit();
+without creating:
 
-when supported by the corresponding source contracts.
+Types → Generic → Types
 
-Inference should resolve simple programs without unnecessary annotations.
+as a circular grammar-import architecture.
 
----
-
-128. Large-System Contract
-
-Large programs must not require changing type semantics merely because:
-
-- the number of resources grows;
-- tensor dimensions grow;
-- node count grows;
-- quantum register size grows;
-- module count grows;
-- generic instantiation count grows.
-
-The same semantic type rules apply at every scale.
+Generic declaration syntax belongs to the declaration/function generic subsystem.
 
 ---
 
-129. Infinite vs Unbounded
+126. Bounds Grammar Integration
 
-Zamani must distinguish:
+"grammar/types/bounds.g4" owns source syntax for bounds.
 
-unbounded semantic domain
+The type system interprets the resulting constraints.
 
-from:
+A bound MUST resolve to an existing semantic constraint mechanism.
 
-actually infinite runtime allocation
-
-For example:
-
-Integer
-
-may represent an unbounded mathematical integer domain.
-
-This does not mean a machine has infinite memory.
-
-Likewise:
-
-QRegister<N>
-
-may have arbitrary finite "N".
-
-It does not mean a runtime can allocate infinitely many qubits.
-
-The language provides scalable semantics; resources determine realizability.
+It MUST NOT introduce a parallel type-class system.
 
 ---
 
-130. Compile-Once Principle
+127. Associated-Type Grammar Integration
 
-A source program should not need type rewrites merely because it moves from:
+Associated type syntax belongs to its designated grammar.
 
-small CPU
+Its AST representation is:
 
-to:
+TypeExpr::Associated
 
-large CPU
+Semantic resolution belongs to type analysis.
 
-or:
-
-CPU → GPU
-GPU → FPGA
-FPGA → QPU
-QPU → simulator
-single node → distributed system
-
-provided the target satisfies the semantic requirements.
+No duplicate associated-type AST is permitted.
 
 ---
 
-131. Compile-Time Specialization
+128. Linear and Affine Grammar Integration
 
-Specialization may optimize a type for a target.
+"grammar/types/linear.g4" and "grammar/types/affine.g4" own source syntax.
 
-It must preserve semantic equivalence.
+Their semantics are:
 
-For example:
+Linear<T>
+Affine<T>
 
-Tensor<S, F64>
+or the repository's canonical equivalent.
 
-may become:
+The ownership checker consumes the resolved semantic qualifiers.
 
-SIMD
-GPU tensor
-distributed tensor
-accelerator tensor
-
-internally.
-
-The source type remains:
-
-Tensor<S, F64>
+These grammars MUST NOT allocate resources.
 
 ---
 
-132. Type-Level Capability Negotiation
+129. Dependent-Type Grammar Integration
 
-Capability negotiation is downstream of core type formation.
+Dependent syntax is owned by:
 
-A type can establish:
+grammar/types/dependent.g4
 
-requires capability C
+The canonical AST representation uses:
 
-but the target resolver determines:
+Pi
+Sigma
+Identity
+Type-level values
 
-provided by target A
-provided by target B
-not available
+The type checker owns:
 
-This supports POCO-REAF.
+- scope;
+- substitution;
+- normalization;
+- equality;
+- proof obligations.
 
----
-
-133. Hardware Growth
-
-If a machine gains:
-
-- more CPUs;
-- more GPUs;
-- more QPUs;
-- more memory;
-- more nodes;
-- more accelerators;
-
-the type system must not require source changes merely to use the additional capacity.
-
-Scaling decisions belong to:
-
-- compiler;
-- scheduler;
-- runtime;
-- deployment;
-- resource manager.
+Dependent types MUST NOT be confused with ordinary runtime generics.
 
 ---
 
-134. Hardware Shrinkage
+130. Effects Integration
 
-Likewise, moving to a smaller target must not cause type-system corruption.
+Effects are defined by:
 
-The result should be one of:
+grammar/effects/
+grammar/spec/effects.md
 
-valid execution
+The type system consumes effect information but does not define the effect vocabulary.
 
-or:
-
-insufficient resources
-
-or:
-
-missing capability
-
-rather than a false type error.
+Effect checking MUST occur before final semantic type commitment for computations whose validity depends on effects.
 
 ---
 
-135. Security
+131. Resources Integration
 
-The type system must preserve security boundaries.
-
-Sensitive resources may be:
-
-- non-copyable;
-- affine;
-- linear;
-- opaque;
-- capability-controlled.
-
-Type checking must not expose secrets through implicit conversions.
-
----
-
-136. No Unsafe Escape Hatch
-
-The core stable language must not require an unrestricted unsafe type operation.
-
-Rust implementation code for the type checker and semantic model must use:
-
-#![forbid(unsafe_code)]
-
-where applicable.
-
-The implementation baseline is:
-
-Rust 1.97
-Rust 1.97.1
-Rust 2021
-
-No nightly-only feature is required by this specification.
-
----
-
-137. Safe Rust Implementation Contract
-
-The type-system implementation must use safe Rust abstractions.
-
-Allowed implementation mechanisms include:
-
-- enums;
-- structs;
-- traits;
-- generics;
-- "Arc";
-- "Box";
-- "Vec";
-- "BTreeMap";
-- "BTreeSet";
-- safe indexing/access patterns;
-- checked arithmetic;
-- explicit error types;
-- immutable semantic structures.
-
-Unsafe pointer manipulation is prohibited.
-
----
-
-138. Semantic Arithmetic in Rust
-
-Rust implementation code must distinguish:
-
-host indexing arithmetic
-
-from:
-
-semantic arithmetic
-
-For semantic values requiring arbitrary size, the implementation must not rely on unchecked native integer arithmetic.
-
-Any fixed-width implementation field must have a documented semantic bound or be used only as an implementation identifier.
-
----
-
-139. Existing Quantum IR Correction Requirement
-
-The current canonical quantum IR type implementation is architecturally sound in its separation of semantic types from hardware, and it explicitly prohibits unsafe code.
-
-However, semantic variants equivalent to:
-
-Arbitrary(u64)
-
-must not be interpreted as "infinite precision."
-
-They mean only:
-
-arbitrary within a u64-encoded width descriptor
-
-if retained as an implementation representation.
-
-For true unbounded semantic dimensions, the canonical representation should instead use one of:
-
-SymbolicNat
-Natural
-ShapeExpr
-ConstNat
-TypeLevelValue
-
-or the repository's equivalent canonical representation.
-
-This correction applies to:
-
-- integer widths;
-- vector lengths;
-- bit widths;
-- tensor dimensions;
-- quantum register sizes;
-- resource counts.
-
----
-
-140. Existing Platform-Sized Types
-
-The current quantum IR contains platform-sized concepts such as "Size".
-
-Such types are acceptable only when explicitly documented as:
-
-implementation/platform representation
-
-They must never become:
-
-universal semantic cardinality
-
-For example:
-
-usize
-
-may index a Rust vector internally.
-
-It must not define the maximum semantic number of qubits.
-
----
-
-141. No Duplicate Qubit IDs
-
-The type system must not introduce another:
-
-QubitId
-PhysicalQubitId
-
-The canonical quantum IR identity layer owns those identifiers.
-
-This preserves the existing repository architecture.
-
----
-
-142. Type-to-Grammar Integration
-
-The type grammar under:
-
-grammar/types/
-
-owns syntax such as:
-
-TypeExpression
-GenericArguments
-TypeParameters
-FunctionType
-ReferenceType
-ArrayType
-TupleType
-ResourceType
-CapabilityType
-QuantumType
-ShapeType
-
-The grammar does not determine semantic validity.
-
-For example:
-
-Matrix<A, B, Float>
-
-can be syntactically valid while semantic checking determines whether "A" and "B" are valid dimension expressions.
-
----
-
-143. Type-to-Expression Integration
-
-The type system consumes expressions when they occur in:
-
-- generic value parameters;
-- array dimensions;
-- shape expressions;
-- constraints;
-- dependent types.
-
-The expression grammar owns expression syntax.
-
-The type system owns whether an expression is valid in a type-level position.
-
----
-
-144. Type-to-Declaration Integration
-
-Declarations introduce:
-
-- named types;
-- aliases;
-- generic parameters;
-- constraints;
-- implementations;
-- traits/interfaces.
-
-The declaration grammar owns syntax.
-
-The type system owns:
-
-- binding;
-- identity;
-- compatibility;
-- implementation satisfaction.
-
----
-
-145. Type-to-Function Integration
-
-Function declarations must lower to complete function types containing all semantically relevant:
-
-parameters
-returns
-generics
-effects
-resources
-capabilities
-ownership
-constraints
-
-The function grammar must not independently redefine function type semantics.
-
----
-
-146. Type-to-Effects Integration
-
-Effects are attached to computation types.
-
-The effect grammar defines source syntax.
-
-The effect system determines:
-
-effect identity
-effect compatibility
-effect polymorphism
-effect propagation
-
-The type checker verifies effect requirements.
-
----
-
-147. Type-to-Resources Integration
-
-Resource syntax belongs under:
+Resources are defined by:
 
 grammar/resources/
+grammar/spec/resources.md
 
-Type semantics consume the resulting resource contracts.
+The type system can emit resource obligations.
 
-The type system determines whether a value is:
+Resource availability is resolved downstream.
 
-resource-sensitive
-linear
-affine
-owned
-borrowed
-shared
-
-Resource availability remains downstream.
+A resource shortage MUST NOT invalidate a source type.
 
 ---
 
-148. Type-to-Hardware Integration
+132. Capabilities Integration
 
-Hardware types express target-independent intent.
+Capabilities are defined by:
 
-They must not expose physical implementation accidentally.
+grammar/resources/
+grammar/security/
+grammar/spec/resources.md
 
-The hardware grammar owns syntax for:
+and related contracts.
 
+Type semantics MAY require capabilities.
+
+Capability availability is not type identity.
+
+---
+
+133. Contract Integration
+
+Contracts are owned by:
+
+grammar/validation/
+grammar/specification/
+
+The type system consumes type-relevant contract facts.
+
+Contract syntax MUST NOT be duplicated inside type grammars.
+
+---
+
+134. Policy Integration
+
+Policies are owned by:
+
+grammar/policies/
+grammar/security/
+grammar/execution/
+
+A policy can prohibit an operation without changing the type of the values involved.
+
+---
+
+135. Provenance Integration
+
+Provenance is owned by the provenance subsystem.
+
+Type analysis MAY emit provenance events for:
+
+resolution
+inference
+substitution
+conversion
+constraint solving
+proof discharge
+extension resolution
+
+The provenance mechanism MUST NOT change semantic type identity.
+
+---
+
+136. Macro Integration
+
+Macros MAY generate type syntax.
+
+Macro expansion MUST complete before final semantic type checking.
+
+Generated type syntax is subject to exactly the same type rules as handwritten syntax.
+
+Macros MUST NOT bypass:
+
+- type checking;
+- ownership;
+- effects;
 - capabilities;
-- resource classes;
-- constraints;
-- topology intent;
-- deployment intent.
-
-The type system ensures those constructs are type-consistent.
+- resources;
+- contracts;
+- policies.
 
 ---
 
-149. Type-to-Quantum Integration
+137. Reflection and Metaprogramming
 
-Quantum syntax comes from:
+Reflection MAY inspect type information.
 
-grammar/quantum/
+Metaprogramming MAY construct type expressions.
 
-Quantum semantics come from:
+Neither may bypass semantic validation.
 
-grammar/spec/quantum.md
+Reflective type identity MUST remain canonical and independent of:
 
-Quantum types lower into:
+- compiler memory addresses;
+- backend IDs;
+- physical device IDs.
+
+---
+
+138. Canonical Semantic Model
+
+After type checking, the compiler produces a resolved semantic type model.
+
+The semantic model MUST contain enough information for downstream consumers to determine:
+
+- identity;
+- parameters;
+- constraints;
+- ownership;
+- effects;
+- capabilities;
+- resource obligations;
+- domain semantics;
+- provenance where required.
+
+It MUST NOT contain accidental backend decisions.
+
+---
+
+139. Canonical IR Integration
+
+The type system feeds canonical IR only after semantic validation.
+
+The relationship is:
+
+TypeExpr
+    ↓
+SemanticType
+    ↓
+validated semantic operation/value
+    ↓
+canonical IR
+
+The type system MUST NOT directly construct backend-specific machine instructions.
+
+---
+
+140. Classical IR Integration
+
+Classical semantic values and computations MUST lower to the repository's canonical Classical IR boundary.
+
+Type information retained in the IR MUST preserve semantic distinctions necessary for:
+
+- correctness;
+- optimization;
+- ownership;
+- effects;
+- resources;
+- contracts;
+- interoperability.
+
+---
+
+141. Quantum IR Integration
+
+Quantum types MUST lower through:
 
 quantum::ir
 
-No duplicate quantum semantic boundary is permitted.
+There MUST NOT be a second competing quantum IR introduced by the type system.
+
+The type system MUST NOT depend on:
+
+OpenQASM
+QIR
+CUDA
+LLVM
+MLIR
+vendor QPU APIs
+
+as canonical type semantics.
+
+Those are interoperability or lowering technologies.
 
 ---
 
-150. Type-to-HDL Integration
+142. HDL and Hardware IR Integration
 
-HDL syntax comes from:
+HDL/hardware semantic types may lower to domain-specific IR where necessary.
 
-grammar/hdl/
+Such IRs are downstream representations.
 
-Hardware intent comes from:
-
-grammar/hardware/
-
-Type semantics remain unified.
-
-An HDL signal type must remain distinguishable from an ordinary software integer even if both are represented using bits internally.
+They MUST preserve the source-level semantic type contract.
 
 ---
 
-151. Type-to-Distributed Integration
+143. IR Type Preservation
 
-Distributed syntax comes from:
+Lowering MUST preserve all type properties that remain semantically observable.
 
-grammar/distributed/
+This includes, where applicable:
 
-The type system provides:
+- signedness;
+- precision;
+- shape;
+- ownership;
+- linearity;
+- affinity;
+- quantum identity;
+- effect obligations;
+- capability requirements;
+- resource obligations;
+- refinement guarantees.
 
-Node
-Process
-Actor
-Channel<T>
-Distributed<T>
-Replica<T>
+A lowering pass MUST NOT discard a property merely because its selected target does not directly represent it.
 
-where semantically required.
+The pass must either:
 
-Physical placement remains downstream.
-
----
-
-152. Type-to-AI Integration
-
-AI syntax comes from:
-
-grammar/ai/
-
-The type system provides general semantic constructs such as:
-
-Tensor<S, T>
-Model<I, O>
-Dataset<T>
-Agent<I, O>
-Distribution<T>
-
-Framework-specific details must remain outside the language core.
+1. preserve it;
+2. discharge it with valid evidence;
+3. lower it into an equivalent mechanism;
+4. reject the lowering.
 
 ---
 
-153. Type-to-Data Integration
+144. Optimization and Types
 
-Data syntax comes from:
+Optimization MUST preserve type semantics.
 
-grammar/data/
+An optimization MAY change representation.
 
-The type system supplies the common foundation.
+It MUST NOT change:
 
-A dataset may be:
+- type identity;
+- ownership guarantees;
+- effect semantics;
+- quantum legality;
+- refinement guarantees;
+- contract meaning.
 
-Dataset<T>
-
-without requiring a specific database engine.
-
----
-
-154. Type-to-Networking Integration
-
-Networking syntax comes from:
-
-grammar/networking/
-
-The type system provides semantic network types.
-
-The implementation may lower them to:
-
-- sockets;
-- RPC;
-- message queues;
-- RDMA;
-- accelerator links;
-- future transports.
-
-The source type remains portable.
+An optimization may remove type information only when that information has been proven unnecessary for all remaining semantic obligations.
 
 ---
 
-155. Type-to-Security Integration
+145. Specialization
 
-Security syntax comes from:
+Specialization may instantiate generic types using known parameters.
 
-grammar/security/
+Specialization MUST preserve generic semantics.
 
-Security-sensitive values must preserve their ownership and capability requirements.
+Specialization is a compiler operation.
 
-No backend may silently weaken a security type.
-
----
-
-156. Type-to-Interoperability Integration
-
-Interoperability types come from:
-
-grammar/interoperability/
-
-Foreign representations must be explicitly marked.
-
-Canonical Zamani types must not accidentally become ABI-dependent.
+It does not redefine the source generic type.
 
 ---
 
-157. Type-to-Dialect Integration
+146. Monomorphization
 
-A dialect may introduce new types.
+An implementation MAY use monomorphization.
 
-Every dialect-defined type must declare:
+It MUST NOT make monomorphization part of source-language semantics.
 
-type identifier
-version
-semantic definition
-source syntax
-AST representation
-compatibility
-IR mapping
-capabilities
-effects
-resource requirements
+A compiler MAY instead use:
 
-A dialect must not redefine the meaning of an existing stable core type.
+- dictionary passing;
+- type erasure;
+- interpretation;
+- JIT;
+- AOT;
+- specialization;
+- hybrid strategies.
+
+The observable semantics MUST remain equivalent.
 
 ---
 
-158. Type-to-Macro Integration
+147. Representation Independence
 
-Macros may generate type syntax.
+Two implementations may represent the same semantic type differently.
 
-Macro expansion must occur before final semantic type checking.
+For example:
 
-Generated type syntax is subject to the same type rules as handwritten source.
+Vector<N, Float>
 
-Macros must not bypass:
+may become:
+
+CPU memory
+GPU buffer
+FPGA stream
+accelerator tile
+distributed partition
+
+The representation does not define type identity.
+
+---
+
+148. Memory and Type Semantics
+
+The type system describes logical values.
+
+Physical memory layout is downstream.
+
+A type MAY specify alignment, layout, or representation only when those properties are explicitly part of the type's semantics.
+
+Otherwise:
+
+type
+
+MUST NOT imply:
+
+physical address
+
+---
+
+149. ABI and Type Semantics
+
+ABI compatibility is a separate concern.
+
+A source-level type may have multiple valid ABI representations.
+
+An explicit foreign/ABI type may constrain representation.
+
+The compiler MUST NOT make portable source types ABI-specific merely because one backend uses a particular calling convention.
+
+---
+
+150. Interoperability
+
+External representations such as:
+
+- JSON;
+- XML;
+- SQL;
+- OpenQASM;
+- other data formats;
+- foreign APIs;
+
+must map into the canonical Zamani type system through explicit interoperability contracts.
+
+External syntax MUST NOT become the universal type authority.
+
+---
+
+151. Type Safety and Safe Rust
+
+The reference compiler implementation MUST use safe Rust.
+
+The relevant Rust modules MUST include:
+
+#![forbid(unsafe_code)]
+
+where appropriate at crate/module boundaries.
+
+Production code MUST NOT use:
+
+unsafe
+unsafe {}
+unsafe fn
+unsafe trait
+unsafe impl
+
+as part of the compiler implementation.
+
+The type-system implementation SHOULD prefer:
 
 - ownership;
-- type checking;
-- effect checking;
-- capability checking;
-- resource checking.
+- "Box";
+- "Arc";
+- "Rc" where appropriate;
+- "Vec";
+- slices;
+- enums;
+- pattern matching;
+- explicit worklists;
+- checked arithmetic;
+- fallible APIs;
+- "Result";
+- deterministic maps/sets where semantic ordering matters.
 
 ---
 
-159. Type-to-Metaprogramming Integration
+152. Safe FFI Boundary
 
-Metaprogramming may inspect or construct types.
+If a foreign subsystem requires unsafe operations internally, the Zamani type-system implementation MUST NOT expose that unsafety into the semantic type checker.
 
-The semantic type identity must remain canonical.
+The safe compiler layer MUST consume a validated safe abstraction.
 
-Reflection must not depend on compiler memory addresses or backend implementation details.
-
----
-
-160. Type Feature Completion Contract
-
-A type-system feature is not complete until all of the following exist:
-
-LEXICAL SUPPORT
-      ↓
-SYNTAX
-      ↓
-AST REPRESENTATION
-      ↓
-TYPE SEMANTICS
-      ↓
-TYPE INFERENCE
-      ↓
-DIAGNOSTICS
-      ↓
-CANONICAL SEMANTIC REPRESENTATION
-      ↓
-IR LOWERING
-      ↓
-IR VERIFICATION
-      ↓
-COMPILER INTEGRATION
-      ↓
-RUNTIME/TARGET INTEGRATION
-      ↓
-POSITIVE TESTS
-      ↓
-NEGATIVE TESTS
-      ↓
-BOUNDARY TESTS
-      ↓
-SCALABILITY TESTS
-      ↓
-DETERMINISM TESTS
-      ↓
-COMPATIBILITY TESTS
-
-A grammar rule alone does not complete a type feature.
+Unsafe implementation details are outside this type-system specification.
 
 ---
 
-161. Required Tests
+153. Panic Policy
 
-The type system must have tests covering:
+Normal invalid source programs MUST produce diagnostics rather than compiler panics.
 
-Primitive
+Internal invariants may use assertions during development where appropriate, but production compiler paths SHOULD return structured errors for recoverable invalid input.
 
-- boolean;
-- character;
-- string;
-- unit;
-- never.
+Untrusted source must not cause undefined behavior.
 
-Numeric
+---
 
-- signed integers;
-- unsigned integers;
-- floating point;
-- complex;
-- overflow;
-- conversion;
-- promotion.
+154. Arithmetic Safety
 
-Generic
+Semantic quantities MUST use checked operations.
 
-- generic functions;
-- generic types;
-- generic constraints;
-- generic inference.
+A compiler implementation MUST NOT silently wrap:
 
-Shapes
+- dimensions;
+- cardinalities;
+- resource counts;
+- type-level integers;
+- diagnostic counters;
+- constraint solver quantities.
 
-- vectors;
-- matrices;
-- tensors;
-- symbolic dimensions;
-- mismatched dimensions;
-- dynamic dimensions.
+Where an implementation index uses "usize", conversions MUST be checked.
 
-Ownership
+---
 
-- borrowing;
+155. Memory Safety
+
+Recursive semantic structures MUST use safe ownership.
+
+The implementation MAY use:
+
+Box<T>
+Arc<T>
+Vec<T>
+
+or equivalent safe structures.
+
+No semantic rule may depend on raw pointer identity.
+
+---
+
+156. Deterministic Collections
+
+Where collection iteration affects:
+
+- diagnostics;
+- canonical serialization;
+- type identity;
+- constraint ordering;
+- semantic hashes;
+
+the implementation MUST use a deterministic ordering strategy.
+
+Unordered map iteration MUST NOT determine semantic output.
+
+---
+
+157. Type Hashing
+
+If semantic type hashes are used, the hash input MUST be canonical.
+
+The hash MUST NOT depend on:
+
+- memory address;
+- process ID;
+- random hash seed;
+- allocation order;
+- compilation order.
+
+If cryptographic stability is required, the relevant hash algorithm and encoding MUST be specified by the repository compatibility/provenance contract.
+
+---
+
+158. Source Locations
+
+Source locations are metadata.
+
+They MUST NOT affect semantic type identity.
+
+They are retained for diagnostics and provenance.
+
+Two identical semantic types from different source files remain semantically identical unless their declarations create distinct nominal identities.
+
+---
+
+159. Diagnostics
+
+Every type diagnostic SHOULD identify:
+
+error category
+primary source span
+expected type
+actual type
+relevant constraint
+resolution context
+candidate alternatives where applicable
+actionable explanation
+
+Diagnostics MUST distinguish type failure from resource or target failure.
+
+---
+
+160. Generic Diagnostic Example
+
+A diagnostic should conceptually distinguish:
+
+expected: Matrix<M, N, T>
+found:    Matrix<M, K, T>
+required constraint: N = K
+status: TYPE_CONSTRAINT_UNSATISFIED
+
+from:
+
+type: QRegister<N>
+status: RESOURCE_UNAVAILABLE
+requirement: qubits >= N
+
+These are different failures.
+
+---
+
+161. Type-System Tests
+
+Every type feature MUST have:
+
+positive tests
+negative tests
+boundary tests
+scalability tests
+determinism tests
+compatibility tests
+cross-domain tests
+IR integration tests
+
+where applicable.
+
+---
+
+162. Primitive Tests
+
+Tests MUST cover:
+
+- Bool;
+- Char;
+- String;
+- Unit;
+- Never;
+- integer families;
+- floating-point families;
+- exact numeric types where implemented;
+- complex types.
+
+---
+
+163. Generic Tests
+
+Tests MUST cover:
+
+- generic declaration;
+- generic application;
+- generic inference;
+- bounds;
+- multiple parameters;
+- nested generic types;
+- symbolic value parameters;
+- associated types;
+- variance;
+- ambiguous constraints;
+- unsatisfied constraints.
+
+---
+
+164. Ownership Tests
+
+Tests MUST cover:
+
 - move;
-- copy;
-- linear;
-- affine;
-- resource consumption.
+- borrow;
+- mutable borrow;
+- lifetime compatibility;
+- linear consumption;
+- affine consumption;
+- invalid duplication;
+- invalid use after move;
+- invalid lifetime escape.
 
-Quantum
+---
+
+165. Dependent-Type Tests
+
+Tests MUST cover:
+
+- "Pi";
+- "Sigma";
+- identity;
+- symbolic dimensions;
+- substitution;
+- normalization;
+- equality;
+- unsatisfied proof obligations;
+- valid dependent specialization.
+
+---
+
+166. Shape Tests
+
+Tests MUST cover:
+
+Vector<N, T>
+Matrix<M, N, T>
+Tensor<S, T>
+
+including:
+
+- equal dimensions;
+- symbolic dimensions;
+- dependent dimensions;
+- compatible dimensions;
+- incompatible dimensions;
+- dynamic dimensions where supported.
+
+---
+
+167. Quantum Type Tests
+
+Tests MUST cover:
 
 - logical qubit;
-- physical qubit;
-- registers;
-- measurement;
-- quantum operations;
-- resource uniqueness;
-- hybrid computation.
-
-Hardware
-
-- capabilities;
+- quantum register;
+- symbolic quantum cardinality;
+- linear quantum resources;
+- measurement result typing;
+- quantum/classical boundaries;
+- hybrid computations;
 - resource requirements;
-- target-independent intent;
-- unavailable capability.
+- unavailable quantum capabilities.
 
-Distributed
+---
 
+168. HDL Tests
+
+Tests MUST cover:
+
+- signals;
+- ports;
+- registers;
+- interfaces;
+- timing-related type constraints;
+- hardware intent;
+- type distinction between HDL and ordinary software values.
+
+---
+
+169. Distributed Tests
+
+Tests MUST cover:
+
+- actor types;
 - channels;
-- nodes;
-- processes;
-- distributed collections;
-- arbitrary topology sizes.
-
-AI/data
-
-- tensors;
-- datasets;
-- models;
-- agents;
-- distributions.
+- distributed values;
+- replicas;
+- symbolic topology requirements;
+- resource-dependent placement.
 
 ---
 
-162. Negative Tests
+170. Interoperability Tests
 
-The following must fail:
+Tests MUST cover:
 
-integer assigned to incompatible quantum type
+- foreign types;
+- ABI declarations;
+- explicit conversions;
+- serialization types;
+- data-format mappings;
+- incompatible foreign representations.
 
-matrix with incompatible dimensions
+---
 
-linear quantum resource copied
+171. Negative Tests
 
-affine resource consumed twice
+The following MUST fail where semantically invalid:
 
-missing generic constraint
-
-ambiguous inferred type
-
-invalid conversion
-
-invalid capability requirement
-
+incompatible integer assignment
+invalid generic arity
+unsatisfied generic bound
+ambiguous type inference
+invalid associated type
+invalid type-level application
+invalid shape multiplication
+linear value duplicated
+affine value consumed twice
+invalid lifetime
+invalid quantum/classical conversion
+missing required capability
 invalid effect requirement
-
-nominal types used interchangeably without conversion
-
-invalid dependent constraint
+invalid refinement
+invalid dependent equality
+invalid nominal conversion
+invalid foreign conversion
 
 ---
 
-163. Boundary Tests
+172. Resource Failure Tests
 
-Boundary tests must include:
+The compiler MUST distinguish:
 
-zero-dimensional semantic cases where permitted
-one-element structures
-large finite dimensions
-very large integer widths
-large generic structures
-deeply nested valid types
-recursive types
-large quantum registers
+type invalid
+
+from:
+
+resource unavailable
+
+Tests MUST demonstrate that a valid type can remain valid even when a selected target cannot realize it.
+
+---
+
+173. Scalability Tests
+
+Tests MUST include progressively larger semantic structures without encoding a universal maximum.
+
+Examples include:
+
+large generic applications
+large tuples
+deep type graphs
+large symbolic dimensions
 large tensor shapes
-large distributed resource descriptions
+large quantum cardinalities
+large distributed descriptions
+large associated-type graphs
+large constraint sets
 
-The test suite must not define a fake maximum merely because a fixture uses one.
+The test harness MAY choose concrete sizes.
 
----
-
-164. Scalability Tests
-
-Scalability tests must verify that the semantic model does not contain artificial limits.
-
-Examples:
-
-large Vector<N, T>
-large Matrix<M, N, T>
-large Tensor<S, T>
-large QRegister<N>
-large distributed topology
-large generic instantiation set
-large nested type graph
-
-The tests may use configured compiler resource budgets.
-
-Those budgets must be reported as implementation limits, not language limits.
+Those sizes MUST NOT become language limits.
 
 ---
 
-165. Determinism Tests
+174. Compiler-Budget Tests
 
-Given identical source and specification configuration:
+Tests MUST verify that configured compiler budgets produce:
 
-type checking result
-type identities
-constraint results
-diagnostic ordering
-semantic type hashes
+COMPILER_RESOURCE_EXHAUSTED
 
-must be deterministic.
+rather than false semantic errors.
 
-Hash-map iteration order must not affect semantic results.
+Examples include:
+
+- type solver work budget;
+- type-level evaluation budget;
+- memory budget;
+- diagnostic budget.
 
 ---
 
-166. Cross-Target Tests
+175. Determinism Tests
 
-The same source type program should be checked against:
+Given identical:
+
+source
+language version
+dialects
+type environment
+semantic configuration
+
+the implementation MUST produce deterministic:
+
+- resolved types;
+- constraint results;
+- diagnostics;
+- canonical semantic serialization;
+- semantic type identity.
+
+---
+
+176. Cross-Target Tests
+
+The same source type program SHOULD be analyzed against:
 
 CPU
 GPU
 FPGA
+ASIC
+accelerator
 QPU
 simulator
+HPC
 distributed target
 future/opaque target
 
-where supported.
+where those target profiles exist.
 
-The source semantic type must remain stable.
+Type meaning MUST remain unchanged.
 
-Only target feasibility and lowering may differ.
-
----
-
-167. Compatibility Tests
-
-Compatibility tests must verify:
-
-old valid program remains valid
-
-unless a deliberate breaking language version says otherwise.
-
-A change to:
-
-type equality
-generic compatibility
-ownership
-quantum resource semantics
-effect semantics
-
-is a potentially breaking change and must be versioned.
+Only feasibility and realization MAY differ.
 
 ---
 
-168. Hard-Coding Audit
+177. Compatibility Tests
 
-The type-system implementation and specification must be automatically audited for accidental machine limits.
+Compatibility tests MUST verify that:
 
-Suspicious semantic constructs include:
+- existing valid programs remain valid;
+- deliberate breaking changes are versioned;
+- type equality remains stable;
+- generic compatibility remains stable;
+- ownership remains stable;
+- quantum type semantics remain stable;
+- effect compatibility remains stable.
+
+---
+
+178. Hard-Coding Audit
+
+The type-system specification and implementation MUST be audited for accidental machine ceilings.
+
+Suspicious constructs include:
 
 MAX_QUBITS
-MAX_CORES
-MAX_THREADS
+MAX_CPUS
 MAX_GPUS
 MAX_FPGAS
 MAX_NODES
 MAX_MEMORY
+MAX_THREADS
+MAX_REGISTER_WIDTH
 MAX_TENSOR_RANK
-MAX_VECTOR_LENGTH
-MAX_REGISTER_SIZE
-MAX_TIMELINES
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
 
 A fixed value is permitted only when it is explicitly:
 
-- a language semantic constant;
+- semantic by language definition;
+- a program value;
 - a test fixture;
+- a compiler resource budget;
 - a diagnostic budget;
-- an implementation limit;
-- a target-specific resource description.
+- a security policy;
+- a target-specific resource property.
 
-It must not masquerade as a universal type-system limit.
+It MUST NOT masquerade as a universal type-system limit.
 
 ---
 
-169. What Counts as a Hard-Coded Limit
+179. Important Distinction: Fixed Semantic Widths
+
+A fixed-width type such as:
+
+u32
+
+is not an artificial hardware limit.
+
+The width is the semantic definition of that type.
 
 This is valid:
 
 u32
 
-because the width is the semantic definition of the type.
-
-This is not valid:
+This is not a universal type rule:
 
 QRegister supports at most 1024 qubits
 
-because that is a hardware/resource constraint.
-
 This is valid:
 
-Matrix<1024, 1024, Float>
+QRegister<1024>
 
-because "1024" is program data/type-level intent.
-
-This is invalid:
-
-Matrix dimensions may never exceed 1024
-
-as a universal language rule.
+because "1024" is program-level type information.
 
 ---
 
-170. Error Classification
+180. Implementation-Policy Boundary
 
-The compiler must distinguish at least:
+The compiler MAY impose:
 
-TYPE_INVALID
-TYPE_INFERENCE_FAILED
-TYPE_CONSTRAINT_UNSATISFIED
-TYPE_CONVERSION_INVALID
-RESOURCE_UNAVAILABLE
-CAPABILITY_UNAVAILABLE
-EFFECT_UNSUPPORTED
-TARGET_UNSUPPORTED
-IR_INVALID
+maximum compilation memory
+maximum compilation time
+maximum solver steps
+maximum diagnostic volume
+maximum serialized artifact size
 
-These errors must not be collapsed into one generic type failure.
+for operational safety.
 
----
+Such policies MUST be:
 
-171. Documentation Integration
-
-"grammar/grammar.md" should document the implementation status of the type system.
-
-"grammar/Zamani-Grammar.md" may contain proposed type constructs.
-
-Neither may silently redefine this specification.
-
-"grammar/types/README.md" should map syntax files to this normative specification.
-
-"grammar/specification/types.md", if retained as a broader human-readable specification, should reference this file rather than defining conflicting rules.
-
----
-
-172. Implementation File Integration
-
-The semantic type implementation should be independently completable.
-
-The type-system implementation must establish its contracts before consumers are updated.
-
-Recommended conceptual dependency order:
-
-type identity
-    ↓
-semantic scalar types
-    ↓
-type expressions
-    ↓
-generic parameters
-    ↓
-shape expressions
-    ↓
-composite types
-    ↓
-ownership/resource qualifiers
-    ↓
-effects
-    ↓
-capabilities
-    ↓
-function types
-    ↓
-quantum types
-    ↓
-domain types
-    ↓
-type compatibility
-    ↓
-inference
-    ↓
-semantic validation
-    ↓
-IR lowering
-
-No consumer should need to reinterpret an already-completed type definition.
-
----
-
-173. Stable Public Semantic Contracts
-
-Once a semantic type is consumed by another IR module, its meaning becomes a compatibility contract.
-
-Existing variants must not be silently repurposed.
-
-New variants must be:
-
-- additive;
-- versioned where required;
+- configurable where appropriate;
 - documented;
-- tested;
-- lowered to canonical IR.
+- externally distinguishable from semantic invalidity;
+- absent from the language's universal type meaning.
 
 ---
 
-174. No Backend Leakage
+181. Type-System Security
 
-The type system must not import or depend on:
+The type checker MUST treat source input as untrusted.
+
+It MUST:
+
+- validate names;
+- validate recursive structures;
+- prevent integer overflow;
+- avoid unchecked indexing;
+- avoid unsafe memory access;
+- avoid uncontrolled external execution;
+- avoid uncontrolled filesystem access;
+- avoid uncontrolled network access.
+
+Type checking MUST be deterministic unless an explicitly declared semantic mechanism says otherwise.
+
+---
+
+182. No Backend Leakage
+
+The type system MUST NOT depend on:
 
 LLVM
 MLIR
-QIR
 CUDA
 ROCm
 OpenQASM
-vendor QPU APIs
-FPGA vendor APIs
-specific CPU ISA
-specific GPU architecture
-specific physical topology
+QIR
+vendor CPU ISA
+vendor GPU ISA
+vendor FPGA API
+vendor QPU API
+specific machine topology
+specific device ID
 
-except through explicitly defined interoperability/target-lowering contracts.
+as semantic authorities.
 
-OpenQASM and QIR are interoperability representations, not the canonical Zamani type system.
+Such systems MAY be used in downstream lowering or interoperability.
 
 ---
 
-175. No Quantum IR Duplication
+183. No Hardware Type Explosion
 
-The type system must not create a second quantum IR merely to accommodate source syntax.
+The core language MUST NOT create types such as:
 
-The architecture remains:
+SpecificVendorGpu
+SpecificVendorQpu
+SpecificVendorFpga
+SpecificCpuGeneration
+SpecificPhysicalQubit
 
-Zamani source
-    ↓
-domain-neutral AST
-    ↓
-semantic quantum types
-    ↓
+as universal portable types.
+
+Hardware-specific semantics belong in:
+
+capabilities
+resources
+dialects
+target descriptions
+interoperability
+backend contracts
+
+---
+
+184. No Duplicate Quantum Type System
+
+There MUST be one semantic quantum type system.
+
+Source grammar may be distributed among the repository's quantum/type grammar files according to ownership contracts.
+
+But semantic meaning MUST converge on one representation.
+
+No second quantum type AST or IR may be introduced merely because another domain needs quantum types.
+
+---
+
+185. No Duplicate Generic System
+
+There MUST be one generic semantic model.
+
+These must not become competing systems:
+
+generic
+type-class
+associated
+higher-kinded
+dependent
+dialect generic
+domain generic
+
+They may be different constructs, but they must share:
+
+parameter identity
+constraint model
+substitution
+scope
+kind checking
+resolution
+compatibility
+
+---
+
+186. No Duplicate Constraint Systems
+
+All type-relevant constraints MUST eventually use the canonical semantic constraint model.
+
+This includes:
+
+- generic bounds;
+- associated-type equality;
+- shape constraints;
+- refinements;
+- dependent equality;
+- capability requirements where type-dependent;
+- resource requirements where type-dependent.
+
+The syntax may live in different grammar files.
+
+The semantic constraint representation must remain unified.
+
+---
+
+187. File Completion Contract
+
+A type-system-related file is not complete merely because its grammar parses.
+
+Before a file is marked complete, the following must already be defined:
+
+PURPOSE
+OWNS
+DOES NOT OWN
+DEPENDS_ON
+EXPORTS
+CONSUMED_BY
+LEXER_DEPENDENCIES
+GRAMMAR_DEPENDENCIES
+AST_OWNER
+SEMANTIC_OWNER
+IR_OWNER
+SPEC_OWNER
+TEST_OWNER
+COMPATIBILITY_OWNER
+DIAGNOSTICS_CONTRACT
+SCALABILITY_CONTRACT
+RESOURCE_CONTRACT
+CAPABILITY_CONTRACT
+EFFECT_CONTRACT
+CONTRACT_INTEGRATION
+POLICY_INTEGRATION
+PROVENANCE_INTEGRATION
+COMPLETION_CRITERIA
+
+A downstream implementation can therefore be added later without requiring the upstream specification file to be redesigned.
+
+---
+
+188. "grammar/types/types.g4" Integration Contract
+
+"grammar/types/types.g4" owns:
+
+typeExpression
+typeCore
+typePrefix
+typePostfix
+typeValueExpression
+typeExtension
+
+It MUST:
+
+- remain parser-only;
+- use the canonical lexer;
+- avoid lexer rules;
+- avoid embedded actions;
+- avoid target selection;
+- avoid semantic evaluation;
+- avoid resource discovery;
+- avoid hardware selection.
+
+It MUST expose the single universal type entry point.
+
+---
+
+189. "grammar/types/generic.g4" Integration Contract
+
+Owns:
+
+genericTypeArguments
+genericArgumentList
+genericTypeApplicationSuffix
+
+It MUST:
+
+- represent generic applications;
+- preserve argument ordering;
+- support arbitrary semantic arity;
+- avoid declaring generic parameters;
+- avoid defining type inference;
+- avoid defining substitution;
+- avoid defining type-class resolution.
+
+AST destination:
+
+TypeExpr::Generic
+
+or the canonical equivalent.
+
+---
+
+190. "grammar/types/bounds.g4" Integration Contract
+
+Owns source syntax for generic bounds.
+
+Semantic destination:
+
+TypeConstraint
+
+It MUST NOT define a second trait/type-class system.
+
+---
+
+191. "grammar/types/linear.g4" Integration Contract
+
+Owns linear source syntax.
+
+Semantic destination:
+
+linear ownership qualifier
+
+The ownership checker consumes it.
+
+No resource allocation occurs here.
+
+---
+
+192. "grammar/types/affine.g4" Integration Contract
+
+Owns affine source syntax.
+
+Semantic destination:
+
+affine ownership qualifier
+
+The ownership checker consumes it.
+
+---
+
+193. "grammar/types/dependent.g4" Integration Contract
+
+Owns syntax for:
+
+Pi
+Sigma
+Identity
+type-level dependent values
+
+AST destination:
+
+TypeExpr::Pi
+TypeExpr::Sigma
+TypeExpr::Identity
+TypeValueExpr
+
+Semantic destination:
+
+dependent semantic type
+constraint/proof obligations
+
+---
+
+194. "grammar/types/quantum.g4" Integration Contract
+
+Owns source syntax for quantum type constructs that are genuinely type-specific.
+
+Semantic destination:
+
+quantum semantic type
+
+IR destination:
+
 quantum::ir
 
-This preserves the repository's existing canonical quantum boundary.
+It MUST NOT:
+
+- assign physical qubits;
+- enumerate hardware;
+- choose a QPU;
+- encode QEC implementation.
 
 ---
 
-176. No Hardware Type Explosion
+195. "grammar/types/hardware.g4" Integration Contract
 
-The type system must not create:
+Owns hardware-intent type syntax.
 
-NvidiaGpuType
-AmdGpuType
-IntelGpuType
-IBMQubitType
-RigettiQubitType
-FPGA_X_Type
-CPU_X_Type
+It MUST express portable intent.
 
-as core portable types.
+It MUST NOT encode universal vendor inventories.
 
-Hardware-specific capabilities belong to:
-
-capability
-resource
-hardware intent
-interoperability
-dialect
-backend
-
-as appropriate.
+Hardware capability and resource resolution occur downstream.
 
 ---
 
-177. Future-Proofing
+196. "grammar/types/resource.g4" Integration Contract
 
-The type system must be extensible to future computational paradigms.
+Owns source syntax for resource-related type constructs.
 
-A future domain must be able to introduce:
+It MUST consume the canonical resource model.
 
-new semantic types
-new capabilities
-new effects
-new resources
-new lowering contracts
+It MUST NOT independently define:
 
-without modifying the meaning of existing core types.
+resource availability
 
-The extension must declare its integration contracts.
+or:
+
+hardware discovery
 
 ---
 
-178. Production Readiness Criteria
+197. "grammar/types/capability.g4" Integration Contract
 
-This file is complete only when:
+Owns source syntax for capability-qualified type constructs where applicable.
 
-- [ ] type authority is unambiguous;
-- [ ] type syntax is delegated to "grammar/types/";
-- [ ] AST integration is defined;
-- [ ] semantic representation is defined;
-- [ ] IR integration is defined;
-- [ ] quantum integration is defined;
-- [ ] resource integration is defined;
-- [ ] capability integration is defined;
-- [ ] effect integration is defined;
-- [ ] compiler integration is defined;
-- [ ] runtime integration is defined;
-- [ ] interoperability is defined;
-- [ ] generic semantics are defined;
-- [ ] shape semantics are defined;
-- [ ] ownership semantics are defined;
-- [ ] linear/affine semantics are defined;
-- [ ] inference is defined;
-- [ ] conversion rules are defined;
-- [ ] diagnostics are defined;
-- [ ] scalability rules are defined;
-- [ ] hard-coding rules are defined;
-- [ ] no artificial hardware limits exist;
-- [ ] positive tests exist;
-- [ ] negative tests exist;
-- [ ] boundary tests exist;
-- [ ] scalability tests exist;
-- [ ] determinism tests exist;
-- [ ] compatibility tests exist;
-- [ ] safe Rust implementation is possible;
-- [ ] "unsafe" Rust is prohibited;
-- [ ] canonical quantum IR remains the quantum semantic boundary.
+Capability identity comes from the canonical capability model.
+
+Capability satisfaction occurs downstream.
 
 ---
 
-179. Final Type-System Invariant
+198. "grammar/types/effectful.g4" Integration Contract
 
-The central invariant of Zamani is:
+Owns source syntax for effect-qualified types where applicable.
 
-«A type describes what a computation means and what semantic guarantees it requires; it does not prescribe the machine on which that computation must run.»
+Effect identity comes from:
 
-Therefore:
+grammar/effects/
 
-Type
-  ≠
-Machine
+No duplicate effect vocabulary may be defined here.
 
-Type
-  ≠
-Hardware topology
+---
 
-Type
-  ≠
-Physical allocation
+199. "src/frontend/ast/node/types/type_expr.rs" Integration Contract
 
-Type
-  ≠
-Scheduling decision
+This file is the canonical source-level "TypeExpr" representation.
 
-Type
-  ≠
-Routing decision
+It MUST remain:
 
-Type
-  ≠
-Calibration
+- source-oriented;
+- target-neutral;
+- deterministic;
+- safe Rust;
+- free of hardware allocation;
+- free of backend selection.
 
-Type
-  ≠
-QEC implementation
+It MAY expose safe convenience APIs around "TypeExpr".
 
-Type
-  ≠
-ZQN implementation
+It MUST NOT become the semantic type checker itself.
 
-Instead:
+---
 
-Type
-  =
-semantic contract
-+
+200. Semantic Type Implementation Contract
+
+The semantic type implementation must provide:
+
+resolution
+normalization
+equality
+compatibility
+subtyping where supported
+substitution
+unification
+kind checking
+constraint solving
+ownership qualifiers
+effect integration
+capability integration
+resource integration
+
+It MUST operate independently of backend-specific target selection.
+
+---
+
+201. Suggested Semantic Implementation Dependency Order
+
+The implementation should be completed in this dependency order:
+
+type identity
+      ↓
+type paths / names
+      ↓
+primitive semantic types
+      ↓
+type constructors
+      ↓
+generic parameters
+      ↓
+generic application
+      ↓
+kind checking
+      ↓
+type substitution
+      ↓
+type normalization
+      ↓
+type equality
+      ↓
 constraints
-+
+      ↓
+unification
+      ↓
+associated types
+      ↓
+variance/subtyping
+      ↓
 ownership
-+
+      ↓
+linear/affine
+      ↓
+lifetimes
+      ↓
+dependent values
+      ↓
+refinement/proof obligations
+      ↓
 effects
-+
+      ↓
 capabilities
-+
-resource intent
+      ↓
+resources
+      ↓
+domain types
+      ↓
+semantic finalization
+      ↓
+IR lowering
 
-and:
-
-semantic contract
-        ↓
-canonical IR
-        ↓
-optimization
-        ↓
-routing / scheduling / resilience
-        ↓
-QEC / ZQN where applicable
-        ↓
-HAL
-        ↓
-target realization
-
-This is the type-system foundation required for Zamani to scale from the smallest useful computation to arbitrarily large finite computations subject only to actual resources, while preserving the Program Once, Compile Once, Run Everywhere, Anywhere, Forever objective.
+No later subsystem should need to reinterpret the meaning of an earlier completed type contract.
 
 ---
 
-180. Integration Summary
+202. Type-System Feature Completion
 
-This file integrates with the repository as follows:
-
-Area| Owner| Relationship to this file
-Lexical syntax| "grammar/spec/lexical.md" / "grammar/lexer/"| Supplies canonical tokens
-General syntax| "grammar/spec/syntax.md"| Supplies type-expression structure
-Type syntax| "grammar/types/"| Owns source grammar
-Expressions| "grammar/expressions/"| Supplies type-level expressions
-Declarations| "grammar/declarations/"| Introduces named types
-Functions| "grammar/functions/"| Defines function syntax
-Effects| "grammar/effects/"| Defines effect syntax
-Resources| "grammar/resources/"| Defines resource intent
-Hardware| "grammar/hardware/"| Defines target-independent hardware intent
-Classical| "grammar/classical/"| Uses common type system
-Quantum| "grammar/quantum/"| Uses quantum semantic types
-Hybrid| "grammar/hybrid/"| Combines classical and quantum types
-HDL| "grammar/hdl/"| Uses common type system
-Distributed| "grammar/distributed/"| Uses distributed semantic types
-AI| "grammar/ai/"| Uses tensor/model/agent types
-Data| "grammar/data/"| Uses collection/tensor/schema types
-Networking| "grammar/networking/"| Uses endpoint/channel types
-Security| "grammar/security/"| Uses capability/secret/key types
-Interoperability| "grammar/interoperability/"| Maps foreign types
-Dialects| "grammar/dialects/"| Adds controlled extensions
-AST| "src/frontend/ast/"| Represents source type structure
-Parser| "src/parser.rs"| Produces AST syntax
-Semantic analysis| semantic/type checking| Implements this contract
-Canonical quantum semantics| "quantum::ir"| Canonical quantum boundary
-Optimization| compiler/IR passes| Consumes validated types
-Routing| quantum routing| Physical realization
-Scheduling| scheduling| Timing/resource realization
-QEC| resilience/QEC| Error-correction realization
-ZQN| ZQN subsystem| Fault/noise semantics
-HAL| hardware abstraction| Capability/device realization
-Runtime| execution/runtime| Executes lowered program
-
----
-
-181. Final Rule
-
-No future Zamani type feature is considered production-ready merely because a type can be written in source code.
-
-It is production-ready only when:
+A feature is production-ready only when:
 
 SPECIFICATION
     ↓
-SYNTAX
-    ↓
 LEXER
     ↓
-PARSER
+SYNTAX
     ↓
 AST
+    ↓
+STRUCTURAL VALIDATION
+    ↓
+NAME RESOLUTION
     ↓
 TYPE SEMANTICS
     ↓
 INFERENCE
     ↓
-OWNERSHIP / EFFECT / CAPABILITY ANALYSIS
+CONSTRAINT SOLVING
     ↓
-RESOURCE ANALYSIS
+OWNERSHIP
     ↓
-CANONICAL SEMANTIC MODEL
+EFFECTS
+    ↓
+CAPABILITIES
+    ↓
+RESOURCES
+    ↓
+CONTRACTS/POLICIES
+    ↓
+SEMANTIC MODEL
     ↓
 IR
     ↓
 IR VERIFICATION
     ↓
-COMPILER
+LOWERING
     ↓
-RUNTIME / TARGET
+TARGET INTEGRATION
     ↓
 TESTS
 
-all agree on exactly the same meaning.
+where the relevant stages apply.
 
-That contract is mandatory for the Zamani type system.
+---
+
+203. Cross-Domain Completion Test
+
+At least one integrated conformance program MUST combine:
+
+generic types
++
+symbolic dimensions
++
+classical computation
++
+tensor computation
++
+quantum resource
++
+quantum operation
++
+measurement
++
+linear ownership
++
+effects
++
+capabilities
++
+resource requirements
++
+contracts
++
+policies
++
+provenance
++
+distributed computation
++
+HDL/hardware intent
+
+The pipeline MUST successfully demonstrate:
+
+source
+ ↓
+AST
+ ↓
+type resolution
+ ↓
+constraint solving
+ ↓
+ownership checking
+ ↓
+effect checking
+ ↓
+capability checking
+ ↓
+resource checking
+ ↓
+contract/policy validation
+ ↓
+semantic type model
+ ↓
+Classical IR / quantum::ir / domain IR
+
+---
+
+204. POCO-REAF Conformance
+
+The same semantic source program SHOULD be testable against multiple target profiles without modifying the source type declarations.
+
+For example:
+
+CPU
+GPU
+FPGA
+ASIC
+accelerator
+QPU
+simulator
+HPC
+cluster
+distributed
+future target
+
+The type semantics MUST remain stable.
+
+Only:
+
+capability satisfaction
+resource feasibility
+specialization
+lowering
+routing
+scheduling
+resilience
+
+may differ.
+
+---
+
+205. Future Computational Domains
+
+A future computational domain may add:
+
+types
+generic constructors
+constraints
+effects
+capabilities
+resources
+dialect types
+lowering rules
+
+without changing the semantics of existing types.
+
+The extension MUST provide:
+
+type identity
+syntax
+AST mapping
+semantic definition
+constraints
+compatibility
+effects
+capabilities
+resources
+IR mapping
+tests
+versioning
+
+---
+
+206. Production Readiness Checklist
+
+"grammar/spec/type-system.md" is production-ready only when all of the following are true:
+
+- [ ] Type authority is unambiguous.
+- [ ] Type syntax is delegated to "grammar/types/".
+- [ ] "TypeExpr" is the sole canonical source type representation.
+- [ ] Semantic types are distinct from source "TypeExpr".
+- [ ] Generic application is distinct from generic declaration.
+- [ ] Generic constraints have one semantic model.
+- [ ] Associated types have one semantic model.
+- [ ] Type-level values have one semantic model.
+- [ ] Dependent types have defined semantics.
+- [ ] Refinement types have defined semantics where implemented.
+- [ ] Ownership semantics are defined.
+- [ ] Linear semantics are defined.
+- [ ] Affine semantics are defined.
+- [ ] Lifetime semantics are defined.
+- [ ] Effects integrate without duplicate ownership.
+- [ ] Capabilities integrate without duplicate ownership.
+- [ ] Resources integrate without duplicate ownership.
+- [ ] Contracts integrate without duplicate ownership.
+- [ ] Policies integrate without duplicate ownership.
+- [ ] Provenance integrates without changing type identity.
+- [ ] Quantum types have a single semantic boundary.
+- [ ] "quantum::ir" remains the canonical quantum IR boundary.
+- [ ] Classical types integrate with canonical Classical IR.
+- [ ] HDL/hardware types remain target-independent.
+- [ ] Distributed types remain placement-independent.
+- [ ] Networking types remain transport-independent.
+- [ ] Foreign types are explicitly distinguished.
+- [ ] ABI semantics do not leak into portable types.
+- [ ] Type equality is deterministic.
+- [ ] Constraint solving is deterministic.
+- [ ] Compiler resource exhaustion is distinct from semantic invalidity.
+- [ ] Semantic quantities do not silently narrow to host integers.
+- [ ] No universal hardware capacity is hard-coded.
+- [ ] No backend becomes the type-system authority.
+- [ ] Safe Rust implementation is possible.
+- [ ] Production Rust uses no "unsafe".
+- [ ] Positive tests exist.
+- [ ] Negative tests exist.
+- [ ] Boundary tests exist.
+- [ ] Scalability tests exist.
+- [ ] Determinism tests exist.
+- [ ] Cross-target tests exist.
+- [ ] Compatibility tests exist.
+- [ ] IR integration tests exist.
+- [ ] Every participating file has an explicit ownership/integration contract.
+
+---
+
+207. Final Semantic Invariants
+
+The following invariants are mandatory.
+
+Invariant 1 — Type is not hardware
+
+Type ≠ physical machine
+
+Invariant 2 — Type is not allocation
+
+Type ≠ physical allocation
+
+Invariant 3 — Resource feasibility is separate
+
+Type validity ≠ resource availability
+
+Invariant 4 — Capability feasibility is separate
+
+Type validity ≠ capability availability
+
+Invariant 5 — Target realization is downstream
+
+semantic type
+    ↓
+canonical IR
+    ↓
+target realization
+
+Invariant 6 — Quantum semantics have one canonical boundary
+
+quantum source semantics
+    ↓
+quantum::ir
+
+Invariant 7 — Source AST has one authority
+
+TypeExpr
+
+is the canonical source-level representation.
+
+Invariant 8 — Genericity is open-ended
+
+New generic abstractions MUST NOT require a finite universal inventory.
+
+Invariant 9 — Semantic quantities do not depend on host width
+
+semantic cardinality ≠ usize
+
+Invariant 10 — Compiler limits are not language limits
+
+compiler budget
+≠
+type-system maximum
+
+Invariant 11 — Safe implementation
+
+The production compiler MUST remain safe Rust.
+
+Invariant 12 — Determinism
+
+Identical semantic inputs MUST produce identical type-analysis results under the same language and implementation profile.
+
+Invariant 13 — No silent semantic weakening
+
+A backend MUST NOT silently weaken:
+
+- type guarantees;
+- ownership;
+- linearity;
+- affinity;
+- effects;
+- capabilities;
+- contracts;
+- refinements;
+- quantum correctness.
+
+Invariant 14 — Open-world computation
+
+A new hardware platform, computational domain, accelerator, quantum technology, or future execution model MUST be able to consume existing semantic types without redefining their meaning.
+
+---
+
+208. Final Architecture
+
+The complete type-system architecture is:
+
+                    ZAMANI SOURCE
+                         │
+                         ▼
+                  canonical lexer
+                         │
+                         ▼
+                  canonical parser
+                         │
+                         ▼
+                     TypeExpr
+                         │
+                         ▼
+              structural AST validation
+                         │
+                         ▼
+                   name resolution
+                         │
+                         ▼
+                 type resolution
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+      generics       constraints      shapes
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                  type normalization
+                         │
+                         ▼
+                    unification
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+      ownership       effects      capabilities
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                     resources
+                         │
+                         ▼
+                  contracts/policies
+                         │
+                         ▼
+                 semantic type model
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+      Classical       Quantum        HDL/Hardware
+          │              │              │
+          ▼              ▼              ▼
+   Classical IR     quantum::ir     domain IR
+          │              │              │
+          └──────────────┼──────────────┘
+                         ▼
+                     optimization
+                         │
+                         ▼
+                      lowering
+                         │
+                ┌────────┼────────┐
+                ▼        ▼        ▼
+             routing  scheduling resilience
+                                  │
+                                  ▼
+                               QEC/ZQN
+                                  │
+                                  ▼
+                                 HAL
+                                  │
+                                  ▼
+                         target realization
+
+The resulting invariant is:
+
+                         TYPE
+                          │
+          ┌───────────────┼────────────────┐
+          ▼               ▼                ▼
+       meaning         constraints       guarantees
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                 semantic type model
+                          │
+                          ▼
+                    canonical IR
+                          │
+                          ▼
+              realization-independent
+                    optimization
+                          │
+          ┌───────────────┼────────────────┐
+          ▼               ▼                ▼
+       CPU/GPU        FPGA/ASIC        QPU/Simulator
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                  HPC / distributed
+                          │
+                          ▼
+                   future targets
+
+A Zamani type therefore remains a semantic contract, not a machine prescription.
+
+That is the required foundation for a type system capable of scaling from the smallest meaningful computation to arbitrarily large finite computations supported by the actual available resources, while preserving portability, type safety, quantum correctness, hardware neutrality, deterministic semantics, safe Rust implementation, and the POCO-REAF architecture.
