@@ -1,0 +1,3479 @@
+# =============================================================================
+#
+# Zamani Programming Language
+#
+# grammar/contracts/semantic-mappings.yaml
+#
+# =============================================================================
+#
+# PURPOSE
+#
+# Canonical machine-checkable contract connecting the Zamani source/AST model
+# to the semantic model.
+#
+# This file defines:
+#
+#   1. semantic ownership;
+#   2. AST -> semantic mappings;
+#   3. structural-validation boundaries;
+#   4. type/effect/capability/resource/contract/policy/provenance mappings;
+#   5. classical/quantum/HDL/hybrid/data/AI/distributed/networking mappings;
+#   6. semantic normalization rules;
+#   7. target-independence rules;
+#   8. scalability rules;
+#   9. POCO-REAF rules;
+#  10. diagnostics and validation integration;
+#  11. canonical IR hand-off;
+#  12. compatibility/versioning;
+#  13. implementation-status gates;
+#  14. freeze requirements.
+#
+# This file DOES NOT own:
+#
+#   - source grammar productions;
+#   - lexer tokens;
+#   - AST implementation structures;
+#   - physical hardware;
+#   - target selection;
+#   - routing;
+#   - scheduling;
+#   - calibration;
+#   - backend instructions;
+#   - runtime resource availability;
+#   - target-specific machine limits.
+#
+# Those responsibilities remain in their declared layers.
+#
+# =============================================================================
+
+schema:
+  version: "1.0"
+  kind: "zamani-grammar-semantic-mapping-contract"
+  format: "YAML"
+  status: "NORMATIVE"
+  repository: "Benwellonedge28/Zamani"
+  language: "Zamani"
+  root: "grammar/"
+  canonical_file: "grammar/contracts/semantic-mappings.yaml"
+
+  implementation:
+    rust:
+      edition: "2021"
+      minimum_version: "1.97"
+      supported_versions: "1.97-or-later"
+      safety_policy: "safe-rust-only"
+      unsafe_code: "forbidden"
+
+  architecture:
+    semantic_model: "target-independent"
+    canonical_quantum_ir: "quantum::ir"
+    canonical_classical_ir: "Classical IR"
+    canonical_hardware_boundary: "HDL/Hardware IR"
+
+  scalability:
+    model: "open-world"
+    meaning: >
+      Zamani source semantics impose no artificial finite universal ceiling
+      on computational scale. Concrete compilation and execution remain
+      bounded by actual resources, implementation representation, explicit
+      program constraints, deployment policy, and physical feasibility.
+
+  poco_reaf:
+    enabled: true
+    name: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
+    semantic_meaning: >
+      Source meaning remains stable and target-independent while realization
+      may be specialized according to capabilities, resources, constraints,
+      policies, effects, topology, and execution environment.
+
+# =============================================================================
+# 1. AUTHORITY
+# =============================================================================
+
+authority:
+
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "normative_architectural_authority"
+
+  language_specification:
+    path: "grammar/specification/"
+    role: "normative_language_meaning"
+
+  machine_specification:
+    path: "grammar/spec/"
+    role: "machine_checkable_language_contracts"
+
+  ownership:
+    path: "grammar/contracts/ownership.yaml"
+    role: "canonical_concept_ownership"
+
+  dependencies:
+    path: "grammar/contracts/dependencies.yaml"
+    role: "canonical_dependency_graph"
+
+  exports:
+    path: "grammar/contracts/exports.yaml"
+    role: "canonical_export_registry"
+
+  ast_mappings:
+    path: "grammar/contracts/ast-mappings.yaml"
+    role: "grammar_to_ast_contract"
+
+  semantic_mappings:
+    path: "grammar/contracts/semantic-mappings.yaml"
+    role: "ast_to_semantic_contract"
+
+  ir_mappings:
+    path: "grammar/contracts/ir-mappings.yaml"
+    role: "semantic_to_ir_contract"
+
+  diagnostics:
+    path: "grammar/contracts/diagnostics.yaml"
+    role: "diagnostic_contract"
+
+  compatibility:
+    path: "grammar/contracts/compatibility.yaml"
+    role: "compatibility_contract"
+
+  feature_status:
+    path: "grammar/contracts/feature-status.yaml"
+    role: "feature_lifecycle_contract"
+
+  semantic_boundaries:
+    path: "grammar/validation/semantic-boundaries.md"
+    role: "semantic_boundary_validation"
+
+  source_spans:
+    path: "grammar/spec/source-spans.md"
+    role: "source_provenance_contract"
+
+  implementation_status:
+    path: "grammar/grammar.md"
+    role: "derived_implementation_conformance_reference"
+    normative: false
+
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    role: "historical_extended_reference"
+    normative: false
+    ownership_effect: "none"
+
+# =============================================================================
+# 2. AUTHORITY LAWS
+# =============================================================================
+
+authority_rules:
+
+  semantic_mapping_is_not_grammar_ownership:
+    severity: "error"
+    rule: >
+      A semantic mapping consumes grammar/AST concepts. It MUST NOT redefine
+      their source syntax.
+
+  semantic_mapping_is_not_AST_ownership:
+    severity: "error"
+    rule: >
+      This file references AST structures but does not define Rust AST
+      structures.
+
+  one_semantic_owner:
+    severity: "error"
+    rule: >
+      Every meaning-bearing source concept MUST have exactly one canonical
+      semantic owner.
+
+  no_parallel_semantic_models:
+    severity: "error"
+    rule: >
+      Classical, quantum, HDL, AI, data, distributed, networking, accelerator,
+      embedded, and future-domain constructs MUST integrate with the common
+      semantic model rather than creating incompatible semantic universes.
+
+  domain_extension_without_core_duplication:
+    severity: "error"
+    rule: >
+      Domain extensions MAY add domain semantics but MUST reuse common types,
+      effects, capabilities, resources, contracts, policies, provenance,
+      execution intent, and compatibility mechanisms where applicable.
+
+  semantic_before_realization:
+    severity: "error"
+    rule: >
+      Source semantics MUST be validated before target realization.
+
+  realization_not_semantics:
+    severity: "error"
+    rule: >
+      Target selection, placement, routing, scheduling, calibration,
+      instruction selection, and physical resource allocation MUST NOT be
+      represented as universal source semantics.
+
+  implementation_not_language_law:
+    severity: "error"
+    rule: >
+      Limitations of the current Rust implementation MUST NOT redefine the
+      normative Zamani language.
+
+# =============================================================================
+# 3. SEMANTIC PIPELINE
+# =============================================================================
+
+pipeline:
+
+  stages:
+
+    - id: "source"
+      owner: "grammar/"
+      input: "Zamani source"
+      output: "source syntax"
+
+    - id: "lexical"
+      owner: "grammar/lexer/"
+      input: "source text"
+      output: "tokens"
+
+    - id: "parsing"
+      owner: "grammar/antlr/"
+      input: "tokens"
+      output: "parse structure"
+
+    - id: "ast"
+      owner: "grammar/contracts/ast-mappings.yaml"
+      input: "parse structure"
+      output: "domain-neutral AST"
+
+    - id: "structural_validation"
+      owner: "grammar/validation/"
+      input: "AST"
+      output: "structurally valid AST"
+
+    - id: "name_resolution"
+      owner: "semantic/name-resolution"
+      input: "valid AST"
+      output: "resolved semantic references"
+
+    - id: "type_analysis"
+      owner: "semantic/type-system"
+      input: "resolved AST"
+      output: "typed semantic model"
+
+    - id: "effect_analysis"
+      owner: "semantic/effects"
+      input: "typed semantic model"
+      output: "effect-annotated semantic model"
+
+    - id: "capability_analysis"
+      owner: "semantic/capabilities"
+      input: "effect-annotated semantic model"
+      output: "capability requirements"
+
+    - id: "resource_analysis"
+      owner: "semantic/resources"
+      input: "capability requirements"
+      output: "resource requirements and constraints"
+
+    - id: "contract_analysis"
+      owner: "semantic/contracts"
+      input: "resource-aware semantic model"
+      output: "contract-validated semantic model"
+
+    - id: "policy_analysis"
+      owner: "semantic/policies"
+      input: "contract-validated semantic model"
+      output: "policy-validated semantic model"
+
+    - id: "provenance_analysis"
+      owner: "semantic/provenance"
+      input: "validated semantic model"
+      output: "provenance-complete semantic model"
+
+    - id: "domain_semantics"
+      owner: "semantic/domains"
+      input: "validated semantic model"
+      output: "domain semantic representation"
+
+    - id: "canonical_ir"
+      owner: "src/ir/"
+      input: "domain semantic representation"
+      output:
+        - "Classical IR"
+        - "quantum::ir"
+        - "HDL/Hardware IR"
+
+    - id: "realization"
+      owner: "compiler/runtime"
+      input: "canonical IR"
+      output: "target realization"
+
+  invariant: >
+    No later stage may require semantic reinterpretation of an earlier frozen
+    source construct merely because a new target, backend, accelerator,
+    device, dialect, algorithm, or resource scale is introduced.
+
+# =============================================================================
+# 4. SEMANTIC LAYERS
+# =============================================================================
+
+semantic_layers:
+
+  source_semantics:
+    owns:
+      - "source meaning"
+      - "program structure"
+      - "types"
+      - "operations"
+      - "control flow"
+      - "effects"
+      - "requirements"
+      - "capabilities"
+      - "resources"
+      - "contracts"
+      - "policies"
+      - "provenance"
+      - "execution intent"
+
+  structural_semantics:
+    owns:
+      - "well-formedness"
+      - "scope structure"
+      - "declaration consistency"
+      - "grammar-derived invariants"
+
+  language_semantics:
+    owns:
+      - "name resolution"
+      - "type semantics"
+      - "evaluation semantics"
+      - "effect semantics"
+      - "capability semantics"
+      - "resource semantics"
+      - "contract semantics"
+      - "policy semantics"
+      - "domain semantics"
+
+  canonical_ir_semantics:
+    owns:
+      - "target-independent executable meaning"
+      - "canonical operation representation"
+      - "semantic dependencies"
+      - "semantic effects"
+      - "semantic capabilities"
+      - "semantic resource requirements"
+
+  target_realization:
+    owns:
+      - "target discovery"
+      - "capability matching"
+      - "resource negotiation"
+      - "placement"
+      - "routing"
+      - "scheduling"
+      - "lowering"
+      - "calibration"
+      - "backend selection"
+      - "device-specific execution"
+
+# =============================================================================
+# 5. UNIVERSAL SEMANTIC ENTITY
+# =============================================================================
+
+semantic_entity:
+
+  required_identity:
+    - "stable semantic identifier"
+    - "source provenance"
+    - "semantic kind"
+    - "language version"
+    - "domain"
+
+  optional_identity:
+    - "dialect"
+    - "dialect version"
+    - "generated origin"
+    - "specialization identity"
+
+  required_properties:
+    - "source meaning"
+    - "semantic dependencies"
+    - "effects"
+    - "capabilities"
+    - "resources"
+    - "contracts"
+    - "policies"
+    - "provenance"
+
+  forbidden_properties:
+    - "physical_device_id"
+    - "physical_core_id"
+    - "physical_gpu_id"
+    - "physical_fpga_location"
+    - "physical_asic_cell"
+    - "physical_qubit_id"
+    - "runtime_pointer"
+    - "memory_address"
+    - "scheduler_slot"
+    - "routing_assignment"
+    - "calibration_state"
+    - "live_device_count"
+
+  identity_invariant: >
+    Semantic identity MUST NOT depend on the machine on which the semantic
+    representation is compiled or executed.
+
+# =============================================================================
+# 6. SOURCE PROVENANCE
+# =============================================================================
+
+provenance:
+
+  canonical_source:
+    specification: "grammar/spec/source-spans.md"
+    implementation: "src/source_map.rs"
+
+  required:
+    - "source span"
+    - "origin kind"
+    - "source revision when required"
+    - "transformation provenance for generated/desugared nodes"
+
+  origin_kinds:
+    - "source"
+    - "generated"
+    - "synthetic"
+    - "desugared"
+    - "imported"
+    - "macro_expansion"
+
+  invariant: >
+    Semantic entities MUST retain enough provenance to produce deterministic
+    diagnostics and explain transformations back to source constructs.
+
+  forbidden_provenance:
+    - "memory address"
+    - "device address"
+    - "physical qubit identity"
+    - "scheduler identity"
+    - "backend-private pointer"
+
+# =============================================================================
+# 7. MAPPING SCHEMA
+# =============================================================================
+
+mapping_schema:
+
+  required_fields:
+    - "id"
+    - "grammar_owner"
+    - "grammar_symbols"
+    - "ast_mapping"
+    - "semantic_owner"
+    - "semantic_kind"
+    - "semantic_contract"
+    - "dependencies"
+    - "effects"
+    - "capabilities"
+    - "resources"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "ir_boundary"
+    - "status"
+    - "tests"
+    - "freeze"
+
+  optional_fields:
+    - "dialect"
+    - "feature_gate"
+    - "normalization"
+    - "desugaring"
+    - "diagnostics"
+    - "compatibility"
+    - "deprecation"
+
+  status_values:
+    - "HISTORICAL"
+    - "REJECTED"
+    - "PROPOSED"
+    - "PLANNED"
+    - "EXPERIMENTAL"
+    - "PARTIALLY_IMPLEMENTED"
+    - "IMPLEMENTED"
+    - "CONFORMANT"
+    - "STABLE"
+    - "DEPRECATED"
+
+  stable_requires:
+    - "normative specification exists"
+    - "unique grammar owner"
+    - "unique semantic owner"
+    - "AST mapping exists"
+    - "dependencies are frozen"
+    - "semantic invariants are defined"
+    - "effects are defined"
+    - "capabilities are defined where applicable"
+    - "resources are defined where applicable"
+    - "contracts are defined where applicable"
+    - "policies are defined where applicable"
+    - "provenance is defined"
+    - "IR mapping exists where applicable"
+    - "diagnostics exist"
+    - "compatibility contract exists"
+    - "positive tests exist"
+    - "negative tests exist"
+    - "scalability audit passes"
+    - "hard-coding audit passes"
+    - "target-independence audit passes"
+
+# =============================================================================
+# 8. COMMON SEMANTIC CONTRACT
+# =============================================================================
+
+common_contract:
+
+  every_meaningful_construct:
+    must_resolve_to:
+      - "semantic kind"
+      - "semantic identity"
+      - "source provenance"
+
+  may_reference:
+    - "types"
+    - "values"
+    - "functions"
+    - "modules"
+    - "capabilities"
+    - "resources"
+    - "effects"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "dialects"
+
+  may_declare:
+    - "constraints"
+    - "preferences"
+    - "requirements"
+    - "effects"
+    - "capabilities"
+    - "resource requirements"
+    - "contracts"
+    - "policies"
+
+  must_not_directly_select:
+    - "CPU"
+    - "GPU instance"
+    - "FPGA device"
+    - "ASIC device"
+    - "QPU device"
+    - "physical qubit"
+    - "physical memory location"
+    - "scheduler slot"
+    - "routing path"
+    - "backend instruction"
+
+# =============================================================================
+# 9. NAME AND PATH SEMANTICS
+# =============================================================================
+
+mappings:
+
+  name:
+    id: "semantic.name"
+    grammar_owner: "grammar/core/names.g4"
+    grammar_symbols:
+      - "identifier"
+      - "name"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+      semantic_input: "Identifier"
+    semantic_owner: "semantic/name-resolution"
+    semantic_kind: "name"
+    semantic_contract:
+      identity: "lexical_name"
+      resolution: "scope_and_namespace"
+      shadowing: "language_defined"
+      case_sensitivity: "language_defined"
+    dependencies:
+      - "core.names"
+      - "core.scopes"
+      - "modules.namespaces"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "metadata_only"
+    status: "IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/core/names/"
+      negative:
+        - "grammar/conformance/diagnostics/name-resolution/"
+    freeze:
+      required: true
+
+  qualified_name:
+    id: "semantic.qualified-name"
+    grammar_owner: "grammar/core/qualified-names.g4"
+    grammar_symbols:
+      - "qualifiedName"
+      - "path"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/name-resolution"
+    semantic_kind: "qualified_name"
+    semantic_contract:
+      namespace_resolution: true
+      deterministic: true
+    dependencies:
+      - "semantic.name"
+      - "modules.namespaces"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "metadata_only"
+    status: "IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/core/qualified-names/"
+      negative:
+        - "grammar/conformance/diagnostics/name-resolution/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 10. DECLARATION SEMANTICS
+# =============================================================================
+
+  declaration:
+    id: "semantic.declaration"
+    grammar_owner: "grammar/declarations/"
+    grammar_symbols:
+      - "declaration"
+      - "item"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/declarations"
+    semantic_kind: "declaration"
+    semantic_contract:
+      declares:
+        - "name"
+        - "kind"
+        - "visibility"
+        - "attributes"
+        - "source_provenance"
+      uniqueness: "scope-dependent"
+    dependencies:
+      - "semantic.name"
+      - "semantic.types"
+      - "semantic.visibility"
+      - "semantic.attributes"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts:
+      - "declaration invariants"
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "semantic_declaration"
+    status: "IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/declarations/"
+      negative:
+        - "grammar/conformance/diagnostics/declarations/"
+    freeze:
+      required: true
+
+  function:
+    id: "semantic.function"
+    grammar_owner: "grammar/functions/"
+    grammar_symbols:
+      - "function"
+      - "functionDeclaration"
+      - "parameters"
+      - "returnType"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/functions"
+    semantic_kind: "function"
+    semantic_contract:
+      includes:
+        - "signature"
+        - "generic_parameters"
+        - "constraints"
+        - "body"
+        - "effects"
+        - "contracts"
+        - "capabilities"
+        - "resource_requirements"
+    dependencies:
+      - "semantic.name"
+      - "semantic.types"
+      - "semantic.effects"
+      - "semantic.resources"
+      - "semantic.contracts"
+    effects:
+      source: "declared_or_inferred"
+    capabilities:
+      source: "declared_or_inferred"
+    resources:
+      source: "declared_or_inferred"
+    contracts:
+      source: "declared_and_inferred"
+    policies:
+      source: "inherited_and_declared"
+    provenance: "source_span"
+    ir_boundary: "function_semantic"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/functions/"
+      negative:
+        - "grammar/conformance/diagnostics/functions/"
+    freeze:
+      required: true
+      blocker_if_incomplete: true
+
+# =============================================================================
+# 11. TYPE SEMANTICS
+# =============================================================================
+
+  type:
+    id: "semantic.type"
+    grammar_owner: "grammar/types/"
+    grammar_symbols:
+      - "type"
+      - "typeExpression"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/type-system"
+    semantic_kind: "type"
+    semantic_contract:
+      responsibilities:
+        - "type identity"
+        - "type equality"
+        - "type compatibility"
+        - "generic substitution"
+        - "bounds"
+        - "constraints"
+        - "variance"
+        - "ownership properties"
+        - "resource properties"
+        - "domain properties"
+    dependencies:
+      - "semantic.name"
+      - "semantic.declarations"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts:
+      - "type invariants"
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "canonical_type_representation"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/types/"
+      negative:
+        - "grammar/conformance/diagnostics/types/"
+    freeze:
+      required: true
+      blocker_if_incomplete: true
+
+  generic_type:
+    id: "semantic.generic-type"
+    grammar_owner: "grammar/types/generic.g4"
+    grammar_symbols:
+      - "genericType"
+      - "typeParameter"
+      - "typeArguments"
+      - "typeBounds"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/type-system/generics"
+    semantic_kind: "generic_type"
+    semantic_contract:
+      supports:
+        - "type parameters"
+        - "value parameters where specified"
+        - "bounds"
+        - "constraints"
+        - "associated semantics"
+    dependencies:
+      - "semantic.type"
+      - "semantic.constraints"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "generic_type"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/types/generics/"
+      negative:
+        - "grammar/conformance/diagnostics/types/generics/"
+    freeze:
+      required: true
+
+  linear_type:
+    id: "semantic.linear-type"
+    grammar_owner: "grammar/types/linear.g4"
+    grammar_symbols:
+      - "linearType"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/type-system/linearity"
+    semantic_kind: "linear_type"
+    semantic_contract:
+      usage: "resource-sensitive"
+      consumption: "tracked_by_semantic_analysis"
+      duplication: "restricted_by_type_rules"
+    dependencies:
+      - "semantic.type"
+      - "semantic.resources"
+      - "semantic.memory"
+    effects: []
+    capabilities: []
+    resources:
+      relationship: "resource_usage"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "linear_type"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/types/linear/"
+      negative:
+        - "grammar/conformance/diagnostics/types/linear/"
+    freeze:
+      required: true
+
+  affine_type:
+    id: "semantic.affine-type"
+    grammar_owner: "grammar/types/affine.g4"
+    grammar_symbols:
+      - "affineType"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/type-system/affinity"
+    semantic_kind: "affine_type"
+    semantic_contract:
+      usage: "at_most_once"
+    dependencies:
+      - "semantic.type"
+      - "semantic.memory"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "affine_type"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/types/affine/"
+      negative:
+        - "grammar/conformance/diagnostics/types/affine/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 12. EXPRESSION SEMANTICS
+# =============================================================================
+
+  expression:
+    id: "semantic.expression"
+    grammar_owner: "grammar/expressions/expressions.g4"
+    grammar_symbols:
+      - "expression"
+      - "primaryExpression"
+      - "unaryExpression"
+      - "binaryExpression"
+      - "callExpression"
+      - "memberExpression"
+      - "indexExpression"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/expressions"
+    semantic_kind: "expression"
+    semantic_contract:
+      produces:
+        - "value"
+        - "type"
+        - "effects"
+        - "provenance"
+      evaluation:
+        order: "language-defined"
+    dependencies:
+      - "semantic.name"
+      - "semantic.type"
+      - "semantic.effects"
+    effects:
+      source: "operation-dependent"
+    capabilities:
+      source: "operation-dependent"
+    resources:
+      source: "operation-dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "expression_semantics"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/expressions/"
+      negative:
+        - "grammar/conformance/diagnostics/expressions/"
+    freeze:
+      required: true
+
+  lambda:
+    id: "semantic.lambda"
+    grammar_owner: "grammar/expressions/lambda.g4"
+    grammar_symbols:
+      - "lambdaExpression"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+      current_ast_symbol: "Expression::Lambda"
+    semantic_owner: "semantic/functions/closures"
+    semantic_kind: "lambda"
+    semantic_contract:
+      captures: "semantic"
+      typing: "function_type"
+      effects: "inferred_or_declared"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.function"
+      - "semantic.type"
+      - "semantic.effects"
+    effects:
+      source: "body_and_capture_dependent"
+    capabilities:
+      source: "body_and_capture_dependent"
+    resources:
+      source: "body_and_capture_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "closure_or_function_value"
+    status: "IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/expressions/lambda/"
+      negative:
+        - "grammar/conformance/diagnostics/expressions/lambda/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 13. STATEMENT SEMANTICS
+# =============================================================================
+
+  statement:
+    id: "semantic.statement"
+    grammar_owner: "grammar/statements/"
+    grammar_symbols:
+      - "statement"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/statements"
+    semantic_kind: "statement"
+    semantic_contract:
+      responsibilities:
+        - "control-flow meaning"
+        - "binding meaning"
+        - "mutation semantics"
+        - "scope effects"
+        - "termination behavior"
+        - "effect propagation"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.type"
+      - "semantic.effects"
+    effects:
+      source: "statement-dependent"
+    capabilities:
+      source: "statement-dependent"
+    resources:
+      source: "statement-dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "control_flow"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/statements/"
+      negative:
+        - "grammar/conformance/diagnostics/statements/"
+    freeze:
+      required: true
+
+  match:
+    id: "semantic.match"
+    grammar_owner: "grammar/statements/match.g4"
+    grammar_symbols:
+      - "matchStatement"
+      - "matchExpression"
+      - "matchArm"
+      - "guard"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/control-flow/match"
+    semantic_kind: "pattern_match"
+    semantic_contract:
+      responsibilities:
+        - "pattern compatibility"
+        - "guard validation"
+        - "exhaustiveness"
+        - "reachability"
+        - "binding semantics"
+    dependencies:
+      - "semantic.patterns"
+      - "semantic.expression"
+      - "semantic.type"
+    effects:
+      source: "guard_and_arm_dependent"
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "branching_control_flow"
+    status: "IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/statements/match/"
+      negative:
+        - "grammar/conformance/diagnostics/statements/match/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 14. EFFECT SEMANTICS
+# =============================================================================
+
+  effect:
+    id: "semantic.effect"
+    grammar_owner: "grammar/effects/"
+    grammar_symbols:
+      - "effect"
+      - "effectDeclaration"
+      - "effectSet"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/effects"
+    semantic_kind: "effect"
+    semantic_contract:
+      algebra:
+        - "identity"
+        - "composition"
+        - "subeffect"
+        - "effect propagation"
+        - "effect checking"
+        - "effect polymorphism"
+    dependencies:
+      - "semantic.type"
+      - "semantic.capability"
+      - "semantic.policy"
+    effects:
+      canonical: true
+    capabilities:
+      relationship: "effects_may_require_capabilities"
+    resources:
+      relationship: "effects_may_consume_resources"
+    contracts: []
+    policies:
+      relationship: "effects_are_policy_subjects"
+    provenance: "source_span"
+    ir_boundary: "effect_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/effects/"
+      negative:
+        - "grammar/conformance/diagnostics/effects/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 15. CAPABILITY SEMANTICS
+# =============================================================================
+
+  capability:
+    id: "semantic.capability"
+    grammar_owner: "grammar/core/capabilities.g4"
+    grammar_symbols:
+      - "capability"
+      - "capabilityReference"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/capabilities"
+    semantic_kind: "capability_requirement"
+    semantic_contract:
+      identity: "namespace_qualified_capability"
+      matching: "deferred_to_realization"
+      source_semantics: "requirement_not_device_identity"
+    dependencies:
+      - "semantic.name"
+      - "semantic.effects"
+      - "semantic.resources"
+      - "semantic.policy"
+    effects: []
+    capabilities:
+      examples:
+        - "quantum.measurement"
+        - "gpu.compute"
+        - "tensor.compute"
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "capability_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/capabilities/"
+      negative:
+        - "grammar/conformance/diagnostics/capabilities/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 16. RESOURCE SEMANTICS
+# =============================================================================
+
+  resource:
+    id: "semantic.resource"
+    grammar_owner: "grammar/resources/"
+    grammar_symbols:
+      - "resource"
+      - "resourceRequirement"
+      - "resourceConstraint"
+      - "resourcePreference"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/resources"
+    semantic_kind: "resource_requirement"
+    semantic_contract:
+      categories:
+        - "memory"
+        - "storage"
+        - "compute"
+        - "qubits"
+        - "communication"
+        - "bandwidth"
+        - "latency"
+        - "energy"
+        - "throughput"
+        - "reliability"
+        - "topology"
+        - "domain_specific_resource"
+      operators:
+        - "requires"
+        - "prefer"
+        - "constrain"
+        - "allow"
+        - "forbid"
+      symbolic_values: true
+      runtime_values: true
+      target_values: false
+    dependencies:
+      - "semantic.expression"
+      - "semantic.capability"
+      - "semantic.policy"
+    effects: []
+    capabilities:
+      relationship: "resource_requirements_may_imply_capabilities"
+    resources:
+      canonical: true
+    contracts: []
+    policies:
+      relationship: "resource_use_is_policy_subject"
+    provenance: "source_span"
+    ir_boundary: "resource_contract"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/resources/"
+      negative:
+        - "grammar/conformance/diagnostics/resources/"
+      scalability:
+        - "grammar/conformance/scalability/resource-symbolic/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 17. SCALABILITY AUDIT FOR RESOURCES
+# =============================================================================
+
+  resource_scalability:
+    id: "semantic.resource-scalability"
+    grammar_owner: "grammar/resources/"
+    grammar_symbols:
+      - "resourceRequirement"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/resources"
+    semantic_kind: "scalable_resource_expression"
+    semantic_contract:
+      allowed:
+        - "symbolic_quantity"
+        - "runtime_quantity"
+        - "generic_quantity"
+        - "derived_quantity"
+        - "capability_predicate"
+        - "topology_predicate"
+      forbidden:
+        - "universal_fixed_capacity"
+        - "vendor_capacity_as_language_law"
+        - "device_inventory_as_language_law"
+    dependencies:
+      - "semantic.resource"
+    effects: []
+    capabilities: []
+    resources:
+      canonical: true
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "resource_contract"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/scalability/resource-symbolic/"
+      negative:
+        - "grammar/conformance/scalability/hardcoded-capacity/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 18. CONTRACT SEMANTICS
+# =============================================================================
+
+  contract:
+    id: "semantic.contract"
+    grammar_owner:
+      - "grammar/statements/contracts.g4"
+      - "grammar/functions/contracts.g4"
+      - "grammar/core/contracts.g4"
+    grammar_symbols:
+      - "requiresClause"
+      - "ensuresClause"
+      - "invariantClause"
+      - "assumeClause"
+      - "guaranteeClause"
+      - "propertyClause"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/contracts"
+    semantic_kind: "contract"
+    semantic_contract:
+      classes:
+        - "precondition"
+        - "postcondition"
+        - "invariant"
+        - "assumption"
+        - "guarantee"
+        - "property"
+      validation: "semantic"
+      optimization_effect: "must_preserve_meaning"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.type"
+      - "semantic.provenance"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts:
+      canonical: true
+    policies:
+      relationship: "contracts_may_be_policy_constrained"
+    provenance: "source_span"
+    ir_boundary: "contract_metadata"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/contracts/"
+      negative:
+        - "grammar/conformance/diagnostics/contracts/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 19. POLICY SEMANTICS
+# =============================================================================
+
+  policy:
+    id: "semantic.policy"
+    grammar_owner: "grammar/policies/"
+    grammar_symbols:
+      - "policy"
+      - "policyReference"
+      - "policyRule"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/policies"
+    semantic_kind: "policy"
+    semantic_contract:
+      dimensions:
+        - "authorization"
+        - "security"
+        - "resource"
+        - "execution"
+        - "adaptation"
+        - "deployment"
+        - "fallback"
+        - "provenance"
+      evaluation:
+        stage: "semantic_validation_and_realization"
+      silent_override: false
+    dependencies:
+      - "semantic.capability"
+      - "semantic.effect"
+      - "semantic.resource"
+      - "semantic.provenance"
+    effects: []
+    capabilities:
+      relationship: "policy_can_require_capabilities"
+    resources:
+      relationship: "policy_can_restrict_resources"
+    contracts: []
+    policies:
+      canonical: true
+    provenance: "source_span"
+    ir_boundary: "policy_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/policies/"
+      negative:
+        - "grammar/conformance/diagnostics/policies/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 20. PROVENANCE AND EVIDENCE
+# =============================================================================
+
+  provenance_entity:
+    id: "semantic.provenance"
+    grammar_owner: "grammar/ai/provenance.g4"
+    grammar_symbols:
+      - "provenance"
+      - "evidence"
+      - "decisionRecord"
+      - "explanation"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/provenance"
+    semantic_kind: "provenance"
+    semantic_contract:
+      records:
+        - "origin"
+        - "source"
+        - "transformation"
+        - "evidence"
+        - "decision"
+        - "confidence"
+        - "explanation"
+      deterministic_identity: true
+      target_independent: true
+    dependencies:
+      - "semantic.source-spans"
+      - "semantic.policy"
+      - "semantic.contract"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies:
+      relationship: "provenance_is_policy_sensitive"
+    provenance:
+      canonical: true
+    ir_boundary: "provenance_metadata"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/provenance/"
+      negative:
+        - "grammar/conformance/diagnostics/provenance/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 21. CLASSICAL COMPUTING
+# =============================================================================
+
+  classical_operation:
+    id: "semantic.classical-operation"
+    grammar_owner: "grammar/classical/"
+    grammar_symbols:
+      - "classicalOperation"
+      - "numericOperation"
+      - "linearAlgebraOperation"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/classical"
+    semantic_kind: "classical_operation"
+    semantic_contract:
+      target_independent: true
+      mathematical_meaning: "canonical"
+      specialization: "deferred"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.type"
+      - "semantic.effects"
+      - "semantic.resources"
+    effects:
+      source: "operation_dependent"
+    capabilities:
+      source: "operation_dependent"
+    resources:
+      source: "operation_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "Classical IR"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/classical/"
+      negative:
+        - "grammar/conformance/diagnostics/classical/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 22. QUANTUM COMPUTING
+# =============================================================================
+
+  quantum_operation:
+    id: "semantic.quantum-operation"
+    grammar_owner: "grammar/quantum/operations.g4"
+    grammar_symbols:
+      - "quantumOperation"
+      - "operationSpecifier"
+      - "quantumTargetList"
+      - "quantumOperationAttributes"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/quantum"
+    semantic_kind: "quantum_operation"
+    semantic_contract:
+      operation_identity:
+        forms:
+          - "builtin"
+          - "custom"
+          - "vendor"
+          - "parameterized"
+          - "dialect"
+      operands:
+        - "logical_targets"
+        - "classical_inputs"
+        - "parameters"
+      results:
+        - "quantum_state_effect"
+        - "classical_result_when_declared"
+      modifiers:
+        supported: true
+      attributes:
+        extensible: true
+      fixed_operation_enumeration: false
+      physical_mapping: "deferred"
+    dependencies:
+      - "semantic.type"
+      - "semantic.expression"
+      - "semantic.effect"
+      - "semantic.capability"
+      - "semantic.resource"
+      - "semantic.policy"
+    effects:
+      default: "quantum_operation_effect"
+      measurement: "quantum.measurement"
+    capabilities:
+      examples:
+        - "quantum.compute"
+        - "quantum.measurement"
+        - "quantum.control"
+    resources:
+      examples:
+        - "qubits"
+        - "quantum_memory"
+        - "coherence"
+        - "connectivity"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "quantum::ir"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/quantum/operations/"
+      negative:
+        - "grammar/conformance/diagnostics/quantum/operations/"
+      scalability:
+        - "grammar/conformance/scalability/quantum/"
+    freeze:
+      required: true
+      blocker_if_incomplete: true
+
+  quantum_measurement:
+    id: "semantic.quantum-measurement"
+    grammar_owner: "grammar/quantum/measurement.g4"
+    grammar_symbols:
+      - "quantumMeasurement"
+      - "measurementBasis"
+      - "measurementResult"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/quantum/measurement"
+    semantic_kind: "quantum_measurement"
+    semantic_contract:
+      observable: "semantic"
+      basis: "semantic"
+      result_type: "language_defined"
+      nondeterminism: "explicit_quantum_semantics"
+    dependencies:
+      - "semantic.quantum-operation"
+      - "semantic.effect"
+      - "semantic.capability"
+    effects:
+      - "measurement"
+      - "quantum"
+    capabilities:
+      - "quantum.measurement"
+    resources:
+      source: "measurement_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "quantum::ir"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/quantum/measurement/"
+      negative:
+        - "grammar/conformance/diagnostics/quantum/measurement/"
+    freeze:
+      required: true
+
+  quantum_error_correction:
+    id: "semantic.quantum-error-correction"
+    grammar_owner: "grammar/quantum/error-correction.g4"
+    grammar_symbols:
+      - "errorCorrection"
+      - "code"
+      - "distance"
+      - "syndrome"
+      - "faultTolerance"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/quantum/error-correction"
+    semantic_kind: "quantum_error_correction_intent"
+    semantic_contract:
+      intent_only: true
+      physical_code_selection: "realization_deferred"
+      decoder_selection: "realization_deferred"
+      physical_qubit_assignment: "realization_deferred"
+    dependencies:
+      - "semantic.quantum-operation"
+      - "semantic.resource"
+      - "semantic.capability"
+      - "semantic.policy"
+    effects:
+      - "quantum"
+    capabilities:
+      source: "code_and_execution_dependent"
+    resources:
+      source: "code_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "quantum::ir"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/quantum/error-correction/"
+      negative:
+        - "grammar/conformance/diagnostics/quantum/error-correction/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 23. HDL / HARDWARE SEMANTICS
+# =============================================================================
+
+  hdl_construct:
+    id: "semantic.hdl-construct"
+    grammar_owner: "grammar/hdl/"
+    grammar_symbols:
+      - "hdlModule"
+      - "port"
+      - "signal"
+      - "wire"
+      - "register"
+      - "clock"
+      - "reset"
+      - "process"
+      - "generate"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/hdl"
+    semantic_kind: "hardware_intent"
+    semantic_contract:
+      describes:
+        - "hardware_structure"
+        - "connectivity"
+        - "timing_intent"
+        - "state"
+        - "combinational_behavior"
+        - "sequential_behavior"
+        - "interfaces"
+      physical_implementation: "deferred"
+      synthesis: "deferred"
+    dependencies:
+      - "semantic.type"
+      - "semantic.expression"
+      - "semantic.resource"
+      - "semantic.effect"
+      - "semantic.contract"
+    effects:
+      source: "hardware_operation_dependent"
+    capabilities:
+      source: "hardware_capability_dependent"
+    resources:
+      source: "hardware_intent_dependent"
+    contracts:
+      source: "verification_and_behavioral"
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "HDL/Hardware IR"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/hdl/"
+      negative:
+        - "grammar/conformance/diagnostics/hdl/"
+    freeze:
+      required: true
+
+  hdl_width:
+    id: "semantic.hdl-width"
+    grammar_owner: "grammar/hdl/"
+    grammar_symbols:
+      - "width"
+      - "dimension"
+      - "range"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/hdl/types"
+    semantic_kind: "symbolic_hardware_dimension"
+    semantic_contract:
+      symbolic: true
+      parameterized: true
+      runtime_or_compile_time_resolution: true
+      universal_fixed_width: false
+    dependencies:
+      - "semantic.type"
+      - "semantic.resource"
+    effects: []
+    capabilities: []
+    resources:
+      relationship: "dimension_may_affect_resource_requirements"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "HDL/Hardware IR"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/hdl/dimensions/"
+      negative:
+        - "grammar/conformance/scalability/hardcoded-capacity/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 24. HYBRID SEMANTICS
+# =============================================================================
+
+  hybrid_operation:
+    id: "semantic.hybrid-operation"
+    grammar_owner: "grammar/hybrid/"
+    grammar_symbols:
+      - "hybridOperation"
+      - "classicalQuantumBoundary"
+      - "hostDeviceBoundary"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/hybrid"
+    semantic_kind: "hybrid_operation"
+    semantic_contract:
+      domains:
+        - "classical"
+        - "quantum"
+        - "hardware"
+      data_boundary: "explicit"
+      effect_boundary: "explicit"
+      resource_boundary: "explicit"
+      synchronization: "semantic"
+    dependencies:
+      - "semantic.classical-operation"
+      - "semantic.quantum-operation"
+      - "semantic.resource"
+      - "semantic.effect"
+      - "semantic.policy"
+    effects:
+      source: "composed"
+    capabilities:
+      source: "composed"
+    resources:
+      source: "composed"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "hybrid semantic lowering"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/hybrid/"
+      negative:
+        - "grammar/conformance/diagnostics/hybrid/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 25. DATA SEMANTICS
+# =============================================================================
+
+  data_operation:
+    id: "semantic.data-operation"
+    grammar_owner: "grammar/data/"
+    grammar_symbols:
+      - "dataOperation"
+      - "collection"
+      - "stream"
+      - "dataset"
+      - "schema"
+      - "query"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/data"
+    semantic_kind: "data_operation"
+    semantic_contract:
+      includes:
+        - "data shape"
+        - "schema"
+        - "transformation"
+        - "stream semantics"
+        - "query semantics"
+        - "serialization intent"
+        - "provenance"
+      external_formats: "dialect_or_interoperability"
+    dependencies:
+      - "semantic.type"
+      - "semantic.expression"
+      - "semantic.provenance"
+      - "semantic.effect"
+    effects:
+      source: "operation_dependent"
+    capabilities:
+      source: "operation_dependent"
+    resources:
+      source: "operation_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span_and_data_provenance"
+    ir_boundary: "data_semantic_ir"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/data/"
+      negative:
+        - "grammar/conformance/diagnostics/data/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 26. AI / REASONING / LEARNING SEMANTICS
+# =============================================================================
+
+  inference:
+    id: "semantic.inference"
+    grammar_owner: "grammar/ai/inference.g4"
+    grammar_symbols:
+      - "infer"
+      - "inference"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/ai/inference"
+    semantic_kind: "inference"
+    semantic_contract:
+      input: "semantic_values_or_evidence"
+      output: "semantic_result"
+      confidence: "optional"
+      provenance: "required_when_declared"
+      model_selection: "deferred"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.provenance"
+      - "semantic.effects"
+      - "semantic.resources"
+    effects:
+      - "learning_or_inference_when_applicable"
+    capabilities:
+      source: "model_or_runtime_dependent"
+    resources:
+      source: "model_or_runtime_dependent"
+    contracts: []
+    policies: []
+    provenance: "required"
+    ir_boundary: "AI semantic representation"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/ai/inference/"
+      negative:
+        - "grammar/conformance/diagnostics/ai/inference/"
+    freeze:
+      required: true
+
+  learning:
+    id: "semantic.learning"
+    grammar_owner: "grammar/ai/learning.g4"
+    grammar_symbols:
+      - "learn"
+      - "training"
+      - "adaptation"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/ai/learning"
+    semantic_kind: "learning"
+    semantic_contract:
+      adaptation_is_explicit: true
+      authorization_required: true
+      policy_required: true
+      provenance_required: true
+      unrestricted_self_modification: false
+    dependencies:
+      - "semantic.effect"
+      - "semantic.policy"
+      - "semantic.resource"
+      - "semantic.provenance"
+      - "semantic.contract"
+    effects:
+      - "learning"
+    capabilities:
+      source: "model_dependent"
+    resources:
+      source: "training_dependent"
+    contracts:
+      source: "learning_contracts"
+    policies:
+      required: true
+    provenance:
+      required: true
+    ir_boundary: "AI semantic representation"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/ai/learning/"
+      negative:
+        - "grammar/conformance/diagnostics/ai/learning/"
+    freeze:
+      required: true
+
+  reasoning:
+    id: "semantic.reasoning"
+    grammar_owner: "grammar/ai/reasoning.g4"
+    grammar_symbols:
+      - "reason"
+      - "deduce"
+      - "query"
+      - "evidence"
+      - "explain"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/ai/reasoning"
+    semantic_kind: "reasoning"
+    semantic_contract:
+      inference_mode: "explicit"
+      evidence_tracking: "supported"
+      provenance_tracking: "supported"
+      explanation: "supported"
+      uncertainty: "supported"
+    dependencies:
+      - "semantic.expression"
+      - "semantic.provenance"
+      - "semantic.policy"
+    effects:
+      source: "reasoning_dependent"
+    capabilities:
+      source: "knowledge_or_model_dependent"
+    resources:
+      source: "reasoning_dependent"
+    contracts: []
+    policies: []
+    provenance: "supported"
+    ir_boundary: "AI semantic representation"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/ai/reasoning/"
+      negative:
+        - "grammar/conformance/diagnostics/ai/reasoning/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 27. CONCURRENCY
+# =============================================================================
+
+  concurrency:
+    id: "semantic.concurrency"
+    grammar_owner: "grammar/concurrency/"
+    grammar_symbols:
+      - "task"
+      - "future"
+      - "actor"
+      - "spawn"
+      - "parallel"
+      - "synchronization"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/concurrency"
+    semantic_kind: "concurrent_computation"
+    semantic_contract:
+      abstract_execution_unit: true
+      realization:
+        may_be:
+          - "task"
+          - "thread"
+          - "actor"
+          - "GPU_work"
+          - "distributed_process"
+          - "accelerator_work"
+      source_semantics_independent_of_unit: true
+    dependencies:
+      - "semantic.expression"
+      - "semantic.effects"
+      - "semantic.resources"
+      - "semantic.policy"
+    effects:
+      source: "concurrency_dependent"
+    capabilities:
+      source: "execution_dependent"
+    resources:
+      source: "parallelism_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "concurrency_semantics"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/concurrency/"
+      negative:
+        - "grammar/conformance/diagnostics/concurrency/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 28. DISTRIBUTED COMPUTING
+# =============================================================================
+
+  distributed:
+    id: "semantic.distributed"
+    grammar_owner: "grammar/distributed/"
+    grammar_symbols:
+      - "node"
+      - "process"
+      - "message"
+      - "channel"
+      - "collective"
+      - "replication"
+      - "partition"
+      - "remote"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/distributed"
+    semantic_kind: "distributed_computation"
+    semantic_contract:
+      topology: "abstract"
+      placement: "deferred"
+      node_identity: "semantic_only_when_explicit"
+      consistency: "semantic_when_declared"
+      fault_model: "semantic_when_declared"
+    dependencies:
+      - "semantic.concurrency"
+      - "semantic.networking"
+      - "semantic.resource"
+      - "semantic.policy"
+    effects:
+      - "distributed"
+      - "network"
+    capabilities:
+      source: "deployment_dependent"
+    resources:
+      source: "deployment_dependent"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "distributed_semantic_ir"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/distributed/"
+      negative:
+        - "grammar/conformance/diagnostics/distributed/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 29. NETWORKING
+# =============================================================================
+
+  networking:
+    id: "semantic.networking"
+    grammar_owner: "grammar/networking/"
+    grammar_symbols:
+      - "endpoint"
+      - "channel"
+      - "message"
+      - "request"
+      - "response"
+      - "service"
+      - "protocol"
+      - "stream"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/domains/networking"
+    semantic_kind: "network_operation"
+    semantic_contract:
+      endpoint_identity: "semantic"
+      physical_address: "realization_or_explicit_application_data"
+      protocol_semantics: "explicit"
+      security: "policy_and_effect_integrated"
+    dependencies:
+      - "semantic.effect"
+      - "semantic.capability"
+      - "semantic.policy"
+      - "semantic.provenance"
+    effects:
+      - "network"
+      - "io"
+    capabilities:
+      source: "network_capability"
+    resources:
+      source: "network_resource"
+    contracts: []
+    policies:
+      required_for_security_sensitive_operations: true
+    provenance: "source_span"
+    ir_boundary: "network_semantic_ir"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/networking/"
+      negative:
+        - "grammar/conformance/diagnostics/networking/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 30. HARDWARE CAPABILITY SEMANTICS
+# =============================================================================
+
+  hardware_capability:
+    id: "semantic.hardware-capability"
+    grammar_owner: "grammar/hardware/"
+    grammar_symbols:
+      - "hardwareCapability"
+      - "hardwareRequirement"
+      - "topologyRequirement"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/hardware/requirements"
+    semantic_kind: "abstract_hardware_requirement"
+    semantic_contract:
+      describes:
+        - "capability"
+        - "resource"
+        - "topology"
+        - "timing requirement"
+        - "reliability requirement"
+        - "performance preference"
+      device_identity: "optional_explicit_program_requirement"
+      default_device_selection: "deferred"
+    dependencies:
+      - "semantic.capability"
+      - "semantic.resource"
+      - "semantic.policy"
+    effects: []
+    capabilities:
+      canonical: true
+    resources:
+      canonical: true
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "hardware_requirement_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/hardware/"
+      negative:
+        - "grammar/conformance/diagnostics/hardware/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 31. EXECUTION INTENT
+# =============================================================================
+
+  execution_intent:
+    id: "semantic.execution-intent"
+    grammar_owner: "grammar/execution/"
+    grammar_symbols:
+      - "executionContext"
+      - "placement"
+      - "schedule"
+      - "adaptiveExecution"
+      - "simulation"
+      - "checkpoint"
+      - "recovery"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/execution-intent"
+    semantic_kind: "execution_intent"
+    semantic_contract:
+      semantic_when_explicit: true
+      target_selection: "deferred_unless_explicitly_part_of_program_meaning"
+      scheduling: "constraint_or_preference"
+      adaptation: "policy_and_effect_controlled"
+      simulation: "explicit_semantic_mode"
+    dependencies:
+      - "semantic.resource"
+      - "semantic.capability"
+      - "semantic.effect"
+      - "semantic.policy"
+      - "semantic.contract"
+    effects:
+      source: "execution_dependent"
+    capabilities:
+      source: "execution_dependent"
+    resources:
+      source: "execution_dependent"
+    contracts: []
+    policies:
+      relationship: "execution_must_obey_policy"
+    provenance: "source_span"
+    ir_boundary: "execution_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/execution/"
+      negative:
+        - "grammar/conformance/diagnostics/execution/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 32. ADAPTATION
+# =============================================================================
+
+  adaptation:
+    id: "semantic.adaptation"
+    grammar_owner: "grammar/execution/adaptive.g4"
+    grammar_symbols:
+      - "adapt"
+      - "adaptation"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/adaptation"
+    semantic_kind: "controlled_adaptation"
+    semantic_contract:
+      unrestricted_self_modification: false
+      authorization_required: true
+      policy_required: true
+      capability_required: true
+      effect_required: true
+      resource_requirements_required: true
+      provenance_required: true
+      contract_validation_required: true
+      deterministic_mode: "policy_dependent"
+    dependencies:
+      - "semantic.policy"
+      - "semantic.capability"
+      - "semantic.effect"
+      - "semantic.resource"
+      - "semantic.contract"
+      - "semantic.provenance"
+    effects:
+      - "adaptation"
+    capabilities:
+      - "adaptation"
+    resources:
+      source: "adaptation_dependent"
+    contracts:
+      required: true
+    policies:
+      required: true
+    provenance:
+      required: true
+    ir_boundary: "adaptation_intent"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/execution/adaptation/"
+      negative:
+        - "grammar/conformance/diagnostics/execution/adaptation/"
+        - "grammar/conformance/security/adaptation/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 33. SIMULATION
+# =============================================================================
+
+  simulation:
+    id: "semantic.simulation"
+    grammar_owner: "grammar/execution/simulation.g4"
+    grammar_symbols:
+      - "simulate"
+      - "simulation"
+      - "simulationModel"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/simulation"
+    semantic_kind: "simulation_intent"
+    semantic_contract:
+      explicit: true
+      model: "semantic"
+      target_selection: "deferred"
+      approximation: "must_be_declared_when_semantically_relevant"
+    dependencies:
+      - "semantic.resource"
+      - "semantic.effect"
+      - "semantic.policy"
+      - "semantic.contract"
+    effects:
+      - "simulation"
+    capabilities:
+      source: "simulation_capability"
+    resources:
+      source: "simulation_resource"
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "simulation_semantics"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/execution/simulation/"
+      negative:
+        - "grammar/conformance/diagnostics/execution/simulation/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 34. SECURITY
+# =============================================================================
+
+  security:
+    id: "semantic.security"
+    grammar_owner: "grammar/security/"
+    grammar_symbols:
+      - "permission"
+      - "authorization"
+      - "sandbox"
+      - "trust"
+      - "audit"
+      - "privacy"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/security"
+    semantic_kind: "security_policy"
+    semantic_contract:
+      authorization: "explicit"
+      capability_security: "integrated"
+      sandboxing: "policy_controlled"
+      auditability: "provenance_integrated"
+      secret_material: "never_embedded_as_plain_source_semantics_when_policy_forbids"
+    dependencies:
+      - "semantic.policy"
+      - "semantic.capability"
+      - "semantic.effect"
+      - "semantic.provenance"
+    effects:
+      source: "security_sensitive"
+    capabilities:
+      source: "security_capability"
+    resources: []
+    contracts: []
+    policies:
+      canonical: true
+    provenance:
+      required: true
+    ir_boundary: "security_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/security/"
+      negative:
+        - "grammar/conformance/diagnostics/security/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 35. INTEROPERABILITY
+# =============================================================================
+
+  foreign_function:
+    id: "semantic.foreign-function"
+    grammar_owner: "grammar/interoperability/"
+    grammar_symbols:
+      - "ffi"
+      - "foreignFunction"
+      - "abi"
+      - "callingConvention"
+      - "foreignType"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/interoperability"
+    semantic_kind: "foreign_interface"
+    semantic_contract:
+      foreign_boundary: "explicit"
+      ABI: "declared_or_selected_by_interop_contract"
+      data_layout: "boundary_specific"
+      target_specificity: "isolated_to_interop_boundary"
+      source_portability: "preserved_when_contract_allows"
+    dependencies:
+      - "semantic.type"
+      - "semantic.effect"
+      - "semantic.policy"
+      - "semantic.resource"
+    effects:
+      - "foreign"
+      - "native"
+      - "io"
+    capabilities:
+      source: "foreign_interface_capability"
+    resources:
+      source: "foreign_interface_dependent"
+    contracts:
+      required: true
+    policies:
+      required: true
+    provenance: "source_span"
+    ir_boundary: "FFI/ABI boundary"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/interoperability/"
+      negative:
+        - "grammar/conformance/diagnostics/interoperability/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 36. DIALECT SEMANTICS
+# =============================================================================
+
+  dialect:
+    id: "semantic.dialect"
+    grammar_owner: "grammar/dialects/"
+    grammar_symbols:
+      - "dialect"
+      - "dialectDeclaration"
+      - "dialectImport"
+      - "dialectVersion"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/dialects"
+    semantic_kind: "dialect"
+    semantic_contract:
+      identity:
+        required:
+          - "namespace"
+          - "name"
+          - "version"
+      dependencies:
+        explicit: true
+      compatibility:
+        explicit: true
+      extension_boundary:
+        explicit: true
+      core_language_override:
+        allowed: false
+    dependencies:
+      - "semantic.name"
+      - "semantic.compatibility"
+      - "semantic.policy"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_span"
+    ir_boundary: "dialect_extension_metadata"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/dialects/"
+      negative:
+        - "grammar/conformance/diagnostics/dialects/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 37. MACRO AND METAPROGRAMMING SEMANTICS
+# =============================================================================
+
+  macro:
+    id: "semantic.macro"
+    grammar_owner: "grammar/macros/"
+    grammar_symbols:
+      - "macroDeclaration"
+      - "macroInvocation"
+      - "macroExpansion"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/macros"
+    semantic_kind: "macro"
+    semantic_contract:
+      hygiene: "required"
+      provenance: "required"
+      semantic_validation_after_expansion: true
+      arbitrary_backend_injection: false
+    dependencies:
+      - "semantic.provenance"
+      - "semantic.policy"
+      - "semantic.effects"
+    effects:
+      - "code_generation"
+    capabilities:
+      - "macro.expansion"
+    resources:
+      source: "expansion_dependent"
+    contracts: []
+    policies:
+      relationship: "macro_execution_is_policy_controlled"
+    provenance:
+      required: true
+    ir_boundary: "expanded_semantic_ast"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/macros/"
+      negative:
+        - "grammar/conformance/diagnostics/macros/"
+    freeze:
+      required: true
+
+  metaprogramming:
+    id: "semantic.metaprogramming"
+    grammar_owner: "grammar/metaprogramming/"
+    grammar_symbols:
+      - "reflection"
+      - "quotation"
+      - "unquotation"
+      - "codeGeneration"
+      - "introspection"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/metaprogramming"
+    semantic_kind: "metaprogramming"
+    semantic_contract:
+      controlled: true
+      effects_required: true
+      capability_required: true
+      policy_required: true
+      provenance_required: true
+    dependencies:
+      - "semantic.macro"
+      - "semantic.effect"
+      - "semantic.capability"
+      - "semantic.policy"
+      - "semantic.provenance"
+    effects:
+      - "reflection"
+      - "code_generation"
+    capabilities:
+      - "reflection"
+      - "code_generation"
+    resources:
+      source: "operation_dependent"
+    contracts: []
+    policies:
+      required: true
+    provenance:
+      required: true
+    ir_boundary: "generated_semantic_representation"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/metaprogramming/"
+      negative:
+        - "grammar/conformance/diagnostics/metaprogramming/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 38. COMPILATION SEMANTICS
+# =============================================================================
+
+  compilation_intent:
+    id: "semantic.compilation-intent"
+    grammar_owner: "grammar/compile/"
+    grammar_symbols:
+      - "compile"
+      - "target"
+      - "optimization"
+      - "specialization"
+      - "conditionalCompilation"
+      - "reproducibility"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/compilation"
+    semantic_kind: "compilation_intent"
+    semantic_contract:
+      source_semantics_preserved: true
+      target_selection: "realization"
+      optimization: "semantics_preserving"
+      specialization: "semantics_preserving"
+      reproducibility: "explicit"
+      provenance: "required"
+    dependencies:
+      - "semantic.resource"
+      - "semantic.capability"
+      - "semantic.policy"
+      - "semantic.provenance"
+      - "semantic.compatibility"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "source_and_compilation_provenance"
+    ir_boundary: "canonical IR"
+    status: "PARTIALLY_IMPLEMENTED"
+    tests:
+      positive:
+        - "grammar/conformance/compile/"
+      negative:
+        - "grammar/conformance/diagnostics/compile/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 39. FALLBACK SEMANTICS
+# =============================================================================
+
+  fallback:
+    id: "semantic.fallback"
+    grammar_owner: "grammar/execution/"
+    grammar_symbols:
+      - "allow"
+      - "fallback"
+      - "alternativeRealization"
+    ast_mapping:
+      contract: "grammar/contracts/ast-mappings.yaml"
+    semantic_owner: "semantic/execution/fallback"
+    semantic_kind: "fallback_policy"
+    semantic_contract:
+      explicit_authorization: true
+      semantic_equivalence_required: true
+      approximation:
+        allowed_only_when_declared: true
+      silent_substitution: false
+    dependencies:
+      - "semantic.policy"
+      - "semantic.contract"
+      - "semantic.capability"
+      - "semantic.resource"
+    effects: []
+    capabilities: []
+    resources: []
+    contracts:
+      equivalence_required: true
+    policies:
+      required: true
+    provenance: "source_span"
+    ir_boundary: "realization_policy"
+    status: "PLANNED"
+    tests:
+      positive:
+        - "grammar/conformance/portability/fallback/"
+      negative:
+        - "grammar/conformance/diagnostics/portability/fallback/"
+    freeze:
+      required: true
+
+# =============================================================================
+# 40. IR HAND-OFF CONTRACT
+# =============================================================================
+
+ir_handoff:
+
+  rule: >
+    A semantic mapping may hand information to canonical IR only after the
+    semantic construct has been validated. IR must preserve required source
+    meaning without introducing target-specific decisions prematurely.
+
+  canonical_targets:
+
+    classical:
+      ir: "Classical IR"
+      owner: "src/ir/"
+      required_metadata:
+        - "source"
+        - "name"
+        - "namespace"
+        - "operands"
+        - "parameters"
+        - "results"
+        - "attributes"
+        - "modifiers"
+        - "effects"
+        - "capabilities"
+        - "source_provenance"
+
+    quantum:
+      ir: "quantum::ir"
+      owner: "src/quantum/"
+      required_metadata:
+        - "operation identity"
+        - "operands"
+        - "parameters"
+        - "results"
+        - "attributes"
+        - "modifiers"
+        - "effects"
+        - "capabilities"
+        - "resource requirements"
+        - "source provenance"
+
+    hdl:
+      ir: "HDL/Hardware IR"
+      owner: "src/hdl/ or canonical hardware IR owner"
+      required_metadata:
+        - "hardware intent"
+        - "ports"
+        - "signals"
+        - "state"
+        - "timing intent"
+        - "constraints"
+        - "source provenance"
+
+  forbidden_ir_handoff:
+    - "physical device selection"
+    - "physical qubit allocation"
+    - "backend instruction selection"
+    - "scheduler slot"
+    - "routing result"
+    - "calibration data"
+    - "live resource inventory"
+
+# =============================================================================
+# 41. TARGET-INDEPENDENCE CONTRACT
+# =============================================================================
+
+target_independence:
+
+  semantic_layer_must_not_depend_on:
+    - "specific CPU model"
+    - "specific GPU model"
+    - "specific FPGA model"
+    - "specific ASIC implementation"
+    - "specific QPU model"
+    - "specific simulator implementation"
+    - "specific cluster size"
+    - "specific cloud provider"
+    - "specific operating system"
+    - "specific vendor device"
+
+  allowed_as_semantic_data:
+    - "abstract capability"
+    - "abstract resource"
+    - "abstract topology"
+    - "explicit program requirement"
+    - "explicit program prohibition"
+    - "explicit program preference"
+    - "explicit deployment policy"
+
+  target_selection_boundary:
+    semantic_layer: "requirements_and_constraints_only"
+    compiler: "negotiation_and_specialization"
+    runtime: "availability_and_realization"
+
+# =============================================================================
+# 42. SCALABILITY CONTRACT
+# =============================================================================
+
+scalability_contract:
+
+  universal_rule: >
+    Semantic mappings MUST remain valid when symbolic dimensions, resource
+    quantities, data sizes, qubit counts, node counts, tensor dimensions,
+    memory requirements, parallelism, or hardware resources grow beyond any
+    value known when the grammar was written.
+
+  allowed:
+    - "symbolic dimensions"
+    - "generic dimensions"
+    - "runtime dimensions"
+    - "resource expressions"
+    - "capability expressions"
+    - "abstract topology"
+    - "dynamic allocation"
+    - "parallel decomposition"
+    - "distributed decomposition"
+    - "target specialization"
+    - "resource negotiation"
+
+  prohibited:
+    - "universal finite capacity constants"
+    - "fixed machine inventory"
+    - "vendor hardware as language law"
+    - "implicit physical allocation"
+    - "source-level scheduler limits"
+
+  forbidden_universal_capacity_identifiers:
+    - "MAX_QUBITS"
+    - "MAX_CPUS"
+    - "MAX_CORES"
+    - "MAX_THREADS"
+    - "MAX_GPUS"
+    - "MAX_FPGAS"
+    - "MAX_ASICS"
+    - "MAX_QPUS"
+    - "MAX_NODES"
+    - "MAX_MEMORY"
+    - "MAX_STORAGE"
+    - "MAX_REGISTER_WIDTH"
+    - "MAX_VECTOR_WIDTH"
+    - "MAX_TENSOR_RANK"
+    - "MAX_TENSOR_DIMENSION"
+    - "MAX_NETWORK_SIZE"
+    - "MAX_DEVICE_COUNT"
+    - "MAX_ACCELERATOR_COUNT"
+    - "MAX_AGENT_COUNT"
+
+  equivalent_identifier_rule: >
+    A differently named constant or hidden finite bound is subject to the
+    same prohibition when it performs the same architectural function.
+
+# =============================================================================
+# 43. POCO-REAF CONTRACT
+# =============================================================================
+
+poco_reaf_contract:
+
+  program_once:
+    semantic_requirement: >
+      A program expresses stable source meaning rather than a mandatory
+      physical execution arrangement.
+
+  compile_once:
+    semantic_requirement: >
+      Compilation produces or preserves a target-independent semantic artifact
+      containing sufficient language, semantic, compatibility, provenance,
+      capability, resource, effect, contract, and policy information.
+
+  run_everywhere:
+    semantic_requirement: >
+      A realization is permitted when target capabilities and resources satisfy
+      the semantic requirements and policies.
+
+  run_anywhere:
+    semantic_requirement: >
+      Target discovery and realization occur outside universal source syntax.
+
+  run_forever:
+    semantic_requirement: >
+      Long-term portability is maintained through versioned language semantics,
+      AST contracts, semantic contracts, IR contracts, dialect contracts,
+      compatibility rules, and migrations.
+
+  semantic_preservation:
+    required: true
+
+  silent_semantic_change:
+    allowed: false
+
+  silent_approximation:
+    allowed: false
+
+  unsupported_feature_silent_fallback:
+    allowed: false
+
+# =============================================================================
+# 44. ERROR AND DIAGNOSTIC INTEGRATION
+# =============================================================================
+
+diagnostics:
+
+  canonical_contract:
+    path: "grammar/contracts/diagnostics.yaml"
+
+  every_semantic_error:
+    required_fields:
+      - "diagnostic_id"
+      - "severity"
+      - "source_span"
+      - "semantic_kind"
+      - "message"
+      - "expected"
+      - "actual"
+      - "help_when_available"
+
+  required_categories:
+    - "name_resolution"
+    - "type_error"
+    - "effect_error"
+    - "capability_error"
+    - "resource_error"
+    - "contract_error"
+    - "policy_error"
+    - "provenance_error"
+    - "domain_semantic_error"
+    - "compatibility_error"
+    - "unsupported_realization"
+    - "nonportable_construct"
+
+  target_failure_rule: >
+    A target inability to realize a valid source program MUST be diagnosed as
+    a realization/compatibility/resource failure rather than by silently
+    changing source semantics.
+
+# =============================================================================
+# 45. VALIDATION INTEGRATION
+# =============================================================================
+
+validation:
+
+  pre_semantic:
+    owner: "grammar/validation/"
+    checks:
+      - "AST structural validity"
+      - "duplicate declarations"
+      - "invalid references"
+      - "invalid source structure"
+
+  semantic:
+    owner: "semantic/"
+    checks:
+      - "name resolution"
+      - "type validity"
+      - "effect validity"
+      - "capability validity"
+      - "resource validity"
+      - "contract validity"
+      - "policy validity"
+      - "provenance validity"
+      - "domain validity"
+
+  scalability:
+    required_checks:
+      - "no universal finite capacity"
+      - "symbolic resource acceptance"
+      - "target independence"
+      - "no hidden target selection"
+
+  hardcoding:
+    required_checks:
+      - "forbidden capacity identifiers"
+      - "equivalent finite bounds"
+      - "vendor leakage"
+      - "physical allocation leakage"
+
+# =============================================================================
+# 46. CROSS-CONTRACT INTEGRATION
+# =============================================================================
+
+integration:
+
+  ownership:
+    file: "grammar/contracts/ownership.yaml"
+    rule: >
+      Every semantic_owner referenced here MUST be represented in the
+      repository ownership model.
+
+  dependencies:
+    file: "grammar/contracts/dependencies.yaml"
+    rule: >
+      Every dependency declared by a mapping MUST exist in the canonical
+      dependency graph.
+
+  exports:
+    file: "grammar/contracts/exports.yaml"
+    rule: >
+      Every grammar symbol referenced here MUST be a registered export or an
+      explicitly internal symbol permitted by the export contract.
+
+  ast:
+    file: "grammar/contracts/ast-mappings.yaml"
+    rule: >
+      Every mapping MUST resolve to an AST contract before becoming STABLE.
+
+  ir:
+    file: "grammar/contracts/ir-mappings.yaml"
+    rule: >
+      Every mapping marked as requiring IR MUST resolve to exactly one
+      canonical IR boundary.
+
+  diagnostics:
+    file: "grammar/contracts/diagnostics.yaml"
+    rule: >
+      Every STABLE semantic mapping MUST have diagnostics coverage.
+
+  compatibility:
+    file: "grammar/contracts/compatibility.yaml"
+    rule: >
+      Every public STABLE semantic mapping MUST have a compatibility identity.
+
+  feature_status:
+    file: "grammar/contracts/feature-status.yaml"
+    rule: >
+      This file MUST NOT invent a lifecycle state that contradicts the central
+      feature-status registry.
+
+  specification:
+    directory: "grammar/specification/"
+    rule: >
+      Every semantic mapping MUST be traceable to normative language meaning.
+
+# =============================================================================
+# 47. LEGACY AST INTEGRATION
+# =============================================================================
+
+legacy_ast:
+
+  current_boundary:
+    path: "src/ast/mod.rs"
+    role: "compatibility_and_migration_boundary"
+
+  rule: >
+    Existing AST variants are not automatically canonical semantic contracts.
+
+  known_current_domain_variants:
+    examples:
+      - "QuantumCircuit"
+      - "NoiseModel"
+      - "FidelityCheck"
+      - "SurfaceCode"
+      - "NanoAgent"
+      - "EffectDeclaration"
+      - "Unsafe"
+      - "Wisdom"
+      - "Omniversal*"
+      - "AsiSystem"
+      - "PaymentGateway"
+      - "Graphics"
+      - "Video"
+      - "SelfAdjust"
+      - "SelfVersioning"
+
+  migration_rule: >
+    Domain-specific or application-specific variants that are not part of the
+    normative universal semantic model MUST be migrated to libraries,
+    dialects, capabilities, policies, or application layers rather than being
+    promoted into the permanent universal semantic core.
+
+  safety_rule: >
+    No semantic mapping may authorize source constructs that violate the
+    repository-wide safe-Rust implementation contract.
+
+  canonical_future_boundary:
+    path: "src/frontend/ast/"
+    status: "required_for_completion"
+
+  freeze_requirement: >
+    The legacy AST cannot be considered the final semantic authority until
+    every stable grammar construct has an explicit canonical AST and semantic
+    mapping.
+
+# =============================================================================
+# 48. APPLICATION-SPECIFIC CONCEPT BOUNDARY
+# =============================================================================
+
+application_boundary:
+
+  universal_semantic_core:
+    allowed:
+      - "computation"
+      - "data"
+      - "reasoning"
+      - "learning"
+      - "communication"
+      - "security"
+      - "resources"
+      - "capabilities"
+      - "policies"
+      - "contracts"
+      - "provenance"
+      - "execution intent"
+
+  application_specific_features:
+    integration:
+      - "library"
+      - "dialect"
+      - "capability"
+      - "policy"
+      - "application semantic package"
+
+  rule: >
+    Application-specific functionality MUST NOT force new universal semantic
+    primitives when the functionality can be expressed through the extension
+    mechanisms already provided by the language.
+
+# =============================================================================
+# 49. DIALECT EXTENSIBILITY
+# =============================================================================
+
+dialect_extensibility:
+
+  new_semantic_operation:
+    must_supply:
+      - "dialect identity"
+      - "version"
+      - "semantic kind"
+      - "AST mapping"
+      - "effects"
+      - "capabilities"
+      - "resources"
+      - "contracts"
+      - "policies"
+      - "provenance"
+      - "IR mapping"
+      - "diagnostics"
+      - "compatibility"
+      - "tests"
+
+  core_modification:
+    required_only_when: >
+      The proposed construct cannot be expressed through existing universal
+      semantic abstractions and is demonstrably language-core functionality.
+
+  vendor_extension:
+    rule: >
+      Vendor semantics MUST remain isolated behind dialect/capability/resource
+      contracts and MUST NOT redefine universal source meaning.
+
+# =============================================================================
+# 50. DETERMINISM
+# =============================================================================
+
+determinism:
+
+  semantic_mapping:
+    required: true
+
+  semantic_identity:
+    must_not_depend_on:
+      - "hash iteration order"
+      - "filesystem traversal order"
+      - "thread scheduling"
+      - "memory addresses"
+      - "target discovery order"
+
+  resolution:
+    imports: "deterministic"
+    overloads: "language_defined"
+    type_constraints: "deterministic"
+    capability_matching: "realization_stage"
+
+  exception:
+    explicit_nondeterminism:
+      allowed: true
+      must_be_declared: true
+      must_be_semantically_visible: true
+
+# =============================================================================
+# 51. REPRODUCIBILITY
+# =============================================================================
+
+reproducibility:
+
+  semantic_identity:
+    required_inputs:
+      - "language version"
+      - "dialect versions"
+      - "semantic contract version"
+      - "source provenance"
+      - "declared policies"
+      - "declared capabilities"
+      - "declared resources"
+
+  target_identity:
+    not_required_for_source_semantics: true
+
+  rule: >
+    Reproducibility metadata must distinguish reproducibility of source
+    semantics from reproducibility of a particular physical realization.
+
+# =============================================================================
+# 52. COMPATIBILITY
+# =============================================================================
+
+compatibility:
+
+  semantic_versioning:
+    required: true
+
+  stable_mapping:
+    requires:
+      - "stable mapping ID"
+      - "semantic version"
+      - "compatibility policy"
+      - "migration policy when applicable"
+
+  breaking_change:
+    examples:
+      - "semantic meaning changes"
+      - "effect meaning changes"
+      - "type compatibility changes"
+      - "resource requirement interpretation changes"
+      - "capability meaning changes"
+      - "contract meaning changes"
+      - "policy meaning changes"
+
+  nonbreaking_extension:
+    examples:
+      - "new dialect operation"
+      - "new capability"
+      - "new resource kind"
+      - "new target realization"
+      - "new backend"
+    condition: >
+      Existing semantic mappings retain their meaning.
+
+# =============================================================================
+# 53. TEST CONTRACT
+# =============================================================================
+
+tests:
+
+  every_mapping:
+    required:
+      - "positive parse/semantic test"
+      - "negative semantic test"
+      - "source-span test"
+      - "diagnostic test"
+
+  domain_mappings:
+    additionally_require:
+      - "domain semantic test"
+      - "IR hand-off test"
+      - "target-independence test"
+
+  scalable_mappings:
+    additionally_require:
+      - "symbolic-size test"
+      - "resource-scaling test"
+      - "absence-of-fixed-capacity test"
+
+  quantum:
+    additionally_require:
+      - "operation identity test"
+      - "parameter test"
+      - "target abstraction test"
+      - "measurement effect test"
+      - "resource requirement test"
+
+  hdl:
+    additionally_require:
+      - "symbolic width test"
+      - "timing intent test"
+      - "hardware realization separation test"
+
+  interoperability:
+    additionally_require:
+      - "ABI boundary test"
+      - "foreign effect test"
+      - "compatibility test"
+
+# =============================================================================
+# 54. FREEZE CONTRACT
+# =============================================================================
+
+freeze:
+
+  mapping_is_freezable_only_when:
+    - "grammar owner is unique"
+    - "semantic owner is unique"
+    - "AST mapping is stable"
+    - "dependencies are resolved"
+    - "semantic contract is normative"
+    - "effects are defined"
+    - "capabilities are defined where applicable"
+    - "resources are defined where applicable"
+    - "contracts are defined where applicable"
+    - "policies are defined where applicable"
+    - "provenance is defined"
+    - "IR boundary is defined"
+    - "diagnostics are defined"
+    - "compatibility is defined"
+    - "tests exist"
+    - "scalability audit passes"
+    - "hard-coding audit passes"
+    - "target-independence audit passes"
+    - "safe-Rust implementation constraints pass"
+
+  frozen_mapping_invariant: >
+    Once STABLE, a semantic mapping MUST NOT require semantic redesign merely
+    because a new hardware target, backend, device, dialect, algorithm,
+    compiler optimization, runtime, or resource scale is added.
+
+# =============================================================================
+# 55. CI ENFORCEMENT
+# =============================================================================
+
+ci:
+
+  required_validators:
+
+    ownership:
+      checks:
+        - "semantic owner exists"
+        - "semantic owner is unique"
+
+    dependencies:
+      checks:
+        - "all dependencies exist"
+        - "no production cycle"
+        - "no backend dependency upstream"
+
+    AST:
+      checks:
+        - "AST mapping exists"
+        - "AST kind resolves"
+        - "source span is supported"
+
+    semantics:
+      checks:
+        - "semantic kind exists"
+        - "semantic contract exists"
+        - "semantic invariants exist"
+
+    effects:
+      checks:
+        - "effect references resolve"
+
+    capabilities:
+      checks:
+        - "capability references resolve"
+
+    resources:
+      checks:
+        - "resource references resolve"
+        - "no universal finite capacity"
+
+    contracts:
+      checks:
+        - "contract references resolve"
+
+    policies:
+      checks:
+        - "policy references resolve"
+
+    provenance:
+      checks:
+        - "provenance is preserved"
+
+    IR:
+      checks:
+        - "required IR mapping exists"
+        - "IR boundary is canonical"
+
+    diagnostics:
+      checks:
+        - "diagnostic coverage exists"
+
+    compatibility:
+      checks:
+        - "stable identity exists"
+        - "version contract exists"
+
+    scalability:
+      checks:
+        - "no forbidden finite capacity"
+        - "no target leakage"
+        - "no physical allocation in semantic layer"
+
+    implementation:
+      checks:
+        - "Rust edition is 2021"
+        - "minimum Rust version is 1.97"
+        - "safe-Rust policy is satisfied"
+
+# =============================================================================
+# 56. PRODUCTION READINESS GATE
+# =============================================================================
+
+production_gate:
+
+  all_mappings:
+    required:
+      - "ownership"
+      - "AST"
+      - "semantic"
+      - "dependencies"
+      - "effects"
+      - "capabilities"
+      - "resources"
+      - "contracts"
+      - "policies"
+      - "provenance"
+      - "IR"
+      - "diagnostics"
+      - "compatibility"
+      - "tests"
+
+  universal_requirements:
+    - "target independent"
+    - "resource scalable"
+    - "capability driven"
+    - "policy aware"
+    - "effect aware"
+    - "provenance preserving"
+    - "versioned"
+    - "deterministic where required"
+    - "safe-Rust compatible"
+
+  failure_conditions:
+    - "duplicate semantic owner"
+    - "missing AST mapping"
+    - "missing semantic owner"
+    - "unresolved dependency"
+    - "missing IR boundary"
+    - "missing diagnostic contract"
+    - "missing compatibility contract"
+    - "hard-coded universal capacity"
+    - "physical target leakage"
+    - "silent semantic fallback"
+    - "silent approximation"
+    - "unsafe implementation requirement"
+
+# =============================================================================
+# 57. COMPLETION CRITERIA
+# =============================================================================
+
+completion:
+
+  this_file_is_complete_when:
+
+    authority:
+      - "authority references resolve"
+      - "no competing semantic-mapping authority exists"
+
+    ownership:
+      - "every mapping has exactly one semantic owner"
+
+    grammar:
+      - "every referenced grammar owner exists"
+      - "every referenced grammar symbol is registered"
+
+    AST:
+      - "every stable mapping has a canonical AST mapping"
+
+    semantics:
+      - "every stable mapping has a complete semantic contract"
+
+    integration:
+      - "effects integrate"
+      - "capabilities integrate"
+      - "resources integrate"
+      - "contracts integrate"
+      - "policies integrate"
+      - "provenance integrates"
+
+    IR:
+      - "every executable domain has a canonical IR boundary"
+
+    diagnostics:
+      - "every stable semantic failure has a diagnostic contract"
+
+    compatibility:
+      - "every stable semantic identity is versioned"
+
+    scalability:
+      - "no artificial universal finite capacity exists"
+
+    portability:
+      - "semantic meaning is independent of physical realization"
+
+    safety:
+      - "Rust implementation remains within the safe-Rust contract"
+
+    tests:
+      - "positive tests exist"
+      - "negative tests exist"
+      - "scalability tests exist"
+      - "integration tests exist"
+
+    freeze:
+      - "CI validators pass"
+      - "semantic mapping registry is synchronized with exports"
+      - "dependency graph is synchronized"
+      - "AST mappings are synchronized"
+      - "IR mappings are synchronized"
+      - "status registry is synchronized"
+
+# =============================================================================
+# 58. REQUIRED SYNCHRONIZATION
+# =============================================================================
+
+synchronization:
+
+  canonical_relationship:
+
+    grammar:
+      source: "grammar/**/*.g4"
+
+    ownership:
+      source: "grammar/contracts/ownership.yaml"
+
+    exports:
+      source: "grammar/contracts/exports.yaml"
+
+    ast:
+      source: "grammar/contracts/ast-mappings.yaml"
+
+    semantic:
+      source: "grammar/contracts/semantic-mappings.yaml"
+
+    ir:
+      source: "grammar/contracts/ir-mappings.yaml"
+
+    diagnostics:
+      source: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      source: "grammar/contracts/compatibility.yaml"
+
+    status:
+      source: "grammar/contracts/feature-status.yaml"
+
+  invariant: >
+    No contract may silently invent a symbol, owner, semantic kind,
+    dependency, AST node, IR node, diagnostic, or compatibility identity that
+    is absent from the corresponding canonical registry.
+
+# =============================================================================
+# END OF CONTRACT
+# =============================================================================
