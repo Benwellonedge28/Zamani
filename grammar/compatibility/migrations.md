@@ -2,55 +2,69 @@ Zamani Migration Specification
 
 Path: "grammar/compatibility/migrations.md"
 Status: Normative
-Language: Zamani
-Repository: "Benwellonedge28/Zamani"
-Rust baseline: Rust 1.97 / Rust 1.97.1
+Scope: Language, grammar, frontend, semantic, IR, artifact, interoperability, runtime, tooling, and repository migrations
+Rust baseline: Rust 1.97 or later
 Rust edition: 2021
-Rust safety requirement: Production Zamani Rust implementation MUST use safe Rust; Rust "unsafe" MUST NOT be required or used.
-Primary objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
-Scope: Source, lexical, grammar, parser, AST, semantic, type, effect, resource, capability, dialect, IR, quantum, HDL, artifact, ABI, runtime, tooling, and repository integration migrations.
+Rust safety: Production Zamani Rust code MUST NOT use Rust "unsafe"
+Primary portability objective: Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)
 
 ---
 
 1. Purpose
 
-This document defines the normative migration system for Zamani.
+This document is the normative procedure for migrating Zamani programs, language representations, compiler representations, serialized artifacts, dialects, and compatibility contracts between supported versions.
 
-It specifies how Zamani changes are introduced, transformed, validated, deprecated, removed, and carried across versions without unnecessarily breaking existing programs or creating parallel semantic architectures.
+It defines how an existing representation moves to a newer representation while preserving specified semantics whenever the compatibility contract requires preservation.
 
-It covers migrations involving:
+This document governs migration of:
 
 - source programs;
-- identifiers;
+- lexical representations;
 - keywords;
+- identifiers;
 - operators;
 - literals;
-- lexical rules;
 - grammar rules;
+- parser representations;
 - declarations;
-- expressions;
 - statements;
+- expressions;
+- patterns;
 - types;
 - generics;
-- ownership;
-- effects;
+- ownership and borrowing;
 - modules;
+- functions;
+- effects;
+- resources;
+- capabilities;
+- requirements;
+- constraints;
+- preferences;
+- hints;
+- policies;
+- contracts;
+- provenance;
+- evidence;
+- uncertainty;
+- reasoning;
+- learning;
+- adaptation;
 - concurrency;
+- distributed computation;
 - classical computation;
 - quantum computation;
 - hybrid computation;
 - HDL;
 - hardware intent;
-- resources;
-- capabilities;
-- distributed computation;
-- AI/data computation;
+- AI/data semantics;
 - networking;
 - security;
 - interoperability;
 - dialects;
+- metaprogramming;
 - AST schemas;
-- semantic representations;
+- semantic schemas;
 - canonical IR;
 - "quantum::ir";
 - compiled artifacts;
@@ -61,322 +75,276 @@ It covers migrations involving:
 - generated documentation;
 - compatibility metadata.
 
-The fundamental rule is:
+The governing principle is:
 
-«Migrate representations; preserve specified semantics.»
+«Migrate representations; preserve specified meaning.»
 
-A migration MUST NOT use temporary implementation limitations, current hardware availability, backend limitations, or compiler convenience as justification for permanently reducing the language's scalable semantic model.
+A migration MUST NOT use current compiler limitations, current hardware availability, temporary backend limitations, or implementation convenience as justification for permanently reducing Zamani's language-level scalability or semantic model.
 
 ---
 
-2. Normative Status
+2. Normative Language
 
 The following terms are normative:
 
 - MUST — mandatory.
 - MUST NOT — prohibited.
 - REQUIRED — mandatory.
-- SHOULD — recommended unless a documented technical reason exists otherwise.
+- SHOULD — recommended unless a documented technical reason prevents it.
 - SHOULD NOT — discouraged unless justified.
 - MAY — permitted.
 - OPTIONAL — permitted but not required.
 
-A migration is not complete merely because source text can be mechanically rewritten.
+A migration is not complete merely because old source can be parsed.
 
-A migration is complete only when the resulting program retains the required semantic meaning and passes the applicable compatibility, semantic, scalability, and integration checks.
+A migration is complete only when all applicable semantic, compatibility, validation, provenance, scalability, determinism, and integration requirements have been satisfied.
 
 ---
 
 3. Ownership
 
-This file owns migration procedure.
+This file owns:
 
-It does not become the owner of language version numbering, deprecation policy, grammar syntax, semantic definitions, or backend implementation.
+- migration classification;
+- migration procedure;
+- migration records;
+- transformation requirements;
+- semantic-preservation requirements;
+- migration validation;
+- migration provenance;
+- migration completion criteria;
+- migration tooling contracts;
+- cross-layer migration integration.
 
-The repository authority relationship is:
+This file does not own:
+
+- language version numbering;
+- AST schema definitions;
+- grammar syntax;
+- semantic definitions;
+- IR schema definitions;
+- deprecation policy;
+- dialect version numbering;
+- feature-gate policy;
+- compatibility matrices;
+- target capability definitions.
+
+Those remain owned by their dedicated repository files.
+
+---
+
+4. Repository Authority Model
+
+The migration system participates in the following authority hierarchy:
 
 grammar/DESIGN.md
         │
         ▼
-language specification
+grammar/specification/
         │
-        ├── grammar/specification/
-        └── grammar/spec/
+        ├── normative language meaning
+        ├── normative domain semantics
+        └── compilation model
+        │
+        ▼
+grammar/spec/
+        │
+        ├── focused machine-oriented contracts
+        ├── compatibility contracts
+        └── semantic contracts
+        │
+        ▼
+grammar/compatibility/
+        │
+        ├── language-version.md
+        ├── grammar-version.md
+        ├── AST-version.md
+        ├── semantic-version.md
+        ├── ir-version.md
+        ├── dialect-version.md
+        ├── target-compatibility-version.md
+        ├── versions.md
+        ├── migrations.md
+        ├── deprecated.md
+        ├── reserved.md
+        ├── feature-gates.md
+        ├── compatibility-matrix.md
+        ├── dialect-compatibility.md
+        ├── frontend-conformance.md
+        ├── ast-conformance.md
+        └── ir-conformance.md
         │
         ▼
 grammar/Zamani.g4
         │
         ▼
-lexer / parser
+lexer
         │
         ▼
-frontend AST
+parser
         │
         ▼
-semantic analysis
+AST
         │
         ▼
-canonical semantic model
+structural validation
         │
-        ├── classical semantics
-        ├── quantum semantics
-        └── HDL/hardware semantics
+        ├── names
+        ├── types
+        ├── effects
+        ├── resources
+        ├── capabilities
+        ├── contracts
+        ├── policies
+        └── provenance
+        │
+        ▼
+semantic model
+        │
+        ├── Classical
+        ├── Quantum
+        ├── HDL
+        ├── AI
+        ├── Data
+        ├── Distributed
+        ├── Networking
+        └── Hybrid
         │
         ▼
 canonical IR
         │
-        ├── quantum::ir
-        └── other canonical IR boundaries
+        ├── Classical IR
+        └── quantum::ir
         │
         ▼
-optimization / lowering
+optimization
         │
+        ├── lowering
         ├── routing
         ├── scheduling
         ├── resilience
-        ├── QEC
-        └── ZQN
+        └── QEC
         │
         ▼
-HAL / runtime / target realization
+ZQN
+        │
+        ▼
+HAL
+        │
+        ▼
+target/runtime realization
 
-3.1 "grammar/DESIGN.md"
+A migration MUST respect this hierarchy.
 
-Owns:
-
-- grammar architecture;
-- authority hierarchy;
-- ownership boundaries;
-- composition rules;
-- production-readiness principles;
-- POCO-REAF architecture;
-- scalability architecture.
-
-It does not own individual migration records.
-
-3.2 "grammar/compatibility/versions.md"
-
-Owns:
-
-- language-version policy;
-- version numbering;
-- compatibility classes;
-- language/compiler version separation;
-- release-level compatibility guarantees.
-
-It answers:
-
-«What does a version mean?»
-
-This file answers:
-
-«How is a change migrated?»
-
-3.3 "grammar/compatibility/deprecated.md"
-
-Owns:
-
-- deprecation lifecycle;
-- deprecation metadata;
-- deprecation diagnostics;
-- removal eligibility.
-
-It answers:
-
-«When and why is an existing feature deprecated?»
-
-This file answers:
-
-«How is the feature transformed or preserved during migration?»
-
-3.4 "grammar/compatibility/compatibility-matrix.md"
-
-Owns:
-
-- compatibility relationships between versions and layers.
-
-It answers:
-
-«Which versions/layers are compatible?»
-
-This file answers:
-
-«What procedure must be performed to move between them?»
-
-3.5 "grammar/spec/compatibility.md"
-
-Owns compatibility concepts and dimensions.
-
-3.6 "grammar/grammar.md"
-
-Owns implementation-conformance reporting.
-
-It MUST NOT silently become another normative language specification.
-
-3.7 "grammar/Zamani.g4"
-
-Is the canonical ANTLR grammar composition root.
-
-It is a syntax representation.
-
-It MUST NOT become a migration engine or semantic authority.
-
-3.8 "grammar/Zamani-Grammar.md"
-
-Remains the broad historical/extended/design reference.
-
-A feature appearing there does not automatically become stable Zamani syntax.
-
-3.9 "src/lexer.rs"
-
-Owns executable lexical tokenization.
-
-3.10 "src/parser.rs"
-
-Owns executable source parsing for the reference frontend.
-
-3.11 "src/ast/"
-
-Owns structural source representation.
-
-3.12 Semantic analysis
-
-Owns interpretation of source meaning.
-
-3.13 "quantum::ir"
-
-Owns the canonical quantum semantic boundary.
-
-Migration MUST NOT introduce a second permanent frontend quantum IR merely to preserve legacy quantum syntax.
+No migration document, compatibility mechanism, generated artifact, or legacy representation may silently become a competing language authority.
 
 ---
 
-4. Fundamental Migration Architecture
+5. Companion File Ownership
 
-The preferred migration path is:
+The following ownership is normative.
 
-Old Source
-    │
-    ▼
-Old Syntax
-    │
-    ▼
-Compatibility / Migration Layer
-    │
-    ▼
-Canonical Meaning
-    │
-    ▼
-Current AST / Semantic Model
-    │
-    ▼
-Canonical IR
-    │
-    ├───────────────┐
-    ▼               ▼
-Classical IR    quantum::ir
-    │               │
-    └───────┬───────┘
-            ▼
-      Optimization
-            ▼
- Routing / Scheduling / Resilience / QEC / ZQN
-            ▼
-           HAL
-            ▼
-       Target Runtime
+File| Owner responsibility
+"grammar/DESIGN.md"| Architecture and authority
+"grammar/specification/"| Human-readable normative language specification
+"grammar/spec/"| Focused formal/machine-oriented contracts
+"grammar/compatibility/language-version.md"| Language version semantics
+"grammar/compatibility/grammar-version.md"| Grammar version semantics
+"grammar/compatibility/AST-version.md"| AST schema version semantics
+"grammar/compatibility/semantic-version.md"| Semantic-model version semantics
+"grammar/compatibility/ir-version.md"| IR version semantics
+"grammar/compatibility/dialect-version.md"| Dialect version semantics
+"grammar/compatibility/target-compatibility-version.md"| Target compatibility semantics
+"grammar/compatibility/versions.md"| Compatibility/version policy
+"grammar/compatibility/migrations.md"| Migration procedures
+"grammar/compatibility/deprecated.md"| Deprecation lifecycle
+"grammar/compatibility/reserved.md"| Reserved syntax/identifier policy
+"grammar/compatibility/feature-gates.md"| Feature availability gates
+"grammar/compatibility/compatibility-matrix.md"| Compatibility relationships
+"grammar/compatibility/dialect-compatibility.md"| Dialect compatibility
+"grammar/compatibility/frontend-conformance.md"| Frontend conformance
+"grammar/compatibility/ast-conformance.md"| AST conformance
+"grammar/compatibility/ir-conformance.md"| IR conformance
+"grammar/grammar.md"| Implementation/conformance status
+"grammar/Zamani-Grammar.md"| Historical/extended reference
+"grammar/Zamani.g4"| Canonical ANTLR composition
+"grammar/lexer/"| Lexical contracts
+"src/lexer.rs"| Executable lexer
+"src/parser.rs"| Executable parser
+"src/ast/"| Frontend AST
+semantic implementation| Semantic meaning
+canonical IR implementation| Canonical compiler representation
+"quantum::ir"| Canonical quantum IR boundary
+compiler/backend| Lowering and target realization
 
-A migration MUST NOT create this architecture:
-
-Old Syntax
-    ▼
-Old Permanent IR
-    ▼
-Old Compiler
-    ▼
-Old Runtime
-
-unless an external artifact compatibility requirement explicitly requires it.
-
-Historical syntax should normally terminate at the current semantic model.
+If another repository file changes ownership, this document MUST reference the new owner rather than duplicating the contract.
 
 ---
 
-5. Migration Invariants
+6. Core Migration Invariant
 
-Every migration MUST preserve all applicable invariants.
+For every migration:
 
-These include:
+OLD REPRESENTATION
+        │
+        ▼
+MIGRATION
+        │
+        ▼
+CURRENT REPRESENTATION
+        │
+        ▼
+CURRENT SEMANTICS
 
-- identifier identity;
-- binding relationships;
-- scope;
-- name resolution;
-- type meaning;
-- generic meaning;
-- ownership;
-- borrowing;
-- lifetime semantics;
-- evaluation order;
-- control flow;
-- effects;
-- capabilities;
-- resource requirements;
-- resource constraints;
-- concurrency semantics;
-- synchronization;
-- error behavior;
-- numerical meaning;
-- deterministic semantics;
-- quantum state meaning;
-- quantum operation ordering;
-- parameter meaning;
-- measurement semantics;
-- reset semantics;
-- classical feed-forward;
-- entanglement semantics;
-- logical/physical resource distinction;
-- HDL behavioral meaning;
-- hardware intent;
-- timing constraints;
-- distributed semantics;
-- networking semantics;
-- security properties;
-- provenance;
-- source spans where promised;
-- diagnostics where compatibility requires them.
+The semantic result MUST be equivalent whenever the compatibility contract requires equivalence.
 
-A migration MAY change representation.
+Formally:
 
-It MUST NOT silently change meaning.
+Meaning(old_program)
+    =
+Meaning(migrate(old_program))
+
+for migrations classified as semantics-preserving.
+
+If the meaning cannot be preserved, the migration MUST explicitly classify the semantic change.
+
+Silent semantic changes are prohibited.
 
 ---
 
-6. Compatibility Is Layered
+7. Compatibility Is Layered
 
-Migration decisions MUST be made independently at each layer.
+Compatibility MUST be evaluated independently across:
 
 Source
   ↓
 Lexical
   ↓
-Syntax
+Grammar
+  ↓
+Parser
   ↓
 AST
   ↓
-Name / Module
+Name Resolution
   ↓
 Type
   ↓
 Effect
   ↓
+Resource
+  ↓
 Capability
   ↓
-Resource
+Contract
+  ↓
+Policy
+  ↓
+Provenance
   ↓
 Semantic
   ↓
-IR
+Canonical IR
   ↓
 Artifact
   ↓
@@ -388,89 +356,137 @@ Target
   ↓
 Execution
 
-A migration MAY therefore have different classifications at different layers.
+A change MAY be compatible at one layer and incompatible at another.
 
-For example:
+Example:
 
-Source:          automatic
-Lexer:           automatic
-Parser:          automatic
-AST:             unchanged
-Semantics:       unchanged
-quantum::ir:     unchanged
-Artifact:        incompatible
-Runtime:         target-dependent
+Source:        compatible
+Lexer:         compatible
+Parser:        compatible
+AST:           compatible
+Semantics:     compatible
+quantum::ir:   compatible
+Artifact:      incompatible
+Runtime:       target-dependent
 
-The entire change MUST NOT be incorrectly classified as universally breaking merely because one downstream representation changed.
+Therefore:
 
-Likewise, source compatibility MUST NOT be claimed merely because parsing still succeeds.
+«Compatibility MUST NOT be reduced to "does it parse?"»
+
+Likewise:
+
+«A backend representation change MUST NOT automatically become a source-language breaking change.»
 
 ---
 
-7. Migration Classes
+8. Migration Classes
 
-Every migration MUST be classified.
+Every non-trivial migration MUST be assigned one or more migration classes.
 
 Class| Name| Meaning
 M0| No Migration| Representation remains compatible
 M1| Transparent Compatibility| Old and new representations coexist without source transformation
-M2| Automatic Mechanical| Deterministic source transformation
-M3| Tool-Assisted| Tool transforms known cases and requests decisions for ambiguous cases
-M4| Explicit Source Migration| Developer must change source
-M5| Semantic Migration| Meaning/model itself changes and requires explicit semantic handling
-M6| Artifact Migration| Compiled/serialized representation changes
-M7| Dialect Migration| Dialect version or extension changes
-M8| Target Migration| Target/backend/runtime representation changes
-M9| Breaking Migration| Existing valid source or semantics can no longer be preserved under the promised compatibility contract
+M2| Automatic Mechanical| Deterministic semantics-preserving transformation
+M3| Tool-Assisted| Tool performs deterministic portions and requests decisions for ambiguous portions
+M4| Explicit Source Migration| Developer must modify source
+M5| Semantic Migration| Meaning or semantic model changes
+M6| Artifact Migration| Serialized/compiled artifact changes
+M7| Dialect Migration| Dialect or extension representation changes
+M8| Target Migration| Target/runtime realization changes
+M9| Breaking Migration| Compatibility contract cannot preserve the old representation or semantics
 
-A single change MAY have multiple classifications.
+A migration MAY have multiple classifications.
 
 Example:
 
-Source syntax:      M2
-AST:                M2
-Semantic meaning:   M0
-quantum::ir:        M0
-Artifact:           M6
-Target:             M8
+Source       = M2
+Lexer        = M2
+Parser       = M2
+AST          = M0
+Semantics    = M0
+quantum::ir  = M0
+Artifact     = M6
+Target       = M8
 
 ---
 
-8. Migration Decision Procedure
+9. Migration Classification Rules
 
-For every proposed change:
+A migration MUST answer these questions in order.
 
-Does existing valid source still parse?
-        │
-        ├── YES
-        │    │
-        │    └── Does it retain the same specified meaning?
-        │             │
-        │             ├── YES → M0/M1
-        │             │
-        │             └── NO → M5
-        │
-        └── NO
-             │
-             └── Is there a deterministic semantics-preserving transformation?
-                       │
-                       ├── YES → M2/M3
-                       │
-                       └── NO
-                            │
-                            ├── explicit source decision → M4
-                            │
-                            └── incompatible semantics → M9
+9.1 Does the old source still parse?
 
-Parser failure alone MUST NOT determine whether a change is breaking.
+If yes, determine whether its meaning is unchanged.
 
-Semantic preservation is the primary criterion.
+9.2 Is its specified meaning unchanged?
+
+If yes:
+
+M0 or M1
+
+If no:
+
+M5
+
+9.3 If it no longer parses, is there a deterministic transformation?
+
+If yes:
+
+M2
+
+9.4 Does the transformation contain ambiguity?
+
+If yes:
+
+M3
+
+9.5 Does the developer have to choose between semantic interpretations?
+
+Then:
+
+M4 or M5
+
+9.6 Is compatibility impossible under the promised contract?
+
+Then:
+
+M9
+
+Parser failure alone MUST NOT determine whether a migration is breaking.
 
 ---
 
-9. Required Migration Record
+10. Migration Identity
 
-Every non-trivial migration MUST have a migration record containing:
+Every migration MUST have a stable migration identifier.
+
+The identifier MUST identify the semantic feature rather than merely its textual spelling.
+
+Preferred:
+
+quantum.operation.generic.v2
+
+Not:
+
+apply_gate_to_q
+
+The migration identity MUST survive lexical renaming.
+
+A rename from:
+
+old_keyword
+
+to:
+
+new_keyword
+
+does not create a new semantic feature if the underlying semantics remain the same.
+
+---
+
+11. Required Migration Record
+
+Every non-trivial migration MUST have a record containing:
 
 Migration ID:
 Feature ID:
@@ -484,11 +500,14 @@ Target Representation:
 
 Migration Class:
 
-Affected Layer:
-Affected Domain:
+Affected Layers:
+Affected Domains:
 
 Old Syntax:
 New Syntax:
+
+Old Tokens:
+New Tokens:
 
 Old AST:
 New AST:
@@ -502,8 +521,13 @@ New IR:
 Quantum IR Impact:
 HDL/HW Impact:
 
+Type Impact:
+Effect Impact:
 Capability Impact:
 Resource Impact:
+Contract Impact:
+Policy Impact:
+Provenance Impact:
 
 Semantic Preservation:
 Semantic Changes:
@@ -514,13 +538,20 @@ Required Manual Action:
 
 Diagnostics:
 Source-Span Policy:
+Comment Policy:
+Formatting Policy:
 
 Compatibility Window:
 Deprecation Status:
 Removal Version:
 
-Rollback / Recovery:
 Artifact Impact:
+ABI Impact:
+Runtime Impact:
+Target Impact:
+
+Rollback:
+Recovery:
 
 Positive Tests:
 Negative Tests:
@@ -528,257 +559,357 @@ Boundary Tests:
 Scalability Tests:
 Determinism Tests:
 Compatibility Tests:
+Diagnostic Tests:
 
-Affected Repository Files:
-Downstream Consumers:
+Specification Files:
+Grammar Files:
+Lexer Files:
+Parser Files:
+AST Files:
+Semantic Files:
+IR Files:
+Compiler Files:
+Runtime Files:
+Tooling Files:
+Test Files:
 
 Feature Manifest:
-Compatibility Matrix Entry:
+Compatibility Matrix:
+Deprecation Record:
 
 Hard-Coding Audit:
 Unsafe-Rust Audit:
 
 Completion Status:
 
-A migration lacking required fields MUST NOT be marked production-complete.
+A migration without the required applicable fields MUST NOT be marked production-complete.
 
 ---
 
-10. Migration Identity
+12. Migration Manifest
 
-Migration identity MUST be stable.
+Each migration SHOULD have a machine-readable manifest.
 
-A migration ID MUST NOT depend solely on the textual spelling of a feature.
+The manifest SHOULD identify:
 
-Preferred identity:
+migration_id
+feature_id
+source_version
+target_version
+migration_class
+source_layers
+target_layers
+source_domains
+target_domains
+semantic_preserving
+requires_manual_action
+reversible
+deprecated_source
+removal_version
+ast_change
+semantic_change
+ir_change
+artifact_change
+abi_change
+runtime_change
+target_change
+tests
+provenance
 
-domain + semantic feature + migration sequence
+The manifest MUST be versioned independently from source syntax.
 
-For example:
-
-quantum.operation.generic.v2
-
-rather than:
-
-apply_gate_to_q
-
-This allows:
-
-old spelling
-    ↓
-new spelling
-
-without treating a spelling change as an entirely new semantic feature.
+It MUST NOT contain fixed resource capacities.
 
 ---
 
-11. Source Migration
+13. Source Migration
 
-A source migration transforms one valid Zamani source representation into another.
+A source migration transforms source representation while preserving specified meaning.
 
-The migration MUST preserve:
+It MUST preserve, where applicable:
 
-- program structure;
-- semantic intent;
+- bindings;
+- scope;
+- name resolution;
+- evaluation order;
+- control flow;
 - types;
+- generics;
+- ownership;
+- borrowing;
 - effects;
-- resources;
 - capabilities;
-- quantum meaning;
-- HDL meaning;
-- diagnostics where promised.
+- requirements;
+- resources;
+- contracts;
+- policies;
+- provenance;
+- concurrency;
+- distributed behavior;
+- numerical meaning;
+- quantum semantics;
+- HDL semantics;
+- hardware intent.
 
-Where tooling promises formatting preservation, formatting MUST be preserved.
+Source migration MAY change:
 
-Where tooling promises comment preservation, comments MUST be preserved.
+- keyword spelling;
+- syntactic sugar;
+- module paths;
+- declaration ordering where order is semantically irrelevant;
+- equivalent expression syntax;
+- deprecated syntax.
 
-Where exact source-span preservation is impossible, migration tooling MUST explicitly document the new span mapping.
+Source migration MUST NOT silently change:
 
----
-
-12. Automatic Migration
-
-Automatic migration is allowed only where the transformation is deterministic.
-
-Examples:
-
-legacy_keyword → canonical_keyword
-
-or:
-
-legacy.module.path → canonical.module.path
-
-provided the semantics are formally equivalent.
-
-Automatic migration MUST NOT guess developer intent.
-
-For example:
-
-legacy_resource_model
-        ↓
-unknown_new_resource_model
-
-MUST NOT be automatically transformed if multiple semantic interpretations are possible.
+- operation order;
+- measurement meaning;
+- synchronization;
+- resource requirements;
+- security policy;
+- effects;
+- ownership;
+- mutation;
+- adaptation authority.
 
 ---
 
-13. Tool-Assisted Migration
+14. Source-Span Preservation
 
-Tool-assisted migration MUST:
+Migration tooling MUST preserve source locations whenever practical.
 
-1. discover all affected constructs;
-2. report their locations;
-3. identify the migration rule;
-4. show the proposed transformation;
-5. distinguish deterministic transformations from decisions;
-6. refuse unsafe semantic guessing;
-7. produce machine-readable diagnostics;
-8. provide validation before rewriting;
-9. record migration provenance;
-10. allow the resulting source to be re-parsed and re-validated.
+The migration result SHOULD provide:
 
-A migration tool MUST distinguish:
+old span → new span
 
-AUTOMATICALLY TRANSFORMED
+for transformed constructs.
 
-from:
+When exact mapping is impossible, the migration tool MUST:
 
-REQUIRES DEVELOPER DECISION
+1. report the affected span;
+2. identify the transformation;
+3. provide the replacement span;
+4. preserve enough provenance for diagnostics to remain actionable.
+
+The repository's source-span contract remains owned by the validation/source-span specification.
 
 ---
 
-14. Manual Migration
+15. Comment and Formatting Preservation
 
-Manual migration is required when semantics cannot be inferred safely.
+Migration tooling MUST distinguish:
+
+- semantic preservation;
+- formatting preservation;
+- comment preservation.
+
+A migration MAY preserve semantics without preserving exact formatting.
+
+If comments are dropped, the tool MUST report that when comment preservation is part of the supported migration contract.
+
+Comments MUST NOT be interpreted as semantic source unless the language specification explicitly makes them semantic.
+
+---
+
+16. Automatic Migration
+
+Automatic migration is permitted only when the transformation is deterministic.
 
 Examples include:
 
-- changed ownership semantics;
-- changed concurrency semantics;
-- changed effect semantics;
+legacy_keyword → canonical_keyword
+legacy_module_path → canonical_module_path
+deprecated_syntax → equivalent_current_syntax
+
+provided semantic equivalence has been established.
+
+Automatic migration MUST NOT infer developer intent where multiple meanings are possible.
+
+The tool MUST fail safely rather than selecting an arbitrary interpretation.
+
+---
+
+17. Tool-Assisted Migration
+
+Tool-assisted migration MUST:
+
+1. discover affected constructs;
+2. report source locations;
+3. identify applicable migration rules;
+4. display proposed transformations;
+5. distinguish deterministic transformations from decisions;
+6. refuse unsafe semantic guessing;
+7. produce machine-readable diagnostics;
+8. validate the transformed source;
+9. reparse the result;
+10. re-run structural validation;
+11. preserve migration provenance;
+12. report unresolved items.
+
+The tool MUST distinguish:
+
+AUTOMATICALLY_TRANSFORMED
+
+from:
+
+REQUIRES_DEVELOPER_DECISION
+
+---
+
+18. Manual Migration
+
+Manual migration is required when semantics cannot safely be inferred.
+
+Examples:
+
+- changed ownership;
+- changed concurrency;
+- changed effect behavior;
 - changed resource semantics;
+- changed capability requirements;
 - changed security guarantees;
 - changed quantum measurement semantics;
 - changed hardware intent;
 - incompatible dialect semantics;
 - removed information;
-- multiple possible replacements.
+- multiple valid replacements.
 
-Manual migration documentation MUST contain concrete before/after examples and explain the semantic difference.
+Manual migrations MUST document:
 
----
-
-15. Grammar Migration
-
-A grammar reorganization is not automatically a language migration.
-
-For example, moving rules from the historical monolithic "grammar/Zamani.g4" architecture into modular grammar domains is implementation-neutral when the accepted language and semantic meaning remain unchanged.
-
-A grammar reorganization is compatible only if:
-
-- accepted source meaning remains equivalent;
-- tokenization remains equivalent or has a documented migration;
-- precedence remains equivalent;
-- associativity remains equivalent;
-- AST meaning remains equivalent;
-- diagnostics remain within documented compatibility guarantees.
-
-The modular directory architecture MUST NOT cause duplicate language authorities.
+before
+after
+semantic difference
+reason
+developer decision
+validation requirements
 
 ---
 
-16. "Zamani.g4" Migration
+19. Grammar Reorganization
+
+Moving grammar rules between files is not automatically a language migration.
+
+For example:
+
+historical monolithic grammar
+        ↓
+modular grammar/
+        ↓
+same canonical AST
+        ↓
+same semantics
+        ↓
+same canonical IR
+
+is implementation restructuring when the accepted language and semantics remain equivalent.
+
+A grammar reorganization MUST preserve:
+
+- lexical meaning;
+- token identity;
+- precedence;
+- associativity;
+- ambiguity behavior;
+- parse structure;
+- AST semantics;
+- semantic meaning.
+
+Grammar modularization MUST NOT create multiple competing language definitions.
+
+---
+
+20. "grammar/Zamani.g4"
 
 "grammar/Zamani.g4" remains the canonical ANTLR composition root.
 
-Migration work MUST converge toward:
+Migration work MUST converge toward a composition architecture where the root grammar performs composition and dispatch rather than becoming a second semantic specification.
 
-Zamani.g4
-    │
-    ├── lexical vocabulary
-    ├── core syntax
-    ├── declarations
-    ├── statements
-    ├── expressions
-    ├── types
-    ├── modules
-    ├── functions
-    ├── effects
-    ├── memory
-    ├── concurrency
-    ├── classical
-    ├── quantum
-    ├── hybrid
-    ├── HDL
-    ├── hardware
-    ├── resources
-    ├── distributed
-    ├── AI
-    ├── data
-    ├── networking
-    ├── security
-    ├── interoperability
-    ├── dialects
-    ├── macros
-    └── metaprogramming
+The root grammar MAY compose:
 
-Historical syntax may remain during a compatibility window.
+- core;
+- declarations;
+- statements;
+- expressions;
+- types;
+- functions;
+- modules;
+- effects;
+- memory;
+- concurrency;
+- classical;
+- quantum;
+- hybrid;
+- HDL;
+- hardware;
+- resources;
+- distributed;
+- AI;
+- data;
+- networking;
+- security;
+- interoperability;
+- dialects;
+- macros;
+- metaprogramming.
 
-It MUST eventually converge onto the canonical semantic model.
-
-No second permanent root grammar may be introduced.
+The root grammar MUST NOT contain implementation-specific hardware limits.
 
 ---
 
-17. Lexer Migration
+21. Lexer Migration
 
-The executable lexer is "src/lexer.rs".
+The lexical authority is distributed between the lexical specification and executable implementation according to repository ownership.
 
-The lexical specification is represented under:
+Relevant files include:
 
-grammar/spec/
 grammar/lexer/
-
-and the ANTLR representation under:
-
+grammar/antlr/
 grammar/Zamani.g4
+src/lexer.rs
 
-All three must converge.
+Migration MUST ensure that these representations remain synchronized.
 
-The current lexer contains a broad vocabulary covering core language, OOP, quantum, nano, Sankofa, mathematical, effect, concurrency, and advanced concepts.
+Before introducing a new keyword, determine whether the concept can instead be represented as:
 
-Therefore, adding additional keywords MUST NOT be the default migration strategy.
+- identifier;
+- qualified name;
+- operation name;
+- attribute;
+- type;
+- capability;
+- effect;
+- dialect construct;
+- metadata.
 
-Before adding a keyword, migration analysis MUST determine whether the concept can be represented by:
+This is especially important for generic computational concepts such as:
 
-- an identifier;
-- a qualified name;
-- an operation name;
-- an attribute;
-- a capability;
-- a type;
-- a generic;
-- an effect;
-- a dialect extension.
+- reasoning;
+- inference;
+- learning;
+- adaptation;
+- querying;
+- evidence;
+- provenance;
+- policy.
 
-This protects the language from uncontrolled keyword growth.
+Keyword growth MUST be deliberate.
 
 ---
 
-18. Token Identity Migration
+22. Token Identity
 
-The existing lexer/parser integration contains overlapping concepts such as:
+One source spelling SHOULD correspond to one canonical lexical identity unless separate token identities have a demonstrable lexical purpose.
+
+Where overlapping tokens exist, migration work MUST evaluate them before creating new aliases.
+
+Examples include overlapping operator concepts such as:
 
 BitAnd / Ampersand
 Question / QuestionMark
 
-and related operator-context distinctions.
+If one spelling can be represented by one token and parser context determines its semantic interpretation, token consolidation SHOULD be preferred.
 
-Migration MUST establish one canonical lexical identity per source spelling unless there is a demonstrable lexical reason for distinct token identities.
-
-Context-sensitive semantic meaning belongs downstream.
-
-The migration rule is:
+The migration sequence is:
 
 source spelling
       ↓
@@ -786,91 +917,82 @@ canonical token
       ↓
 parser context
       ↓
-AST meaning
+AST
       ↓
 semantic meaning
 
 not:
 
-one spelling
+source spelling
       ↓
 multiple competing lexical authorities
 
-Any token consolidation MUST be tested against all existing parser contexts before the legacy token is removed.
-
 ---
 
-19. Keyword Migration
+23. Keyword Migration
 
 A keyword migration MUST account for:
 
-- lexer keyword registry;
-- token enum;
-- parser dispatch;
+- token registry;
+- lexer;
+- parser;
 - grammar;
 - AST;
 - diagnostics;
-- source compatibility;
 - reserved identifiers;
 - dialect interaction;
 - tooling;
-- tests.
+- tests;
+- compatibility metadata.
 
-A keyword MUST NOT be added solely because an extended design document uses that word.
-
-The feature must first have an accepted specification and semantic owner.
+A word appearing in historical or extended documentation MUST NOT automatically become a reserved keyword.
 
 ---
 
-20. Literal Migration
+24. Literal Migration
 
 Literal migrations MUST preserve value semantics.
 
-Numeric migrations MUST NOT introduce artificial machine limits.
+Numeric literal migrations MUST NOT turn an implementation representation into a universal language limit.
 
-A literal representation MAY be restricted by the actual implementation representation, but such a representation limit must not be incorrectly presented as a universal language maximum.
+The language may have representation-specific constraints in a particular compiler implementation, but those constraints MUST remain implementation constraints unless explicitly standardized.
 
-Quantum literal migrations must preserve the semantic distinction between:
-
-|0⟩
-|1⟩
-|+⟩
-|-⟩
-|ψ⟩
-
-and arbitrary quantum-state expressions.
+Quantum literals and state expressions MUST preserve their specified quantum semantics.
 
 ---
 
-21. Type Migration
+25. Type Migration
 
-Type migrations MUST preserve:
+Type migration MUST preserve:
 
-- type identity;
-- generic parameters;
+- identity;
+- generic arguments;
+- bounds;
 - constraints;
+- associated types;
 - ownership;
-- variance where applicable;
-- resource semantics;
-- capability requirements;
-- quantum semantics;
+- variance where specified;
+- effects;
+- capabilities;
+- resource requirements;
+- quantum meaning;
 - hardware intent.
 
-Types such as:
+Symbolic types MUST remain symbolic.
+
+For example:
 
 Qubit[n]
 Tensor<T, shape>
-Memory<T, size>
+Memory<T, required_memory>
 
-must be treated as semantic/program requirements rather than compiler-wide maximums.
-
-A migration MUST NOT transform a symbolic resource requirement into a fixed compiler limit.
+MUST NOT be transformed into compiler-wide fixed maxima.
 
 ---
 
-22. Resource Migration
+26. Requirement / Capability / Constraint / Preference Separation
 
-The following concepts MUST remain distinct:
+Migration MUST preserve the distinction between:
 
 Requirement
 Capability
@@ -881,29 +1003,51 @@ Realization
 
 For example:
 
-requires qubits >= n
+requires capability("quantum.measurement");
 
-does not mean:
+means that the execution environment must provide the capability.
 
-physical qubits 0..n-1
+It does not mean:
+
+use device 0
 
 Likewise:
 
-requires capability("gpu.compute")
+requires qubits >= n;
 
-does not mean:
+does not define a universal physical qubit numbering scheme.
 
-GPU 0
-
-A migration MUST preserve this distinction.
+A migration MUST preserve this abstraction.
 
 ---
 
-23. Scalability Migration Invariant
+27. Resource Migration
 
-Migration tooling MUST preserve open-ended scalability.
+Resource requirements MUST remain open-ended.
 
-The following MUST NOT be introduced as universal language ceilings:
+Valid concepts include:
+
+requires memory >= required_memory;
+requires qubits >= n;
+requires capability("gpu.compute");
+requires capability("tensor.compute");
+requires topology(required_topology);
+prefer ...
+constrain ...
+allow ...
+forbid ...
+
+Migration MUST NOT convert these into fixed physical assumptions.
+
+Resource realization belongs downstream.
+
+---
+
+28. Scalability Invariant
+
+The migration system MUST preserve open-ended scalability.
+
+It MUST NOT introduce universal language limits such as:
 
 MAX_QUBITS
 MAX_CPUS
@@ -911,6 +1055,7 @@ MAX_CORES
 MAX_THREADS
 MAX_GPUS
 MAX_FPGAS
+MAX_ASICS
 MAX_QPUS
 MAX_NODES
 MAX_MEMORY
@@ -921,1398 +1066,118 @@ MAX_TENSOR_RANK
 MAX_TENSOR_DIMENSION
 MAX_DEVICE_COUNT
 MAX_NETWORK_SIZE
-MAX_TIMELINE_COUNT
 MAX_AGENT_COUNT
+MAX_TIMELINE_COUNT
 MAX_MODULE_COUNT
 MAX_PROGRAM_SIZE
 
-Likewise, migrations MUST NOT replace scalable abstractions with fixed machine assumptions.
+This prohibition applies equally to:
 
-A program may contain an ordinary constant:
+- migration tools;
+- compatibility manifests;
+- grammar rules;
+- tests;
+- examples;
+- documentation;
+- AST schemas;
+- semantic models;
+- IR schemas.
 
-let n = 1024;
+An implementation MAY encounter actual resource exhaustion.
 
-because that is program data.
-
-The prohibited construct is a compiler/language architecture that says:
-
-Zamani supports no more than 1024 elements.
+That is different from imposing a language-wide artificial ceiling.
 
 ---
 
-24. POCO-REAF Migration Rule
+29. POCO-REAF Migration Invariant
 
-A migration MUST preserve:
+The fundamental distinction is:
 
-Program Intent
-        ≠
-Target Realization
+PROGRAM INTENT
+       ≠
+TARGET REALIZATION
 
-A valid migration:
+Migration MUST preserve program intent.
 
-requires quantum
-        ↓
-requires capability("quantum.compute")
-        ↓
-quantum semantic model
-        ↓
-quantum::ir
-        ↓
+Target realization MAY change according to:
+
+- available resources;
+- capabilities;
+- topology;
+- memory;
+- accelerators;
+- quantum hardware;
+- classical hardware;
+- distributed infrastructure;
+- timing;
+- resilience;
+- scheduling;
+- routing;
+- QEC;
+- runtime capabilities;
+- deployment policy.
+
+A migration MUST NOT rewrite source semantics merely because the current target cannot satisfy a requirement.
+
+The correct result is a capability/resource failure or a documented alternate realization.
+
+---
+
+30. Target Independence
+
+Migration MUST NOT encode target identity into portable source unless target-specific syntax is explicitly part of a dialect.
+
+The following distinctions are mandatory:
+
+portable source
+portable semantic requirements
+target capability
 target realization
 
-is preferable to:
+A migration MUST NOT turn:
 
-requires quantum
-        ↓
-specific vendor QPU
-
-unless the original source explicitly requested a vendor-specific target.
-
-Likewise:
-
-parallel
-
-must not silently migrate into:
-
-exactly N threads
-
-merely because the current backend happens to use N threads.
-
----
-
-25. Quantum Migration
-
-Quantum migration is governed by the canonical "quantum::ir" boundary.
-
-Legacy quantum syntax MUST migrate toward:
-
-source
-  ↓
-AST
-  ↓
-semantic quantum operation
-  ↓
-quantum::ir
-
-not:
-
-source
-  ↓
-legacy QuantumGate IR
-  ↓
-new quantum IR
-
-The quantum grammar MUST remain open-world where the semantics permit it.
-
-A fixed enumeration such as:
-
-H
-X
-Y
-Z
-CNOT
-...
-
-MUST NOT become the universal semantic gate model.
-
-The preferred model is:
-
-operationSpecifier
-quantumTargetList
-parameters
-results
-attributes
-modifiers
-effects
-capabilities
-
-This permits:
-
-apply H
-apply custom_gate
-apply vendor.operation
-apply operation(parameter)
-
-without making every future operation a grammar change.
-
----
-
-26. Quantum Operation Migration
-
-For every migrated quantum operation, preserve:
-
-- operation identity;
-- namespace;
-- operands;
-- parameters;
-- result semantics;
-- modifiers;
-- control semantics;
-- adjoint semantics;
-- measurement semantics;
-- ordering;
-- classical feed-forward;
-- resource requirements;
-- capability requirements;
-- source spans.
-
-A gate spelling change is not necessarily a semantic migration.
-
-A change in measurement, state preparation, control, or ordering semantics is a semantic migration and MUST be classified accordingly.
-
----
-
-27. Quantum Resource Migration
-
-Quantum migrations MUST preserve the distinction between:
-
-logical qubits
-physical qubits
-available qubits
-required qubits
-allocated qubits
-mapped qubits
-
-A migration MUST NOT convert:
-
-Qubit[n]
-
-into a fixed maximum.
-
-Likewise, the migration system MUST NOT introduce:
-
-MAX_QUBITS
-
-as a language restriction.
-
-Resource feasibility belongs to resource analysis, routing, scheduling, HAL, and runtime layers.
-
----
-
-28. QEC and ZQN Migration
-
-Migration MUST NOT move QEC implementation into the grammar.
-
-The architecture remains:
-
-quantum source
-      ↓
-quantum semantic model
-      ↓
-quantum::ir
-      ↓
-QEC analysis
-      ↓
-ZQN
-      ↓
-routing
-      ↓
-scheduling
-      ↓
-HAL
-
-A source migration involving:
-
-error correction
-fault tolerance
-noise
-fidelity
-logical operations
-resilience
-
-must preserve semantic intent while leaving actual correction, decoding, calibration, and physical realization to their respective subsystems.
-
----
-
-29. HDL Migration
-
-HDL migrations MUST preserve hardware intent.
-
-They MUST distinguish:
-
-logical width
-physical implementation width
-parameterized width
-target-supported width
-
-A legacy construct such as:
-
-wire [31:0]
-
-must not be generalized by hard-coding another universal width.
-
-Where the width is a program property, it remains program data or a type parameter.
-
-Where the width is a target restriction, it belongs to capability/target analysis.
-
----
-
-30. Hardware Migration
-
-Hardware-facing syntax MUST migrate toward target-independent intent.
-
-For example:
-
-requires capability("tensor.compute")
 requires capability("gpu.compute")
-requires capability("quantum.measurement")
-requires memory >= required_memory
-requires topology(...)
-
-are portable requirements.
-
-Physical mappings such as:
-
-logical resource → physical resource
-
-belong downstream.
-
-A migration MUST NOT turn portable source semantics into a physical device selection unless the source explicitly requested target-specific behavior.
-
----
-
-31. Classical Migration
-
-Classical computation MUST retain the existing general mathematical and computational capabilities without converting every operation into a reserved keyword.
-
-Existing vector, matrix, tensor, numerical, symbolic, statistical, optimization, signal-processing, and scientific concepts should migrate toward:
-
-generic operation
-+
-type information
-+
-library/intrinsic semantics
-+
-capability/resource requirements
-
-rather than a continuously expanding keyword list.
-
----
-
-32. Hybrid Migration
-
-Hybrid migrations MUST preserve the boundary between classical and quantum semantics.
-
-For example:
-
-classical computation
-        ↓
-quantum operation
-        ↓
-measurement
-        ↓
-classical decision
-        ↓
-quantum operation
-
-must remain one semantic program.
-
-Migration MUST NOT duplicate classical and quantum AST/IR pipelines unnecessarily.
-
----
-
-33. Distributed Migration
-
-Distributed migrations MUST preserve logical topology and communication semantics.
-
-A migration MUST NOT replace:
-
-parallel distributed computation
-
-with:
-
-exactly N nodes
-
-unless the number is part of explicit program semantics.
-
-Node count, placement, routing, replication, and physical network topology belong to resource/deployment/runtime layers.
-
----
-
-34. AI and Data Migration
-
-AI/data migrations MUST preserve semantic constructs such as:
-
-- model;
-- tensor;
-- dataset;
-- training;
-- inference;
-- differentiation;
-- optimization;
-- agent;
-- pipeline;
-- provenance.
-
-Framework-specific constructs MUST remain interoperability or dialect concerns unless explicitly accepted into core Zamani.
-
-Migration must not make a specific AI framework a permanent language dependency.
-
----
-
-35. Networking Migration
-
-Networking migrations MUST distinguish:
-
-logical endpoint
-logical channel
-protocol requirement
-service capability
-physical address
-physical route
-
-A migration from one address representation to another must preserve logical endpoint identity where promised.
-
-Physical addresses must not be embedded into portable semantic requirements unless explicitly target-specific.
-
----
-
-36. Security Migration
-
-Security migrations MUST preserve:
-
-- identity;
-- authorization;
-- capabilities;
-- policies;
-- provenance;
-- cryptographic intent;
-- trust relationships;
-- secure-computation requirements.
-
-A migration MUST NOT silently weaken a security guarantee.
-
-If a security property cannot be preserved, the migration MUST be classified as semantic and require explicit handling.
-
----
-
-37. Dialect Migration
-
-Dialects are explicitly versioned extensions.
-
-Every dialect migration MUST define:
-
-Dialect ID
-Old Version
-New Version
-Owner
-Syntax Changes
-Semantic Changes
-AST Mapping
-IR Mapping
-Dependencies
-Capabilities
-Requirements
-Compatibility
-Migration Procedure
-Removal Policy
-Tests
-
-A dialect MUST NOT silently change the meaning of core Zamani syntax.
-
-Dialect migration MUST terminate in the canonical semantic model.
-
-Quantum dialects MUST terminate in "quantum::ir" where they express quantum computation.
-
----
-
-38. AST Migration
-
-AST migrations MUST be semantic transformations, not merely struct renames.
-
-For each AST change, define:
-
-Old AST node
-New AST node
-Field mapping
-Default handling
-Deleted information
-New information
-Source-span mapping
-Semantic equivalence
-Diagnostics
-Tests
-
-An AST node may be renamed without semantic migration.
-
-An AST change that changes semantic interpretation is an M5 migration.
-
----
-
-39. Semantic Model Migration
-
-Semantic migration is required whenever the language's meaning changes.
-
-The migration MUST explicitly document:
-
-old meaning
-new meaning
-reason
-programs affected
-preserved properties
-changed properties
-required developer action
-
-The compiler MUST NOT silently apply a semantic change to older source without a version/compatibility rule authorizing it.
-
----
-
-40. IR Migration
-
-IR migrations MUST preserve semantic contracts.
-
-The canonical architecture remains:
-
-AST
- ↓
-semantic analysis
- ↓
-canonical semantic model
- ↓
-canonical IR
-
-A temporary compatibility adapter MAY translate:
-
-old IR
- ↓
-current IR
-
-but such an adapter MUST have a documented retirement condition.
-
-It MUST NOT become a second permanent compiler architecture.
-
----
-
-41. "quantum::ir" Migration
-
-"quantum::ir" is the canonical quantum semantic boundary.
-
-Any quantum migration MUST answer:
-
-Does the old representation map to quantum::ir?
-Are all parameters preserved?
-Are controls preserved?
-Are measurements preserved?
-Are results preserved?
-Are ordering constraints preserved?
-Are resource requirements preserved?
-Are capabilities preserved?
-Are source spans preserved?
-
-If yes, the old quantum representation should terminate at "quantum::ir".
-
-If no, the migration is semantic and MUST be explicitly classified.
-
----
-
-42. Artifact Migration
-
-Compiled artifacts MAY require migration independently of source.
-
-Artifact migration MUST define:
-
-- artifact identity;
-- artifact version;
-- schema version;
-- producer version;
-- consumer compatibility;
-- integrity verification;
-- migration direction;
-- rollback/recovery;
-- provenance.
-
-An artifact migration MUST NOT be confused with source-language compatibility.
-
-A source program can remain compatible while an old binary artifact becomes unsupported.
-
----
-
-43. ABI Migration
-
-ABI migrations MUST be handled independently from language syntax.
-
-A source-level migration MUST NOT introduce ABI assumptions into the grammar merely because one backend ABI changed.
-
-ABI compatibility belongs to interoperability/compiler/backend contracts.
-
-If an ABI change affects externally visible semantics, it MUST be reflected in the appropriate compatibility layer.
-
----
-
-44. Runtime Migration
-
-Runtime migration MUST preserve source semantics.
-
-Runtime changes may include:
-
-- scheduling;
-- resource discovery;
-- placement;
-- resilience;
-- checkpointing;
-- execution lifecycle;
-- observability;
-- deployment.
-
-These changes do not automatically constitute language migrations.
-
-A runtime incompatibility MUST be reported as runtime/target incompatibility rather than incorrectly deprecating valid source syntax.
-
----
-
-45. Target Migration
-
-Target migration is explicitly separate from language migration.
-
-The same Zamani program may be realized on:
-
-embedded
-CPU
-multicore CPU
-GPU
-FPGA
-ASIC
-QPU
-quantum simulator
-accelerator
-HPC
-cluster
-distributed system
-cloud
-future target
-
-A target migration MUST preserve source semantics where the target satisfies the required capabilities and resources.
-
-If it does not, the compiler/runtime MUST report resource or capability incompatibility.
-
-It MUST NOT silently change the program.
-
----
-
-46. Capability Migration
-
-Capability identifiers are semantic requirements.
-
-A capability migration MUST preserve capability meaning.
-
-For example:
-
-quantum.measurement
-
-may evolve in representation while retaining the same semantic capability identity.
-
-If the capability meaning changes, the migration must be classified semantically.
-
-Capabilities MUST remain open-ended.
-
-No universal finite capability list may be treated as the complete future language universe.
-
----
-
-47. Resource Migration
-
-Resource expressions MUST remain symbolic where appropriate.
-
-Examples:
-
-requires qubits >= n
-requires memory >= required_memory
-requires capability("tensor.compute")
-requires topology(...)
-
-A migration MUST preserve whether a resource expression is:
-
-- mandatory;
-- optional;
-- preferred;
-- a constraint;
-- a hint.
-
-A migration MUST NOT turn a preference into a requirement or a requirement into a hard-coded implementation choice without an explicit semantic rule.
-
----
-
-48. Migration and Deprecation
-
-Deprecation and migration are related but distinct.
-
-The preferred stable-feature lifecycle is:
-
-STABLE
-   ↓
-DEPRECATED
-   ↓
-MIGRATION AVAILABLE
-   ↓
-REMOVAL ELIGIBLE
-   ↓
-REMOVED
-
-Experimental features MAY follow:
-
-EXPERIMENTAL
-   ↓
-REMOVED
-
-when they were never promised as stable.
-
-A deprecated feature must remain supported according to "deprecated.md" until its removal conditions are satisfied.
-
----
-
-49. Migration and Reserved Syntax
-
-If an old identifier conflicts with newly reserved syntax, migration MUST account for:
-
-- lexical ambiguity;
-- source compatibility;
-- escape mechanisms;
-- rename tooling;
-- diagnostics;
-- dialect interaction.
-
-A newly reserved keyword MUST NOT silently capture an existing identifier and change its meaning.
-
-Where possible, the migration should provide a deterministic rename.
-
----
-
-50. Migration Ordering
-
-When several layers change, migrations MUST be ordered:
-
-1. Specification
-2. Feature identity
-3. Lexical contract
-4. Grammar contract
-5. AST contract
-6. Semantic contract
-7. IR contract
-8. Compiler integration
-9. Runtime/backend integration
-10. Compatibility metadata
-11. Tests
-12. Generated documentation
-13. Deprecation/removal metadata
-
-However, implementation work may be developed independently provided that the final integration satisfies this dependency order.
-
-No downstream file may silently invent an upstream contract.
-
----
-
-51. Independent-File Completion Contract
-
-Every migration-related file MUST be independently complete.
-
-Before a file is considered finished, it MUST identify:
-
-Purpose
-Owns
-Does Not Own
-Inputs
-Outputs
-Dependencies
-Upstream Contracts
-Downstream Consumers
-Syntax
-AST Contract
-Semantic Contract
-IR Contract
-Compiler Integration
-Runtime Integration
-Diagnostics
-Positive Tests
-Negative Tests
-Boundary Tests
-Scalability Tests
-Compatibility Tests
-Determinism
-Security
-Hard-Coding Audit
-Unsafe-Rust Audit
-Completion Criteria
-
-This prevents the situation where one file appears finished but must later be rewritten because another file introduced an undocumented dependency.
-
----
-
-52. Feature Manifest Integration
-
-Where the repository uses feature manifests, each migrated feature MUST reference its feature manifest.
-
-The manifest SHOULD contain:
-
-id
-name
-status
-version
-syntax
-lexer_tokens
-grammar_rules
-ast_nodes
-semantic_rules
-ir_mapping
-compiler_consumers
-runtime_consumers
-domain
-capabilities
-resource_requirements
-negative_tests
-boundary_tests
-scalability_tests
-compatibility
-hard_coding_policy
-migration
-deprecation
-
-The migration record and feature manifest MUST agree.
-
-Neither may silently contradict the other.
-
----
-
-53. Compatibility Matrix Integration
-
-Every migration that changes compatibility MUST update the compatibility matrix.
-
-At minimum, the matrix must be able to represent:
-
-Language Version
-Grammar Version
-Lexer Contract
-Parser Contract
-AST Schema
-Semantic Schema
-IR Schema
-Quantum IR Schema
-Dialect Version
-Artifact Schema
-ABI
-Runtime Contract
-
-A migration is incomplete if its compatibility relationship is not represented where the matrix requires it.
-
----
-
-54. "grammar.md" Integration
-
-After migration:
-
-grammar.md
-
-must accurately report implementation status.
-
-The migration system MUST NOT mark a feature "IMPLEMENTED" merely because the migration tool can rewrite source.
-
-The implementation chain remains:
-
-Specification
- ↓
-Grammar
- ↓
-Lexer
- ↓
-Parser
- ↓
-AST
- ↓
-Semantic
- ↓
-IR
- ↓
-Compiler
- ↓
-Runtime
- ↓
-Tests
-
----
-
-55. "Zamani-Grammar.md" Integration
-
-Historical and proposed syntax in "Zamani-Grammar.md" MUST be classified.
-
-Recommended statuses:
-
-stable
-proposed
-experimental
-deprecated
-historical
-not implemented
-
-A migration MUST NOT promote a feature directly from historical design material into stable language without passing the normal specification → implementation → test path.
-
----
-
-56. Existing Lexer/Parser Compatibility
-
-The current reference implementation in "src/lexer.rs" and "src/parser.rs" contains a substantially broader vocabulary than a minimal core language, including quantum, nano, Sankofa, effects, advanced declarations, and other constructs.
-
-Therefore, migration work MUST begin with an inventory of actual executable behavior.
-
-For each existing token/parser construct:
-
-token exists?
-grammar exists?
-parser exists?
-AST exists?
-semantic implementation exists?
-IR mapping exists?
-tests exist?
-
-The result must be recorded as:
-
-SPECIFIED
-LEXER_IMPLEMENTED
-PARSER_IMPLEMENTED
-AST_IMPLEMENTED
-SEMANTIC_IMPLEMENTED
-IR_IMPLEMENTED
-TESTED
-STABLE
-EXPERIMENTAL
-DEPRECATED
-
-No migration document may claim full implementation merely from grammar presence.
-
----
-
-57. Source-Level "unsafe" vs Rust "unsafe"
-
-The repository requirement is:
-
-«Production Zamani Rust implementation MUST use safe Rust.»
-
-This means the Rust implementation MUST NOT contain or require:
-
-unsafe
-unsafe fn
-unsafe impl
-unsafe trait
-unsafe { ... }
-
-However, this requirement must not be confused with the Zamani source-language word:
-
-unsafe
-
-The current reference frontend contains an "unsafe" keyword/parser path.
-
-Therefore migration must treat these as separate concerns.
-
-If Zamani source-level "unsafe" remains, it requires:
-
-- syntax definition;
-- semantic definition;
-- capability model;
-- security model;
-- compiler behavior;
-- diagnostics;
-- tests;
-- compatibility status.
-
-Parsing the word "unsafe" does not itself provide safety.
-
-If the intended future language contract eliminates unrestricted source-level unsafe execution, that source construct must follow the normal:
-
-STABLE/EXPERIMENTAL
- ↓
-DEPRECATED
- ↓
-MIGRATION
- ↓
-REMOVED
-
-process.
-
-The Rust implementation's safe-Rust requirement remains independent.
-
----
-
-58. Rust 1.97 / 1.97.1 Compatibility
-
-The production baseline is:
-
-Rust 2021
-Rust 1.97 / Rust 1.97.1
-
-Migration tooling and implementation MUST NOT depend on APIs unavailable to the declared minimum Rust version.
-
-Rust compiler-version changes MUST NOT be confused with Zamani language-version changes.
-
-For example:
-
-Zamani 1.x
-Rust 1.97.1
-
-is a valid combination.
-
-A future Rust update may change the implementation environment without changing the Zamani source language.
-
-The language compatibility policy and Rust toolchain policy therefore remain separate.
-
----
-
-59. Determinism
-
-Migration MUST be deterministic.
-
-Given:
-
-same source
-same source version
-same target version
-same migration rules
-same declared configuration
-
-the migration tool MUST produce the same semantic result.
-
-Migration MUST NOT depend on:
-
-- machine topology;
-- current GPU count;
-- current QPU count;
-- random backend selection;
-- uncontrolled environment state;
-- unspecified filesystem ordering;
-- network responses;
-- mutable external services.
-
-If target discovery is necessary, it belongs to target realization, not source transformation.
-
----
-
-60. Reproducibility
-
-Migration outputs MUST be reproducible when the migration is declared deterministic.
-
-Migration metadata SHOULD record:
-
-source language version
-target language version
-migration tool version
-migration rule versions
-feature manifest versions
-dialect versions
-configuration identity
-
-Where source rewriting is deterministic, the same migration metadata must produce equivalent output.
-
----
-
-61. Provenance
-
-Every non-trivial migration SHOULD emit provenance containing:
-
-migration-id
-source-version
-target-version
-source-file
-source-span
-old-feature-id
-new-feature-id
-migration-class
-tool-version
-rule-version
-timestamp where operationally necessary
-
-Provenance MUST NOT alter program semantics.
-
----
-
-62. Diagnostics
-
-Migration diagnostics MUST be structured.
-
-A diagnostic SHOULD expose:
-
-code
-severity
-feature-id
-migration-id
-source-version
-target-version
-source-span
-old-form
-new-form
-semantic-impact
-automatic-or-manual
-replacement
-
-Human-readable wording may evolve without changing the stable diagnostic identity.
-
----
-
-63. Migration Failure
-
-A migration MUST fail explicitly when semantic preservation cannot be established.
-
-It MUST NOT:
-
-- silently drop operations;
-- silently discard resource requirements;
-- silently remove quantum controls;
-- silently remove measurements;
-- silently change HDL widths;
-- silently remove security constraints;
-- silently convert requirements to hints;
-- silently convert capabilities to preferences;
-- silently select a physical target;
-- silently reduce resource requirements.
-
-Failure is preferable to silent semantic corruption.
-
----
-
-64. Partial Migration
-
-If a source contains several independent migrations and one cannot be transformed automatically, the tool MAY migrate the deterministic portions provided it clearly records the unresolved portions.
-
-Example:
-
-automatic:
-  keyword migration
-  module-path migration
-  attribute migration
-
-manual:
-  changed ownership semantics
-
-The result MUST NOT be presented as fully migrated.
-
----
-
-65. Rollback
-
-A source migration SHOULD support rollback when technically practical.
-
-Rollback is especially important for:
-
-- automated repository-wide rewrites;
-- large syntax migrations;
-- generated artifacts;
-- schema changes;
-- dialect migrations.
-
-Rollback MUST NOT imply that semantic migrations can always be reversed automatically.
-
-Where semantic information has been intentionally removed, the migration must document that reversal requires the original source or external information.
-
----
-
-66. Migration Transaction Boundary
-
-A repository-wide migration should be treated as a logical transaction:
-
-discover
-  ↓
-classify
-  ↓
-validate
-  ↓
-transform
-  ↓
-parse
-  ↓
-semantic-check
-  ↓
-IR-check
-  ↓
-test
-  ↓
-commit migration
-
-A failed validation MUST prevent the migration from being declared complete.
-
----
-
-67. Migration Testing
-
-Every migration MUST have applicable:
-
-Positive tests
-
-Valid old source transforms into valid new source or valid current semantic representation.
-
-Negative tests
-
-Invalid legacy forms remain invalid or produce the specified migration diagnostic.
-
-Boundary tests
-
-Test:
-
-- empty constructs;
-- smallest valid values;
-- large symbolic values;
-- nested constructs;
-- generic constructs;
-- Unicode;
-- qualified names;
-- malformed input;
-- ambiguous syntax.
-
-Scalability tests
-
-Verify that migration does not impose artificial ceilings.
-
-Tests must include progressively larger semantic/resource expressions without defining a language maximum merely for the test suite.
-
-Determinism tests
-
-The same input and migration configuration produce equivalent output.
-
-Compatibility tests
-
-Verify the declared compatibility relationship between versions.
-
----
-
-68. Quantum Migration Tests
-
-Quantum migrations MUST include applicable tests for:
-
-- one qubit;
-- multiple qubits;
-- symbolic qubit counts;
-- parameterized registers;
-- custom operations;
-- qualified operations;
-- parameterized operations;
-- controls;
-- adjoints;
-- measurement;
-- reset;
-- mid-circuit measurement;
-- classical feed-forward;
-- logical operations;
-- physical mapping metadata;
-- resource requirements;
-- capability requirements;
-- unknown operations;
-- unsupported target capabilities.
-
-No test may establish an artificial universal maximum.
-
----
-
-69. HDL Migration Tests
-
-HDL migrations MUST test:
-
-- parameterized widths;
-- signals;
-- registers;
-- combinational logic;
-- sequential logic;
-- clocking;
-- reset;
-- timing;
-- interfaces;
-- state machines;
-- memories;
-- generate constructs;
-- synthesis intent;
-- simulation intent;
-- verification properties.
-
-Physical resource limitations belong to target tests, not universal syntax tests.
-
----
-
-70. POCO-REAF Scalability Tests
-
-The migration test suite MUST distinguish:
-
-language expressiveness
-
-from:
-
-test-machine capacity
-
-A test machine may be small.
-
-That does not authorize the migration system to define the language as small.
-
-For example:
-
-small machine
-   ↓
-cannot execute 10^12-resource program
-
-is a resource-feasibility result.
-
-It is not:
-
-Zamani cannot express 10^12-resource programs.
-
----
-
-71. No Hardware-Driven Language Migration
-
-A backend limitation MUST NOT trigger source-language deprecation by itself.
-
-Invalid reasoning:
-
-backend supports only N
-        ↓
-deprecate programs requiring > N
-
-Correct reasoning:
-
-program requires R
-        ↓
-target capability/resource analysis
-        ↓
-target supports R?
-     /       \
-   yes        no
-   ↓           ↓
-compile      diagnostic / alternative realization
-
-The source language remains scalable.
-
----
-
-72. Migration of Resource Requirements
-
-Suppose an old source expresses:
-
-requires qubits >= n
-
-and the new resource model introduces a capability form.
-
-The migration may produce:
-
-requires capability("quantum.compute")
-requires qubits >= n
-
-only if the specification explicitly establishes that both are required and semantically equivalent.
-
-It MUST NOT silently discard "n".
-
-Similarly, a migration MUST NOT turn:
-
-requires memory >= required_memory
 
 into:
 
-MAX_MEMORY = fixed_value
+gpu0
+
+or:
+
+requires qubits >= n
+
+into:
+
+physical_qubit_0..physical_qubit_n
+
+unless such mapping occurs in a target-specific realization layer.
 
 ---
 
-73. Migration of Physical Mappings
+31. Effects Migration
 
-Physical mappings are downstream realization data.
+Effects are semantic properties, not merely keywords.
 
-For example:
+Migration MUST preserve effect identity.
 
-logical q
-    ↓
-physical q17
+Relevant effects may include:
 
-must not be injected into portable source migration unless the original source explicitly contained physical placement.
+io
+network
+mutation
+randomness
+native
+foreign
+distributed
+measurement
+quantum
+learning
+adaptation
+reflection
+code_generation
+simulation
 
-A migration from a physical-specific legacy construct to portable semantics must preserve any explicitly requested physical behavior.
-
-It must not invent physical behavior where none existed.
-
----
-
-74. Migration of Operation Enumerations
-
-If an old grammar contains a fixed operation list:
-
-H
-X
-Y
-Z
-CNOT
-...
-
-and the new semantic model uses:
-
-operationSpecifier
-
-the migration should transform the operation spelling into semantic operation identity.
-
-The migration must preserve:
-
-- operation name;
-- namespace;
-- parameters;
-- targets;
-- controls;
-- modifiers;
-- effects.
-
-New operations should not require historical migration of every existing operation if they can enter through the generic operation model.
-
----
-
-75. Migration of Vendor-Specific Features
-
-Vendor-specific features MUST be isolated through:
-
-- dialects;
-- interoperability;
-- capabilities;
-- target profiles;
-- backend contracts.
-
-A vendor feature MUST NOT silently become a core Zamani language requirement.
-
-Migration from a vendor-specific representation to portable Zamani should preserve semantics where a portable representation exists.
-
-Where no portable representation exists, the source remains explicitly target-specific.
-
----
-
-76. Module and Package Migration
-
-Module migrations MUST preserve:
-
-- module identity;
-- import identity;
-- export visibility;
-- aliases;
-- dependencies;
-- version constraints;
-- namespace resolution.
-
-Renaming a module is an M2/M3 migration only if the identity mapping is deterministic.
-
-A semantic module split/merge may require M4 or M5 handling.
-
----
-
-77. Function Migration
-
-Function migrations MUST preserve:
-
-- function identity;
-- parameter order;
-- parameter types;
-- generic parameters;
-- effects;
-- return type;
-- ownership;
-- calling semantics;
-- async behavior;
-- capability requirements.
-
-Changing only syntax is not automatically a semantic migration.
-
-Changing evaluation or ownership semantics is.
-
----
-
-78. Effect Migration
-
-Effect migrations MUST preserve the declared effect semantics.
-
-A migration MUST NOT silently:
+A migration MUST NOT silently transform:
 
 pure → effectful
 
@@ -2320,55 +1185,636 @@ or:
 
 effectful → pure
 
-without a semantic rule.
-
-Effect handlers must remain associated with their semantic effect identity rather than textual spelling alone.
+without an explicit semantic rule.
 
 ---
 
-79. Concurrency Migration
+32. Contracts Migration
 
-Concurrency migrations MUST preserve:
+The following semantic constructs MUST retain their meaning:
 
-- happens-before relationships;
+requires
+ensures
+invariant
+assume
+guarantee
+property
+assert
+
+Migration MUST preserve:
+
+- scope;
+- condition;
+- evaluation point;
+- failure behavior;
+- proof/validation status;
+- provenance;
+- relationship to effects and policies.
+
+A contract migration MUST NOT turn a requirement into a preference or a guarantee into an assumption.
+
+---
+
+33. Policy Migration
+
+Policies MUST remain distinct from:
+
+- requirements;
+- capabilities;
+- resources;
+- effects;
+- implementation choices.
+
+Migration MUST preserve:
+
+permission
+prohibition
+constraint
+preference
+fallback
+authorization
+scope
+priority
+
+A policy that prohibits an operation MUST NOT become merely advisory through migration.
+
+---
+
+34. Provenance Migration
+
+Provenance MUST survive migrations whenever the provenance contract requires it.
+
+The minimum conceptual relationship is:
+
+original source
+      ↓
+migration
+      ↓
+derived source
+      ↓
+AST
+      ↓
+semantic representation
+      ↓
+IR
+
+The provenance record SHOULD identify:
+
+- migration ID;
+- source version;
+- target version;
+- transformation;
+- tool version;
+- input digest;
+- output digest;
+- timestamp where required;
+- operator or automation identity where required;
+- diagnostics;
+- unresolved decisions.
+
+Provenance itself MUST NOT be used to change program semantics.
+
+---
+
+35. Evidence and Explainability Migration
+
+Migration MUST preserve semantic evidence where the language contract requires it.
+
+For constructs involving:
+
+- reasoning;
+- inference;
+- learning;
+- adaptation;
+- decisions;
+- policy selection;
+- optimization;
+- resource negotiation;
+
+migration SHOULD preserve:
+
+claim
+evidence
+source
+derivation
+confidence
+decision
+reason
+provenance
+
+Compiler transformations MAY produce additional provenance but MUST NOT fabricate evidence.
+
+---
+
+36. Knowledge Migration
+
+Knowledge constructs such as:
+
+assert
+retract
+query
+
+MUST preserve the distinction between:
+
+- source-level declarations;
+- runtime knowledge state;
+- compiler facts;
+- external data;
+- provenance.
+
+A migration MUST NOT silently turn runtime mutable knowledge into compile-time immutable information or vice versa.
+
+---
+
+37. Reasoning Migration
+
+Reasoning constructs such as:
+
+infer
+deduce
+reason
+
+MUST preserve their semantic role.
+
+Migration MUST NOT hard-code a particular reasoning engine into the source language.
+
+The semantic model SHOULD describe:
+
+premises
+evidence
+rules
+relations
+conclusion
+confidence
+provenance
+
+The realization may be classical, probabilistic, symbolic, learned, distributed, or hybrid.
+
+---
+
+38. Learning Migration
+
+Learning constructs MUST preserve:
+
+- input;
+- target;
+- model;
+- data;
+- objective;
+- training/evaluation semantics;
+- resource requirements;
+- capabilities;
+- effects;
+- policy;
+- provenance.
+
+Algorithm-specific implementation details SHOULD remain outside universal syntax unless standardized.
+
+A migration MUST NOT silently change training data or model semantics.
+
+---
+
+39. Adaptation Migration
+
+Adaptation is a controlled semantic capability.
+
+Migration MUST preserve:
+
+- policy;
+- authorization;
+- capabilities;
+- effects;
+- resource constraints;
+- provenance;
+- validation;
+- state/model/strategy identity.
+
+Adaptation MUST NOT be migrated into unrestricted self-modifying execution.
+
+The intended model is:
+
+adaptation request
+       ↓
+policy evaluation
+       ↓
+authorization
+       ↓
+capability validation
+       ↓
+resource validation
+       ↓
+change
+       ↓
+validation
+       ↓
+provenance
+       ↓
+continued execution
+
+---
+
+40. Uncertainty Migration
+
+Uncertainty-related constructs MUST preserve semantic distinctions among:
+
+- probability;
+- confidence;
+- distribution;
+- belief;
+- uncertainty;
+- deterministic values.
+
+A migration MUST NOT convert a probabilistic statement into a deterministic assertion without explicit semantics.
+
+Likewise, confidence MUST NOT be treated as probability unless the specification explicitly defines that relationship.
+
+---
+
+41. Pattern and Guard Migration
+
+Pattern matching migrations MUST preserve:
+
+- exhaustiveness;
+- binding;
+- guard evaluation;
+- evaluation order;
+- ownership;
+- pattern specificity;
+- fallthrough behavior.
+
+A guard MUST remain semantically distinct from an unconditional pattern.
+
+---
+
+42. Actor and Multi-Agent Migration
+
+AI-agent constructs MUST integrate with the existing concurrency architecture.
+
+Migration MUST NOT create a second actor model.
+
+The intended boundary is:
+
+agent semantics
+      ↓
+actor semantics
+      ↓
+message
+      ↓
+channel
+      ↓
+task
+      ↓
+scheduler/runtime
+
+Migration MUST preserve:
+
+- actor identity;
+- mailbox/message semantics;
+- ordering guarantees;
 - synchronization;
-- ownership;
-- task semantics;
-- channel semantics;
 - cancellation;
-- structured concurrency;
-- determinism guarantees.
-
-A migration MUST NOT silently convert a deterministic program into an explicitly nondeterministic program.
-
-Nor may it silently introduce a fixed thread count.
+- lifecycle;
+- failure semantics;
+- distributed behavior.
 
 ---
 
-80. Memory Migration
+43. Simulation Migration
 
-Memory migrations MUST preserve:
+Simulation is an execution strategy.
 
+Migration MUST preserve the distinction between:
+
+program semantics
+
+and:
+
+simulation realization
+
+The same semantic program MAY be realized through:
+
+- classical simulation;
+- quantum simulation;
+- hardware simulation;
+- distributed simulation;
+- fault simulation;
+- performance simulation;
+- AI simulation.
+
+A migration MUST NOT create a second language merely because the realization is simulated.
+
+---
+
+44. Adaptive Execution Migration
+
+Adaptive execution MUST preserve semantic intent while allowing target realization to change.
+
+Relevant states include:
+
+Unknown
+Healthy
+Degraded
+Unstable
+Unavailable
+Recovering
+Quarantined
+Retired
+
+Relevant outcomes include:
+
+ACCEPT
+DEGRADED_ACCEPT
+RETRY
+RECOVER
+ESCALATE
+REJECT
+
+Migration MUST preserve the distinction between:
+
+program-level fallback
+
+and:
+
+runtime-level recovery
+
+A target recovery strategy MUST NOT silently change source semantics.
+
+---
+
+45. Deterministic and Reproducible Migration
+
+A semantics-preserving migration MUST be deterministic unless the migration specification explicitly permits nondeterminism.
+
+Given identical:
+
+source
+source version
+target version
+migration rules
+tool version
+migration configuration
+
+the migration SHOULD produce the same canonical result.
+
+Where nondeterministic processing is unavoidable, the tool MUST expose the relevant source of nondeterminism and provide reproducibility controls.
+
+Randomized migration behavior MUST NOT silently alter semantics.
+
+---
+
+46. Quantum Migration
+
+Quantum migrations MUST preserve:
+
+- qubit identity;
+- logical resource identity;
+- state semantics;
+- operation ordering;
+- parameter semantics;
+- measurement;
+- reset;
+- classical feed-forward;
+- entanglement;
+- control flow;
+- dynamic circuit behavior;
+- noise semantics where specified;
+- error-correction intent;
+- resource requirements;
+- capability requirements.
+
+Quantum source migration MUST converge onto the canonical quantum semantic model.
+
+---
+
+47. "quantum::ir" Boundary
+
+"quantum::ir" is the canonical quantum IR boundary.
+
+A migration MUST NOT introduce a second permanent quantum IR merely to preserve historical syntax.
+
+The preferred path is:
+
+legacy quantum syntax
+        ↓
+migration
+        ↓
+current AST
+        ↓
+quantum semantic model
+        ↓
+quantum::ir
+
+Historical quantum representations MAY be retained temporarily for compatibility tooling, import/export, or artifact conversion.
+
+They MUST NOT become a second permanent compiler architecture.
+
+---
+
+48. Generic Quantum Operations
+
+Quantum migration MUST support the data-driven operation model.
+
+The semantic operation identity SHOULD be represented through concepts equivalent to:
+
+operationSpecifier
+targets
+parameters
+results
+attributes
+modifiers
+effects
+capabilities
+resources
+source
+
+Migration MUST NOT require a universal enumeration of every known gate.
+
+New vendor, research, parameterized, or future operations SHOULD be introduced through the appropriate operation metadata/dialect mechanisms.
+
+---
+
+49. Quantum Resource Migration
+
+Quantum resources MUST remain symbolic and target-independent.
+
+Examples:
+
+requires qubits >= n;
+requires capability("quantum.measurement");
+requires capability("quantum.dynamic-circuit");
+requires topology(required_topology);
+
+Migration MUST NOT encode:
+
+- a fixed number of qubits;
+- a fixed number of QPUs;
+- a fixed topology;
+- a fixed physical qubit numbering scheme.
+
+Physical mapping belongs to routing and target realization.
+
+---
+
+50. Quantum Error Correction Migration
+
+Where migration affects QEC metadata, it MUST preserve:
+
+- logical/physical distinction;
+- code identity;
+- distance;
+- correction intent;
+- syndrome/measurement semantics;
+- decoder requirements;
+- resilience requirements;
+- resource relationships.
+
+A migration MUST NOT replace symbolic QEC requirements with a fixed hardware assumption.
+
+QEC realization remains downstream from semantic intent.
+
+---
+
+51. HDL Migration
+
+HDL migration MUST preserve:
+
+- hardware intent;
+- signal identity;
+- connectivity;
+- timing;
+- concurrency;
+- state;
+- reset;
+- memory behavior;
+- verification semantics;
+- simulation semantics;
+- synthesis intent;
+- resource requirements.
+
+Migration MUST distinguish:
+
+hardware intent
+
+from:
+
+physical realization
+
+A target-specific implementation may select a concrete implementation after semantic migration.
+
+---
+
+52. Hardware Migration
+
+Hardware migration MUST preserve capability/resource abstractions.
+
+The language may express:
+
+requires capability("tensor.compute");
+requires capability("gpu.compute");
+requires capability("quantum.measurement");
+
+but MUST NOT force a specific hardware identity into portable source.
+
+Physical resources belong to target discovery, negotiation, routing, scheduling, and HAL.
+
+---
+
+53. Hybrid Migration
+
+Hybrid programs may cross:
+
+classical
+quantum
+AI
+tensor
+accelerator
+HDL
+distributed
+
+Migration MUST preserve cross-domain data and control-flow semantics.
+
+The canonical flow is:
+
+source
+  ↓
+domain-neutral AST
+  ↓
+semantic analysis
+  ↓
+domain semantic models
+  ↓
+Classical IR + quantum::ir + other canonical representations
+  ↓
+optimization/lowering
+
+Migration MUST NOT create a separate hybrid language.
+
+---
+
+54. Classical Migration
+
+Classical constructs MUST preserve:
+
+- numerical meaning;
+- control flow;
+- memory semantics;
 - ownership;
-- borrowing;
-- allocation semantics;
-- regions;
-- address-space meaning;
-- persistence;
-- sharing;
-- distributed memory semantics;
-- accelerator-memory intent;
-- quantum-memory semantics.
+- concurrency;
+- effects;
+- contracts;
+- resource requirements.
 
-Physical memory capacity remains a resource property.
-
-It is not a language migration limit.
+A migration MUST NOT silently specialize classical semantics to one processor architecture.
 
 ---
 
-81. Interoperability Migration
+55. Data Migration
 
-Interoperability migrations MAY involve:
+Data migrations MUST preserve:
+
+- schema meaning;
+- value meaning;
+- null/optional semantics;
+- ordering where specified;
+- precision;
+- provenance;
+- query semantics;
+- serialization semantics.
+
+External formats such as SQL, JSON, XML, and similar representations remain interoperability/dialect concerns where applicable.
+
+Migration MUST NOT make an external interchange format part of the universal language merely because it is supported.
+
+---
+
+56. Dialect Migration
+
+Dialect migrations are governed jointly by:
+
+grammar/compatibility/dialect-version.md
+grammar/compatibility/dialect-compatibility.md
+grammar/dialects/
+
+A dialect migration MUST specify:
+
+- dialect identity;
+- dialect version;
+- language version dependency;
+- grammar dependency;
+- semantic dependency;
+- AST impact;
+- IR impact;
+- external format impact;
+- migration procedure;
+- compatibility class.
+
+A dialect MUST NOT redefine universal Zamani semantics.
+
+---
+
+57. Interoperability Migration
+
+Interoperability formats may include:
 
 - C;
 - C++;
@@ -2378,180 +1824,2459 @@ Interoperability migrations MAY involve:
 - OpenQASM;
 - QIR;
 - HDL;
-- serialization formats;
-- external ABIs.
+- serialized data formats.
 
-These are interoperability boundaries.
+Migration MUST preserve the canonical Zamani semantic model.
 
-They MUST NOT replace the canonical Zamani semantic model.
+The intended path is:
 
-Quantum interoperability formats must map into the canonical quantum semantic model and ultimately "quantum::ir".
+external representation
+        ↓
+interoperability adapter
+        ↓
+Zamani semantic representation
+        ↓
+canonical IR
+
+not:
+
+external representation
+        ↓
+permanent alternate Zamani IR
 
 ---
 
-82. Generated Files
+58. FFI and ABI Migration
 
-Generated compatibility artifacts MUST identify:
+FFI migrations MUST preserve:
 
-generated
-source authority
-generator version
-generation inputs
+- function identity;
+- parameter layout;
+- return layout;
+- calling convention;
+- ownership;
+- lifetime assumptions;
+- error behavior;
+- data layout;
+- effects;
+- capabilities;
+- ABI version.
 
-A generated file MUST NOT become an independent authority.
+FFI MUST remain visible to the effect and capability systems.
+
+For example, a foreign/native operation MUST NOT silently become a pure operation.
+
+---
+
+59. Metaprogramming Migration
+
+Migration of:
+
+- reflection;
+- introspection;
+- compile-time execution;
+- syntax trees;
+- quotation;
+- code generation;
+- type-level computation;
+
+MUST preserve the distinction between:
+
+compile-time computation
+
+and:
+
+runtime computation
+
+Reflection and code generation MUST retain their capability/effect requirements.
+
+Migration MUST NOT turn controlled metaprogramming into unrestricted runtime self-modification.
+
+---
+
+60. Version Independence
+
+Zamani has multiple version dimensions.
+
+A migration MUST identify which dimensions change:
+
+language version
+grammar version
+lexer version
+AST version
+semantic version
+IR version
+dialect version
+artifact version
+ABI version
+runtime compatibility version
+target compatibility version
+
+A compiler implementation version MUST NOT automatically be treated as a language version.
+
+The exact numbering policy remains owned by the relevant version documents.
+
+---
+
+61. Version Selection
+
+Migration tooling MUST determine:
+
+source language version
+source grammar compatibility
+source dialect versions
+source AST/artifact version when applicable
+target language version
+target dialect versions
+target compiler capabilities
+
+before applying transformations.
+
+The tool MUST NOT silently assume that:
+
+latest compiler = latest source language
+
+unless the language version contract explicitly defines that behavior.
+
+---
+
+62. No Silent Version Upgrade
+
+A compiler MUST NOT silently reinterpret an old program as a newer language version when the interpretation could change semantics.
+
+Where explicit version information is required, missing information MUST produce a deterministic diagnostic or use a documented default.
+
+The selected interpretation MUST be recorded in diagnostics/provenance where required.
+
+---
+
+63. No Silent Version Downgrade
+
+A compiler MUST NOT silently discard newer language semantics to make a program fit an older version.
+
+Examples include silently dropping:
+
+- effects;
+- policies;
+- contracts;
+- resource requirements;
+- capabilities;
+- provenance;
+- quantum semantics;
+- type information;
+- adaptation controls.
+
+A downgrade requires explicit compatibility analysis.
+
+---
+
+64. Feature Gates
+
+Feature gates are governed by:
+
+grammar/compatibility/feature-gates.md
+
+A feature gate controls feature availability.
+
+It MUST NOT redefine:
+
+- semantic meaning;
+- hardware capacity;
+- resource limits;
+- backend identity;
+- language version;
+- target capability.
+
+A migration MAY remove a feature gate when the feature becomes stable.
+
+It MUST NOT use feature gates as a substitute for proper versioning.
+
+---
+
+65. Deprecation
+
+Deprecation is governed by:
+
+grammar/compatibility/deprecated.md
+
+Migration MUST reference deprecation records when applicable.
+
+A deprecated feature SHOULD have:
+
+- replacement;
+- migration ID;
+- compatibility window;
+- diagnostic;
+- removal version;
+- migration tooling where practical.
+
+Deprecation status MUST NOT itself change semantics.
+
+---
+
+66. Removal
+
+Before removing a stable feature:
+
+[ ] Deprecated
+[ ] Replacement documented
+[ ] Migration defined where practical
+[ ] Compatibility window elapsed
+[ ] Removal version defined
+[ ] Compatibility matrix updated
+[ ] Diagnostics implemented
+[ ] Negative tests added
+[ ] Historical migration retained
+
+Removal MUST produce deterministic diagnostics when old syntax is encountered.
+
+Removed syntax MUST NOT silently acquire unrelated new semantics unless that behavior is explicitly specified.
+
+---
+
+67. Reserved Syntax
+
+Reserved syntax is governed by:
+
+grammar/compatibility/reserved.md
+
+A migration that reserves a formerly legal identifier MUST:
+
+1. identify the affected source;
+2. classify the migration;
+3. provide an automatic transformation where safe;
+4. provide a deterministic diagnostic otherwise;
+5. update compatibility metadata;
+6. update lexical tests.
+
+Keyword reservation MUST be justified by an actual language requirement.
+
+---
+
+68. AST Migration
+
+AST migrations MUST preserve source semantics rather than merely tree shape.
+
+Every AST schema migration MUST specify:
+
+old node
+new node
+field mapping
+default handling
+removed fields
+new fields
+source-span mapping
+metadata mapping
+semantic interpretation
+
+An AST schema change MUST NOT automatically imply a source-language breaking change.
+
+A source-compatible grammar may produce a new AST representation while preserving semantic meaning.
+
+---
+
+69. AST Compatibility
+
+AST compatibility is governed by:
+
+grammar/compatibility/AST-version.md
+grammar/compatibility/ast-conformance.md
+
+Migration MUST specify whether the AST change is:
+
+- additive;
+- representational;
+- normalization;
+- structural;
+- semantic;
+- breaking.
+
+Generated AST representations MUST NOT become an independent language authority.
+
+---
+
+70. Semantic Migration
+
+Semantic migration is required when the meaning changes.
+
+Examples:
+
+old operation semantics
+        ↓
+new operation semantics
+
+or:
+
+old ownership rule
+        ↓
+new ownership rule
+
+A semantic migration MUST document:
+
+- old meaning;
+- new meaning;
+- motivation;
+- compatibility impact;
+- migration strategy;
+- diagnostics;
+- tests;
+- affected IR;
+- downstream effects.
+
+Semantic migrations MUST NOT be disguised as parser changes.
+
+---
+
+71. Effect Migration
+
+When an effect is added, removed, or reclassified, migration MUST explicitly evaluate:
+
+type
+effect
+capability
+policy
+resource
+provenance
 
 For example:
 
-grammar.md
+pure operation
 
-may be generated or synchronized from the authoritative specification and implementation.
+MUST NOT silently become:
 
-Manual edits to generated output MUST NOT be used to establish new language semantics.
+operation with network effect
 
----
-
-83. Migration and Documentation
-
-After a migration:
-
-- normative specifications must be updated;
-- compatibility metadata must be updated;
-- deprecation metadata must be updated where applicable;
-- generated references must be regenerated;
-- migration examples must be added;
-- tests must be updated.
-
-Documentation must not claim that an old construct is removed while the compiler still accepts it under the compatibility contract.
-
-Likewise, documentation must not claim stability for an implementation that has only partial integration.
+without explicit semantic treatment.
 
 ---
 
-84. Migration Completion Criteria
+72. Capability Migration
 
-A migration is COMPLETE only when all applicable conditions are true:
+Capability identities MUST be stable.
+
+A renamed capability SHOULD have an explicit alias/migration path.
+
+For example:
+
+legacy.capability
+        ↓
+canonical.capability
+
+The migration MUST preserve:
+
+- requirement meaning;
+- authorization;
+- policy;
+- target negotiation;
+- provenance.
+
+A capability migration MUST NOT silently grant additional authority.
+
+---
+
+73. Resource Migration
+
+Resource expressions MUST preserve mathematical/semantic meaning.
+
+For example:
+
+requires memory >= required_memory;
+
+MUST remain a requirement.
+
+It MUST NOT become:
+
+memory == fixed_value
+
+unless the program itself specifies that equality.
+
+Likewise, migration tooling MUST NOT replace symbolic dimensions with fixed implementation constants.
+
+---
+
+74. Constraint Migration
+
+Constraints are not requirements and not preferences.
+
+Migration MUST preserve:
+
+requirement
+constraint
+preference
+hint
+
+as distinct concepts.
+
+A constraint may restrict valid realizations.
+
+A preference may influence selection.
+
+A hint may inform optimization.
+
+Migration MUST NOT silently change one into another.
+
+---
+
+75. Policy Migration
+
+Policy migration MUST preserve scope and authority.
+
+A policy MUST retain:
+
+- subject;
+- scope;
+- condition;
+- action;
+- permission/prohibition;
+- precedence;
+- fallback;
+- provenance.
+
+Policy evaluation order MUST remain stable where order is semantically significant.
+
+---
+
+76. Contract Migration
+
+Contracts MUST preserve their execution/verification phase.
+
+A migration MUST distinguish:
+
+compile-time requirement
+runtime assertion
+postcondition
+invariant
+assumption
+guarantee
+property
+
+Moving a runtime assertion into compile-time validation is a semantic change unless explicitly specified.
+
+---
+
+77. Provenance Migration
+
+Migration tooling MUST itself be provenance-aware.
+
+At minimum, a migration record SHOULD identify:
+
+source digest
+target digest
+migration ID
+source version
+target version
+tool version
+configuration
+timestamp when required
+
+A migration MUST NOT fabricate provenance.
+
+---
+
+78. Diagnostic Migration
+
+Diagnostics are part of the compatibility contract where explicitly promised.
+
+Migration MUST preserve diagnostic meaning where practical.
+
+Diagnostics SHOULD identify:
+
+code
+severity
+source span
+migration ID
+old construct
+replacement
+reason
+action
+
+Diagnostics MUST be deterministic for deterministic migrations.
+
+---
+
+79. Error Compatibility
+
+Migration MUST distinguish:
+
+source error
+migration error
+semantic error
+resource error
+capability error
+policy error
+target error
+runtime error
+
+A migration tool MUST NOT hide a target limitation as a source syntax error.
+
+A resource shortage MUST NOT be reported as a grammar incompatibility.
+
+---
+
+80. Runtime Migration
+
+Runtime compatibility MAY change independently of source compatibility.
+
+A runtime migration MUST document:
+
+- runtime contract;
+- state representation;
+- serialization;
+- scheduling;
+- recovery;
+- cancellation;
+- ABI;
+- observability;
+- provenance.
+
+Runtime migration MUST NOT change source semantics merely because runtime internals changed.
+
+---
+
+81. Artifact Migration
+
+Compiled or serialized artifacts MUST identify:
+
+language version
+grammar compatibility where relevant
+AST version where relevant
+semantic version where relevant
+IR version
+dialect versions
+ABI version
+target compatibility version
+artifact schema version
+
+An artifact migration MUST NOT pretend that a binary-compatible artifact is semantically portable if its target assumptions are incompatible.
+
+---
+
+82. IR Migration
+
+IR migration MUST preserve semantic meaning.
+
+An IR migration MAY:
+
+- rename fields;
+- normalize structure;
+- add metadata;
+- split nodes;
+- merge equivalent nodes;
+- change storage layout.
+
+It MUST NOT silently change:
+
+- operation semantics;
+- effects;
+- resource requirements;
+- capability requirements;
+- control flow;
+- quantum semantics;
+- HDL semantics.
+
+IR compatibility is governed by:
+
+grammar/compatibility/ir-version.md
+grammar/compatibility/ir-conformance.md
+
+---
+
+83. Canonical IR Rule
+
+Migration MUST converge onto the repository's canonical IR architecture.
+
+The preferred model is:
+
+current AST
+      ↓
+semantic model
+      ↓
+canonical IR
+      ├── Classical IR
+      └── quantum::ir
+
+Temporary legacy IR adapters are permitted only where necessary for artifact interoperability.
+
+They MUST NOT become permanent competing semantic architectures.
+
+---
+
+84. Optimization Migration
+
+Optimization changes MUST preserve specified semantics.
+
+An optimization migration MUST NOT change:
+
+- observable behavior;
+- effect ordering;
+- resource requirements;
+- contract meaning;
+- quantum measurement semantics;
+- synchronization;
+- externally visible provenance guarantees.
+
+Optimization MAY change target realization.
+
+---
+
+85. Routing Migration
+
+Routing is a target realization concern.
+
+Migration MUST NOT expose physical routing assumptions as portable semantic source unless explicitly target-specific.
+
+Quantum routing MUST preserve:
+
+- logical operation ordering;
+- logical qubit identity;
+- measurement semantics;
+- required connectivity;
+- resource requirements.
+
+Physical mapping remains downstream.
+
+---
+
+86. Scheduling Migration
+
+Scheduling migrations MUST preserve semantic ordering constraints.
+
+The scheduler MAY change:
+
+- execution placement;
+- parallelism;
+- timing;
+- resource allocation;
+
+provided the specified semantics remain unchanged.
+
+A scheduler MUST NOT introduce a fixed global thread, device, node, or timeline count into the language.
+
+---
+
+87. Resilience Migration
+
+Resilience migration MUST preserve the distinction between:
+
+program behavior
+
+and:
+
+failure recovery
+
+Recovery strategies MAY evolve.
+
+They MUST NOT silently change the specified program result.
+
+If recovery can change observable results, that behavior MUST be part of the semantic contract.
+
+---
+
+88. QEC Migration
+
+QEC migration MUST preserve the declared logical computation.
+
+Changes to:
+
+- code;
+- decoder;
+- physical layout;
+- syndrome processing;
+- error model;
+
+belong to implementation/realization unless they alter the specified logical semantics.
+
+---
+
+89. ZQN Migration
+
+Where ZQN representation changes, migration MUST document:
+
+- source semantic representation;
+- ZQN version;
+- serialization format;
+- operation identity;
+- resource metadata;
+- capability metadata;
+- provenance;
+- target assumptions.
+
+ZQN changes MUST NOT be used to redefine source language semantics.
+
+---
+
+90. HAL Migration
+
+HAL changes are target implementation changes unless the HAL contract itself is part of a compatibility boundary.
+
+Migration MUST preserve:
+
+semantic request
+      ↓
+HAL realization
+
+rather than making source syntax depend on a specific HAL implementation.
+
+---
+
+91. External Format Migration
+
+External formats MAY evolve independently.
+
+Examples:
+
+OpenQASM
+QIR
+HDL formats
+JSON
+XML
+SQL
+WebAssembly
+C ABI
+C++ ABI
+Rust ABI
+
+Migration adapters MUST translate through the canonical semantic model whenever practical.
+
+External formats MUST NOT become competing Zamani language authorities.
+
+---
+
+92. Dialect-Specific Migration
+
+A dialect migration MAY define syntax unavailable in the universal language.
+
+However:
+
+dialect syntax
+      ↓
+dialect AST
+      ↓
+canonical semantic model
+
+must remain the integration boundary.
+
+A dialect MUST identify its language version dependency.
+
+A dialect migration MUST NOT silently alter core Zamani semantics.
+
+---
+
+93. Future Domains
+
+A future computational domain MUST use the same migration principles.
+
+The integration model is:
+
+shared lexical foundation
+        ↓
+shared syntax foundation
+        ↓
+shared types
+        ↓
+shared effects
+        ↓
+shared resources
+        ↓
+shared capabilities
+        ↓
+shared contracts
+        ↓
+shared policies
+        ↓
+shared provenance
+        ↓
+domain semantics
+        ↓
+canonical IR boundary
+        ↓
+target realization
+
+A future domain MUST NOT require a second language.
+
+---
+
+94. Atom-to-Everywhere Migration Invariant
+
+Migration must preserve the ability to express computation at arbitrary semantic scale.
+
+This includes:
+
+- tiny systems;
+- embedded systems;
+- single processors;
+- multicore systems;
+- GPUs;
+- FPGAs;
+- ASICs;
+- accelerators;
+- quantum processors;
+- simulators;
+- HPC systems;
+- clusters;
+- distributed systems;
+- cloud systems;
+- future computing systems;
+- nanoscale/atom-scale semantic models.
+
+The migration system MUST NOT encode a finite universe into the grammar.
+
+Actual physical feasibility remains a property of the target realization.
+
+---
+
+95. Migration of Symbolic Scale
+
+Symbolic values such as:
+
+n
+required_memory
+required_qubits
+tensor_shape
+topology
+device_count
+worker_count
+
+MUST remain symbolic when the source program expresses them symbolically.
+
+Migration MUST NOT replace symbolic values with implementation constants.
+
+For example:
+
+requires qubits >= n;
+
+MUST remain dependent on "n".
+
+---
+
+96. No Artificial Resource Ceilings
+
+Migration documents, tools, tests, manifests, and examples MUST NOT define artificial universal ceilings.
+
+Actual implementation failures such as:
+
+out of memory
+capability unavailable
+resource exhausted
+target unsupported
+
+are valid runtime/compiler conditions.
+
+They are not equivalent to:
+
+Zamani permits no more than N
+
+unless the semantic specification genuinely requires such a bound.
+
+---
+
+97. Migration and Reproducibility
+
+A migration SHOULD support reproducible execution.
+
+The migrated result SHOULD be reproducible from:
+
+source
+source version
+migration version
+migration manifest
+tool version
+dialect versions
+configuration
+
+Where external data participates, its identity/version/digest SHOULD be recorded where required.
+
+---
+
+98. Migration and Security
+
+Migration tooling processes potentially untrusted source.
+
+Production migration implementations MUST:
+
+- avoid executing migrated source;
+- avoid executing generated source;
+- validate input;
+- validate output;
+- avoid hidden network access;
+- avoid uncontrolled filesystem writes;
+- expose failures;
+- preserve provenance;
+- avoid privilege escalation;
+- respect sandbox/policy requirements.
+
+---
+
+99. Safe Rust Requirement
+
+The production migration implementation MUST use safe Rust.
+
+Required baseline:
+
+Rust >= 1.97
+edition = "2021"
+
+Production Zamani migration code MUST NOT introduce:
+
+unsafe
+unsafe fn
+unsafe impl
+unsafe trait
+unsafe { ... }
+
+Migration implementation SHOULD prefer:
+
+- ownership;
+- borrowing;
+- standard collections;
+- checked arithmetic;
+- explicit errors;
+- deterministic iteration where ordering matters;
+- safe parsing;
+- immutable transformations where practical;
+- explicit resource handling.
+
+The migration architecture MUST NOT depend on "unsafe" as a correctness mechanism.
+
+---
+
+100. Dependency Safety
+
+A Rust dependency may internally use implementation mechanisms unavailable to Zamani source.
+
+That does not authorize Zamani's own production code to introduce "unsafe".
+
+The project's direct migration implementation MUST maintain the safe-Rust requirement.
+
+Where dependency behavior affects compatibility, the dependency version MUST be captured in the migration/tool provenance as appropriate.
+
+---
+
+101. Resource Safety in Migration Tools
+
+Migration tools process potentially large source programs.
+
+They MUST avoid arbitrary fixed-size assumptions such as:
+
+maximum source file size
+maximum AST nodes
+maximum migration records
+maximum declarations
+maximum nesting depth
+maximum number of modules
+
+unless a bound is required for a specific algorithm and is explicitly an implementation safeguard rather than a language semantic limit.
+
+Where practical, migration processing SHOULD use streaming, incremental, or resource-aware algorithms.
+
+---
+
+102. Large-Program Migration
+
+Migration tooling MUST support programs whose size is limited by available implementation resources rather than an artificial language ceiling.
+
+The architecture SHOULD allow:
+
+small source
+large source
+very large source
+distributed source
+incrementally migrated source
+
+without changing semantic rules.
+
+---
+
+103. Incremental Migration
+
+A migration tool MAY operate incrementally.
+
+Incremental migration MUST preserve the same final semantics as complete migration.
+
+For:
+
+source A + source B + source C
+
+migrating components independently MUST NOT produce a different semantic result merely because migration occurred incrementally, provided all compatibility contracts are satisfied.
+
+---
+
+104. Partial Migration
+
+A partially migrated program MUST have explicit status.
+
+Allowed states include:
+
+UNMIGRATED
+PARTIALLY_MIGRATED
+MIGRATION_REQUIRED
+MIGRATION_BLOCKED
+MIGRATED
+VALIDATED
+COMPATIBLE
+
+A partially migrated representation MUST NOT be presented as fully compatible.
+
+---
+
+105. Migration Idempotence
+
+A migration SHOULD be idempotent.
+
+Applying the same migration twice SHOULD NOT produce a different result.
+
+Formally:
+
+M(M(source)) = M(source)
+
+If idempotence is impossible, the migration MUST explicitly document why.
+
+Migration tooling SHOULD detect already-migrated constructs.
+
+---
+
+106. Migration Ordering
+
+When multiple migrations apply, the tool MUST use an explicit dependency order.
+
+Each migration SHOULD declare:
+
+requires_migration:
+conflicts_with:
+supersedes:
+superseded_by:
+
+The migration engine MUST reject ambiguous migration ordering rather than selecting arbitrary order.
+
+---
+
+107. Migration Dependencies
+
+A migration MUST declare dependencies on:
+
+language version
+grammar version
+AST version
+semantic version
+IR version
+dialect version
+artifact version
+
+where applicable.
+
+Migration dependencies MUST form a deterministic graph.
+
+Cycles MUST be rejected unless the compatibility specification explicitly defines a fixed-point process.
+
+---
+
+108. Migration Conflicts
+
+Two migrations conflict when applying both could produce incompatible semantics.
+
+Examples:
+
+migration A: old operator → meaning A
+migration B: old operator → meaning B
+
+The migration engine MUST detect the conflict.
+
+It MUST NOT select a migration arbitrarily.
+
+Conflicts MUST produce deterministic diagnostics.
+
+---
+
+109. Migration Supersession
+
+A migration may supersede another migration.
+
+Supersession MUST identify:
+
+old migration
+new migration
+reason
+effective version
+semantic relationship
+
+Historical migrations MUST remain documented.
+
+Supersession MUST NOT erase provenance.
+
+---
+
+110. Migration Rollback
+
+Where practical, migration tooling SHOULD support rollback.
+
+Rollback MUST be defined as:
+
+current representation
+        ↓
+inverse migration
+        ↓
+previous representation
+
+A rollback is guaranteed only when the migration is explicitly reversible.
+
+A migration MUST NOT claim reversibility when information was intentionally discarded.
+
+---
+
+111. Lossy Migration
+
+A lossy migration is any migration that removes information.
+
+It MUST explicitly identify:
+
+lost information
+reason
+semantic impact
+developer action
+
+Lossy migration MUST NOT be classified as transparent compatibility.
+
+---
+
+112. Semantic Equivalence
+
+Semantic equivalence MUST be evaluated at the semantic-model boundary rather than textual similarity.
+
+Two programs may have different syntax while being semantically equivalent.
+
+Conversely, two programs may have identical syntax while receiving different semantics under different language versions.
+
+Therefore:
+
+textual equality ≠ semantic equality
+parse equality ≠ semantic equality
+AST equality ≠ semantic equality
+
+The semantic contract is authoritative.
+
+---
+
+113. Equivalence Validation
+
+Where practical, migration validation SHOULD compare:
+
+old semantic representation
+
+with:
+
+new semantic representation
+
+using:
+
+- canonicalization;
+- structural comparison;
+- semantic invariants;
+- type checking;
+- effect checking;
+- resource checking;
+- capability checking;
+- contract checking;
+- policy checking;
+- domain-specific equivalence.
+
+For quantum programs, equivalence MUST respect quantum semantic rules rather than textual gate sequence equality alone.
+
+---
+
+114. Quantum Equivalence
+
+Quantum migration validation MUST account for:
+
+- global operation order;
+- control dependencies;
+- measurement;
+- reset;
+- classical feedback;
+- state preparation;
+- entanglement;
+- parameter values;
+- observable behavior.
+
+Equivalent circuits need not have identical physical gate decompositions.
+
+Physical decomposition is downstream.
+
+---
+
+115. HDL Equivalence
+
+HDL migration validation MUST distinguish:
+
+behavioral equivalence
+
+from:
+
+structural identity
+
+A structurally different implementation MAY be compatible when behavioral semantics remain equivalent.
+
+---
+
+116. Concurrency Equivalence
+
+Concurrency migration MUST preserve required:
+
+- happens-before relationships;
+- synchronization;
+- atomicity;
+- message ordering;
+- cancellation;
+- ownership;
+- deterministic behavior guarantees.
+
+A migration MUST NOT silently introduce data races or change specified synchronization semantics.
+
+---
+
+117. Distributed Equivalence
+
+Distributed migration MUST preserve:
+
+- message semantics;
+- consistency requirements;
+- ordering guarantees;
+- failure semantics;
+- topology requirements;
+- capability requirements;
+- resource requirements.
+
+A migration MUST NOT introduce a fixed node count.
+
+---
+
+118. Determinism
+
+Where the original semantics are deterministic, migration MUST preserve determinism unless the specification explicitly changes it.
+
+Where nondeterminism is already permitted, migration MUST preserve its permitted scope.
+
+The migration tool itself SHOULD remain deterministic.
+
+---
+
+119. Randomness
+
+If randomness is part of program semantics, migration MUST preserve:
+
+- randomness effect;
+- source of randomness where specified;
+- seeding semantics where specified;
+- reproducibility policy where specified.
+
+A migration MUST NOT silently replace secure randomness with deterministic pseudo-randomness or vice versa.
+
+---
+
+120. Learning and Adaptation Determinism
+
+Learning and adaptation MAY inherently involve nondeterminism.
+
+Migration MUST distinguish:
+
+semantic nondeterminism
+
+from:
+
+tool nondeterminism
+
+Migration tooling MUST NOT introduce additional nondeterminism without documentation.
+
+---
+
+121. Diagnostics for Unsupported Migration
+
+If a migration cannot be completed, the tool MUST report:
+
+migration ID
+feature
+source location
+source version
+target version
+reason
+required action
+affected semantic layer
+
+The tool MUST NOT silently leave an unsupported construct unchanged and report successful migration.
+
+---
+
+122. Migration Preconditions
+
+Before transformation, tooling SHOULD verify:
+
+source parses
+source version known
+dialects known
+migration available
+dependencies satisfied
+migration conflicts absent
+required metadata available
+
+If preconditions fail, migration MUST stop or explicitly mark the affected portion unresolved.
+
+---
+
+123. Migration Postconditions
+
+After transformation:
+
+new source parses
+AST validates
+types validate
+effects validate
+resources validate
+capabilities validate
+contracts validate
+policies validate
+provenance validates
+semantic model validates
+canonical IR conversion succeeds
+
+where applicable.
+
+A migration cannot be marked complete merely because textual transformation succeeded.
+
+---
+
+124. Migration Validation Pipeline
+
+The normative pipeline is:
+
+old source
+    ↓
+version identification
+    ↓
+migration discovery
+    ↓
+dependency/conflict resolution
+    ↓
+source transformation
+    ↓
+lexical validation
+    ↓
+parser validation
+    ↓
+AST validation
+    ↓
+name resolution
+    ↓
+type validation
+    ↓
+effect validation
+    ↓
+resource validation
+    ↓
+capability validation
+    ↓
+contract validation
+    ↓
+policy validation
+    ↓
+provenance validation
+    ↓
+semantic validation
+    ↓
+canonical IR
+    ↓
+domain IR validation
+    ↓
+artifact validation where applicable
+
+---
+
+125. Repository Integration Contract
+
+Every migration MUST identify affected repository layers.
+
+At minimum:
+
+Specification
+Lexer
+Parser
+AST
+Semantic
+IR
+Compiler
+Runtime
+Tooling
+Tests
+Documentation
+
+For domain-specific migrations also identify:
+
+Classical
+Quantum
+HDL
+Hybrid
+AI
+Data
+Distributed
+Networking
+Security
+Interoperability
+Dialect
+
+---
+
+126. Independent File Completion Contract
+
+A migration-related file MUST be independently completable.
+
+Its contract MUST identify:
+
+Purpose
+Owns
+Does Not Own
+Inputs
+Dependencies
+Outputs
+Public identifiers
+Version dependencies
+AST impact
+Semantic impact
+IR impact
+Diagnostics
+Tests
+Downstream consumers
+Completion criteria
+
+The file MUST NOT depend on undocumented future edits elsewhere.
+
+---
+
+127. Cross-File Integration Contract
+
+Before a migration is marked complete, all affected files MUST be known.
+
+Typical integration:
+
+compatibility/migrations.md
+        ↓
+compatibility/versions.md
+        ↓
+compatibility/*-version.md
+        ↓
+compatibility/compatibility-matrix.md
+        ↓
+compatibility/deprecated.md
+        ↓
+specification/
+        ↓
+spec/
+        ↓
+grammar/Zamani.g4
+        ↓
+lexer
+        ↓
+parser
+        ↓
+AST
+        ↓
+semantic analysis
+        ↓
+IR
+        ↓
+compiler
+        ↓
+runtime/HAL
+        ↓
+tests
+
+No hidden dependency is permitted.
+
+---
+
+128. Feature Integration Matrix
+
+Every migrated feature SHOULD be traceable through:
+
+Layer| Required record
+Specification| normative feature definition
+Compatibility| migration ID/class
+Lexer| token impact
+Grammar| syntax impact
+Parser| parser impact
+AST| node/field mapping
+Semantic| meaning mapping
+Types| type impact
+Effects| effect impact
+Resources| resource impact
+Capabilities| capability impact
+Contracts| contract impact
+Policies| policy impact
+Provenance| provenance impact
+IR| canonical representation
+Quantum| "quantum::ir" impact when applicable
+Compiler| lowering/optimization impact
+Runtime| runtime contract
+Target| realization impact
+Tests| conformance evidence
+Documentation| user-facing migration
+
+---
+
+129. UBUNTU-Derived Semantic Integration
+
+The discussed additional computational capabilities MUST migrate into Zamani's existing universal architecture rather than create a parallel language.
+
+Relevant semantic categories include:
+
+infer
+deduce
+reason
+assert
+retract
+query
+learn
+adapt
+match
+guards
+requires
+ensures
+invariant
+assume
+guarantee
+property
+uncertainty
+probability
+confidence
+evidence
+provenance
+explainability
+decision records
+policies
+sandboxing
+simulation
+multi-agent execution
+neural-symbolic composition
+FFI
+ABI
+reflection
+metaprogramming
+richer type-system capabilities
+data interoperability
+quantum-classical hybrid computation
+adaptive execution
+deterministic/reproducible execution
+
+Migration MUST place these capabilities into their existing Zamani owners.
+
+Examples:
+
+reasoning
+    → grammar/ai/
+    → semantic reasoning model
+
+knowledge
+    → grammar/ai/
+    → data/knowledge where appropriate
+
+learning
+    → grammar/ai/
+
+adaptation
+    → grammar/ai/
+    → grammar/execution/
+    → grammar/policies/
+
+contracts
+    → grammar/validation/
+
+sandbox
+    → grammar/security/
+
+simulation
+    → grammar/execution/
+
+agents
+    → grammar/ai/
+    → existing concurrency actor semantics
+
+FFI/ABI
+    → grammar/interoperability/
+
+reflection
+    → grammar/metaprogramming/
+
+uncertainty
+    → grammar/types/
+    → grammar/ai/
+
+quantum-classical hybrid
+    → grammar/hybrid/
+
+Migration MUST NOT introduce application-specific universal keywords for individual industries or applications.
+
+Such functionality belongs in:
+
+- libraries;
+- dialects;
+- capabilities;
+- policies;
+- services;
+- applications.
+
+---
+
+130. Application-Specific Syntax Migration
+
+Application-specific concepts SHOULD remain identifiers, library APIs, dialect constructs, or capability names unless there is a compelling universal language requirement.
+
+Examples include:
+
+vision
+robotics
+sentiment
+payments
+administration
+legal workflows
+blockchain applications
+VR
+AR
+domain-specific business logic
+
+Migration MUST NOT turn every library concept into a core keyword.
+
+This preserves lexical scalability and prevents application-domain keyword explosion.
+
+---
+
+131. AI Migration
+
+AI-related migrations MUST use the common:
+
+types
+effects
+resources
+capabilities
+contracts
+policies
+provenance
+
+architecture.
+
+AI syntax MUST NOT become a separate semantic universe.
+
+AI migration MUST preserve:
+
+- model identity;
+- data identity;
+- training/evaluation semantics;
+- inference semantics;
+- uncertainty;
+- evidence;
+- provenance;
+- resource requirements;
+- capabilities;
+- policy;
+- effects.
+
+---
+
+132. Neural-Symbolic Migration
+
+Neural-symbolic migrations MUST preserve the relationship among:
+
+learned model
+symbolic representation
+reasoning
+evidence
+provenance
+
+A migration MUST NOT silently convert a learned result into a formally proven fact.
+
+Likewise, symbolic assertions MUST NOT automatically become learned predictions.
+
+---
+
+133. Explainability Migration
+
+Explainability metadata MUST distinguish:
+
+explanation
+evidence
+proof
+provenance
+confidence
+decision
+
+These concepts are not interchangeable.
+
+Migration MUST preserve those distinctions.
+
+---
+
+134. Knowledge Provenance
+
+Knowledge migration MUST preserve the source of facts.
+
+For:
+
+assert fact
+
+the semantic record MAY contain:
+
+fact
+source
+confidence
+timestamp
+derivation
+provenance
+
+Migration MUST NOT discard provenance when the contract requires it.
+
+---
+
+135. Reflection Migration
+
+Reflection migrations MUST preserve authority boundaries.
+
+Reflection MAY inspect:
+
+- types;
+- metadata;
+- declarations;
+- capabilities;
+- source structure;
+- semantic structures;
+
+subject to policy and capability constraints.
+
+Reflection MUST NOT silently acquire the authority to modify arbitrary program semantics.
+
+---
+
+136. Code Generation Migration
+
+Generated code must remain distinguishable from source-authoritative semantics.
+
+Migration MUST preserve:
+
+generator identity
+generator version
+source input
+generated output
+provenance
+
+Generated output MUST NOT silently become a new language authority.
+
+---
+
+137. Compilation Model Migration
+
+The compilation model remains:
+
+source
+ ↓
+frontend
+ ↓
+semantic validation
+ ↓
+canonical IR
+ ↓
+optimization
+ ↓
+lowering
+ ↓
+routing/scheduling
+ ↓
+resilience/QEC
+ ↓
+ZQN
+ ↓
+HAL
+ ↓
+target
+
+A migration MUST NOT bypass semantic validation merely because an old representation already contains a low-level form.
+
+---
+
+138. Migration Across Compiler Generations
+
+A newer compiler MAY migrate older source directly.
+
+Preferred:
+
+old source
+    ↓
+current migration layer
+    ↓
+current AST
+    ↓
+current semantic model
+    ↓
+current IR
+
+Avoid:
+
+old source
+    ↓
+old compiler
+    ↓
+old permanent IR
+    ↓
+new compiler
+
+unless artifact compatibility explicitly requires the latter.
+
+---
+
+139. Legacy Artifact Import
+
+Legacy artifacts MAY be imported through dedicated compatibility adapters.
+
+The adapter MUST:
+
+1. identify artifact version;
+2. validate integrity;
+3. decode safely;
+4. validate schema;
+5. migrate representation;
+6. validate semantic meaning;
+7. convert to canonical IR;
+8. record provenance.
+
+A legacy artifact adapter MUST NOT become a permanent semantic authority.
+
+---
+
+140. Serialization Migration
+
+Serialized representations MUST include sufficient version identity to determine the correct migration.
+
+If version identity is absent and cannot be safely inferred, the importer MUST report an explicit error rather than guessing.
+
+---
+
+141. Migration Security Boundaries
+
+Migration input MUST be considered untrusted.
+
+The migration implementation MUST NOT:
+
+- execute arbitrary source;
+- execute arbitrary generated code;
+- load arbitrary native libraries;
+- invoke external commands;
+- make hidden network calls.
+
+Any explicitly authorized external integration MUST occur through a separately specified tool boundary.
+
+---
+
+142. Migration Tool Isolation
+
+A migration tool SHOULD operate as a pure transformation:
+
+input
+  ↓
+parse
+  ↓
+transform
+  ↓
+validate
+  ↓
+output
+
+External state SHOULD be minimized.
+
+Where external state is required, it MUST be explicit and recorded for reproducibility.
+
+---
+
+143. Migration Logging
+
+Migration tools SHOULD produce structured logs containing:
+
+migration_id
+source_version
+target_version
+file
+span
+action
+status
+diagnostic
+
+Logs MUST NOT contain secrets or unrelated sensitive information.
+
+---
+
+144. Migration Provenance Chain
+
+The preferred provenance graph is:
+
+source
+  ↓
+migration-1
+  ↓
+source-1
+  ↓
+migration-2
+  ↓
+source-2
+  ↓
+current AST
+  ↓
+semantic model
+  ↓
+canonical IR
+
+Each transformation SHOULD be independently identifiable.
+
+This allows historical migration chains to remain auditable.
+
+---
+
+145. Migration Chain Compression
+
+Multiple compatible migrations MAY be composed into one direct migration.
+
+A direct migration MUST produce semantics equivalent to applying the individual migrations in order.
+
+For:
+
+M1
+M2
+M3
+
+a composed migration:
+
+M1→3
+
+is valid only if:
+
+M1→3(source)
+
+is semantically equivalent to:
+
+M3(M2(M1(source)))
+
+---
+
+146. Migration Chain Validation
+
+The repository SHOULD test both:
+
+sequential migration
+
+and:
+
+direct migration
+
+when direct migration exists.
+
+The resulting canonical semantic representation MUST agree.
+
+---
+
+147. Compatibility Matrix Integration
+
+Every migration that changes compatibility MUST update:
+
+grammar/compatibility/compatibility-matrix.md
+
+The matrix entry MUST identify:
+
+- source version;
+- target version;
+- compatibility class;
+- migration ID;
+- applicable layers;
+- artifact compatibility;
+- dialect compatibility;
+- target compatibility.
+
+"migrations.md" defines the procedure.
+
+"compatibility-matrix.md" records the relationship.
+
+---
+
+148. Version Document Integration
+
+Migration MUST reference the relevant version document rather than redefining version numbering.
+
+Relevant files include:
+
+language-version.md
+grammar-version.md
+AST-version.md
+semantic-version.md
+ir-version.md
+dialect-version.md
+target-compatibility-version.md
+versions.md
+
+A migration MUST NOT introduce an independent version numbering system.
+
+---
+
+149. Deprecation Integration
+
+A migration involving deprecated syntax MUST reference:
+
+grammar/compatibility/deprecated.md
+
+The migration record MUST identify:
+
+deprecated feature
+migration ID
+replacement
+compatibility window
+removal version
+
+---
+
+150. Feature-Gate Integration
+
+A feature-gated migration MUST reference:
+
+grammar/compatibility/feature-gates.md
+
+The migration MUST distinguish:
+
+feature availability
+
+from:
+
+language semantics
+
+A disabled feature MUST NOT silently reinterpret the source as another feature.
+
+---
+
+151. Dialect Integration
+
+Dialect migrations MUST reference:
+
+grammar/compatibility/dialect-version.md
+grammar/compatibility/dialect-compatibility.md
+grammar/dialects/
+
+The migration MUST identify whether the change affects:
+
+syntax
+AST
+semantics
+IR
+external format
+runtime
+target
+
+---
+
+152. Frontend Conformance Integration
+
+A migration affecting frontend behavior MUST satisfy:
+
+grammar/compatibility/frontend-conformance.md
+
+This includes:
+
+- lexer;
+- parser;
+- diagnostics;
+- source spans;
+- AST generation.
+
+Parsing alone is insufficient.
+
+---
+
+153. AST Conformance Integration
+
+A migration affecting AST representation MUST satisfy:
+
+grammar/compatibility/ast-conformance.md
+
+The AST must remain semantically sufficient for downstream processing.
+
+---
+
+154. IR Conformance Integration
+
+A migration affecting IR MUST satisfy:
+
+grammar/compatibility/ir-conformance.md
+
+For quantum features, this includes verification against "quantum::ir".
+
+---
+
+155. Validation Integration
+
+Migration validation MUST integrate with:
+
+grammar/validation/
+
+Relevant validation responsibilities include:
+
+- source spans;
+- unreachable rules;
+- semantic coverage;
+- semantic boundaries;
+- cross-layer validation;
+- compatibility checks.
+
+Migration validation MUST NOT duplicate validation rules owned elsewhere.
+
+---
+
+156. Tests
+
+Every migration MUST have applicable tests.
+
+Minimum categories:
+
+positive
+negative
+boundary
+scalability
+determinism
+compatibility
+diagnostics
+provenance
+
+Domain-specific migrations additionally require:
+
+quantum
+HDL
+classical
+hybrid
+AI
+distributed
+networking
+interoperability
+
+where applicable.
+
+---
+
+157. Positive Tests
+
+Positive tests MUST demonstrate that valid legacy input migrates successfully.
+
+They SHOULD test:
+
+- minimal program;
+- representative program;
+- nested constructs;
+- generic constructs;
+- cross-domain constructs;
+- metadata;
+- contracts;
+- resources;
+- capabilities;
+- effects.
+
+---
+
+158. Negative Tests
+
+Negative tests MUST demonstrate deterministic rejection of:
+
+- invalid source;
+- unsupported migration;
+- ambiguous migration;
+- conflicting migration;
+- incompatible versions;
+- invalid semantic conversion;
+- invalid artifact;
+- unsupported dialect;
+- unavailable required capability where validation requires it.
+
+---
+
+159. Boundary Tests
+
+Boundary tests MUST test transitions between:
+
+old/new syntax
+old/new lexer
+old/new AST
+old/new semantics
+old/new IR
+old/new dialect
+old/new artifact
+
+Boundary tests MUST be especially strong for:
+
+- quantum/classical boundaries;
+- AI/classical boundaries;
+- hybrid boundaries;
+- HDL/software boundaries;
+- dialect boundaries;
+- FFI/ABI boundaries.
+
+---
+
+160. Scalability Tests
+
+Scalability tests MUST demonstrate that migration does not introduce artificial capacity limits.
+
+Tests SHOULD use symbolic scale rather than fixed universal maxima.
+
+For example:
+
+n
+required_memory
+tensor_shape
+qubit_count
+worker_count
+topology
+
+may vary according to the test environment.
+
+The purpose is to prove that the migration algorithm does not contain hidden language ceilings.
+
+---
+
+161. Determinism Tests
+
+Repeated migration of identical input under identical conditions MUST produce identical canonical results for deterministic migrations.
+
+Tests SHOULD compare:
+
+migrated source
+AST
+semantic representation
+canonical IR
+migration manifest
+
+where stable serialization exists.
+
+---
+
+162. Compatibility Tests
+
+Compatibility tests MUST cover:
+
+old compiler/frontend
+new compiler/frontend
+old source
+new source
+old artifact
+new artifact
+old dialect
+new dialect
+
+as applicable.
+
+The tests MUST verify semantic behavior rather than merely successful parsing.
+
+---
+
+163. Cross-Domain Tests
+
+A production migration system MUST test cross-domain composition.
+
+At minimum, the repository SHOULD contain migration cases combining:
+
+classical + quantum
+classical + AI
+quantum + AI
+quantum + HDL
+AI + distributed
+data + AI
+resources + quantum
+policies + effects
+contracts + adaptation
+provenance + reasoning
+FFI + effects
+
+where those features exist.
+
+---
+
+164. POCO-REAF Integration Test
+
+The repository MUST maintain an end-to-end migration test representing the portability architecture.
+
+Conceptually:
+
+program intent
+    ↓
+requirements
+capabilities
+resources
+constraints
+preferences
+policies
+contracts
+provenance
+    ↓
+current AST
+    ↓
+semantic model
+    ↓
+Classical IR
++
+quantum::ir
+    ↓
+optimization
+    ↓
+lowering
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+resilience
+    ↓
+QEC
+    ↓
+ZQN
+    ↓
+HAL
+
+The test MUST verify that migration does not introduce target-specific assumptions into source semantics.
+
+---
+
+165. Migration Acceptance Matrix
+
+A production migration SHOULD be accepted only when:
+
+Area| Required
+Specification| PASS
+Version identity| PASS
+Migration class| PASS
+Source transformation| PASS
+Lexer| PASS where affected
+Parser| PASS where affected
+AST| PASS where affected
+Types| PASS where affected
+Effects| PASS where affected
+Resources| PASS where affected
+Capabilities| PASS where affected
+Contracts| PASS where affected
+Policies| PASS where affected
+Provenance| PASS where affected
+Semantic equivalence| PASS
+Canonical IR| PASS
+"quantum::ir"| PASS where affected
+Artifact| PASS where affected
+ABI| PASS where affected
+Runtime| PASS where affected
+Target| PASS where affected
+Tests| PASS
+Scalability| PASS
+Determinism| PASS
+Safe Rust| PASS
+Documentation| PASS
+Compatibility metadata| PASS
+
+---
+
+166. Production Completion Checklist
+
+A migration is production-complete only when:
 
 [ ] Migration ID exists
-[ ] Feature identity is stable
+[ ] Feature ID exists
 [ ] Source version identified
 [ ] Target version identified
 [ ] Migration class identified
+[ ] Affected layers identified
+[ ] Affected domains identified
+
 [ ] Old syntax documented
 [ ] New syntax documented
+[ ] Lexer mapping documented
+[ ] Parser mapping documented
 [ ] AST mapping documented
 [ ] Semantic mapping documented
-[ ] IR mapping documented
-[ ] quantum::ir mapping verified when applicable
-[ ] Resource semantics verified
-[ ] Capability semantics verified
-[ ] Target independence verified
-[ ] Diagnostics implemented
-[ ] Compatibility metadata updated
-[ ] Deprecation metadata updated when applicable
-[ ] Feature manifest updated
+[ ] Type mapping documented
+[ ] Effect mapping documented
+[ ] Resource mapping documented
+[ ] Capability mapping documented
+[ ] Contract mapping documented
+[ ] Policy mapping documented
+[ ] Provenance mapping documented
+
+[ ] Canonical IR mapping documented
+[ ] quantum::ir impact verified where applicable
+[ ] HDL/hardware impact verified where applicable
+
+[ ] Artifact impact documented
+[ ] ABI impact documented
+[ ] Runtime impact documented
+[ ] Target impact documented
+
+[ ] Automatic transformation defined
+[ ] Ambiguity handling defined
+[ ] Manual actions defined
+[ ] Diagnostics defined
+[ ] Source-span mapping defined
+[ ] Comment policy defined
+[ ] Formatting policy defined
+
+[ ] Version metadata updated
+[ ] Compatibility matrix updated
+[ ] Deprecation metadata updated where applicable
+[ ] Feature-gate metadata updated where applicable
+[ ] Dialect metadata updated where applicable
+
+[ ] Provenance implemented
 [ ] Positive tests pass
 [ ] Negative tests pass
 [ ] Boundary tests pass
 [ ] Scalability tests pass
 [ ] Determinism tests pass
 [ ] Compatibility tests pass
-[ ] Hard-coding audit passes
-[ ] Rust unsafe audit passes
-[ ] Repository integration passes
-[ ] Documentation is synchronized
+[ ] Diagnostic tests pass
 
-Only then may the migration be marked production-complete.
+[ ] No artificial resource ceiling introduced
+[ ] No target identity leaked into portable semantics
+[ ] No duplicate permanent IR introduced
+[ ] No duplicate quantum semantic architecture introduced
+[ ] No hidden cross-file dependency exists
+[ ] Safe-Rust audit passes
+[ ] Documentation synchronized
 
----
+Only after all applicable checks pass may a migration be marked:
 
-85. Repository-Wide Acceptance Gate
-
-A migration is not production-ready merely because "grammar/Zamani.g4" parses.
-
-The complete acceptance chain is:
-
-Specification
-      ↓
-Lexical Contract
-      ↓
-Zamani.g4
-      ↓
-Lexer
-      ↓
-Parser
-      ↓
-AST
-      ↓
-Structural Validation
-      ↓
-Name Resolution
-      ↓
-Type Analysis
-      ↓
-Effect Analysis
-      ↓
-Resource / Capability Analysis
-      ↓
-Semantic Validation
-      ↓
-Canonical Semantic Model
-      ↓
-Canonical IR
-      ↓
-Quantum::IR where applicable
-      ↓
-Optimization
-      ↓
-Routing
-      ↓
-Scheduling
-      ↓
-Resilience
-      ↓
-QEC
-      ↓
-ZQN
-      ↓
-HAL
-      ↓
-Target
-      ↓
-Runtime
-      ↓
-Tests
-
-A migration must be rejected as incomplete if it leaves a semantic gap in the applicable chain.
+PRODUCTION_COMPLETE
 
 ---
 
-86. Migration Status Values
+167. Migration Status
 
-Migration records SHOULD use:
+The following statuses are recommended:
 
 PLANNED
 DESIGNED
 IMPLEMENTING
 IMPLEMENTED
 VALIDATING
-COMPATIBLE
-DEPRECATED
 MIGRATION_AVAILABLE
+COMPATIBLE
+REQUIRES_MANUAL_ACTION
+BLOCKED
+DEPRECATED
 REMOVAL_ELIGIBLE
 REMOVED
-BLOCKED
-REQUIRES_MANUAL_ACTION
 
-"IMPLEMENTED" does not mean "COMPATIBLE".
+These statuses MUST NOT be conflated.
 
-"COMPATIBLE" does not mean "STABLE".
+In particular:
 
-"REMOVED" does not erase historical migration documentation.
+IMPLEMENTED ≠ COMPATIBLE
+COMPATIBLE ≠ STABLE
+DEPRECATED ≠ REMOVED
+MIGRATION_AVAILABLE ≠ MIGRATION_COMPLETE
 
 ---
 
-87. Breaking Migration Requirements
+168. Breaking Migration Requirements
 
-A migration may be classified as breaking only when the compatibility contract cannot preserve existing source semantics.
+A migration is breaking only when the compatibility contract cannot preserve the previous source or semantic behavior.
 
 A breaking migration MUST include:
 
@@ -2562,618 +4287,1187 @@ A breaking migration MUST include:
 5. semantic explanation;
 6. migration procedure;
 7. diagnostics;
-8. compatibility-matrix update;
-9. deprecation/removal relationship;
-10. tests.
+8. compatibility matrix entry;
+9. deprecation relationship where applicable;
+10. tests;
+11. replacement guidance where applicable.
 
-A breaking migration MUST NOT be declared merely because implementation restructuring is inconvenient.
-
----
-
-88. Removal Requirements
-
-Before a stable feature is removed:
-
-[ ] Deprecated status exists
-[ ] Replacement exists where applicable
-[ ] Migration exists where practical
-[ ] Documentation identifies replacement
-[ ] Compatibility window has elapsed
-[ ] Removal version is defined
-[ ] Compatibility matrix is updated
-[ ] Negative tests verify removal
-[ ] Historical migration documentation remains
-
-A removed feature MUST produce a deterministic diagnostic rather than silently changing meaning.
+Implementation inconvenience MUST NOT be sufficient justification.
 
 ---
 
-89. Historical Compatibility
+169. Semantic Breaking Changes
 
-Historical migration support MUST remain documented even after the old syntax is removed.
+A semantic breaking change MUST be explicitly identified.
 
-The repository should retain:
+Examples include:
 
-old syntax
- ↓
-migration rule
- ↓
-new syntax
+evaluation order changed
+ownership changed
+effect changed
+resource meaning changed
+capability authority changed
+policy behavior changed
+quantum measurement meaning changed
+HDL timing meaning changed
+concurrency ordering changed
+distributed consistency changed
 
-so that old programs can continue to be upgraded even when the current compiler no longer accepts the old syntax directly.
-
-Where a standalone migration tool supports historical versions, its accepted source-version range MUST be explicit.
-
----
-
-90. Security of Migration Tools
-
-Migration tools process source code and therefore MUST be treated as compiler infrastructure.
-
-They MUST:
-
-- avoid executing migrated source;
-- avoid executing arbitrary generated code;
-- avoid hidden network access;
-- avoid uncontrolled filesystem modification;
-- produce deterministic transformations;
-- validate transformed syntax;
-- report failures explicitly;
-- preserve provenance.
-
-Migration tooling must not use Rust "unsafe".
+A parser-only description is insufficient.
 
 ---
 
-91. No Unsafe Rust
+170. Migration of Reserved Names
 
-The production migration implementation MUST use safe Rust.
+If a previously valid identifier becomes reserved:
 
-The following are prohibited:
+old identifier
+      ↓
+identifier collision
 
-unsafe
-unsafe fn
-unsafe impl
-unsafe trait
-unsafe { ... }
+the migration system MUST:
 
-If a dependency internally uses unsafe implementation details, that does not automatically mean Zamani itself uses unsafe Rust; however, the project's direct production Rust code MUST NOT introduce unsafe blocks or unsafe APIs as a migration shortcut.
-
-The migration architecture should prefer:
-
-- safe ownership;
-- standard collections;
-- safe parsing;
-- explicit error handling;
-- checked arithmetic where needed;
-- bounded external input processing;
-- deterministic data structures where ordering matters.
+1. detect the collision;
+2. report the exact location;
+3. provide a deterministic replacement where possible;
+4. avoid changing references incorrectly;
+5. preserve bindings;
+6. update source-span mappings;
+7. validate the entire program after transformation.
 
 ---
 
-92. Arithmetic and Representation Limits
+171. Binding-Preserving Renames
 
-Migration code MUST distinguish:
+A rename migration MUST preserve binding identity.
 
-program-defined numeric values
+For:
 
-from:
+declaration
+references
 
-implementation resource limits
+all references MUST resolve to the same declaration after migration.
 
-It MUST avoid converting an implementation representation detail into a language-level restriction.
+Textual replacement alone is insufficient when shadowing exists.
 
-Where a representation genuinely has a finite domain, the migration must document that representation boundary explicitly rather than pretending that the language has an arbitrary universal ceiling.
-
----
-
-93. Migration of Future Domains
-
-The migration system is intentionally open to future domains.
-
-A new domain should integrate through:
-
-common lexical model
-        ↓
-common syntax foundations
-        ↓
-common type/effect/resource/capability model
-        ↓
-domain semantic model
-        ↓
-canonical IR boundary
-        ↓
-compiler/backend
-
-A new domain MUST NOT require creating a second language.
-
-The same migration rules apply to future domains even when the actual hardware does not yet exist.
+The migration system MUST understand lexical/symbol scopes sufficiently to avoid accidental renaming of unrelated identifiers.
 
 ---
 
-94. Migration of Nano / Atom-Scale Computation
+172. Module Migration
 
-Nano/atom-scale constructs MUST preserve semantic intent without encoding a fixed physical universe into the grammar.
+Module migrations MUST preserve:
+
+- module identity;
+- imports;
+- exports;
+- visibility;
+- namespace;
+- initialization behavior;
+- dependency graph.
+
+If a module is renamed, migration MUST update references semantically rather than through unsafe textual substitution.
+
+---
+
+173. Function Migration
+
+Function migration MUST preserve:
+
+- function identity;
+- parameter order;
+- parameter types;
+- return type;
+- generics;
+- effects;
+- ownership;
+- asynchronous behavior;
+- capabilities;
+- resource requirements.
+
+Changing syntax is not automatically semantic.
+
+Changing calling semantics is.
+
+---
+
+174. Generic Migration
+
+Generic migrations MUST preserve:
+
+- type parameters;
+- bounds;
+- constraints;
+- variance where specified;
+- associated types;
+- specialization semantics where specified.
+
+A migration MUST NOT erase generic constraints merely because the current backend cannot specialize them.
+
+---
+
+175. Linear and Affine Type Migration
+
+Where linear or affine types are supported, migration MUST preserve their usage guarantees.
+
+The migration MUST NOT silently weaken:
+
+must-use-once
+
+or:
+
+may-use-at-most-once
+
+semantics.
+
+---
+
+176. Dependent-Type Migration
+
+Where dependent-type semantics are supported, migration MUST preserve the relationship between:
+
+type
+value
+constraint
+proof/validation
+
+A dependent constraint MUST NOT be replaced with an implementation constant unless the source explicitly defines that value.
+
+---
+
+177. Contract and Type Interaction
+
+When a type migration changes a contract-relevant property, both layers MUST be migrated together.
 
 For example:
+
+type constraint
++
+requires
++
+ensures
+
+must retain their semantic relationship.
+
+---
+
+178. Resource and Type Interaction
+
+If a type encodes a resource requirement, migration MUST preserve that requirement symbolically.
+
+For example:
+
+Qubit[n]
+
+must not become a type with an implementation-specific fixed cardinality.
+
+---
+
+179. Capability and Effect Interaction
+
+Capability migrations MUST be checked against effect migrations.
+
+An operation requiring:
+
+effect(network)
+
+and:
+
+capability("network.connect")
+
+must not be migrated to a pure operation merely because the syntax changed.
+
+---
+
+180. Policy and Adaptation Interaction
+
+Adaptation migrations MUST validate policy compatibility.
+
+A policy that restricts adaptation MUST remain effective after migration.
+
+Migration MUST NOT bypass:
+
+authorization
+policy
+capability
+effect
+provenance
+
+checks.
+
+---
+
+181. Provenance and Migration Interaction
+
+Migration itself is a transformation and therefore SHOULD be represented in provenance.
+
+The provenance graph SHOULD allow:
+
+source artifact
+    ↓
+migration
+    ↓
+derived artifact
+
+to be independently audited.
+
+---
+
+182. Migration of Generated Grammar
+
+Generated grammar artifacts MUST identify:
+
+source authority
+generator
+generator version
+input versions
+generation timestamp where required
+
+Generated files MUST NOT become semantic authorities.
+
+---
+
+183. Migration of "grammar.md"
+
+"grammar/grammar.md" is a conformance/status artifact.
+
+Migration MUST preserve its distinction among statuses such as:
+
+SPECIFIED
+IMPLEMENTED
+PARTIALLY IMPLEMENTED
+PLANNED
+DEPRECATED
+
+and additional implementation statuses where used:
+
+AST_IMPLEMENTED
+SEMANTIC_IMPLEMENTED
+IR_IMPLEMENTED
+TESTED
+STABLE
+EXPERIMENTAL
+
+Migration MUST NOT use "grammar.md" as a substitute for normative specification.
+
+---
+
+184. Migration of "Zamani-Grammar.md"
+
+"grammar/Zamani-Grammar.md" remains historical/extended reference material.
+
+A feature appearing there MUST NOT automatically become stable language syntax.
+
+Migration status MUST respect its labels, including:
+
+stable
+proposed
+experimental
+deprecated
+historical
+not implemented
+
+---
+
+185. Migration of "README.md"
+
+The compatibility README is navigation/architecture material.
+
+Migration MUST NOT make the README a competing normative source.
+
+---
+
+186. Migration of "DESIGN.md"
+
+All migration rules MUST comply with the architectural principles in:
+
+grammar/DESIGN.md
+
+If a proposed migration conflicts with the architecture, the migration MUST be blocked until the authoritative architecture is intentionally changed.
+
+"migrations.md" MUST NOT override "DESIGN.md".
+
+---
+
+187. Migration of Specification
+
+When a migration changes language meaning, the normative specification MUST be updated before the migration is declared complete.
+
+Required order:
+
+semantic decision
+      ↓
+specification
+      ↓
+compatibility classification
+      ↓
+migration design
+      ↓
+implementation
+      ↓
+tests
+
+A grammar edit MUST NOT be used to establish semantics retroactively.
+
+---
+
+188. Migration of Machine Contracts
+
+Machine-oriented contracts under "grammar/spec/" MUST be updated when their owned contract changes.
+
+Migration records MUST link to the relevant machine contract.
+
+Duplicating machine contracts inside this file is prohibited.
+
+---
+
+189. Repository Consistency Rule
+
+The repository MUST NOT reach a state where:
+
+specification says A
+grammar accepts B
+AST means C
+semantic layer means D
+IR means E
+
+for the same feature.
+
+A migration MUST identify and resolve such inconsistencies before production completion.
+
+---
+
+190. Semantic Gap Rule
+
+A migration is blocked if it creates an unresolved semantic gap between:
+
+source
+AST
+semantic model
+IR
+runtime
+
+A syntactically accepted migration without a complete semantic path MUST be considered incomplete.
+
+---
+
+191. Domain-Neutral Migration Rule
+
+The migration layer itself MUST remain domain-neutral.
+
+It may understand domain-specific migration metadata, but it MUST not become a second implementation of:
+
+- quantum semantics;
+- AI semantics;
+- HDL semantics;
+- networking semantics;
+- distributed semantics.
+
+Those remain owned by their domains.
+
+---
+
+192. Future Hardware Rule
+
+Migration MUST remain valid when new hardware classes appear.
+
+The migration architecture MUST NOT require adding a new universal migration rule merely because a new target appears.
+
+New targets should normally integrate through:
+
+capabilities
+resources
+constraints
+topology
+target compatibility
+HAL
+
+rather than changing source semantics.
+
+---
+
+193. Future Computing Model
+
+If a future computing model introduces a new semantic domain, its migration MUST integrate through the common foundations:
+
+types
+operations
+effects
+resources
+capabilities
+contracts
+policies
+provenance
+
+followed by a domain semantic model and canonical IR boundary.
+
+---
+
+194. Migration of Nano/Atom-Scale Semantics
+
+Nano- and atom-scale semantic constructs MUST remain abstract.
+
+Migration MUST NOT define a finite physical universe.
+
+The language may describe:
 
 atom
 molecule
 material
-nano-agent
 interaction
+nano-structure
+quantum state
 
-may be semantic constructs.
+but migration MUST NOT introduce a universal maximum count of physical entities.
 
-The migration system MUST NOT encode a finite set of atoms, molecules, agents, or interaction counts as universal language limits.
-
-Physical feasibility belongs downstream.
+Physical feasibility remains target-specific.
 
 ---
 
-95. Migration of Temporal / Multi-Timeline Features
+195. Temporal and Multi-Timeline Migration
 
-Timeline migrations MUST preserve:
+Where temporal or timeline semantics exist, migration MUST preserve:
 
 - timeline identity;
 - temporal ordering;
-- branch/merge semantics;
-- observation semantics;
-- rewind semantics;
-- speculative execution semantics.
+- branching;
+- merging;
+- observation;
+- speculative execution;
+- rollback;
+- causality.
 
-The number of timelines MUST remain scalable.
-
-A migration MUST NOT impose a universal fixed timeline count.
-
----
-
-96. Sankofa-Related Migration
-
-Where Sankofa concepts are represented in Zamani syntax, migration must preserve their semantic distinction.
-
-Examples may include:
-
-remember
-recall
-learn
-wisdom
-zamani
-sasa
-ancestor
-consensus
-temporal learning
-
-These constructs must not be treated as parser-only keywords.
-
-Where their semantics are stable, migration preserves their semantic identity independent of spelling.
-
-Where they are experimental or historical, their status must be represented in the feature/deprecation system.
+No universal timeline count may be introduced.
 
 ---
 
-97. Compiler Self-Description and Governance Features
+196. Sankofa-Related Constructs
 
-Extended grammar material may contain compiler/self-hosting concepts such as:
+Where concepts associated with the repository's interoperability or historical computational model are represented in Zamani, migration MUST preserve their semantic identity without automatically making every historical term a permanent keyword.
+
+Historical or experimental constructs MUST remain clearly classified.
+
+Migration MUST pass through:
+
+specification
+→ syntax
+→ AST
+→ semantics
+→ canonical IR
+→ tests
+
+before becoming stable.
+
+---
+
+197. Migration of Compiler Self-Description
+
+Historical/extended grammar material may describe compiler-oriented constructs such as:
 
 bootstrap
 compiler
 grammar_snapshot
-constitutional compiler
 self_compile
 grammar_diff
 compiler_snapshot
 
-These MUST NOT automatically become stable Zamani syntax merely because they occur in historical/extended grammar material.
+Such constructs MUST NOT automatically become stable Zamani syntax.
 
-If accepted, each feature must pass:
-
-specification
-→ syntax
-→ lexer
-→ parser
-→ AST
-→ semantics
-→ IR/implementation contract
-→ tests
-→ compatibility
-
-Migration of these features must not create a second compiler governance system outside the repository's canonical architecture.
-
----
-
-98. Migration of Existing Monolithic Grammar Features
-
-The existing broad "Zamani.g4" contains many domains in one grammar surface.
-
-Migration toward modular directories is allowed and encouraged for maintainability, but the migration MUST preserve one canonical language.
-
-The preferred transformation is:
-
-historical monolithic rule
-        ↓
-canonical modular rule
-        ↓
-same AST semantics
-        ↓
-same semantic model
-        ↓
-same IR
-
-not:
-
-old monolithic language
-+
-new modular language
-=
-two languages
-
----
-
-99. No Unnecessary File Renames
-
-Migration work MUST NOT rename existing authoritative files unnecessarily.
-
-In particular, retain:
-
-grammar/Zamani.g4
-grammar/grammar.md
-grammar/Zamani-Grammar.md
-grammar/DESIGN.md
-grammar/README.md
-grammar/compatibility/versions.md
-grammar/compatibility/migrations.md
-grammar/compatibility/deprecated.md
-grammar/compatibility/compatibility-matrix.md
-
-If a new file is required, it should be introduced only when it has a distinct ownership responsibility.
-
-Existing directories should be populated before a parallel hierarchy is created.
-
----
-
-100. Integration Map
-
-The migration file integrates with the repository as follows:
-
-DESIGN.md
-    ↓
-architecture
-
-specification/
-    ↓
-normative language meaning
-
-spec/
-    ↓
-formal contracts
-
-compatibility/versions.md
-    ↓
-version policy
-
-compatibility/migrations.md
-    ↓
-migration procedure
-
-compatibility/deprecated.md
-    ↓
-deprecation lifecycle
-
-compatibility/compatibility-matrix.md
-    ↓
-compatibility relationships
-
-compatibility/reserved.md
-    ↓
-reserved syntax
-
-validation/
-    ↓
-automated compatibility checks
-
-Zamani.g4
-    ↓
-canonical ANTLR syntax
-
-lexer/
-    ↓
-lexical contracts
-
-src/lexer.rs
-    ↓
-executable lexical implementation
-
-src/parser.rs
-    ↓
-executable parser
-
-src/ast/
-    ↓
-source structure
-
-semantic analysis
-    ↓
-meaning
-
-quantum::ir
-    ↓
-canonical quantum semantic boundary
-
-IR
-    ↓
-canonical compiler representation
-
-compiler
-    ↓
-lowering/optimization
-
-routing / scheduling / resilience / QEC / ZQN
-    ↓
-realization planning
-
-HAL
-    ↓
-target capability/state
-
-runtime
-    ↓
-execution
-
----
-
-101. Migration Dependency Rule
-
-A migration MUST identify every downstream consumer that depends on its changed contract.
-
-For example, a quantum syntax migration may affect:
-
-grammar/quantum/
-lexer
-parser
-AST
-semantic quantum model
-quantum::ir
-optimizer
-routing
-QEC
-ZQN
-HAL
-OpenQASM interoperability
-tests
-documentation
-
-The migration record must identify these consumers before the migration is declared complete.
-
----
-
-102. No Hidden Cross-File Dependencies
-
-A migration file MUST NOT rely on an undocumented future change in another file.
-
-All assumptions must be expressed through explicit references to:
+If accepted, they must have:
 
 - specification;
-- feature manifest;
-- compatibility matrix;
-- AST contract;
-- semantic contract;
-- IR contract;
-- implementation contract.
-
-This ensures a file can be completed independently and integrated without re-editing it merely because another file later became more specific.
+- syntax;
+- AST;
+- semantic owner;
+- implementation contract;
+- migration record;
+- tests.
 
 ---
 
-103. Migration Review Checklist
+198. Monolithic-to-Modular Migration
 
-Before accepting a migration:
+Migration from a broad monolithic grammar architecture to modular files MUST follow:
+
+existing rule
+      ↓
+canonical owner identified
+      ↓
+modular rule
+      ↓
+same token semantics
+      ↓
+same AST semantics
+      ↓
+same semantic meaning
+      ↓
+same canonical IR
+
+The migration MUST NOT produce:
+
+old language + new language
+
+It must produce:
+
+one language
+one semantic model
+one canonical architecture
+
+---
+
+199. No Unnecessary Renames
+
+Existing authoritative filenames MUST be retained unless there is a documented ownership reason to rename them.
+
+In particular, migration MUST preserve the existing compatibility architecture rather than creating redundant parallel files.
+
+Existing dedicated files such as:
+
+language-version.md
+grammar-version.md
+AST-version.md
+semantic-version.md
+ir-version.md
+dialect-version.md
+target-compatibility-version.md
+versions.md
+migrations.md
+deprecated.md
+reserved.md
+feature-gates.md
+compatibility-matrix.md
+dialect-compatibility.md
+frontend-conformance.md
+ast-conformance.md
+ir-conformance.md
+
+retain their distinct responsibilities.
+
+---
+
+200. Required Integration Graph
+
+The complete migration integration graph is:
+
+grammar/DESIGN.md
+        │
+        ▼
+grammar/specification/
+        │
+        ▼
+grammar/spec/
+        │
+        ▼
+compatibility version contracts
+        │
+        ▼
+migrations.md
+        │
+        ├── deprecated.md
+        ├── reserved.md
+        ├── feature-gates.md
+        ├── compatibility-matrix.md
+        └── dialect-compatibility.md
+        │
+        ▼
+grammar/Zamani.g4
+        │
+        ▼
+lexer
+        │
+        ▼
+parser
+        │
+        ▼
+AST
+        │
+        ▼
+validation
+        │
+        ▼
+semantic analysis
+        │
+        ├── types
+        ├── effects
+        ├── resources
+        ├── capabilities
+        ├── contracts
+        ├── policies
+        └── provenance
+        │
+        ▼
+domain semantics
+        │
+        ├── classical
+        ├── quantum
+        ├── HDL
+        ├── AI
+        ├── data
+        ├── distributed
+        ├── networking
+        └── hybrid
+        │
+        ▼
+canonical IR
+        │
+        ├── Classical IR
+        └── quantum::ir
+        │
+        ▼
+compiler
+        │
+        ├── optimization
+        ├── lowering
+        ├── routing
+        ├── scheduling
+        ├── resilience
+        └── QEC
+        │
+        ▼
+ZQN
+        │
+        ▼
+HAL
+        │
+        ▼
+runtime / target
+
+---
+
+201. Required Per-File Migration Contract
+
+Any repository file modified because of a migration SHOULD have an accompanying integration contract:
+
+FILE:
+PURPOSE:
+OWNER:
+DOES_NOT_OWN:
+
+INPUTS:
+DEPENDENCIES:
+
+EXPORTS:
+CONSUMERS:
+
+VERSION_DEPENDENCIES:
+
+LEXER_IMPACT:
+GRAMMAR_IMPACT:
+PARSER_IMPACT:
+AST_IMPACT:
+SEMANTIC_IMPACT:
+TYPE_IMPACT:
+EFFECT_IMPACT:
+RESOURCE_IMPACT:
+CAPABILITY_IMPACT:
+CONTRACT_IMPACT:
+POLICY_IMPACT:
+PROVENANCE_IMPACT:
+IR_IMPACT:
+QUANTUM_IR_IMPACT:
+HDL_IMPACT:
+RUNTIME_IMPACT:
+TARGET_IMPACT:
+
+DIAGNOSTICS:
+
+POSITIVE_TESTS:
+NEGATIVE_TESTS:
+BOUNDARY_TESTS:
+SCALABILITY_TESTS:
+DETERMINISM_TESTS:
+
+COMPATIBILITY:
+DEPRECATION:
+REMOVAL:
+
+HARD_CODING_AUDIT:
+SAFE_RUST_AUDIT:
+
+COMPLETION_CRITERIA:
+
+This contract ensures that a file can be completed independently without being reopened merely because another file is subsequently implemented.
+
+---
+
+202. Migration Review
+
+Every production migration SHOULD receive review against:
 
 Authority
 
-- [ ] Correct owner identified.
-- [ ] No competing authority created.
-- [ ] Existing filenames retained where appropriate.
+[ ] Correct specification owner
+[ ] Correct implementation owner
+[ ] No competing authority
 
 Syntax
 
-- [ ] Lexer impact known.
-- [ ] Grammar impact known.
-- [ ] Parser impact known.
-- [ ] Ambiguity checked.
-- [ ] Precedence checked.
+[ ] Lexer reviewed
+[ ] Grammar reviewed
+[ ] Parser reviewed
+[ ] Ambiguity reviewed
+[ ] Precedence reviewed
 
 AST
 
-- [ ] AST mapping defined.
-- [ ] Source spans preserved.
-- [ ] No unnecessary duplicate AST representation.
+[ ] Node mapping reviewed
+[ ] Fields reviewed
+[ ] Bindings preserved
+[ ] Source spans reviewed
 
 Semantics
 
-- [ ] Meaning preserved or explicitly changed.
-- [ ] Type semantics checked.
-- [ ] Effects checked.
-- [ ] Ownership checked.
-- [ ] Resource semantics checked.
-- [ ] Capability semantics checked.
+[ ] Meaning preserved or explicitly changed
+[ ] Types reviewed
+[ ] Effects reviewed
+[ ] Resources reviewed
+[ ] Capabilities reviewed
+[ ] Contracts reviewed
+[ ] Policies reviewed
+[ ] Provenance reviewed
 
 IR
 
-- [ ] Canonical IR mapping defined.
-- [ ] "quantum::ir" checked when applicable.
-- [ ] No duplicate permanent IR introduced.
+[ ] Canonical IR mapping reviewed
+[ ] quantum::ir reviewed where applicable
+[ ] No duplicate permanent IR
 
-Hardware
+Target
 
-- [ ] Target independence checked.
-- [ ] No physical resource limit introduced.
-- [ ] Capability/requirement distinction preserved.
-- [ ] Routing/scheduling remain downstream.
-
-Compatibility
-
-- [ ] Version policy updated.
-- [ ] Compatibility matrix updated.
-- [ ] Deprecation metadata updated where necessary.
-- [ ] Removal conditions defined where applicable.
+[ ] Target independence preserved
+[ ] Resource realization remains downstream
+[ ] Routing remains downstream
+[ ] Scheduling remains downstream
+[ ] QEC remains downstream
+[ ] HAL remains downstream
 
 Safety
 
-- [ ] No Rust "unsafe".
-- [ ] Migration tool does not execute source.
-- [ ] External input handling is validated.
+[ ] No Rust unsafe
+[ ] No source execution
+[ ] No hidden network access
+[ ] No uncontrolled filesystem modification
 
 Tests
 
-- [ ] Positive.
-- [ ] Negative.
-- [ ] Boundary.
-- [ ] Scalability.
-- [ ] Determinism.
-- [ ] Compatibility.
-- [ ] Diagnostics.
+[ ] Positive
+[ ] Negative
+[ ] Boundary
+[ ] Scalability
+[ ] Determinism
+[ ] Compatibility
+[ ] Diagnostics
+[ ] Provenance
 
 ---
 
-104. Production-Readiness Definition
+203. Production Readiness Gate
 
-"grammar/compatibility/migrations.md" and its migration system are production-ready only when:
+A migration system is production-ready only when:
 
-Every supported migration has a stable identity
-        AND
-Every migration has an explicit compatibility class
-        AND
-Every migration has a semantic preservation statement
-        AND
-Every affected layer is identified
-        AND
-Every migration has tests
-        AND
-Every breaking change is explicit
-        AND
-Every deprecation has a migration path where practical
-        AND
-No migration introduces artificial hardware limits
-        AND
-No migration duplicates canonical quantum semantics
-        AND
-No migration silently changes target realization
-        AND
-No production Rust migration implementation uses unsafe
-        AND
-Repository-wide compatibility metadata is synchronized
+EVERY SUPPORTED MIGRATION
+        │
+        ├── has stable identity
+        ├── has explicit classification
+        ├── has semantic-preservation analysis
+        ├── has version dependencies
+        ├── has layer ownership
+        ├── has transformation rules
+        ├── has diagnostics
+        ├── has provenance
+        ├── has compatibility metadata
+        ├── has tests
+        ├── has scalability validation
+        ├── has determinism validation
+        ├── has safe-Rust validation
+        └── has repository integration validation
 
 ---
 
-105. Final Migration Principle
+204. Final Acceptance Rule
 
-The complete Zamani migration architecture is:
+The migration MUST NOT be marked complete merely because:
 
-                  OLD PROGRAM
-                       │
-                       ▼
-              VERSION IDENTIFICATION
-                       │
-                       ▼
-              MIGRATION CLASSIFICATION
-                       │
-                       ▼
-              SYNTAX / AST ANALYSIS
-                       │
-                       ▼
-             SEMANTIC EQUIVALENCE
-                 /             \
-               YES              NO
-                │                │
-                ▼                ▼
-       AUTOMATIC / ASSISTED   EXPLICIT
-             MIGRATION        SEMANTIC MIGRATION
-                │                │
-                └───────┬────────┘
-                        ▼
-                CURRENT AST
-                        │
-                        ▼
-               SEMANTIC ANALYSIS
-                        │
-                        ▼
-             CANONICAL SEMANTIC MODEL
-                        │
-            ┌───────────┴───────────┐
-            ▼                       ▼
-       Classical                Quantum
-                                 │
-                                 ▼
-                            quantum::ir
-            │                       │
-            └───────────┬───────────┘
-                        ▼
-                 CANONICAL IR
-                        │
-                        ▼
-                  OPTIMIZATION
-                        │
-             ┌──────────┼──────────┐
-             ▼          ▼          ▼
-          ROUTING   SCHEDULING   RESILIENCE
-             │          │          │
-             └──────────┼──────────┘
-                        ▼
-                       QEC
-                        │
-                        ▼
-                       ZQN
-                        │
-                        ▼
-                       HAL
-                        │
-                        ▼
-                TARGET REALIZATION
-                        │
-             ┌──────────┼──────────┐
-             ▼          ▼          ▼
-            CPU        GPU        FPGA
-             │          │          │
-             ├──────────┼──────────┤
-             ▼          ▼          ▼
-            ASIC       QPU      DISTRIBUTED
-                        │
-                        ▼
-                  FUTURE TARGETS
+old source → new source
 
-The migration system therefore protects the central Zamani invariant:
+succeeds.
 
-«A language evolution may change how a program is represented, but it must not silently change what the program means.»
+The complete requirement is:
 
-And it protects the POCO-REAF invariant:
+old source
+    ↓
+version identification
+    ↓
+migration classification
+    ↓
+migration
+    ↓
+lexer
+    ↓
+parser
+    ↓
+AST
+    ↓
+structural validation
+    ↓
+type validation
+    ↓
+effect validation
+    ↓
+resource validation
+    ↓
+capability validation
+    ↓
+contract validation
+    ↓
+policy validation
+    ↓
+provenance validation
+    ↓
+semantic validation
+    ↓
+canonical IR
+    ↓
+quantum::ir where applicable
+    ↓
+optimization
+    ↓
+lowering
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+resilience
+    ↓
+QEC where applicable
+    ↓
+ZQN
+    ↓
+HAL
+    ↓
+target/runtime
 
-«Program source describes computation and requirements; migration must not turn those semantics into temporary hardware limitations.»
+The migration is complete only when the applicable path succeeds.
 
-Consequently, migration must preserve the ability for one Zamani program to scale from the smallest useful computation to arbitrarily large realizations permitted by the program's semantics, implementation representation, declared constraints, target capabilities, and resources actually available.
+---
 
-The language does not promise that infinite physical resources exist.
+205. Permanent Architectural Invariants
 
-It promises that the language architecture does not manufacture artificial finite ceilings where the semantics do not require them.
+The following invariants are permanent unless the language specification itself is intentionally changed.
 
-The permanent architectural boundary is therefore:
+Invariant 1 — One Language
+
+Zamani remains one language.
+
+Historical syntax, dialects, and migration adapters MUST NOT silently create parallel permanent languages.
+
+Invariant 2 — One Semantic Center
+
+All supported domains converge through the common semantic architecture.
+
+Invariant 3 — Canonical Quantum Boundary
+
+Quantum semantics converge through:
+
+quantum::ir
+
+Invariant 4 — Target Independence
+
+Portable source describes computation and intent, not today's physical hardware.
+
+Invariant 5 — Open-Ended Scale
+
+Language architecture MUST NOT impose artificial finite resource ceilings.
+
+Invariant 6 — Explicit Capability
+
+Unavailable capabilities MUST be diagnosed rather than silently substituted with different semantics.
+
+Invariant 7 — Explicit Resource Negotiation
+
+Requirements, capabilities, constraints, preferences, hints, and realization remain distinct.
+
+Invariant 8 — Explicit Effects
+
+Effect changes are semantic changes and MUST be migrated explicitly.
+
+Invariant 9 — Provenance
+
+Meaningful transformations SHOULD remain traceable.
+
+Invariant 10 — Safe Rust
+
+Production migration implementation uses safe Rust with Rust 1.97 or later.
+
+Invariant 11 — Determinism
+
+Deterministic migrations remain deterministic.
+
+Invariant 12 — No Silent Semantic Downgrade
+
+Unsupported newer semantics MUST NOT silently disappear.
+
+---
+
+206. The Fundamental Migration Equation
+
+For a semantics-preserving migration:
+
+S_old
+   │
+   ▼
+M
+   │
+   ▼
+S_new
+
+the required property is:
+
+Semantics(S_old)
+=
+Semantics(S_new)
+
+and, where canonical IR exists:
+
+CanonicalIR(S_old)
+≈
+CanonicalIR(S_new)
+
+where "≈" means semantic equivalence rather than byte-for-byte equality.
+
+For quantum programs:
+
+QuantumSemantics(S_old)
+=
+QuantumSemantics(S_new)
+
+must hold before physical routing or decomposition is considered.
+
+---
+
+207. The Fundamental POCO-REAF Equation
+
+The portability architecture is:
 
 SOURCE
   ↓
-MEANING
+INTENT
+  ↓
+SEMANTICS
+  ↓
+REQUIREMENTS
+CAPABILITIES
+RESOURCES
+CONSTRAINTS
+PREFERENCES
+POLICIES
+CONTRACTS
+PROVENANCE
   ↓
 CANONICAL IR
   ↓
 REALIZATION
 
-not:
+Therefore:
 
-SOURCE
-  ↓
-TODAY'S HARDWARE
-  ↓
-PERMANENT LANGUAGE LIMIT
+SOURCE PORTABILITY
 
-That is the compatibility and migration foundation required for Zamani's production path toward:
+does not require:
 
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
+IDENTICAL PHYSICAL REALIZATION
+
+and:
+
+TARGET DIFFERENCE
+
+does not automatically imply:
+
+SOURCE MIGRATION
+
+---
+
+208. Final Migration Architecture
+
+The complete production architecture is:
+
+                         OLD PROGRAM
+                              │
+                              ▼
+                    VERSION IDENTIFICATION
+                              │
+                              ▼
+                    MIGRATION CLASSIFICATION
+                              │
+                              ▼
+                     MIGRATION DEPENDENCIES
+                              │
+                              ▼
+                      SOURCE TRANSFORMATION
+                              │
+                              ▼
+                       CURRENT SOURCE
+                              │
+                              ▼
+                            LEXER
+                              │
+                              ▼
+                           PARSER
+                              │
+                              ▼
+                             AST
+                              │
+                              ▼
+                    STRUCTURAL VALIDATION
+                              │
+             ┌────────────────┼────────────────┐
+             ▼                ▼                ▼
+           TYPES           EFFECTS        CAPABILITIES
+             │                │                │
+             └────────────────┼────────────────┘
+                              │
+             ┌────────────────┼────────────────┐
+             ▼                ▼                ▼
+        RESOURCES         CONTRACTS         POLICIES
+             │                │                │
+             └────────────────┼────────────────┘
+                              ▼
+                         PROVENANCE
+                              │
+                              ▼
+                     SEMANTIC ANALYSIS
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+         CLASSICAL         QUANTUM           HDL
+              │               │               │
+              │               ▼               │
+              │          quantum::ir          │
+              │               │               │
+              └───────────────┼───────────────┘
+                              ▼
+                       CANONICAL IR
+                              │
+                              ▼
+                         OPTIMIZATION
+                              │
+                              ▼
+                          LOWERING
+                              │
+                 ┌────────────┼────────────┐
+                 ▼            ▼            ▼
+              ROUTING     SCHEDULING   RESILIENCE
+                                             │
+                                             ▼
+                                            QEC
+                                             │
+                                             ▼
+                                            ZQN
+                                             │
+                                             ▼
+                                            HAL
+                                             │
+                              ┌──────────────┼──────────────┐
+                              ▼              ▼              ▼
+                             CPU            GPU            FPGA
+                              │              │              │
+                              ├──────────────┼──────────────┤
+                              ▼              ▼              ▼
+                             ASIC           QPU       DISTRIBUTED
+                              │              │              │
+                              └──────────────┼──────────────┘
+                                             ▼
+                                      FUTURE TARGETS
+
+---
+
+209. Final Principle
+
+The permanent rule for Zamani compatibility is:
+
+«A language evolution may change representation, syntax, storage, compiler architecture, or target realization, but a semantics-preserving migration MUST NOT silently change what the program means.»
+
+And the permanent scalability rule is:
+
+«A Zamani program expresses computation, intent, requirements, capabilities, constraints, preferences, policies, contracts, and provenance; the compiler and runtime determine an appropriate realization from the resources and capabilities actually available.»
+
+Therefore migration MUST never transform:
+
+symbolic requirement
+
+into:
+
+fixed implementation capacity
+
+and MUST never transform:
+
+target limitation
+
+into:
+
+language limitation
+
+The final compatibility architecture is consequently:
+
+                    SOURCE
+                      │
+                      ▼
+                 MIGRATION
+                      │
+                      ▼
+                  MEANING
+                      │
+                      ▼
+             CANONICAL SEMANTICS
+                      │
+          ┌───────────┴───────────┐
+          ▼                       ▼
+     Classical                Quantum
+          │                       │
+          │                  quantum::ir
+          │                       │
+          └───────────┬───────────┘
+                      ▼
+                CANONICAL IR
+                      │
+                      ▼
+              TARGET-INDEPENDENT
+                 COMPILATION
+                      │
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+       ROUTING    SCHEDULING   RESILIENCE
+                                  │
+                                  ▼
+                                 QEC
+                                  │
+                                  ▼
+                                 ZQN
+                                  │
+                                  ▼
+                                 HAL
+                                  │
+                                  ▼
+                           TARGET REALIZATION
+
+This is the required foundation for maintaining:
+
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+
+from the smallest useful computation through arbitrarily large realizations permitted by program semantics, available resources, target capabilities, physical feasibility, and implementation capacity.
+
+The language itself MUST NOT manufacture finite ceilings where the semantics do not require them.
+
+The migration system therefore exists to preserve one thing above all else:
+
+OLD REPRESENTATION
+        ↓
+        MIGRATE
+        ↓
+CURRENT REPRESENTATION
+        ↓
+SAME SPECIFIED MEANING
+        ↓
+ARBITRARY VALID REALIZATION
+
+That is the production compatibility contract.
