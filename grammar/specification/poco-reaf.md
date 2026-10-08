@@ -1,1564 +1,2368 @@
-Worked for 1m 13s
-
-I inspected the repository's current grammar architecture and related quantum/compilation boundaries before defining this file. In particular, the existing design establishes Rust 1.97/1.97.1, Safe Rust only, POCO-REAF, the frontend → semantic analysis → canonical IR pipeline, and quantum::ir as the canonical quantum semantic boundary.  The repository also already contains substantial quantum::ir structure and explicitly separates it from scheduling, ZQN, and resilience.
-
-I also found that POCO-REAF is already referenced across the grammar specifications, including grammar/specification/README.md, lexical, syntax, semantic, type-system, language-scope, and compatibility documents.
-
-The GitHub write operation itself was unavailable from this session, so below is the complete contents for grammar/specification/poco-reaf.md ready to place at that exact path.
-
 Zamani POCO-REAF Specification
 
 Path: "grammar/specification/poco-reaf.md"
-Status: Normative production specification
+Status: Normative
+Specification class: Language architecture / portability / compilation contract
 Language: Zamani
-Minimum implementation Rust: Rust 1.97 / 1.97.1
-Safety: Safe Rust only; Rust "unsafe" is forbidden
+Minimum implementation: Rust 1.97
+Edition: Rust 2021
+Safety model: Safe Rust only
 Primary objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
 
 ---
 
 1. Purpose
 
-This document defines the normative meaning of Zamani's Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF) model and the contracts required from the grammar, frontend, semantic layers, IR, compiler, target layers, and runtime.
+This document defines the normative POCO-REAF contract for Zamani.
 
-POCO-REAF is a portability and semantic-stability property.
+POCO-REAF means that a Zamani program expresses its computational meaning independently of any particular machine, processor, accelerator, quantum processor, FPGA, ASIC, simulator, cluster, network, or deployment environment.
 
-It is not a promise that every program can execute on every machine.
+The same source program MUST be capable of being considered for different realizations without requiring source modification merely because the available computational substrate changes.
 
-A target may lack required:
+POCO-REAF therefore separates:
 
-- capabilities;
-- resources;
-- memory;
-- processing capacity;
-- quantum resources;
-- timing guarantees;
-- precision;
-- connectivity;
-- supported execution modes;
-- security capabilities;
-- runtime services.
+program meaning
+    ↓
+semantic requirements
+    ↓
+capabilities
+    ↓
+resources
+    ↓
+constraints
+    ↓
+policies
+    ↓
+portable semantic compilation
+    ↓
+target realization
 
-Such failure MUST be explicit, diagnosable, and MUST NOT silently change the program's meaning.
+The central invariant is:
 
-The central rule is:
+«Target variation MUST change realization, not the meaning of a valid portable program.»
 
-«Zamani source describes computation and portable intent. Target-specific systems determine how that computation is realized under the capabilities, constraints, and resources actually available.»
+POCO-REAF does not require every program to execute on every physical target.
 
-The language MUST therefore scale from the smallest supported computation to arbitrarily large computations subject only to representational, implementation, declared-resource, and execution-resource limits.
+A target may lack:
 
-No artificial machine-size ceiling may be introduced into the source grammar.
+- required resources;
+- required capabilities;
+- required precision;
+- required timing guarantees;
+- required topology;
+- required execution modes;
+- required security properties;
+- required quantum resources;
+- required memory;
+- required communication facilities;
+- required accelerator support;
+- required runtime services.
+
+When this occurs, the implementation MUST report the incompatibility explicitly.
+
+It MUST NOT silently change the program's semantics merely to make execution possible.
 
 ---
 
-2. Normative Scope
+2. Normative Language
 
-This specification applies to:
+The following terms are normative:
 
-- "grammar/Zamani.g4"
-- "grammar/specification/*"
-- "grammar/spec/*"
-- "grammar/grammar.md"
-- "grammar/Zamani-Grammar.md"
-- lexer implementation
-- parser implementation
-- AST construction
-- semantic analysis
-- type analysis
-- effect analysis
-- capability analysis
-- resource analysis
-- canonical semantic IR generation
-- "quantum::ir"
-- classical/control/data IR
-- optimization
-- routing
-- scheduling
-- ZQN
-- QEC integration
-- resilience
-- hardware abstraction
-- target lowering
-- runtime
-- interoperability
-- grammar tests
-- compiler tests
-- compatibility tests
+- MUST
+- MUST NOT
+- REQUIRED
+- SHALL
+- SHALL NOT
+- SHOULD
+- SHOULD NOT
+- MAY
+- OPTIONAL
 
-This document does not own:
+A conforming implementation MUST interpret these terms according to their normative meaning.
 
-- target-specific lowering algorithms;
+---
+
+3. Specification Authority
+
+This document is the normative authority for POCO-REAF semantics.
+
+It MUST be interpreted together with:
+
+grammar/specification/grammar-authority.md
+grammar/specification/language.md
+grammar/specification/language-principles.md
+grammar/specification/language-scope.md
+grammar/specification/lexical.md
+grammar/specification/syntax.md
+grammar/specification/syntax-model.md
+grammar/specification/semantics.md
+grammar/specification/semantic-model.md
+grammar/specification/types.md
+grammar/specification/scalability-model.md
+grammar/specification/portability.md
+grammar/specification/compilation-model.md
+grammar/specification/execution-model.md
+grammar/specification/compatibility.md
+grammar/specification/language-version.md
+
+and the detailed domain specifications under:
+
+grammar/spec/
+
+Concrete syntax is implemented through the grammar architecture headed by:
+
+grammar/Zamani.g4
+grammar/antlr/ZamaniLexer.g4
+grammar/antlr/ZamaniParser.g4
+
+where applicable in the current repository architecture.
+
+The executable Rust frontend remains authoritative for actual implementation conformance:
+
+src/lexer.rs
+src/parser.rs
+src/ast/
+src/semantic.rs
+src/ir_gen.rs
+src/ir_verify.rs
+
+The canonical quantum semantic boundary is:
+
+src/quantum/ir/
+
+and is referred to throughout this specification as:
+
+quantum::ir
+
+The canonical classical semantic representation is the repository's existing Classical IR.
+
+This document MUST NOT create a competing IR.
+
+---
+
+4. Scope
+
+This specification governs:
+
+1. source portability;
+2. semantic portability;
+3. compilation portability;
+4. target-independent semantic artifacts;
+5. capability negotiation;
+6. resource negotiation;
+7. target specialization;
+8. optimization;
+9. lowering;
+10. routing;
+11. scheduling;
+12. deployment;
+13. execution;
+14. runtime adaptation;
+15. resilience;
+16. reproducibility;
+17. deterministic compilation;
+18. compatibility;
+19. provenance;
+20. diagnostics;
+21. quantum portability;
+22. classical portability;
+23. HDL/hardware portability;
+24. heterogeneous execution;
+25. distributed execution;
+26. simulation;
+27. AI and reasoning portability;
+28. controlled adaptation;
+29. policy enforcement;
+30. security boundaries.
+
+This specification does not own the implementation of:
+
 - hardware discovery;
-- calibration;
+- target drivers;
 - QEC algorithms;
+- routing algorithms;
 - scheduling algorithms;
 - optimization algorithms;
-- routing algorithms;
+- backend code generation;
+- machine-code generation;
+- physical calibration;
 - runtime implementation;
-- physical device management;
-- backend-specific machine code.
+- operating-system services;
+- physical device management.
 
-It defines the portability contract those systems MUST satisfy.
-
----
-
-3. Normative Language
-
-The terms MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, and MAY are normative.
-
-A conforming implementation:
-
-1. MUST preserve source semantics across supported targets.
-2. MUST separate source semantics from target realization.
-3. MUST represent target requirements explicitly.
-4. MUST NOT introduce fixed machine-size limits into the language grammar.
-5. MUST NOT silently substitute a semantically different operation because a target lacks a capability.
-6. MUST use safe Rust only.
-7. MUST provide structured diagnostics for unsupported, impossible, or resource-insufficient execution.
-8. MUST preserve sufficient provenance to explain target-specific lowering decisions.
-9. MUST distinguish guaranteed semantics from performance preferences and optimization hints.
-10. MUST preserve language-version compatibility according to the compatibility policy.
+Those systems consume and realize the contracts defined here.
 
 ---
 
-4. Definition of POCO-REAF
+5. Fundamental POCO-REAF Principle
 
-4.1 Program Once
+Zamani follows this invariant:
 
-A Zamani program is written against the language's semantic model rather than against a particular machine.
+SOURCE MEANING
+      ↓
+PORTABLE SEMANTIC MODEL
+      ↓
+CANONICAL IR
+      ↓
+TARGET REALIZATION
 
-Source MAY express:
+Never:
 
-- computational intent;
+SOURCE
+  ↓
+TARGET-SPECIFIC MEANING
+
+The source language describes what the computation means.
+
+The target layer determines how that computation can be realized.
+
+---
+
+6. The Five Portability Layers
+
+POCO-REAF distinguishes five different kinds of portability.
+
+6.1 Source Portability
+
+The same valid source program can be parsed and semantically interpreted by conforming implementations without being rewritten merely for another target.
+
+6.2 Semantic Portability
+
+The program retains the same defined meaning across compatible target environments.
+
+6.3 Compilation Portability
+
+The semantic representation can be compiled, transformed, serialized, cached, transported, or reused across compatible compiler and target environments.
+
+6.4 Execution Portability
+
+The program can execute on a target when the target satisfies its declared requirements and the implementation has a conforming realization.
+
+6.5 Evolution Portability
+
+Existing valid programs remain meaningful as Zamani, hardware, execution environments, and computational domains evolve.
+
+These five forms MUST NOT be conflated.
+
+---
+
+7. Program Once
+
+7.1 Definition
+
+"Program Once" means that programmers describe computation using Zamani's semantic model rather than encoding accidental assumptions about a particular machine.
+
+A source program MAY express:
+
+- computation;
 - types;
-- effects;
-- concurrency semantics;
-- quantum semantics;
-- hardware semantics;
-- HDL semantics;
+- values;
+- control flow;
+- concurrency;
+- parallelism;
+- quantum computation;
+- hardware intent;
+- HDL intent;
+- AI computation;
+- reasoning;
+- learning;
+- adaptation;
+- uncertainty;
+- contracts;
+- policies;
+- provenance;
 - resource requirements;
 - capability requirements;
-- correctness constraints;
+- constraints;
+- preferences;
+- optimization intent;
 - timing requirements;
 - precision requirements;
 - security requirements;
-- placement constraints;
-- portability constraints;
-- performance preferences.
+- deployment intent.
 
-Source MUST NOT need to be rewritten merely because the target has a different:
+The program MUST NOT need to be rewritten merely because the target changes its:
 
-- number of cores;
-- number of qubits;
-- number of devices;
+- processor;
+- ISA;
+- core count;
 - memory capacity;
-- topology;
-- instruction set;
-- native gate set;
-- accelerator layout;
-- communication fabric;
-- timing grid;
-- calibration state;
-- execution provider.
+- accelerator availability;
+- GPU architecture;
+- FPGA family;
+- ASIC implementation;
+- quantum architecture;
+- qubit topology;
+- device count;
+- network topology;
+- storage capacity;
+- execution provider;
+- deployment location.
 
 ---
 
-4.2 Compile Once
+8. Compile Once
 
-Compilation produces a canonical, versioned semantic representation and, where supported, a reusable target-independent compiled artifact.
+8.1 Definition
 
-"Compile once" means that the semantic compilation result can be reused across compatible target realizations without requiring the source program to be rewritten for every target.
+"Compile Once" means that the source can be compiled into a reusable, versioned, target-independent semantic representation.
 
-It does not mean that one immutable machine-code binary must execute on every ISA.
+Compilation MUST preserve:
 
-Target-specific realization MAY occur through:
+- source meaning;
+- type meaning;
+- effects;
+- capabilities;
+- resource requirements;
+- contracts;
+- policies;
+- provenance;
+- domain semantics.
 
-- specialization;
-- capability negotiation;
-- routing;
-- scheduling;
-- optimization;
-- decomposition;
-- resource allocation;
-- target lowering;
-- code generation;
-- runtime dispatch.
+The reusable compilation artifact MAY then be specialized for different target environments.
 
-Those transformations MUST preserve canonical semantics or explicitly report that the selected target cannot satisfy them.
+Therefore:
 
----
+source
+   ↓
+frontend
+   ↓
+domain-neutral AST
+   ↓
+semantic analysis
+   ↓
+canonical semantic representation
+   ↓
+reusable compilation artifact
 
-4.3 Run Everywhere
+A target-specific realization MAY subsequently perform:
 
-A program can run on every target for which:
+specialization
+optimization
+decomposition
+routing
+scheduling
+lowering
+code generation
+deployment
 
-1. the target satisfies the program's semantic requirements;
-2. the target satisfies required capabilities;
-3. sufficient resources are available;
-4. a conforming lowering exists;
-5. execution is permitted by security and policy constraints.
-
-"Everywhere" means across supported execution classes.
-
-It does not mean that an incapable machine must somehow execute an impossible computation.
-
----
-
-4.4 Run Anywhere
-
-The same semantic program MAY execute:
-
-- locally;
-- remotely;
-- embedded;
-- distributed;
-- simulated;
-- emulated;
-- accelerated;
-- classically;
-- quantumly;
-- on heterogeneous hardware;
-- on future target classes.
-
-Target identity MUST NOT become part of program meaning unless explicitly declared as such.
+This is still consistent with "Compile Once".
 
 ---
 
-4.5 Run Forever
+8.2 What Compile Once Does Not Mean
 
-The semantic contract MUST be versioned and evolvable so that new targets can interpret existing valid programs without requiring historical source to encode future hardware assumptions.
+POCO-REAF MUST NOT require:
 
-"Forever" is therefore a language-evolution objective.
+«one immutable machine-code binary that executes unchanged on every architecture.»
 
-It does not claim that every historical implementation or physical device will remain available forever.
+Such a requirement would conflict with the existence of different:
 
-Backward compatibility is governed by:
+- instruction sets;
+- quantum instruction models;
+- FPGA fabrics;
+- ASIC implementations;
+- accelerator interfaces;
+- memory systems;
+- execution models.
 
-- "grammar/specification/language-version.md";
-- "grammar/specification/compatibility.md";
-- "grammar/compatibility/*".
+Instead:
+
+«One source-level semantic program MUST have one stable meaning, while target-specific realization MAY differ.»
 
 ---
 
-5. Fundamental Separation: Meaning vs Realization
+9. Run Everywhere
 
-Zamani MUST distinguish:
+A program is executable on a target when all mandatory conditions are satisfied.
 
-Semantic requirement
+Conceptually:
 
-What must be true for the program to be correct.
+Program
+  +
+Types
+  +
+Effects
+  +
+Capabilities
+  +
+Resources
+  +
+Contracts
+  +
+Policies
+  +
+Target
+  =
+Feasible Realization
 
-Capability requirement
+A target MUST NOT be considered feasible merely because it can parse the source.
 
-What a target must be able to provide.
+A conforming implementation MUST establish, where applicable:
 
-Constraint
+1. type validity;
+2. effect validity;
+3. capability satisfaction;
+4. resource sufficiency;
+5. contract compatibility;
+6. policy authorization;
+7. security compatibility;
+8. semantic lowering availability;
+9. required runtime support.
 
-What realizations are forbidden.
+---
 
-Preference
+10. Run Anywhere
 
-What realization is preferred but not required.
+A conforming Zamani implementation MAY realize a program through:
 
-Hint
+- local execution;
+- embedded execution;
+- native CPU execution;
+- multicore execution;
+- GPU execution;
+- FPGA execution;
+- ASIC execution;
+- accelerator execution;
+- quantum execution;
+- quantum simulation;
+- classical simulation;
+- distributed execution;
+- cluster execution;
+- HPC execution;
+- cloud execution;
+- heterogeneous execution;
+- emulation;
+- future execution substrates.
 
-Information supplied to guide optimization without changing semantics.
+The existence of a new target class MUST NOT require changing the meaning of existing portable programs.
 
-Budget
+---
 
-An explicitly selected limit on resource consumption.
+11. Run Forever
 
-Target fact
+"Forever" is a compatibility and evolution property.
 
-What the selected execution environment actually provides.
+It does not mean that:
 
-Target facts MUST NOT automatically become source semantics.
+- every historical device remains available;
+- every compiler remains operational;
+- every runtime remains supported;
+- physical hardware remains operational indefinitely.
+
+It means that Zamani's semantic model is designed so that future implementations can continue to interpret existing valid programs without requiring those programs to encode assumptions about future hardware that does not yet exist.
+
+Evolution MUST therefore be governed by:
+
+grammar/specification/language-version.md
+grammar/specification/compatibility.md
+grammar/compatibility/
+
+and the associated language, AST, semantic, dialect, target, and IR version contracts.
+
+---
+
+12. Meaning Versus Realization
+
+The following concepts are distinct.
+
+Concept| Meaning
+Requirement| Something the program needs for correctness
+Capability| Something the target can provide
+Constraint| A realization that is forbidden
+Preference| A realization preferred by the program
+Hint| Information useful to optimization but not semantic
+Budget| An explicitly declared resource bound
+Target fact| Information discovered about a target
+Policy| Rules governing allowed behavior
+Contract| Correctness obligations
+Provenance| Evidence of where information or decisions originated
+
+A target fact MUST NOT automatically become program semantics.
 
 For example:
 
-requires quantum
+requires capability("quantum.measurement")
 
 does not mean:
 
-use device X
-use topology Y
-use exactly N physical qubits
-use native gate set Z
+use quantum device X
 
-Likewise:
+Similarly:
 
-requires memory >= M
+requires memory >= required_memory
 
-expresses a resource requirement.
-
-It does not establish a universal machine memory size.
+does not define the amount of memory that every Zamani machine must have.
 
 ---
 
-6. Scaling Model
+13. Resource Independence
 
-6.1 General Rule
+Resource quantities MUST remain open-ended.
 
-Every scalable quantity MUST be represented:
-
-- symbolically;
-- parametrically;
-- dynamically;
-- through an explicit program requirement;
-- through a resource expression;
-- through a runtime-discovered capability.
-
-The following MUST NOT receive arbitrary language-level maxima:
+The language MUST NOT define universal limits for:
 
 - qubits;
 - logical qubits;
 - physical qubits;
-- quantum registers;
 - CPUs;
 - cores;
 - threads;
 - GPUs;
 - FPGAs;
-- ASIC instances;
+- ASICs;
+- accelerators;
 - devices;
 - nodes;
 - processes;
 - tasks;
 - channels;
-- memories;
+- memory;
+- storage;
+- network endpoints;
 - tensor dimensions;
 - tensor rank;
-- vector lengths;
 - matrix dimensions;
-- network endpoints;
-- distributed partitions;
-- storage capacity;
-- address spaces;
-- program size;
+- vector lengths;
 - circuit depth;
-- timeline count;
-- hardware modules.
+- module count;
+- source size;
+- deployment size.
+
+The following classes of limits are legitimate:
+
+1. physical limitations;
+2. target capability limits;
+3. runtime limits;
+4. explicitly selected budgets;
+5. security policies;
+6. implementation representation limits;
+7. test-fixture limits.
+
+Such limits MUST NOT become universal Zamani language semantics.
 
 ---
 
-6.2 Legitimate Limits
+14. No Artificial Capacity Ceiling
 
-A limit is legitimate only when it represents one of:
+The grammar and language specification MUST NOT establish an artificial universal capacity.
 
-1. A fundamental language semantic restriction.
-2. A documented representation constraint.
-3. An explicitly selected resource budget.
-4. A target capability.
-5. A user-selected execution policy.
-6. A security or safety policy.
-7. A finite host-resource limitation.
+Forbidden architecture:
 
-A limit MUST NOT be disguised as a grammar constant.
+MAX_QUBITS = ...
+MAX_CPUS = ...
+MAX_GPUS = ...
+MAX_FPGAS = ...
+MAX_NODES = ...
+MAX_MEMORY = ...
+MAX_THREADS = ...
+MAX_REGISTER_WIDTH = ...
+MAX_TENSOR_RANK = ...
+MAX_NETWORK_SIZE = ...
+MAX_DEVICE_COUNT = ...
 
----
+The same rule applies to disguised equivalents.
 
-6.3 No Artificial Ceiling
+A constant is not automatically forbidden merely because it contains a numeric value.
 
-The language MUST NOT define universal semantics equivalent to:
+The implementation MUST classify each capacity value as one of:
 
-MAX_QUBITS = 32
-MAX_CORES = 64
-MAX_DEVICES = 16
-MAX_TENSOR_RANK = 8
+language semantics
+explicit user budget
+target capability
+runtime limit
+implementation representation limit
+security limit
+test fixture
 
-Such constants MAY exist only as:
-
-- test fixtures;
-- implementation safeguards;
-- explicit user-selected execution budgets;
-- target-specific capability values.
-
-They MUST NOT define the semantic capacity of Zamani.
-
----
-
-7. Program Shape and Parametric Scaling
-
-Programs SHOULD express scale through program semantics rather than machine identity.
-
-Examples include:
-
-for each element in data {
-    ...
-}
-
-allocate n qubits
-
-parallelize over available resources
-
-require capability quantum
-
-require memory >= required_memory
-
-A compiler/runtime MAY instantiate those semantics at different scales.
-
-A program whose algorithm explicitly requires 1024 qubits is portable to every target capable of satisfying that requirement.
-
-It is not equivalent to a language that universally supports only 1024 qubits.
+Only the first category belongs to language semantics.
 
 ---
 
-8. Source-to-Execution Contract
+15. "Infinity" and Practical Limits
 
-The canonical pipeline is:
+POCO-REAF uses "infinity" in the architectural sense of:
 
-Zamani Source
-    │
-    ▼
-Source Identity / Source Map
-    │
-    ▼
+«No artificial finite language-level ceiling.»
+
+It does not claim physically infinite:
+
+- memory;
+- processing power;
+- bandwidth;
+- qubits;
+- storage;
+- execution time;
+- energy;
+- communication;
+- hardware.
+
+A computation may therefore scale as far as the actual combination of:
+
+program requirements
++
+implementation representation
++
+available resources
++
+target capabilities
++
+security policy
++
+execution policy
+
+permits.
+
+The language itself MUST NOT impose an arbitrary smaller ceiling.
+
+---
+
+16. Parametric Scaling
+
+Portable programs SHOULD describe scale through:
+
+- values;
+- parameters;
+- types;
+- resource expressions;
+- capability expressions;
+- data size;
+- runtime discovery;
+- policies;
+- topology descriptions;
+- algorithmic structure.
+
+Examples of valid semantic intent include:
+
+requires qubits >= required_qubits;
+requires memory >= required_memory;
+requires capability("quantum.measurement");
+requires capability("gpu.compute");
+requires capability("tensor.compute");
+requires topology(required_topology);
+
+and, where supported by the resource grammar:
+
+prefer ...
+constrain ...
+allow ...
+forbid ...
+
+These describe requirements or realization policy.
+
+They MUST NOT become hidden universal limits.
+
+---
+
+17. Canonical Compilation Pipeline
+
+The repository's POCO-REAF pipeline is:
+
+Zamani source
+       │
+       ▼
 Lexer
-    │
-    ▼
-Parser
-    │
-    ▼
-Frontend AST
-    │
-    ▼
-Name / Module / Import Resolution
-    │
-    ▼
-Type + Effect + Capability + Resource Analysis
-    │
-    ▼
-Canonical Semantic Representation
-    ├───────────────────────┬─────────────────────┐
-    ▼                       ▼                     ▼
-Classical IR           quantum::ir       Effect/resource/
-                                          temporal metadata
-    │                       │                     │
-    └───────────────────────┴─────────────────────┘
-                            │
-                            ▼
-                  Target-independent analysis
-                            │
-                            ▼
-                 Optimization / Planning
-                            │
-                            ▼
-             Resilience / Routing / Scheduling / ZQN
-                            │
-                            ▼
-                      Target Lowering
-                            │
-                            ▼
-          CPU / GPU / FPGA / ASIC / QPU /
-          Simulator / Distributed / Future Target
-                            │
-                            ▼
-                          Runtime
+       │
+       ▼
+ANTLR grammar
+       │
+       ▼
+Domain-neutral AST
+       │
+       ▼
+Name / module / import resolution
+       │
+       ▼
+Type analysis
+       │
+       ▼
+Effect analysis
+       │
+       ▼
+Capability analysis
+       │
+       ▼
+Resource analysis
+       │
+       ▼
+Contract analysis
+       │
+       ▼
+Policy analysis
+       │
+       ▼
+Provenance analysis
+       │
+       ▼
+Semantic model
+       │
+       ├───────────────┐
+       ▼               ▼
+Classical IR      quantum::ir
+       │               │
+       └───────┬───────┘
+               ▼
+     Target-independent
+       optimization
+               │
+               ▼
+       specialization
+               │
+               ▼
+       routing / mapping
+               │
+               ▼
+          scheduling
+               │
+               ▼
+      resilience / QEC
+               │
+               ▼
+             ZQN
+               │
+               ▼
+        target lowering
+               │
+               ▼
+              HAL
+               │
+               ▼
+            runtime
 
-The grammar is authoritative for syntax.
-
-The grammar MUST NOT bypass semantic analysis by directly encoding backend decisions.
+The grammar MUST NOT bypass this architecture.
 
 ---
 
-9. Grammar Contract
-
-9.1 Grammar Owns
+18. Grammar Boundary
 
 The grammar owns:
 
-- lexical structure;
+- syntax;
+- lexical composition;
 - syntactic structure;
-- valid source forms;
-- precedence;
-- associativity;
-- syntactic declarations;
-- syntactic resource expressions;
-- syntactic capability expressions;
-- syntactic quantum constructs;
-- syntactic hardware constructs;
-- syntactic HDL constructs;
-- syntactic effects;
-- syntactic annotations;
-- source-level version markers.
-
----
-
-9.2 Grammar Does Not Own
-
-The grammar does not own:
-
-- physical device discovery;
-- calibration values;
-- native hardware gate sets;
-- routing algorithms;
-- schedule construction;
-- QEC algorithms;
-- noise models;
-- runtime retry policy;
-- optimization algorithms;
-- physical placement decisions;
-- device identifiers as semantic identities;
-- backend-specific machine code.
-
----
-
-9.3 Open-Ended Operations
-
-Domain operations that do not require distinct syntax SHOULD remain:
-
-- identifiers;
-- calls;
+- declarations;
 - expressions;
-- intrinsics;
-- registered operations;
-- dialect operations;
-- library functions.
+- statements;
+- domain syntax;
+- resource expressions;
+- capability expressions;
+- policy syntax;
+- contract syntax;
+- effect syntax;
+- version syntax.
 
-The grammar MUST NOT become a closed enumeration of all possible:
+The grammar does NOT own:
 
-- quantum gates;
-- mathematical operations;
-- accelerators;
-- processors;
-- GPUs;
-- FPGA primitives;
-- HDL primitives;
-- devices;
-- future hardware operations.
-
-This is essential for:
-
-- scalability;
-- extensibility;
-- future hardware;
-- dialect support;
-- POCO-REAF.
+- target discovery;
+- physical allocation;
+- hardware calibration;
+- routing;
+- scheduling;
+- QEC algorithms;
+- runtime adaptation algorithms;
+- machine code;
+- physical device control.
 
 ---
 
-10. Quantum POCO-REAF
+19. AST Boundary
 
-Quantum computing is a first-class Zamani domain.
+The AST MUST remain domain-neutral at the common frontend boundary.
 
-Quantum source MUST remain hardware-independent unless hardware specificity is explicitly part of the program's declared intent.
+The AST MUST preserve enough information to reconstruct:
 
----
+- source meaning;
+- source spans;
+- explicit requirements;
+- capabilities;
+- constraints;
+- preferences;
+- effects;
+- contracts;
+- policies;
+- provenance;
+- domain operations;
+- type information required downstream.
 
-10.1 Canonical Quantum Boundary
+The AST MUST NOT prematurely replace source intent with:
 
-"quantum::ir" is the canonical quantum semantic boundary.
-
-The grammar/frontend MUST NOT create a competing permanent quantum IR.
-
-The frontend MAY construct temporary AST nodes for:
-
-- quantum operation expressions;
-- qubit references;
-- quantum register declarations;
-- measurement;
-- reset;
-- controlled operations;
-- parameter expressions;
-- observables;
-- quantum regions.
-
-Those nodes MUST lower into the canonical quantum semantic representation.
-
----
-
-10.2 Qubit Identity
-
-The grammar MUST NOT define competing semantic versions of:
-
-- "QubitId";
-- "PhysicalQubitId";
-- logical qubit identity;
-- physical qubit identity.
-
-Canonical quantum identity belongs to the quantum IR/hardware boundary.
-
-A source-level qubit reference expresses program semantics.
-
-It is not automatically a physical device address.
+- physical device IDs;
+- hardware addresses;
+- physical qubit mappings;
+- backend instructions;
+- calibration data;
+- machine-code instructions;
+- scheduler state.
 
 ---
 
-10.3 No Fixed Qubit Count
+20. Semantic Boundary
 
-The grammar MUST NOT restrict programs to a fixed number of qubits.
+Semantic analysis owns interpretation.
 
-Forbidden as language semantics:
+It MUST determine, as applicable:
 
-MAX_QUBITS = 32
-MAX_QUBITS = 64
-MAX_QUBITS = 1024
+- names;
+- types;
+- effects;
+- capabilities;
+- resources;
+- contracts;
+- policies;
+- domain legality;
+- portability properties;
+- provenance relationships.
 
-A program-specific register size is valid when it is part of the algorithm.
+A syntactically valid program MAY still be semantically invalid.
 
-That size is program semantics.
+A semantically valid program MAY still be physically infeasible on a selected target.
 
-It is not a universal compiler limit.
+These are different failure classes.
 
 ---
 
-10.4 Quantum Operation Lowering
+21. Canonical IR Boundary
 
-The required model is:
+POCO-REAF requires canonical semantic representations.
 
-Zamani Quantum Intent
-        ↓
-Quantum AST
-        ↓
-Semantic Validation
-        ↓
+Classical computation MUST converge into the repository's Classical IR.
+
+Quantum computation MUST converge into:
+
 quantum::ir
-        ↓
-Optimization
-        ↓
-Routing / Mapping
-        ↓
-Scheduling
-        ↓
-ZQN / Calibration-Aware Analysis
-        ↓
-Target Lowering
-        ↓
-Native Execution
 
-A backend MUST NOT silently replace an operation with a semantically different operation because its native gate set differs.
+The grammar MUST NOT define another permanent quantum IR.
 
-If exact realization is impossible, compilation MUST produce a structured diagnostic.
+The frontend MAY create temporary AST representations.
 
-If approximation is permitted by language semantics, that approximation MUST be explicit and its correctness/error contract MUST be available to verification.
+Those representations MUST lower into the canonical semantic structures.
 
 ---
 
-10.5 Quantum Control
+22. Quantum POCO-REAF
 
-Where implemented, the semantic model MUST be capable of representing:
+Quantum computation is a first-class Zamani domain.
 
-- single-target operations;
-- multi-target operations;
-- controls;
-- negative controls;
-- parameterized operations;
-- inverses/adjoints;
-- measurement;
+Quantum source MUST be hardware-independent by default.
+
+Hardware-specific intent is permitted only when explicitly expressed as part of the program's semantics or realization constraints.
+
+---
+
+22.1 Quantum Operation Model
+
+Quantum operations MUST remain open-ended.
+
+The language MUST NOT require a universal enumeration such as:
+
+H
+X
+Y
+Z
+CNOT
+...
+
+to define the entire universe of quantum operations.
+
+Quantum operations SHOULD be represented through the existing data-driven operation model:
+
+operation specifier
+targets
+parameters
+results
+attributes
+modifiers
+
+New operations MAY be supplied through:
+
+- libraries;
+- dialects;
+- metadata;
+- registered operations;
+- vendor extensions.
+
+A new quantum operation MUST NOT require changing the universal language grammar unless genuinely new syntax is required.
+
+---
+
+22.2 Quantum Resource Identity
+
+Source-level qubit references express program-level identity.
+
+Physical qubit identity belongs to the quantum IR and target realization boundary.
+
+The implementation MUST preserve the distinction between:
+
+source qubit
+logical qubit
+canonical IR resource
+physical qubit
+
+No layer may silently reinterpret one identity as another.
+
+---
+
+22.3 Quantum Resource Scaling
+
+Quantum programs MUST NOT be restricted by an arbitrary universal qubit count.
+
+A program may legitimately require a particular number of logical qubits.
+
+That is a property of the program.
+
+It is not a universal limit of Zamani.
+
+---
+
+22.4 Quantum Realization
+
+The realization path is:
+
+quantum source intent
+       ↓
+quantum AST
+       ↓
+semantic validation
+       ↓
+quantum::ir
+       ↓
+optimization / decomposition
+       ↓
+logical-to-physical mapping
+       ↓
+routing
+       ↓
+scheduling
+       ↓
+QEC / resilience where required
+       ↓
+ZQN / target information
+       ↓
+target lowering
+       ↓
+QPU / simulator / other realization
+
+A backend MUST NOT silently replace a semantically different quantum operation merely because its native operation set differs.
+
+If exact realization is impossible, the compiler MUST diagnose the failure.
+
+Approximation is allowed only when the program's semantics or explicit policy permits it.
+
+The approximation MUST have an explicit correctness/error contract.
+
+---
+
+22.5 Quantum Measurement
+
+Measurement is a semantic operation.
+
+Its realization MAY depend on the target.
+
+The language MUST preserve:
+
+- measurement meaning;
+- result type;
+- result ordering;
+- relevant probabilistic semantics;
+- classical feed-forward semantics.
+
+A target's physical measurement mechanism MUST NOT redefine the source meaning.
+
+---
+
+22.6 Quantum Dynamic Control
+
+Where supported, POCO-REAF MUST permit semantic representation of:
+
 - mid-circuit measurement;
-- reset;
 - classical feed-forward;
-- dynamic control flow;
-- barriers/fences;
-- logical-to-physical mapping;
-- logical resources;
-- error-correction metadata;
-- noise-aware execution;
-- pulse-level lowering.
+- conditional quantum operations;
+- dynamic circuits;
+- reset;
+- adaptive quantum control.
 
-These MUST be represented semantically rather than through an arbitrary closed gate list.
+The compiler MAY realize these through target-specific mechanisms.
 
 ---
 
-10.6 QEC Boundary
+22.7 Quantum Error Correction
 
 The grammar MAY express:
 
-- QEC intent;
-- logical resource requirements;
-- error-correction requirements;
-- fault-tolerance constraints.
+- error-correction intent;
+- fault-tolerance requirements;
+- logical-resource requirements;
+- correctness constraints.
 
-The grammar MUST NOT implement QEC algorithms.
+The grammar does not own QEC algorithms.
 
 QEC owns:
 
-- detection;
+- encoding;
+- syndrome extraction;
 - decoding;
 - correction;
-- code-specific algorithms;
-- syndrome processing;
-- logical error handling.
+- logical error processing;
+- code-specific realization.
+
+The POCO-REAF layer only requires that the declared correctness semantics survive the realization.
 
 ---
 
-10.7 ZQN Boundary
+22.8 ZQN
 
-ZQN owns quantum:
+ZQN is downstream of the semantic program.
 
-- noise;
+ZQN may provide information about:
+
 - faults;
-- fault classification;
-- fault location;
-- correlated faults;
+- noise;
+- fault locations;
 - leakage;
 - loss;
 - erasure;
-- calibration-related fault information.
+- correlated faults;
+- calibration-related conditions;
+- target behavior.
 
-POCO-REAF integration is:
+POCO-REAF MUST NOT duplicate the ZQN model in the language grammar.
 
-Program Semantics
-       ↓
-Requirements / Correctness Constraints
+The relationship is:
+
+program semantics
        ↓
 quantum::ir
        ↓
-ZQN Fault / Noise Information
+target / ZQN information
        ↓
-Planning / Adaptation
-
-The grammar MUST NOT duplicate ZQN noise models.
+planning / resilience / realization
 
 ---
 
-10.8 Scheduling Boundary
+22.9 Quantum Scheduling
 
 Scheduling owns:
 
+- temporal placement;
 - operation ordering;
-- dependency scheduling;
 - resource conflicts;
 - timing;
-- alignment;
-- delays;
+- synchronization;
 - execution slots;
-- scheduling policies.
+- delays;
+- alignment.
 
-The grammar MAY express semantic timing requirements.
+The grammar may express semantic timing requirements.
 
-The grammar MUST NOT hard-code:
+It MUST NOT hard-code target-specific:
 
-- a device timing grid;
-- gate durations;
+- pulse durations;
+- timing grids;
 - channel counts;
-- pulse widths;
-- backend timing tables.
-
-Those belong to target information and scheduling.
+- gate durations;
+- calibration values.
 
 ---
 
-10.9 Resilience Boundary
+23. Classical POCO-REAF
 
-Resilience decides when and how to adapt execution in response to:
+Classical computation MUST remain independent of physical machine size.
 
-- faults;
-- degradation;
-- resource changes;
-- backend failure;
-- execution failure;
-- changing target conditions.
+Zamani MUST support classical computation across:
 
-The grammar MUST NOT own:
+- tiny embedded systems;
+- single-core systems;
+- multicore systems;
+- CPUs;
+- GPUs;
+- accelerators;
+- distributed systems;
+- HPC systems;
+- future computational systems.
 
-- retry algorithms;
-- rollback algorithms;
-- remapping;
-- rerouting;
-- rescheduling;
-- backend switching;
-- mitigation algorithms.
+The same semantics MAY be realized differently according to available capabilities.
 
-Where source-level resilience policy is required, grammar expresses policy intent.
+The source MUST NOT depend on:
 
-The resilience subsystem implements the decision mechanism.
-
----
-
-11. Classical POCO-REAF
-
-Classical computation MUST remain fully expressive without establishing a fixed hardware scale.
-
-The language MAY express:
-
-- scalar computation;
-- structured data;
-- arrays;
-- vectors;
-- matrices;
-- tensors;
-- functions;
-- generics;
-- concurrency;
-- parallelism;
-- distributed computation;
-- accelerator intent;
-- numerical computation;
-- symbolic computation.
-
-A classical construct MUST NOT imply a particular:
-
-- CPU;
-- ISA;
-- register count;
-- cache hierarchy;
-- SIMD width;
-- core count;
-- memory capacity.
+- fixed register width;
+- fixed cache size;
+- fixed core count;
+- fixed vector width;
+- fixed memory size.
 
 ---
 
-12. HDL and Hardware POCO-REAF
+24. HDL and Hardware POCO-REAF
 
-HDL syntax represents hardware semantics such as:
+HDL/hardware semantics MAY express:
 
 - modules;
 - ports;
 - signals;
 - registers;
-- clocks;
-- timing requirements;
-- combinational behavior;
-- sequential behavior;
-- state machines;
 - memories;
+- clocks;
+- timing;
+- state machines;
 - pipelines;
 - interfaces;
-- parameters.
+- combinational behavior;
+- sequential behavior;
+- hardware parameters.
 
-A hardware parameter that is part of the design is semantic.
+A design parameter that is part of the intended hardware behavior is semantic.
 
-A physical implementation detail is not automatically semantic.
+A physical implementation limit is not automatically semantic.
 
-For example, a parametrized data width is valid when the width is part of the hardware design.
+For example:
 
-A grammar rule that only permits 32-bit hardware is not.
+parameter width = application_width
 
-Hardware source SHOULD be capable of lowering to different implementations when target toolchains support those realizations.
+is different from defining a universal maximum hardware width.
+
+Hardware realization MUST remain downstream.
 
 ---
 
-13. Hybrid Computing
+25. Hybrid Computation
 
-Zamani MUST support classical, quantum, hardware, accelerator, and distributed semantics in one program.
+Zamani MUST support composition of:
 
-Cross-domain boundaries MUST be explicit.
+classical
+quantum
+HDL
+hardware
+AI
+data
+distributed
+networking
+accelerator
+simulation
+
+without creating separate language universes.
 
 Examples include:
 
 classical → quantum
-quantum → classical measurement
+quantum → classical
 classical → accelerator
-HDL → software control
-quantum → hardware execution
-classical → distributed service
+AI → quantum
+quantum → AI
+software → HDL
+HDL → software
+distributed → quantum
+quantum → distributed
 
-Conversions MUST be:
+Each boundary MUST preserve:
 
-- type checked;
-- effect checked;
-- capability checked;
-- resource checked where applicable.
+- type correctness;
+- effect correctness;
+- capability requirements;
+- resource requirements;
+- contracts;
+- policies;
+- provenance.
 
-A hybrid program MUST preserve semantic meaning when resources change, subject to its declared requirements.
-
----
-
-14. Resource and Capability Model
-
-POCO-REAF depends on separating what a program needs from what a machine happens to have.
-
-The language/resource model MUST distinguish:
-
-- requirement;
-- capability;
-- constraint;
-- preference;
-- hint;
-- budget;
-- target fact.
-
-Examples of semantic intent include:
-
-requires capability quantum;
-requires capability fpga;
-requires memory >= M;
-requires qubits >= Q;
-requires precision >= P;
-prefer latency <= L;
-prefer energy <= E;
-
-The exact surface syntax is governed by the canonical grammar and resource specifications.
-
-Semantic analysis determines the meaning.
-
-The runtime reports actual target facts.
+Hybrid computation MUST converge into the existing canonical IR architecture rather than creating a separate hybrid IR.
 
 ---
 
-15. Target Selection
+26. Resources
 
-Target selection MUST be external to source semantics unless the developer explicitly declares a target requirement as part of the program's meaning.
+The resource subsystem is governed by:
 
-Target selection MAY consider:
+grammar/resources/
+grammar/spec/resources.md
 
-- declared capabilities;
-- resource availability;
-- correctness requirements;
-- security policy;
-- performance preferences;
-- energy preferences;
-- reliability requirements;
-- placement constraints;
-- interoperability requirements.
+POCO-REAF depends on the resource model distinguishing:
 
-Target selection MUST NOT reinterpret a preference as a requirement.
+requirement
+capability
+constraint
+preference
+hint
+budget
+target fact
+
+Resource expressions MUST remain symbolic and extensible.
+
+Examples:
+
+requires qubits >= required_qubits;
+requires memory >= required_memory;
+requires capability("gpu.compute");
+requires capability("quantum.measurement");
+requires topology(required_topology);
+
+Resource quantities MUST NOT be interpreted as universal language capacities.
+
+---
+
+27. Capability Negotiation
+
+Capability negotiation occurs after parsing.
+
+The pipeline is:
+
+source requirement
+       ↓
+semantic capability expression
+       ↓
+target capability discovery
+       ↓
+capability matching
+       ↓
+feasibility result
+
+A capability MAY describe:
+
+- computation;
+- quantum measurement;
+- tensor computation;
+- GPU execution;
+- FPGA synthesis;
+- network access;
+- cryptography;
+- simulation;
+- distributed execution;
+- native execution;
+- foreign ABI support;
+- learning;
+- adaptation;
+- reflection;
+- code generation.
+
+Capabilities MUST remain open-ended.
+
+The language MUST NOT enumerate every future capability.
+
+---
+
+28. Preferences
+
+Preferences are not requirements.
 
 For example:
 
-prefer GPU
+prefer gpu;
 
-MUST NOT mean:
+MAY influence target selection.
 
-program is invalid on CPU
+It MUST NOT mean:
 
-unless the program explicitly requires a GPU capability.
+gpu is required
 
----
+unless the source explicitly declares a requirement.
 
-16. Compilation Reuse
+The compiler MUST therefore distinguish:
 
-A POCO-REAF implementation SHOULD preserve reusable artifacts at multiple levels:
-
-1. Parsed source representation.
-2. Typed/validated AST or semantic representation.
-3. Canonical semantic IR.
-4. Target-independent optimized IR.
-5. Target-specialized representation.
-6. Target-specific executable representation.
-
-Each artifact MUST record its relevant assumptions.
-
-An artifact depending on target facts MUST NOT be represented as universally target-independent.
+required
+preferred
+permitted
+forbidden
+suggested
 
 ---
 
-17. Determinism
+29. Constraints
 
-For identical:
+A constraint limits acceptable realizations.
+
+A constraint MUST NOT silently become a universal language limit.
+
+For example:
+
+constrain topology(required_topology);
+
+may restrict realization.
+
+It does not define the topology of every Zamani target.
+
+---
+
+30. Policies
+
+Policies are governed by:
+
+grammar/policies/
+grammar/execution/policies.g4
+grammar/spec/policies.md
+
+Policies MAY govern:
+
+- security;
+- execution;
+- resource selection;
+- adaptation;
+- deployment;
+- simulation;
+- target selection;
+- fallback;
+- permissions;
+- prohibitions.
+
+Policies MUST NOT silently alter the meaning of the source program.
+
+---
+
+31. Effects
+
+Effects are governed by:
+
+grammar/effects/
+grammar/spec/effects.md
+
+POCO-REAF requires effects to remain part of semantic portability.
+
+Relevant effects may include:
+
+- I/O;
+- network;
+- mutation;
+- randomness;
+- native execution;
+- foreign execution;
+- distributed execution;
+- quantum measurement;
+- learning;
+- adaptation;
+- reflection;
+- code generation;
+- simulation;
+- hardware access.
+
+An effect MUST NOT be silently removed merely because a target does not provide it.
+
+The target must either satisfy the effect or report infeasibility.
+
+---
+
+32. Contracts
+
+Contracts are governed by the validation and specification layers.
+
+Relevant constructs include:
+
+requires
+ensures
+invariant
+assume
+guarantee
+property
+assertion
+
+Contracts MUST remain semantic obligations.
+
+A target realization MUST preserve required contracts.
+
+An optimization MUST NOT invalidate a contract.
+
+An approximation MUST NOT claim exact contract satisfaction when only an explicitly permitted approximation contract is available.
+
+---
+
+33. Knowledge, Reasoning, Learning, and Adaptation
+
+Zamani's generic computational model MAY include:
+
+- inference;
+- deduction;
+- reasoning;
+- knowledge;
+- assertions;
+- retraction;
+- queries;
+- learning;
+- adaptation;
+- uncertainty;
+- evidence;
+- explanation;
+- provenance;
+- decision records.
+
+These capabilities MUST use the same:
+
+types
+effects
+resources
+capabilities
+contracts
+policies
+provenance
+IR
+
+as other computational domains.
+
+They MUST NOT create a second semantic universe.
+
+---
+
+33.1 Reasoning
+
+Reasoning MUST remain portable.
+
+A reasoning operation may consume:
+
+- premises;
+- evidence;
+- relations;
+- models;
+- constraints;
+- policies.
+
+The semantic result MUST be independent of the particular CPU/GPU/QPU used to execute it.
+
+---
+
+33.2 Learning
+
+Learning is an effectful semantic operation.
+
+A learning operation MUST account for applicable:
+
+- input;
+- data;
+- model;
+- objective;
+- resources;
+- capabilities;
+- effects;
+- policy;
+- provenance.
+
+Specific algorithms SHOULD remain libraries, dialects, or semantic registrations rather than becoming an ever-growing core grammar enumeration.
+
+---
+
+33.3 Adaptation
+
+Adaptation MUST be controlled.
+
+Adaptation MUST NOT mean unrestricted self-modifying execution.
+
+A conforming adaptation model MUST permit enforcement of:
+
+policy
+capability
+effect
+resource
+authorization
+provenance
+contract
+
+The semantic model is:
+
+adaptation request
+       ↓
+authorization
+       ↓
+policy evaluation
+       ↓
+resource/capability validation
+       ↓
+controlled change
+       ↓
+verification
+       ↓
+provenance record
+       ↓
+continued execution
+
+---
+
+33.4 Evidence
+
+Evidence MAY support:
+
+- reasoning;
+- learning;
+- verification;
+- compiler decisions;
+- optimization decisions;
+- target selection;
+- security decisions;
+- runtime decisions.
+
+Evidence MUST retain provenance where the relevant subsystem requires it.
+
+---
+
+33.5 Explainability
+
+Explanation MAY describe:
+
+- program decisions;
+- compiler transformations;
+- target selection;
+- resource allocation;
+- optimization;
+- quantum routing;
+- hardware placement;
+- security decisions;
+- adaptive execution.
+
+Explanation is not restricted to AI.
+
+---
+
+34. Determinism
+
+POCO-REAF distinguishes:
+
+deterministic parsing
+deterministic semantic analysis
+reproducible compilation
+deterministic execution
+
+These are separate properties.
+
+Parsing MUST be deterministic with respect to:
 
 - source;
+- lexer configuration;
+- grammar version;
+- parser configuration.
+
+Parsing MUST NOT depend on:
+
+- hardware availability;
+- runtime state;
+- wall-clock time;
+- random target selection;
+- network state.
+
+Where reproducible compilation is requested, the compiler MUST preserve the required compilation inputs and versions.
+
+Runtime nondeterminism MAY exist when explicitly permitted by program semantics.
+
+---
+
+35. Reproducibility
+
+A reproducible artifact MUST identify the information required to reproduce its semantic compilation.
+
+This may include:
+
 - language version;
-- source inputs;
-- compilation configuration;
-- dependency versions;
-- deterministic target-independent policy;
+- grammar version;
+- compiler version;
+- relevant dialect versions;
+- relevant library versions;
+- semantic configuration;
+- optimization configuration;
+- target-independent inputs;
+- provenance;
+- declared policies.
 
-parsing and semantic interpretation MUST be deterministic.
+Target-specific realization may still differ when target facts differ.
 
-Target selection MAY differ when available targets differ.
-
-The selected target MUST still satisfy the same source requirements.
-
-Nondeterministic optimization or scheduling decisions MUST NOT alter semantic correctness.
-
----
-
-18. Provenance
-
-Target-dependent transformations SHOULD retain provenance sufficient to determine:
-
-- which source construct caused an operation;
-- which requirement caused resource allocation;
-- which capability caused lowering;
-- which optimization transformed representation;
-- which routing decision changed placement;
-- which scheduling decision changed timing;
-- which ZQN information influenced planning;
-- which resilience decision altered execution.
-
-Provenance MUST NOT require:
-
-- secrets;
-- credentials;
-- private keys;
-- backend authentication data.
+Reproducibility MUST NOT be confused with identical physical execution.
 
 ---
 
-19. Failure Semantics
+36. Target Discovery
 
-POCO-REAF MUST NOT permit silent failure.
+Target discovery belongs downstream of parsing.
 
-The implementation MUST distinguish:
+It may discover:
 
-- syntax failure;
-- semantic failure;
-- type failure;
-- capability failure;
-- resource insufficiency;
-- target incompatibility;
-- unsupported lowering;
-- runtime failure;
-- transient execution failure;
-- permanent execution failure;
-- verification failure.
+- CPU capabilities;
+- GPU capabilities;
+- FPGA capabilities;
+- ASIC capabilities;
+- QPU capabilities;
+- simulator capabilities;
+- memory;
+- topology;
+- timing;
+- communication;
+- energy;
+- reliability;
+- security;
+- available runtime services.
 
-A target that cannot satisfy a requirement MUST produce a structured diagnostic.
-
-The implementation MUST NOT silently:
-
-- reduce qubit count;
-- drop operations;
-- change precision;
-- change arithmetic semantics;
-- remove synchronization;
-- replace quantum computation;
-- ignore hardware requirements;
-- weaken security constraints.
-
-If approximation is supported, approximation MUST be explicitly represented by the language/compilation contract.
+Target discovery MUST NOT modify source semantics.
 
 ---
 
-20. Resource Exhaustion
+37. Target Selection
 
-Resource exhaustion is not automatically a grammar error.
+Target selection consumes:
 
-The implementation MUST distinguish:
+program requirements
+program constraints
+program preferences
+program policies
+target capabilities
+target resources
+target state
 
-program is invalid
+A selected target MUST be compatible with all mandatory source requirements.
 
-from:
-
-target cannot currently satisfy valid program
-
-Examples include:
-
-- valid large quantum computation on a target with insufficient qubits;
-- valid tensor computation on insufficient memory;
-- valid distributed computation when the required node count is unavailable;
-- valid FPGA design when the selected FPGA lacks resources.
-
-The diagnostic SHOULD identify:
-
-- unsatisfied requirement;
-- available capability;
-- relevant target;
-- resource deficit;
-
-where disclosure is safe.
+If multiple targets satisfy the requirements, selection MAY be influenced by preferences and policies.
 
 ---
 
-21. Runtime Adaptation
+38. Specialization
 
-Runtime MAY select among semantically equivalent realizations using current target facts such as:
+Specialization MAY adapt a semantic artifact to:
 
-- available CPU cores;
-- GPU availability;
-- QPU capacity;
-- queue state;
-- calibration state;
-- network topology;
-- energy budget;
-- memory availability.
+- known resource quantities;
+- known target capabilities;
+- known data shapes;
+- known execution environments;
+- known topology.
 
-Runtime adaptation MUST NOT change program semantics.
+Specialization MUST preserve source semantics.
 
-Adaptation MUST respect:
-
-- declared constraints;
-- correctness requirements;
-- security requirements;
-- resource policies.
+Specialization MUST NOT turn an optional target property into a mandatory property of the source language.
 
 ---
 
-22. Optimization Boundary
+39. Optimization
 
 Optimization MAY change implementation while preserving semantics.
 
-Optimization owns transformations such as:
+Optimization may include:
 
 - algebraic simplification;
-- operation cancellation;
-- gate synthesis;
 - common-subexpression elimination;
-- target-independent optimization;
-- target-aware optimization after target information is introduced.
+- loop transformations;
+- tensor optimization;
+- quantum operation simplification;
+- gate decomposition;
+- memory optimization;
+- parallelization;
+- vectorization;
+- accelerator mapping.
 
-The grammar MUST NOT encode optimizer implementation details as language semantics.
-
-Optimization preferences are hints unless explicitly declared as requirements.
-
----
-
-23. Routing Boundary
-
-Routing maps logical computation to physical resources.
-
-Quantum routing MAY include:
-
-- logical-to-physical qubit mapping;
-- connectivity realization;
-- movement/swap insertion.
-
-Distributed routing MAY include:
-
-- node placement;
-- communication mapping.
-
-Accelerator routing MAY include:
-
-- kernel placement;
-- resource assignment.
-
-Routing MUST consume canonical semantic representations and target capabilities.
-
-Source MUST NOT encode target topology unless topology is explicitly part of the intended design.
+Optimization preferences MUST be distinguishable from correctness requirements.
 
 ---
 
-24. Scheduling Boundary
+40. Lowering
 
-Scheduling determines when executable operations occur subject to:
+Lowering transforms canonical semantic operations into a target-specific representation.
 
-- dependencies;
-- resources;
-- timing constraints;
+The lowering chain MAY include:
+
+Classical IR
+      ↓
+target representation
+
+and:
+
+quantum::ir
+      ↓
+quantum target representation
+
+and:
+
+HDL/hardware semantic representation
+      ↓
+synthesis / target representation
+
+Lowering MUST preserve required semantics.
+
+---
+
+41. Routing
+
+Routing maps logical computation onto available physical resources.
+
+Routing MAY include:
+
+- quantum logical-to-physical mapping;
+- distributed placement;
+- accelerator placement;
+- memory placement;
+- communication routing.
+
+Routing MUST operate downstream of the canonical semantic model.
+
+The source grammar MUST NOT own routing algorithms.
+
+---
+
+42. Scheduling
+
+Scheduling MAY determine:
+
+- execution order;
+- resource sharing;
+- timing;
 - synchronization;
-- target capabilities;
-- execution policy.
+- communication;
+- quantum operation timing;
+- accelerator execution;
+- distributed execution.
 
-Source-level timing semantics MUST be distinguished from target scheduling decisions.
-
-A source deadline is semantic when it affects correctness.
-
-A physical gate duration is a target fact.
+Scheduling MUST use target facts rather than embedding them into universal language semantics.
 
 ---
 
-25. Resilience Boundary
+43. Resilience
 
-Resilience is an orchestration and decision layer.
+The repository's resilience architecture owns adaptation to execution conditions.
 
-It MAY select:
+POCO-REAF-compatible resilience MAY respond to:
 
-- retry;
-- restart;
-- resume;
-- rollback;
-- remap;
-- reroute;
-- reschedule;
-- recompile;
-- reoptimize;
-- change QEC;
-- mitigate;
-- switch backend;
-- quarantine resource;
-- abort.
+- resource degradation;
+- target failure;
+- backend failure;
+- quantum faults;
+- unavailable services;
+- network failure;
+- runtime errors.
 
-The grammar MUST NOT implement these actions.
+Existing resilience states such as:
 
-Source-level resilience policy MAY constrain acceptable adaptations.
+Unknown
+Healthy
+Degraded
+Unstable
+Unavailable
+Recovering
+Quarantined
+Retired
 
-Acceptance MUST remain verification-driven.
+and outcomes such as:
 
-A recovered execution MUST NOT be accepted merely because recovery completed.
+ACCEPT
+DEGRADED_ACCEPT
+RETRY
+RECOVER
+ESCALATE
+REJECT
 
----
+remain downstream execution/resilience concepts.
 
-26. Checkpoint and State Semantics
-
-POCO-REAF MUST NOT imply that arbitrary quantum state can always be serialized and restored.
-
-Checkpoint semantics MUST distinguish:
-
-- classical execution state;
-- compiled program state;
-- logical checkpoint state;
-- measurement-boundary state;
-- QEC-supported state;
-- provider-supported state;
-- reconstructible algorithmic state.
-
-An implementation MUST NOT advertise arbitrary quantum checkpoint/restart semantics unless the underlying target actually supports them.
+POCO-REAF requires that any adaptation preserve source correctness.
 
 ---
 
-27. Security
+44. No Silent Semantic Substitution
 
-Portability MUST NOT weaken security.
+The following behavior is prohibited:
 
-The following MUST remain valid across target selection:
+requested operation unavailable
+        ↓
+silently use a different operation
+        ↓
+claim success
 
-- permissions;
-- capability requirements;
-- identity requirements;
-- cryptographic requirements;
-- privacy constraints;
-- trust constraints.
+Instead:
 
-Secrets MUST NOT become portable source semantics merely because a backend requires credentials.
+requested operation unavailable
+        ↓
+search for conforming realization
+        ↓
+if one exists → use it
+if approximation is explicitly permitted → use permitted approximation
+otherwise → report failure
 
-The Zamani compiler MUST use Safe Rust.
+This rule applies to:
 
-Rust "unsafe" is forbidden.
-
----
-
-28. Versioning and Forever Compatibility
-
-Every POCO-REAF artifact MUST be associated with:
-
-- language version;
-- relevant grammar version;
-- relevant semantic/IR version where applicable.
-
-Language evolution SHOULD prefer:
-
-1. backward-compatible additions;
-2. explicit versioned extensions;
-3. migration tooling;
-4. deprecation periods;
-5. explicit breaking-version changes.
-
-Existing valid semantics MUST NOT silently acquire different meaning because new hardware technologies appear.
+- quantum operations;
+- numerical operations;
+- precision;
+- timing;
+- memory;
+- communication;
+- security;
+- AI model behavior;
+- contracts;
+- hardware operations.
 
 ---
 
-29. Dialects and Future Computing
+45. Approximation
 
-Zamani MAY support dialects for:
+Approximation MUST be explicit.
+
+A target MAY use an approximate realization only when the source semantics or policy permits it.
+
+The implementation MUST preserve the relevant:
+
+- error bound;
+- confidence;
+- probability;
+- tolerance;
+- fidelity;
+- precision;
+- correctness contract.
+
+A target MUST NOT silently downgrade exact semantics into approximate semantics.
+
+---
+
+46. Simulation
+
+Simulation is an execution strategy, not a separate language.
+
+The same source semantic model MAY be realized through:
+
+- classical simulation;
+- quantum simulation;
+- hardware simulation;
+- distributed simulation;
+- fault simulation;
+- performance simulation.
+
+Simulation MUST preserve the semantic distinction between:
+
+simulated resource
+physical resource
+
+A simulation result MUST NOT automatically be treated as evidence that a physical target can realize the computation.
+
+---
+
+47. Sandboxing
+
+Sandboxing is governed by the security and execution policy systems.
+
+A sandbox MAY constrain:
+
+- I/O;
+- network;
+- filesystem;
+- native calls;
+- foreign calls;
+- reflection;
+- code generation;
+- adaptation;
+- resource consumption;
+- device access.
+
+Sandboxing MUST NOT change the meaning of permitted operations.
+
+If an operation is prohibited, execution MUST fail or follow an explicitly defined policy path.
+
+---
+
+48. Foreign Interfaces
+
+FFI/ABI boundaries are explicit interoperability boundaries.
+
+A foreign interface MUST identify applicable:
+
+- ABI;
+- calling convention;
+- data representation;
+- ownership;
+- effects;
+- capabilities;
+- target assumptions.
+
+Foreign code is not automatically portable.
+
+The foreign boundary MUST NOT force foreign machine limitations into Zamani's universal language semantics.
+
+---
+
+49. Dialects
+
+Dialects MAY extend Zamani for:
 
 - specialized domains;
 - vendors;
-- experimental technologies;
-- future architectures.
+- experimental hardware;
+- scientific domains;
+- data formats;
+- interoperability formats;
+- future computational models.
 
-A dialect MUST:
+A dialect MUST define:
 
-- have explicit identity;
-- have version information;
-- declare capabilities;
-- define semantic lowering;
-- avoid conflicting core syntax;
-- define compatibility;
-- avoid hidden target assumptions.
-
-Vendor dialects MUST NOT redefine core semantic identities.
-
-A future accelerator SHOULD be addable without changing the semantics of existing core programs.
-
----
-
-30. Interoperability
-
-Interoperability with:
-
-- C;
-- C++;
-- Python;
-- OpenQASM;
-- Verilog;
-- SystemVerilog;
-- foreign ABIs;
-- external runtimes;
-
-MUST be represented as explicit boundaries.
-
-Foreign code is not automatically POCO-REAF portable.
-
-The interoperability layer MUST record target assumptions introduced by foreign interfaces.
-
-A foreign function declaration MUST NOT cause the core language to inherit foreign platform limits.
-
----
-
-31. Existing Grammar Integration
-
-The repository already contains multiple grammar/specification surfaces.
-
-They MUST NOT remain competing authorities.
-
-The intended hierarchy is:
-
-Normative Language Specification
-            │
-            ▼
-Canonical Zamani.g4
-            │
-            ▼
-Lexer / Parser
-            │
-            ▼
-AST
-            │
-            ▼
-Semantic Analysis
-            │
-            ▼
-Canonical IR
-
-Integration rules:
-
-- "grammar/Zamani.g4" is the canonical ANTLR grammar after reconciliation.
-- "grammar/specification/*" contains normative language contracts.
-- "grammar/spec/*" contains detailed/legacy specification material that MUST remain consistent.
-- "grammar/grammar.md" is an implementation/conformance reference and MUST NOT become a competing language authority.
-- "grammar/Zamani-Grammar.md" remains historical/design material unless constructs are formally promoted.
-- "grammar/DESIGN.md" defines the broader frontend architecture.
-- "grammar/specification/README.md" defines the specification-directory organization.
-- compatibility documents govern evolution.
-
-Conflicts MUST be resolved through the language authority and compatibility process.
-
----
-
-32. Repository Integration Contract
-
-32.1 Lexer
-
-The lexer MUST tokenize portable syntax without target-dependent interpretation.
-
-32.2 Parser
-
-The parser MUST produce deterministic AST structure and preserve source spans.
-
-32.3 AST
-
-The AST MUST preserve all semantic information needed for POCO-REAF.
-
-It MUST NOT collapse portable constructs into target-specific identities prematurely.
-
-32.4 Semantic Analysis
-
-Semantic analysis determines:
-
-- types;
-- effects;
+- identity;
+- version;
+- syntax ownership;
+- semantic ownership;
 - capabilities;
-- resources;
-- constraints;
-- ownership/resource correctness;
-- domain validity.
-
-32.5 Canonical IR
-
-Canonical IR is the semantic bridge between language and implementation.
-
-Quantum constructs MUST lower to "quantum::ir".
-
-They MUST NOT create an independent frontend quantum IR.
-
-32.6 Optimization
-
-Optimization MUST preserve:
-
-- semantics;
-- correctness;
-- required provenance.
-
-32.7 Routing
-
-Routing consumes canonical semantic information and target capabilities.
-
-32.8 Scheduling
-
-Scheduling consumes:
-
-- dependencies;
-- resources;
-- timing constraints;
-- target facts.
-
-32.9 ZQN
-
-ZQN supplies:
-
-- noise;
-- faults;
-- target information;
-
-without owning language syntax.
-
-32.10 QEC
-
-QEC supplies detection/correction mechanisms.
-
-It does not own source grammar.
-
-32.11 Hardware HAL
-
-Hardware abstraction exposes capabilities and state.
-
-Source semantics MUST NOT depend on one concrete hardware implementation.
-
-32.12 Resilience
-
-Resilience orchestrates adaptation and recovery while preserving semantic correctness.
-
-32.13 Runtime
-
-Runtime executes verified realizations and reports actual execution state and failures.
-
----
-
-33. Ownership Matrix
-
-Concern| Grammar| Semantic| Canonical IR| Backend| Runtime
-Syntax| Owns| Consumes| No| No| No
-Types| Declares| Owns| Represents| Consumes| Consumes
-Effects| Declares| Owns| Represents| Consumes| Enforces
-Resource requirements| Declares| Validates| Represents| Satisfies| Reports
-Target capabilities| Names| Checks| Represents metadata| Owns facts| Reports
-Quantum semantics| Declares| Validates| "quantum::ir"| Lowers| Executes
-QEC algorithms| No| No| No| No| QEC subsystem
-Noise model| No| No| Metadata only| ZQN| Backend/runtime
-Routing| No| No| Input| Owns realization| Executes
-Scheduling| No| No| Input| Owns realization| Executes
-Resilience policy| Syntax only| Validates| Metadata| Consumes| Resilience/runtime
-Machine size| Never universal| Requirement| Represents requirement| Reports capacity| Reports availability
-
----
-
-34. Diagnostics Contract
-
-POCO-REAF diagnostics MUST be structured.
-
-Where applicable, diagnostics SHOULD include:
-
-- diagnostic code;
-- severity;
-- source span;
-- source construct;
-- failed requirement;
-- available capability;
-- relevant target;
-- remediation guidance;
+- lowering;
+- compatibility;
 - provenance.
 
-Diagnostics MUST NOT expose secrets.
+A dialect MUST NOT silently redefine core Zamani semantics.
 
-"Unsupported target" is insufficient when a more precise capability failure can be identified.
+A new domain SHOULD use existing universal primitives whenever possible.
 
 ---
 
-35. Testing Requirements
+50. Application-Specific Functionality
 
-POCO-REAF requires tests at every architectural boundary.
+Application functionality MUST normally be provided through:
 
-35.1 Grammar Tests
+- libraries;
+- dialects;
+- capabilities;
+- policies;
+- services;
+- modules;
+- applications.
 
-Test:
+The core language MUST NOT become an ever-growing enumeration of application-specific keywords.
 
-- valid portable programs;
-- invalid programs;
-- boundary syntax;
-- nested structures;
-- generic programs;
-- quantum programs;
-- HDL programs;
-- hybrid programs;
-- distributed programs;
-- future/dialect syntax.
+The same principle applies to:
 
-35.2 Scalability Tests
+- domain services;
+- administrative functions;
+- business systems;
+- scientific packages;
+- robotics;
+- vision;
+- language processing;
+- payment systems;
+- legal workflows;
+- virtual/augmented environments;
+- specialized AI systems.
 
-Tests MUST demonstrate that the language does not impose artificial limits on:
+The universal core remains computational.
 
-- qubits;
-- cores;
-- threads;
-- nodes;
-- devices;
+---
+
+51. Distributed POCO-REAF
+
+Distributed computation MUST remain independent of a fixed node count.
+
+The language MAY express:
+
+- actors;
+- tasks;
+- channels;
+- services;
+- messages;
+- collectives;
+- distributed state;
+- topology requirements;
+- consistency requirements;
+- fault-tolerance requirements.
+
+The implementation MUST NOT establish a universal number of nodes.
+
+An explicit application requirement for a particular scale is valid.
+
+That requirement is not a language capacity.
+
+---
+
+52. Concurrency and Actors
+
+AI agents and other agents MUST integrate with the existing concurrency architecture rather than create a second actor runtime.
+
+The intended relationship is:
+
+agent
+  ↓
+actor
+  ↓
+message
+  ↓
+channel
+  ↓
+scheduler
+  ↓
+runtime
+
+Agent-specific semantics MAY be defined in the AI layer.
+
+Actor lifecycle and message semantics remain owned by the concurrency subsystem.
+
+---
+
+53. Data and Interoperability
+
+Data formats such as:
+
+- SQL;
+- JSON;
+- XML;
+- external schemas;
+
+MUST remain dialect/interoperability concerns where they are not core Zamani syntax.
+
+Their semantic results SHOULD map into the common Zamani data/query model.
+
+They MUST NOT impose fixed limits on:
+
+- rows;
+- columns;
+- graph size;
+- document size;
 - tensor dimensions;
-- circuit size;
-- module count;
-- program size.
+- schema size.
 
-Tests SHOULD use generated/parameterized cases instead of treating an arbitrary fixed maximum as language capacity.
+Actual limits are target or implementation limits.
 
-35.3 Cross-Domain Tests
+---
 
-Required combinations include:
+54. Security and Trust
 
-- classical + quantum;
-- classical + HDL;
-- quantum + HDL;
-- quantum + hardware;
-- quantum + distributed;
-- AI + quantum;
-- AI + hardware;
-- classical + quantum + distributed;
-- classical + quantum + HDL + hardware.
+Security semantics MUST remain portable.
 
-35.4 Target Variation Tests
+Target variation MUST NOT silently weaken:
 
-The same semantic source MUST be tested against multiple target capability profiles.
+- authorization;
+- permissions;
+- capability restrictions;
+- cryptographic requirements;
+- privacy requirements;
+- trust policies;
+- sandbox policies.
 
-Tests MUST distinguish:
+Credentials and secrets MUST remain external security material.
 
-- successful equivalent realization;
-- explicit capability failure;
-- explicit resource failure;
-- prohibited semantic substitution.
+They MUST NOT become universal source semantics.
 
-35.5 Determinism Tests
+---
 
-Identical source and compilation context MUST produce identical parsing and semantic results.
+55. Provenance
 
-35.6 Round-Trip Tests
+POCO-REAF requires provenance to remain available where semantic decisions depend on transformations or external facts.
 
-Where printers/serializers exist:
+Relevant provenance may include:
 
 source
-  → lexer
-  → parser
-  → AST
-  → canonical printer
-  → parser
+    ↓
+AST
+    ↓
+semantic decision
+    ↓
+optimization
+    ↓
+specialization
+    ↓
+routing
+    ↓
+scheduling
+    ↓
+lowering
+    ↓
+artifact
+    ↓
+execution
 
-must preserve intended semantics.
+A provenance record SHOULD identify:
 
----
+- origin;
+- transformation;
+- reason;
+- evidence;
+- version;
+- policy;
+- target fact where applicable;
+- verification status.
 
-36. Hard-Coding Audit
-
-Every grammar/frontend change MUST be checked for accidental machine assumptions.
-
-Search for:
-
-- "MAX_QUBITS";
-- fixed register sizes;
-- fixed device counts;
-- fixed core counts;
-- fixed node counts;
-- fixed memory capacities;
-- fixed topology indices;
-- fixed hardware IDs;
-- fixed gate catalogs presented as complete;
-- fixed timing grids;
-- fixed accelerator counts;
-- fixed tensor ranks;
-- fixed deployment layouts.
-
-Every discovered constant MUST be classified as:
-
-1. Language semantic requirement.
-2. Explicit user resource budget.
-3. Target capability.
-4. Implementation safeguard.
-5. Test fixture.
-6. Accidental hard-coding.
-
-Category 6 MUST be removed.
-
-Categories 2–5 MUST NOT leak into universal language semantics.
+Target-specific facts MUST be distinguishable from source-defined facts.
 
 ---
 
-37. No Unsafe Rust
+56. Compatibility
 
-The Zamani implementation MUST use:
+POCO-REAF depends on compatibility across:
 
-- Rust 1.97 or 1.97.1;
-- Safe Rust only.
+- language versions;
+- grammar versions;
+- lexer versions;
+- AST versions;
+- semantic versions;
+- dialect versions;
+- Classical IR versions;
+- quantum::ir versions;
+- target compatibility versions.
 
-Rust "unsafe" is forbidden.
+The compatibility architecture under:
+
+grammar/compatibility/
+
+is authoritative for version migration.
+
+A new target MUST NOT require rewriting a source program merely because it is new.
+
+A breaking semantic change MUST be explicitly versioned.
+
+---
+
+57. Semantic Stability
+
+The appearance of new hardware MUST NOT change the meaning of existing programs.
+
+For example, adding a new quantum processor MUST NOT cause an existing operation to acquire a different mathematical meaning.
+
+Adding a new GPU MUST NOT redefine the semantics of a tensor operation.
+
+Adding a new FPGA MUST NOT redefine a hardware interface.
+
+New target capabilities may create new realizations.
+
+They do not rewrite historical semantics.
+
+---
+
+58. Target Compatibility
+
+A target is compatible when it can satisfy all mandatory source obligations.
+
+Compatibility is evaluated over:
+
+types
+effects
+capabilities
+resources
+contracts
+policies
+precision
+timing
+security
+execution model
+domain semantics
+
+A target may be:
+
+fully compatible
+partially compatible
+conditionally compatible
+incompatible
+temporarily unavailable
+
+The exact classifications belong to the target/execution compatibility model.
+
+---
+
+59. Failure Model
+
+POCO-REAF requires structured failures.
+
+The implementation MUST distinguish at least:
+
+Syntax failure
+
+The source is malformed.
+
+Semantic failure
+
+The source is structurally valid but semantically invalid.
+
+Capability failure
+
+The target lacks a required capability.
+
+Resource failure
+
+The target cannot provide required resources.
+
+Policy failure
+
+Execution violates a policy.
+
+Contract failure
+
+A required correctness obligation cannot be established.
+
+Lowering failure
+
+No conforming target realization exists.
+
+Routing failure
+
+Required physical mapping cannot be established.
+
+Scheduling failure
+
+Required execution schedule cannot be constructed.
+
+Runtime failure
+
+Execution failed after a valid realization was established.
+
+These failures MUST NOT be collapsed into a generic parser error.
+
+---
+
+60. Resource Insufficiency
+
+A valid program may require more resources than the selected target provides.
+
+For example:
+
+program requires N qubits
+target provides fewer than N
+
+This does not make the source invalid.
+
+It means:
+
+source = valid
+target = insufficient
+execution = infeasible on this target
+
+The compiler MUST preserve this distinction.
+
+---
+
+61. Target Substitution
+
+A target MAY substitute an implementation mechanism when semantic equivalence is established.
+
+For example:
+
+high-level operation
+        ↓
+target-specific implementation
+
+is permitted.
+
+However:
+
+high-level operation
+        ↓
+semantically different operation
+
+is forbidden unless the source explicitly permits the transformation.
+
+---
+
+62. Runtime Adaptation
+
+Runtime adaptation MAY use current target facts such as:
+
+- available processors;
+- available accelerators;
+- available memory;
+- queue state;
+- target health;
+- network topology;
+- quantum calibration;
+- device availability;
+- energy constraints.
+
+Runtime adaptation MUST remain within:
+
+- source semantics;
+- contracts;
+- policies;
+- capabilities;
+- resource constraints.
+
+Runtime adaptation MUST NOT silently change program meaning.
+
+---
+
+63. Checkpointing
+
+POCO-REAF MUST NOT imply that every computation can be checkpointed arbitrarily.
+
+Checkpoint semantics MUST distinguish:
+
+- classical state;
+- compiled state;
+- logical state;
+- algorithmic state;
+- provider-supported state;
+- reconstructible state;
+- quantum state.
+
+Arbitrary physical quantum state serialization MUST NOT be assumed.
+
+---
+
+64. Recompilation
+
+Target-specific recompilation MAY occur when required for realization.
+
+This does not violate POCO-REAF if:
+
+1. source remains unchanged;
+2. semantic meaning remains unchanged;
+3. canonical semantic compilation remains stable;
+4. target-specific work occurs below the semantic boundary.
+
+Examples:
+
+same source
+    ↓
+same semantic artifact
+    ├── CPU lowering
+    ├── GPU lowering
+    ├── FPGA lowering
+    ├── QPU lowering
+    └── simulator lowering
+
+---
+
+65. Caching
+
+Compiled semantic artifacts MAY be cached.
+
+Cache keys MUST include all semantically relevant inputs.
+
+A cache MUST NOT reuse an artifact when doing so would violate:
+
+- language compatibility;
+- semantic compatibility;
+- dialect compatibility;
+- IR compatibility;
+- required policy;
+- required target facts.
+
+Target-specific caches MUST remain distinguishable from target-independent semantic artifacts.
+
+---
+
+66. Deployment
+
+Deployment is downstream of compilation.
+
+Deployment MAY choose:
+
+- local;
+- embedded;
+- remote;
+- distributed;
+- cluster;
+- cloud;
+- edge;
+- accelerator;
+- QPU;
+- simulator.
+
+Deployment decisions MUST NOT redefine source semantics.
+
+---
+
+67. Future Computational Domains
+
+A future computational domain SHOULD integrate through:
+
+syntax
+   ↓
+domain-neutral AST
+   ↓
+semantic model
+   ↓
+capability/resource/effect contracts
+   ↓
+canonical IR or existing canonical domain IR
+   ↓
+lowering
+
+A future domain MUST NOT require arbitrary changes to the fundamental POCO-REAF contract.
+
+This is the mechanism by which Zamani remains extensible beyond currently known computational technologies.
+
+---
+
+68. Rust Implementation Contract
+
+The production implementation MUST target:
+
+Rust 1.97 or later
+Rust 2021 edition
+
+The implementation MUST use Safe Rust.
+
+The implementation MUST NOT require Rust "unsafe".
 
 This applies to:
 
@@ -1566,207 +2370,2115 @@ This applies to:
 - parser;
 - AST;
 - semantic analysis;
-- IR lowering;
+- type analysis;
+- resource analysis;
+- effect analysis;
+- capability analysis;
+- IR generation;
+- IR verification;
+- quantum IR;
+- optimization;
 - compiler infrastructure;
 - grammar tooling;
-- production test infrastructure.
+- production tests.
 
-Performance optimization MUST NOT weaken the safety boundary.
+Safe scalable structures SHOULD include normal dynamically sized Rust collections such as:
 
----
+Vec<T>
+String
+VecDeque<T>
+HashMap<K, V>
+HashSet<T>
+BTreeMap<K, V>
+BTreeSet<T>
 
-38. Performance and Scalability
+where appropriate.
 
-POCO-REAF requires scalability without pretending that physical resources are infinite.
-
-The implementation SHOULD:
-
-- avoid unnecessary source-to-AST duplication;
-- use compact representations where appropriate;
-- use iterative worklists for deeply generated structures;
-- stream large inputs where practical;
-- avoid quadratic scans where scalable indexing is possible;
-- avoid fixed-capacity semantic resource collections;
-- avoid recursive algorithms where input depth can be generated arbitrarily;
-- make resource budgets explicit;
-- preserve deterministic behavior where required.
-
-"Infinity" in POCO-REAF means:
-
-«No artificial language-level ceiling.»
-
-It does not mean infinite physical memory, infinite processing power, or infinite execution time.
-
-Actual execution remains bounded by:
-
-- physical resources;
-- virtual resources;
-- implementation representation;
-- security policy;
-- execution policy;
-- explicitly declared budgets.
+Fixed-size collections MUST NOT be introduced merely to impose artificial language capacity.
 
 ---
 
-39. What POCO-REAF Does Not Promise
+69. Rust Resource Limits
 
-POCO-REAF does NOT promise:
+Rust's own representation limits are implementation limits.
 
-1. Every program runs on every target.
-2. Every target has every capability.
-3. Every target satisfies every resource requirement.
-4. A single machine-code binary works on every ISA.
-5. Arbitrary quantum state can always be checkpointed.
-6. Arbitrary timing guarantees can always be preserved.
-7. Performance is identical across targets.
-8. Hardware-specific features work without declaring requirements.
-9. Unsupported operations can be silently approximated.
-10. A target can execute a program with insufficient resources.
+They MUST NOT be presented as Zamani language semantics.
 
-POCO-REAF DOES promise:
+For example, a Rust integer type may have a finite representation.
 
-«Target differences are handled explicitly without forcing unnecessary source rewrites or semantic drift.»
+That does not establish a universal Zamani resource limit.
+
+Where larger quantities are semantically required, the implementation MUST use an appropriate representation rather than silently narrowing the language semantics.
 
 ---
 
-40. Conformance Levels
+70. Recursion and Deep Programs
 
-Implementations SHOULD identify conformance at these levels.
+Implementations MUST consider stack limitations when processing generated or deeply nested source structures.
 
-Level 0 — Syntax Conformance
+Where practical, scalable compiler algorithms SHOULD use:
 
-Lexer/parser correctly implement canonical syntax.
+- iterative worklists;
+- explicit stacks;
+- streaming;
+- incremental processing;
+- bounded recursion where semantically appropriate.
 
-Level 1 — Semantic Conformance
-
-AST and semantic analysis preserve source meaning and enforce:
-
-- type rules;
-- effect rules;
-- capability rules;
-- resource rules.
-
-Level 2 — Canonical IR Conformance
-
-Programs lower to canonical semantic representations.
-
-Quantum programs use "quantum::ir".
-
-Level 3 — Target Conformance
-
-A backend realizes canonical semantics without prohibited substitutions.
-
-Level 4 — Runtime Conformance
-
-Execution, diagnostics, provenance, resource reporting, and failure behavior satisfy the runtime contract.
-
-Level 5 — POCO-REAF Conformance
-
-The implementation demonstrates reusable semantic artifacts and target-independent source semantics across substantially different target profiles.
+A host-language stack limit MUST NOT become a language-level maximum.
 
 ---
 
-41. File Integration Contract
+71. Memory Scaling
 
-This document is independently complete as the normative POCO-REAF policy.
+Large Zamani programs MAY exceed the memory available to a particular compiler process.
 
-Adding or changing downstream implementation files MUST NOT require redefining the principles established here.
+That is an implementation/resource limitation.
 
-Integration is fixed in advance.
+The language MUST remain semantically unbounded with respect to arbitrary artificial source-size ceilings.
 
-File/subsystem| Required integration
-"grammar/Zamani.g4"| Implements syntax consistent with this portability model.
-"grammar/specification/README.md"| Lists this document as the POCO-REAF specification.
-"grammar/specification/scalability-model.md"| Provides detailed scalability rules.
-"grammar/specification/compilation-model.md"| Defines compilation behavior under POCO-REAF.
-"grammar/specification/execution-model.md"| Defines execution semantics.
-"grammar/specification/compatibility.md"| Defines language evolution.
-"grammar/specification/hardware-independence.md"| Defines target/resource separation where present.
-"grammar/spec/semantics.md"| Preserves semantic separation.
-"grammar/spec/syntax.md"| Does not introduce target-specific core semantics.
-"grammar/spec/type-system.md"| Preserves portable type meaning.
-"src/lexer.rs"| Target-independent tokenization.
-"src/parser.rs"| Portable AST construction.
-"src/ast/"| Preservation of POCO-REAF semantic information.
-"src/semantic.rs"| Validation of types/effects/capabilities/resources.
-"src/ir_gen.rs"| Lowering to canonical semantic representations.
-"src/quantum/ir/"| Canonical quantum semantic identity.
-"src/quantum/zqn/"| Quantum noise/fault/target information.
-"src/quantum/scheduling/"| Schedule realization.
-"src/quantum/resilience/"| Adaptation and recovery decisions.
-Optimization| Semantics-preserving implementation transformation.
-Hardware HAL| Target capabilities and state.
-Runtime| Verified execution and actual-state reporting.
+Implementations SHOULD support scalable techniques such as:
 
-No downstream subsystem may reinterpret POCO-REAF as permission to silently weaken source semantics.
+- incremental parsing;
+- streaming where appropriate;
+- compact representations;
+- lazy processing;
+- structural sharing where appropriate;
+- incremental semantic analysis.
 
 ---
 
-42. Completion Criteria
+72. Compilation Scalability
 
-This file is complete when all of the following are true:
+The compiler SHOULD avoid algorithms whose complexity grows unnecessarily with total repository or program size.
 
-- POCO-REAF is precisely defined.
-- Program semantics are separated from target realization.
-- Compile-once semantics are distinguished from universal machine-code binaries.
-- Resource requirements and target capabilities are separated.
-- Quantum portability is defined.
-- "quantum::ir" remains the canonical quantum semantic boundary.
-- QEC ownership is separated from grammar ownership.
-- ZQN ownership is separated from grammar ownership.
-- Scheduling ownership is separated from grammar ownership.
-- Resilience ownership is separated from grammar ownership.
-- HDL/hardware portability is defined.
-- Cross-domain execution is defined.
-- Artificial machine-size limits are prohibited.
-- Resource exhaustion is distinguished from invalid source.
-- Target incompatibility is explicit.
-- Silent semantic substitutions are prohibited.
-- Versioning is defined.
-- Provenance requirements are defined.
-- Security boundaries are defined.
-- Testing requirements are defined.
-- Hard-coding audit requirements are defined.
-- Rust 1.97/1.97.1 is specified.
-- Rust "unsafe" is prohibited.
-- File-level integration contracts are defined.
+Where possible:
 
-The remaining implementation work belongs to the referenced grammar, specification, compiler, IR, backend, runtime, and test files.
+- use indexed lookup;
+- use dependency graphs;
+- use worklists;
+- cache semantic results;
+- use incremental invalidation;
+- preserve provenance;
+- avoid repeated full-program rescans.
 
-It does not require weakening or redefining this POCO-REAF contract.
+Compilation scalability is an implementation concern.
+
+It MUST NOT be solved by reducing language capacity.
 
 ---
 
-43. Canonical Principle
+73. Deterministic Frontend
 
-Zamani follows this rule:
+For identical:
 
-«Write the computation once. Preserve its meaning once. Compile its semantics once. Realize it according to available capabilities and resources. Never make today's machine limitations tomorrow's language semantics.»
+source
+lexer configuration
+grammar version
+language version
+dialect set
+frontend configuration
+
+the frontend MUST produce equivalent AST and semantic results.
+
+Frontend results MUST NOT depend on:
+
+- hardware availability;
+- random target selection;
+- runtime queue state;
+- wall-clock time;
+- network availability.
+
+---
+
+74. Deterministic Compilation
+
+When deterministic compilation is requested, all semantically relevant inputs MUST be fixed or recorded.
+
+This includes:
+
+- compiler version;
+- language version;
+- grammar version;
+- dialect versions;
+- library versions;
+- optimization configuration;
+- semantic configuration;
+- source;
+- declared policies.
+
+Target-dependent compilation may additionally depend on target facts.
+
+Those facts MUST be recorded when reproducibility requires them.
+
+---
+
+75. Performance Portability
+
+POCO-REAF guarantees semantic portability, not identical performance.
+
+The same program MAY have different:
+
+- latency;
+- throughput;
+- energy use;
+- memory use;
+- communication cost;
+- quantum fidelity;
+- compilation time;
+- execution time.
+
+Performance differences MUST NOT be interpreted as semantic differences.
+
+---
+
+76. Resource-Aware Performance
+
+Performance preferences MAY be expressed through the resource and compilation systems.
+
+For example:
+
+prefer capability("gpu.compute");
+prefer lower_latency;
+prefer energy_efficiency;
+
+These preferences MUST remain distinguishable from correctness requirements.
+
+---
+
+77. Security-Aware Portability
+
+A target that is faster but violates a required security policy is not a valid POCO-REAF realization.
+
+Target selection MUST therefore consider:
+
+performance
++
+capability
++
+resource
++
+security
++
+policy
++
+correctness
+
+not performance alone.
+
+---
+
+78. Provenance-Aware Compilation
+
+Compiler transformations SHOULD preserve provenance sufficient to answer:
+
+1. Where did this operation originate?
+2. Why was this transformation applied?
+3. Which requirement caused this realization?
+4. Which target capability was used?
+5. Which policy constrained the choice?
+6. Which optimization changed the representation?
+7. Which routing decision mapped the operation?
+8. Which scheduling decision placed it?
+9. Which verification step accepted it?
+
+This is especially important for:
+
+- quantum execution;
+- AI decisions;
+- safety-critical hardware;
+- distributed systems;
+- scientific computation;
+- adaptive execution.
+
+---
+
+79. POCO-REAF and Contracts
+
+A portable program is not merely syntax-compatible.
+
+Its required contracts MUST survive target realization.
+
+For example:
+
+source
+  ↓
+optimization
+  ↓
+routing
+  ↓
+lowering
+  ↓
+execution
+
+MUST preserve:
+
+requires
+ensures
+invariant
+guarantee
+property
+
+where those contracts are applicable.
+
+---
+
+80. POCO-REAF and Policies
+
+Policies MAY prohibit a technically feasible realization.
 
 Therefore:
 
-                    ONE PROGRAM
-                         │
-                         ▼
-                 ONE SEMANTIC MEANING
-                         │
-             ┌───────────┼───────────┐
-             ▼           ▼           ▼
-          Classical   Quantum       HDL
-             │           │           │
-             └───────────┼───────────┘
-                         ▼
-                  CANONICAL IR
-                         │
-       ┌─────────────────┼─────────────────┐
-       ▼                 ▼                 ▼
-   CPU/GPU/FPGA        QPU            Distributed
-       │                 │                 │
-       └─────────────────┼─────────────────┘
-                         ▼
-                  TARGET REALIZATION
-                         │
-                         ▼
-                       RUNTIME
+resource feasible
 
-POCO-REAF is achieved when the semantic program remains stable while realization scales from atom to everywhere, limited only by explicit semantics, implementation capabilities, and resources actually available.This version deliberately corrects the most important architectural ambiguity: “compile once” does not mean one machine-code binary for every ISA/QPU/FPGA; it means the program's canonical semantic compilation remains reusable while target realization is performed below the semantic boundary. That keeps POCO-REAF compatible with quantum::ir, routing, scheduling, ZQN, resilience, hardware HAL, and future targets rather than forcing the grammar to encode today's machines. 
+does not necessarily imply:
+
+policy permitted
+
+The final realization MUST satisfy both.
+
+---
+
+81. POCO-REAF and Effects
+
+Effects form part of the semantic contract.
+
+A target that cannot provide a required effect is not a valid realization.
+
+For example, if a program requires:
+
+effect(network)
+
+and the target is sandboxed from networking, the compiler/runtime MUST report the policy/capability conflict.
+
+It MUST NOT silently remove the network operation.
+
+---
+
+82. POCO-REAF and AI
+
+AI computation is not exempt from portability.
+
+Models, inference, learning, reasoning, adaptation, uncertainty, and evidence MUST participate in the same semantic system.
+
+AI implementations MAY differ across:
+
+- CPU;
+- GPU;
+- accelerator;
+- distributed system;
+- simulator;
+- quantum/classical hybrid system.
+
+The semantic result MUST remain consistent with the declared model and contracts.
+
+---
+
+83. POCO-REAF and Learning
+
+Learning introduces state and adaptation.
+
+Therefore learning operations MUST have explicit semantic treatment for:
+
+- mutable state;
+- training data;
+- randomness;
+- model state;
+- resource use;
+- provenance;
+- reproducibility;
+- authorization where required.
+
+A learning system MUST NOT silently alter unrelated program semantics.
+
+---
+
+84. POCO-REAF and Adaptation
+
+Adaptation MUST be constrained.
+
+The implementation MUST be able to establish:
+
+who/what may adapt
+what may adapt
+why adaptation is allowed
+which policy permits it
+which resources may be consumed
+which capabilities may be used
+what contract must remain true
+what provenance must be recorded
+
+Unrestricted self-modification is not part of the POCO-REAF contract.
+
+---
+
+85. POCO-REAF and Uncertainty
+
+Uncertainty MUST remain explicit.
+
+Where the program expresses:
+
+- probability;
+- confidence;
+- distribution;
+- uncertainty;
+- belief;
+- approximation;
+
+the compiler MUST preserve the semantic distinction between:
+
+certain
+probabilistic
+approximate
+unknown
+unavailable
+
+A target MUST NOT silently turn an uncertain result into a falsely exact result.
+
+---
+
+86. POCO-REAF and Explainability
+
+Where explanation is requested or required, target-specific decisions SHOULD be explainable through provenance.
+
+For example:
+
+program
+  ↓
+required capability
+  ↓
+target selection
+  ↓
+optimization
+  ↓
+routing
+  ↓
+schedule
+
+The implementation SHOULD be able to expose the relevant decision chain without exposing secrets.
+
+---
+
+87. POCO-REAF and Interoperability
+
+External languages and formats remain explicit boundaries.
+
+Examples include:
+
+C
+C++
+Python
+OpenQASM
+Verilog
+SystemVerilog
+foreign ABIs
+external runtimes
+SQL
+JSON
+XML
+
+Interop MUST preserve explicit information about:
+
+- ABI;
+- ownership;
+- effects;
+- target requirements;
+- representation;
+- compatibility;
+- provenance.
+
+External limitations MUST NOT become universal Zamani limits.
+
+---
+
+88. Target-Independent Semantic Artifact
+
+A POCO-REAF implementation SHOULD be able to produce a target-independent artifact containing, where applicable:
+
+source identity
+language version
+grammar version
+AST/semantic version
+semantic program
+type information
+effect information
+capability requirements
+resource requirements
+constraints
+preferences
+contracts
+policies
+provenance
+domain information
+Classical IR
+quantum::ir
+
+This artifact is the principal meaning-preserving compilation product.
+
+---
+
+89. Target-Specific Artifact
+
+A target-specific artifact MAY additionally contain:
+
+target identity
+target capability snapshot
+target resource snapshot
+specialization
+optimization decisions
+routing
+schedule
+lowering
+backend representation
+deployment information
+
+Target-specific information MUST NOT be confused with the target-independent semantic artifact.
+
+---
+
+90. Artifact Layering
+
+The architecture SHOULD distinguish:
+
+Source Artifact
+      ↓
+Semantic Artifact
+      ↓
+Target Plan
+      ↓
+Target Artifact
+      ↓
+Deployment Artifact
+      ↓
+Runtime State
+
+This prevents target facts from contaminating source semantics.
+
+---
+
+91. Cross-Compilation
+
+Cross-compilation MUST be supported where a target backend exists.
+
+The compiler MAY compile on one environment for execution on another.
+
+The host environment MUST NOT automatically become the target semantics.
+
+Host and target information MUST remain distinct.
+
+---
+
+92. Heterogeneous Compilation
+
+A single program MAY use:
+
+CPU + GPU
+CPU + FPGA
+CPU + QPU
+CPU + accelerator
+CPU + GPU + QPU
+CPU + distributed cluster
+GPU + FPGA
+classical + quantum
+software + HDL
+
+The compiler MUST preserve the semantic relationships between components.
+
+Each target component may have its own capabilities and resources.
+
+The overall program remains one semantic program.
+
+---
+
+93. Multi-Target Realization
+
+A semantic program MAY be realized across multiple targets simultaneously.
+
+For example:
+
+host CPU
+   ↓
+GPU computation
+   ↓
+QPU computation
+   ↓
+CPU post-processing
+   ↓
+distributed storage
+
+The source program MUST remain one semantic unit.
+
+The compiler/runtime may partition the realization.
+
+---
+
+94. Future Hardware
+
+Future hardware MUST be introducible without requiring a universal grammar rewrite when existing semantic abstractions are sufficient.
+
+The preferred extension mechanism is:
+
+new capability
+new resource
+new dialect
+new lowering
+new backend
+new target profile
+
+not:
+
+new universal machine keyword
+
+---
+
+95. Target Metadata
+
+Target metadata MAY describe:
+
+- resources;
+- capabilities;
+- topology;
+- performance;
+- timing;
+- reliability;
+- security;
+- energy;
+- supported dialects;
+- supported IR versions.
+
+Target metadata is not language syntax.
+
+It is target information.
+
+---
+
+96. Target Facts and Source Facts
+
+The compiler MUST distinguish:
+
+source fact
+target fact
+derived fact
+
+Example:
+
+source:
+requires qubits >= n
+
+target:
+provides qubits = m
+
+derived:
+m >= n
+
+The target's "m" MUST NOT rewrite the source's "n".
+
+---
+
+97. Capability Failure
+
+A capability failure SHOULD identify:
+
+- capability required;
+- target considered;
+- capability missing;
+- whether an alternative realization exists;
+- whether simulation is available;
+- whether another target may satisfy the requirement.
+
+The diagnostic MUST NOT silently remove the operation.
+
+---
+
+98. Resource Failure
+
+A resource failure SHOULD identify:
+
+- resource required;
+- amount required;
+- amount available where safely reportable;
+- resource type;
+- relevant target;
+- whether scaling or another target could satisfy the requirement.
+
+The source remains valid.
+
+---
+
+99. Portability Does Not Mean Identical Representation
+
+Different targets MAY use completely different physical representations.
+
+For example:
+
+same semantic operation
+        ↓
+CPU instructions
+GPU kernel
+FPGA circuit
+ASIC logic
+QPU operations
+simulator operations
+
+This is expected.
+
+POCO-REAF protects semantic meaning, not representation identity.
+
+---
+
+100. Portability Does Not Mean Identical Performance
+
+The following may differ:
+
+runtime
+latency
+throughput
+energy
+memory usage
+network usage
+compilation time
+queue time
+quantum fidelity
+
+These are target properties unless explicitly made part of program correctness.
+
+---
+
+101. Portable Hardware Intent
+
+Hardware intent MAY be expressed at an abstraction level above a specific device.
+
+Examples:
+
+requires capability("tensor.compute");
+requires capability("fpga.compute");
+requires capability("quantum.measurement");
+requires topology(required_topology);
+
+A source program MAY constrain realization when necessary.
+
+However, it SHOULD avoid unnecessary target-specific identities.
+
+---
+
+102. Explicit Target Dependence
+
+A program MAY intentionally depend on a specific target capability or property.
+
+When it does, that dependence MUST be explicit.
+
+For example:
+
+requires capability("vendor.specific.feature");
+
+is semantically different from silently depending on the feature.
+
+Explicit target dependence remains portable as a source artifact, but its execution domain becomes correspondingly narrower.
+
+---
+
+103. Portability Classes
+
+A program MAY be classified as:
+
+fully target-independent
+capability-constrained
+resource-constrained
+topology-constrained
+vendor-constrained
+environment-constrained
+non-portable by explicit design
+
+These classifications describe the program's declared requirements.
+
+They MUST NOT be inferred merely from the compiler's current target.
+
+---
+
+104. Production Conformance
+
+A production POCO-REAF implementation MUST establish all of the following.
+
+Frontend
+
+- deterministic lexical analysis;
+- deterministic parsing;
+- source-span preservation;
+- domain-neutral AST;
+- version-aware parsing.
+
+Semantic layer
+
+- type validation;
+- effect validation;
+- capability validation;
+- resource validation;
+- contract validation;
+- policy validation;
+- provenance preservation.
+
+IR
+
+- Classical IR integration;
+- "quantum::ir" integration;
+- IR version compatibility;
+- IR validation.
+
+Compilation
+
+- optimization;
+- specialization;
+- lowering;
+- routing;
+- scheduling;
+- target realization.
+
+Runtime
+
+- capability reporting;
+- resource reporting;
+- structured failures;
+- policy enforcement;
+- resilience;
+- provenance;
+- reproducibility support.
+
+---
+
+105. Testing Contract
+
+POCO-REAF MUST be tested at every layer.
+
+105.1 Lexical Tests
+
+Test:
+
+- portable keywords;
+- identifiers;
+- numeric resource expressions;
+- capability expressions;
+- version syntax;
+- dialect syntax.
+
+105.2 Parser Tests
+
+Test:
+
+- minimal programs;
+- classical programs;
+- quantum programs;
+- HDL programs;
+- hybrid programs;
+- distributed programs;
+- resource requirements;
+- capabilities;
+- policies;
+- contracts;
+- provenance;
+- adaptation;
+- simulation.
+
+105.3 Semantic Tests
+
+Test:
+
+- valid requirements;
+- conflicting requirements;
+- incompatible capabilities;
+- insufficient resources;
+- invalid policies;
+- invalid contracts;
+- invalid effects;
+- invalid cross-domain operations.
+
+105.4 IR Tests
+
+Test:
+
+source
+→ AST
+→ semantic model
+→ Classical IR
+
+and:
+
+source
+→ AST
+→ semantic model
+→ quantum::ir
+
+where applicable.
+
+105.5 Target Tests
+
+The same semantic program MUST be evaluated against multiple target profiles.
+
+Tests MUST distinguish:
+
+valid + realizable
+valid + resource insufficient
+valid + capability unavailable
+valid + policy prohibited
+valid + lowering unavailable
+invalid source
+
+---
+
+106. Scalability Tests
+
+Scalability tests MUST NOT define an arbitrary value as the language's maximum.
+
+Tests SHOULD use generated or parameterized workloads.
+
+They MUST cover:
+
+- increasing source size;
+- increasing data size;
+- increasing tensor dimensions;
+- increasing quantum resource requirements;
+- increasing task count;
+- increasing distributed scale;
+- increasing hardware modules;
+- increasing compilation units.
+
+The purpose is to verify absence of artificial grammar ceilings.
+
+---
+
+107. Cross-Domain Tests
+
+At minimum, production testing SHOULD include:
+
+classical
+quantum
+HDL
+hardware
+AI
+data
+distributed
+networking
+hybrid
+
+and combinations such as:
+
+classical + quantum
+classical + HDL
+quantum + HDL
+quantum + distributed
+AI + quantum
+AI + classical
+AI + hardware
+classical + quantum + distributed
+classical + quantum + HDL
+classical + quantum + AI + hardware
+
+---
+
+108. POCO-REAF End-to-End Test
+
+A mandatory integration test SHOULD represent one program containing, where supported:
+
+classical computation
++
+generic types
++
+resource requirements
++
+capabilities
++
+effects
++
+contracts
++
+policy
++
+provenance
++
+reasoning
++
+learning
++
+controlled adaptation
++
+uncertainty
++
+parallelism
++
+distributed execution
++
+quantum computation
++
+measurement
++
+HDL/hardware intent
++
+simulation
+
+The program MUST be able to pass through:
+
+lexer
+→ parser
+→ AST
+→ semantic analysis
+→ resource analysis
+→ capability analysis
+→ effect analysis
+→ contract analysis
+→ policy analysis
+→ provenance
+→ Classical IR
+→ quantum::ir
+→ optimization
+→ routing
+→ scheduling
+→ resilience/QEC where applicable
+→ ZQN where applicable
+→ target lowering
+
+without introducing a second semantic universe.
+
+---
+
+109. Determinism Tests
+
+Identical:
+
+source
+language version
+grammar version
+dialect versions
+frontend configuration
+
+MUST produce equivalent frontend and semantic results.
+
+Where deterministic compilation is requested, repeated compilation MUST produce equivalent semantic artifacts.
+
+---
+
+110. Compatibility Tests
+
+Compatibility testing MUST cover:
+
+- language versions;
+- grammar versions;
+- AST versions;
+- semantic versions;
+- Classical IR versions;
+- "quantum::ir" versions;
+- dialect versions;
+- target compatibility versions.
+
+Breaking changes MUST be detected explicitly.
+
+---
+
+111. Hard-Coding Audit
+
+Every POCO-REAF implementation change MUST audit for accidental limits.
+
+The audit MUST search for:
+
+MAX_QUBITS
+MAX_CPUS
+MAX_GPUS
+MAX_FPGAS
+MAX_NODES
+MAX_MEMORY
+MAX_THREADS
+MAX_REGISTER_WIDTH
+MAX_TENSOR_RANK
+MAX_NETWORK_SIZE
+MAX_DEVICE_COUNT
+
+and equivalent disguised constants.
+
+The existence of such a constant in an implementation does not automatically mean the architecture is wrong.
+
+It MUST be classified.
+
+For example:
+
+target-specific capacity
+
+is valid.
+
+test fixture
+
+is valid.
+
+universal language capacity
+
+is prohibited.
+
+---
+
+112. Existing Repository Limits
+
+Existing implementation limits discovered under the repository's quantum, benchmarking, memory, resilience, or other subsystems MUST be treated as implementation/target/test constraints unless they are explicitly proven to be language semantics.
+
+They MUST NOT be allowed to leak into:
+
+grammar/Zamani.g4
+grammar/specification/
+grammar/spec/
+
+as universal language capacity.
+
+Where an existing limit currently has ambiguous ownership, it MUST be migrated to the appropriate:
+
+target profile
+resource budget
+runtime policy
+implementation safeguard
+benchmark configuration
+
+rather than becoming a POCO-REAF language limit.
+
+---
+
+113. Repository Integration Matrix
+
+Repository component| POCO-REAF responsibility
+"grammar/DESIGN.md"| Overall architecture and ownership
+"grammar/README.md"| Navigation
+"grammar/Zamani.g4"| Canonical grammar composition
+"grammar/antlr/ZamaniLexer.g4"| Canonical lexical implementation
+"grammar/specification/grammar-authority.md"| Authority hierarchy
+"grammar/specification/language.md"| Language definition
+"grammar/specification/language-scope.md"| Language scope
+"grammar/specification/scalability-model.md"| Detailed scalability rules
+"grammar/specification/portability.md"| General portability rules
+"grammar/specification/compilation-model.md"| Compilation behavior
+"grammar/specification/execution-model.md"| Execution behavior
+"grammar/specification/compatibility.md"| Compatibility guarantees
+"grammar/specification/language-version.md"| Language versioning
+"grammar/spec/resources.md"| Resource semantics
+"grammar/spec/effects.md"| Effect semantics
+"grammar/spec/policies.md"| Policy semantics
+"grammar/spec/quantum.md"| Quantum semantics
+"grammar/spec/semantics.md"| General semantic model
+"grammar/spec/type-system.md"| Type portability
+"grammar/spec/determinism.md"| Determinism
+"grammar/compile/"| Compilation syntax and intent
+"grammar/resources/"| Resource syntax
+"grammar/effects/"| Effect syntax
+"grammar/policies/"| Policy syntax
+"grammar/validation/"| Contract/validation syntax
+"grammar/execution/"| Execution syntax
+"grammar/quantum/"| Quantum syntax
+"grammar/classical/"| Classical syntax
+"grammar/hdl/"| HDL syntax
+"grammar/hardware/"| Hardware intent
+"grammar/hybrid/"| Hybrid syntax
+"grammar/distributed/"| Distributed syntax
+"grammar/networking/"| Networking syntax
+"grammar/interoperability/"| Foreign/data interoperability
+"grammar/compatibility/"| Compatibility machinery
+"src/lexer.rs"| Executable lexer
+"src/parser.rs"| Executable parser
+"src/ast/"| Domain-neutral AST
+"src/semantic.rs"| Semantic analysis
+"src/ir_gen.rs"| Canonical IR lowering
+"src/ir_verify.rs"| Canonical IR validation
+Classical IR| Canonical classical semantics
+"src/quantum/ir/"| Canonical quantum semantics
+"src/quantum/zqn/"| Quantum noise/fault information
+quantum routing subsystem| Quantum realization mapping
+quantum scheduling subsystem| Quantum execution scheduling
+quantum resilience subsystem| Quantum adaptation/recovery
+QEC subsystem| Error correction
+hardware HAL| Target realization
+runtime| Execution and state reporting
+
+---
+
+114. Ownership Rule
+
+Every concept MUST have one semantic owner.
+
+Examples:
+
+resource requirements → resource system
+effects → effect system
+contracts → validation/contract system
+policies → policy system
+provenance → provenance system
+quantum semantics → quantum semantic layer / quantum::ir
+classical semantics → Classical IR
+routing → routing subsystem
+scheduling → scheduling subsystem
+QEC → QEC subsystem
+noise/faults → ZQN
+runtime adaptation → execution/resilience
+
+A grammar file MAY compose a concept.
+
+It MUST NOT create a second semantic definition for that concept.
+
+---
+
+115. No Duplicate IR
+
+The repository MUST NOT introduce:
+
+POCOIR
+PortableIR
+UniversalIR
+QuantumPortableIR
+HybridPortableIR
+TargetPortableIR
+
+merely to implement POCO-REAF.
+
+The established canonical semantic representations remain authoritative.
+
+POCO-REAF is an architectural property.
+
+It is not another IR.
+
+---
+
+116. No POCO-REAF Keyword Requirement
+
+POCO-REAF MUST NOT require a universal source keyword such as:
+
+program_once
+compile_once
+run_everywhere
+
+The property is provided by the architecture.
+
+Source syntax only needs to express semantic requirements when such requirements are meaningful.
+
+---
+
+117. Source Stability Invariant
+
+For a portable program "P":
+
+Meaning(P, target_A)
+=
+Meaning(P, target_B)
+
+whenever both targets satisfy the same required semantic contract.
+
+Performance and representation may differ.
+
+Meaning MUST NOT.
+
+---
+
+118. Realization Equivalence
+
+Two target realizations are POCO-REAF equivalent when both satisfy the same required semantic contract.
+
+They need not have:
+
+- identical instructions;
+- identical circuit decomposition;
+- identical schedule;
+- identical memory layout;
+- identical execution time;
+- identical device topology.
+
+They MUST preserve the required observable semantics.
+
+---
+
+119. Observability
+
+Observable behavior includes whatever the language semantics explicitly expose.
+
+Depending on the program, this may include:
+
+- return values;
+- mutations;
+- I/O;
+- measurement outcomes;
+- probabilistic behavior;
+- communication;
+- timing guarantees;
+- contract results;
+- errors;
+- externally visible effects.
+
+Target-specific internal implementation details are not automatically observable semantics.
+
+---
+
+120. Timing
+
+Timing is semantic only when explicitly required.
+
+A target-specific operation duration is normally a target fact.
+
+A source-level deadline, latency bound, real-time requirement, or synchronization guarantee MAY be semantic.
+
+A target that cannot satisfy a required timing contract is incompatible.
+
+---
+
+121. Precision
+
+Precision requirements MUST be explicit.
+
+A target MUST NOT silently reduce precision when the program requires higher precision.
+
+If approximation is permitted, the relevant tolerance MUST be part of the semantic contract.
+
+---
+
+122. Numerical Portability
+
+Numerical operations MAY have target-dependent implementations.
+
+The semantic model MUST distinguish:
+
+exact operation
+approximate operation
+floating-point operation
+probabilistic operation
+implementation-defined behavior
+
+where relevant.
+
+The compiler MUST NOT silently cross these semantic categories.
+
+---
+
+123. Quantum Numerical Portability
+
+Quantum parameters and amplitudes MUST preserve the declared mathematical semantics within the program's numerical contract.
+
+Target precision limitations MUST be reported when they violate that contract.
+
+---
+
+124. Distributed Portability
+
+Distributed execution may vary in:
+
+- node count;
+- topology;
+- communication latency;
+- bandwidth;
+- failure rate;
+- consistency mechanisms.
+
+The program remains portable when the target can satisfy the declared distributed semantics.
+
+---
+
+125. Network Portability
+
+Network operations MUST carry appropriate:
+
+- effect information;
+- capability requirements;
+- security policy;
+- resource requirements.
+
+Network topology is target information unless explicitly made part of program semantics.
+
+---
+
+126. Hardware Discovery
+
+Hardware discovery MUST remain outside the parser.
+
+The parser MUST NOT:
+
+- inspect physical hardware;
+- query device inventories;
+- allocate memory;
+- allocate qubits;
+- discover GPUs;
+- probe network topology.
+
+Discovery occurs downstream.
+
+---
+
+127. Resource Negotiation
+
+Resource negotiation MUST be performed after semantic analysis.
+
+Conceptually:
+
+program requirement
+       ↓
+resource expression
+       ↓
+target resource model
+       ↓
+negotiation
+       ↓
+feasible / infeasible
+
+Negotiation MUST NOT modify the source AST merely because target capacity differs.
+
+---
+
+128. Resource Preferences
+
+Preferences MAY be used to select among valid realizations.
+
+They MUST NOT override mandatory requirements.
+
+The priority is:
+
+semantic correctness
+    >
+mandatory requirements
+    >
+mandatory constraints/policies
+    >
+capabilities/resources
+    >
+preferences
+    >
+optimization hints
+
+Exact policy ordering MUST follow the relevant resource/policy specification where more detail is required.
+
+---
+
+129. Portability and Vendor Extensions
+
+Vendor-specific features MAY be used explicitly.
+
+They MUST be represented through:
+
+- dialects;
+- capabilities;
+- explicit requirements;
+- target metadata;
+- interoperability contracts.
+
+Vendor features MUST NOT silently become core Zamani requirements.
+
+---
+
+130. Portability and Future Targets
+
+A future target may introduce:
+
+- new instruction sets;
+- new quantum models;
+- new accelerator architectures;
+- new memory systems;
+- new execution models.
+
+Existing source remains valid provided its semantic requirements can be satisfied.
+
+The future target is responsible for providing the realization.
+
+---
+
+131. Portability and Language Evolution
+
+When the language evolves, the compiler MUST distinguish:
+
+old source
+new compiler
+new target
+
+from:
+
+old source
+changed semantics
+
+A compiler MUST NOT silently reinterpret old semantics merely because a new target has appeared.
+
+---
+
+132. Migration
+
+When a breaking semantic change is necessary, the repository MUST provide an explicit migration path where practical.
+
+Migration MUST be governed by:
+
+grammar/compatibility/
+grammar/specification/compatibility.md
+
+Migration tooling MUST NOT silently change program meaning.
+
+---
+
+133. Diagnostics Contract
+
+POCO-REAF diagnostics SHOULD contain structured information.
+
+Where applicable:
+
+diagnostic code
+severity
+source span
+construct
+requirement
+constraint
+capability
+resource
+target
+policy
+contract
+provenance
+remediation
+
+Diagnostics MUST distinguish source invalidity from target infeasibility.
+
+---
+
+134. Error Stability
+
+Diagnostic codes SHOULD remain stable across compatible versions.
+
+Diagnostic wording MAY improve.
+
+Machine-readable diagnostic identity SHOULD remain versioned where tooling depends on it.
+
+---
+
+135. Tooling Integration
+
+Formatter:
+
+- MUST preserve semantic constructs;
+- MUST NOT rewrite target facts into source semantics.
+
+LSP/IDE:
+
+- SHOULD expose capability/resource diagnostics;
+- SHOULD distinguish source errors from target errors;
+- SHOULD expose provenance where available.
+
+Static analysis:
+
+- SHOULD inspect portability constraints;
+- SHOULD identify target assumptions;
+- SHOULD identify resource requirements.
+
+Build tooling:
+
+- SHOULD cache semantic artifacts;
+- SHOULD record versions;
+- SHOULD preserve reproducibility information.
+
+---
+
+136. Independent File Completion Contract
+
+"grammar/specification/poco-reaf.md" is considered independently complete when its downstream files can be implemented without redefining the POCO-REAF principles here.
+
+Each dependent file MUST integrate with this specification through its own explicit ownership contract.
+
+The dependent file MUST NOT redefine:
+
+- Program Once;
+- Compile Once;
+- semantic portability;
+- target realization separation;
+- no artificial universal capacity;
+- canonical IR boundaries.
+
+---
+
+137. Integration Contract by Layer
+
+Lexer
+
+Consumes only syntax definitions.
+
+Must not perform target discovery.
+
+Parser
+
+Builds syntax/AST.
+
+Must not allocate resources.
+
+AST
+
+Preserves portable intent.
+
+Must not become target-specific.
+
+Semantic Analysis
+
+Validates meaning.
+
+Must integrate:
+
+types
+effects
+capabilities
+resources
+contracts
+policies
+provenance
+
+Classical IR
+
+Owns classical computational semantics.
+
+"quantum::ir"
+
+Owns canonical quantum semantics.
+
+Optimization
+
+Preserves semantics.
+
+Routing
+
+Maps semantics to physical topology.
+
+Scheduling
+
+Maps operations to execution time/resources.
+
+ZQN
+
+Represents quantum noise/fault information.
+
+QEC
+
+Provides error-correction realization.
+
+Resilience
+
+Provides adaptation/recovery.
+
+HAL
+
+Exposes target capabilities and execution mechanisms.
+
+Runtime
+
+Executes and reports actual execution behavior.
+
+---
+
+138. Exact Integration With Existing Compilation Grammar
+
+The POCO-REAF specification integrates with:
+
+grammar/compile/compile.g4
+grammar/compile/compilation.g4
+grammar/compile/intent.g4
+grammar/compile/profiles.g4
+grammar/compile/features.g4
+grammar/compile/feature-selection.g4
+grammar/compile/conditional-compilation.g4
+grammar/compile/target.g4
+grammar/compile/target-selection.g4
+grammar/compile/specialization.g4
+grammar/compile/optimization.g4
+grammar/compile/lowering.g4
+grammar/compile/code-generation.g4
+grammar/compile/cross-compilation.g4
+grammar/compile/reproducibility.g4
+grammar/compile/deterministic-builds.g4
+grammar/compile/provenance.g4
+grammar/compile/caching.g4
+grammar/compile/deployment.g4
+
+These files provide syntax/composition.
+
+This specification provides the semantic portability contract.
+
+They MUST NOT create a competing POCO-REAF definition.
+
+---
+
+139. Exact Integration With Resource Grammar
+
+POCO-REAF integrates with:
+
+grammar/resources/resource.g4
+grammar/resources/resources.g4
+grammar/resources/requirements.g4
+grammar/resources/resource-expressions.g4
+grammar/resources/capabilities.g4
+grammar/resources/constraints.g4
+grammar/resources/preferences.g4
+grammar/resources/hints.g4
+grammar/resources/budgets.g4
+grammar/resources/negotiation.g4
+grammar/resources/placement.g4
+grammar/resources/topology-related resource rules
+grammar/resources/scalability.g4
+
+The resource subsystem owns the concrete resource syntax and semantic resource model.
+
+This file only defines its POCO-REAF role.
+
+---
+
+140. Exact Integration With Effects
+
+POCO-REAF integrates with:
+
+grammar/effects/effects.g4
+grammar/effects/effect-types.g4
+grammar/effects/effect-sets.g4
+grammar/effects/effect-composition.g4
+grammar/effects/effect-declarations.g4
+grammar/effects/quantum.g4
+grammar/effects/measurement.g4
+grammar/effects/learning.g4
+grammar/effects/adaptation.g4
+grammar/effects/simulation.g4
+grammar/effects/foreign.g4
+grammar/effects/native.g4
+grammar/effects/network.g4
+grammar/effects/distributed.g4
+grammar/effects/reflection.g4
+grammar/effects/code_generation.g4
+
+Effects remain semantic obligations.
+
+---
+
+141. Exact Integration With Execution
+
+POCO-REAF integrates with:
+
+grammar/execution/adaptive.g4
+grammar/execution/dispatch.g4
+grammar/execution/distributed-execution.g4
+grammar/execution/environments.g4
+grammar/execution/execution-context.g4
+grammar/execution/parallel-execution.g4
+grammar/execution/placement.g4
+grammar/execution/policies.g4
+grammar/execution/recovery.g4
+grammar/execution/resilience.g4
+grammar/execution/runtime-capabilities.g4
+grammar/execution/scheduling.g4
+grammar/execution/simulation.g4
+grammar/execution/speculative.g4
+grammar/execution/tracing.g4
+
+These implement execution behavior.
+
+POCO-REAF constrains their behavior to preserve source semantics.
+
+---
+
+142. Exact Integration With Quantum
+
+POCO-REAF integrates with:
+
+grammar/quantum/
+src/quantum/ir/
+src/quantum/zqn/
+src/quantum/routing/
+src/quantum/scheduling/
+src/quantum/resilience/
+src/quantum/error_correction/
+
+where those subsystems are present in the current architecture.
+
+No quantum subsystem may create a competing POCO-REAF semantic model.
+
+---
+
+143. Exact Integration With Validation
+
+POCO-REAF integrates with:
+
+grammar/validation/
+
+especially:
+
+contracts
+assertions
+properties
+assumptions
+guarantees
+semantic boundaries
+portability
+scalability
+IR coverage
+source spans
+ambiguity
+
+Validation is responsible for proving that the program satisfies the applicable structural and semantic requirements.
+
+---
+
+144. Exact Integration With Compatibility
+
+POCO-REAF integrates with:
+
+grammar/compatibility/
+
+including:
+
+language version
+grammar version
+AST version
+semantic version
+IR version
+dialect version
+target compatibility
+migration
+deprecation
+feature gates
+conformance
+
+No compatibility mechanism may introduce an artificial resource ceiling.
+
+---
+
+145. Exact Integration With Classical IR
+
+Classical source semantics MUST lower through the existing canonical Classical IR.
+
+A new POCO-REAF construct MUST NOT create another classical IR merely because it introduces:
+
+- AI;
+- reasoning;
+- data;
+- tensor operations;
+- distributed computation;
+- hardware interaction.
+
+Such semantics MUST reuse existing IR infrastructure where possible.
+
+---
+
+146. Exact Integration With "quantum::ir"
+
+Quantum constructs MUST lower through:
+
+src/quantum/ir/
+
+The quantum IR remains responsible for canonical quantum semantic identity.
+
+POCO-REAF MUST NOT define:
+
+- another qubit identity;
+- another quantum operation IR;
+- another quantum resource identity;
+- another quantum scheduling IR.
+
+---
+
+147. Exact Integration With ZQN
+
+ZQN remains responsible for quantum fault/noise representation.
+
+POCO-REAF only specifies how source semantics interact with target information.
+
+The language grammar MUST NOT duplicate ZQN's fault ontology.
+
+---
+
+148. Exact Integration With QEC
+
+QEC remains a downstream realization mechanism.
+
+POCO-REAF MAY require fault-tolerance properties.
+
+It MUST NOT prescribe one QEC algorithm.
+
+---
+
+149. Exact Integration With Routing
+
+Routing remains downstream.
+
+POCO-REAF expresses requirements and constraints.
+
+Routing determines realization.
+
+---
+
+150. Exact Integration With Scheduling
+
+Scheduling remains downstream.
+
+POCO-REAF may express timing requirements.
+
+Scheduling maps them onto target timing resources.
+
+---
+
+151. Exact Integration With Resilience
+
+Resilience remains downstream.
+
+POCO-REAF establishes:
+
+adaptation must preserve semantics
+
+The resilience subsystem determines:
+
+retry
+recover
+remap
+reroute
+reschedule
+recompile
+switch target
+abort
+
+according to policy and target state.
+
+---
+
+152. Completion Criteria
+
+"grammar/specification/poco-reaf.md" is complete when all of the following are satisfied:
+
+Authority
+
+- [ ] It is the normative POCO-REAF specification.
+- [ ] It does not compete with "grammar/DESIGN.md".
+- [ ] It does not compete with "grammar/specification/compilation-model.md".
+- [ ] It does not compete with "grammar/specification/scalability-model.md".
+- [ ] It does not compete with "grammar/specification/compatibility.md".
+
+Portability
+
+- [ ] Source portability is defined.
+- [ ] Semantic portability is defined.
+- [ ] Compilation portability is defined.
+- [ ] Execution portability is defined.
+- [ ] Evolution portability is defined.
+
+Compilation
+
+- [ ] Program Once is defined.
+- [ ] Compile Once is defined.
+- [ ] Universal machine-code assumptions are explicitly rejected.
+- [ ] Canonical semantic compilation is defined.
+- [ ] Target-specific realization is separated.
+
+Scalability
+
+- [ ] No artificial universal capacity is permitted.
+- [ ] Resource scaling is symbolic/parametric.
+- [ ] Physical limitations remain target/resource facts.
+- [ ] Implementation limits cannot become language semantics accidentally.
+- [ ] "Infinity" is defined as absence of artificial language ceilings.
+
+Resources
+
+- [ ] Requirements are distinct from capabilities.
+- [ ] Constraints are distinct from preferences.
+- [ ] Hints are distinct from requirements.
+- [ ] Budgets are explicit.
+- [ ] Target facts are distinct from source facts.
+
+Quantum
+
+- [ ] "quantum::ir" is canonical.
+- [ ] Quantum operations remain open-ended.
+- [ ] Qubit identity remains layered.
+- [ ] Routing is downstream.
+- [ ] Scheduling is downstream.
+- [ ] QEC is downstream.
+- [ ] ZQN is downstream.
+- [ ] Quantum adaptation preserves semantics.
+
+Classical
+
+- [ ] Classical IR remains canonical.
+- [ ] No fixed machine size is encoded.
+- [ ] Numerical portability is addressed.
+- [ ] Performance is distinguished from semantics.
+
+HDL/Hardware
+
+- [ ] Hardware intent is separated from hardware realization.
+- [ ] No universal hardware capacity is defined.
+- [ ] Target hardware facts remain downstream.
+
+Hybrid
+
+- [ ] Classical/quantum/HDL/hardware composition is supported.
+- [ ] No competing hybrid IR is created.
+
+AI and reasoning
+
+- [ ] Reasoning participates in the semantic model.
+- [ ] Learning participates in the effect/resource model.
+- [ ] Adaptation is controlled.
+- [ ] Evidence/provenance are preserved.
+- [ ] Uncertainty remains explicit.
+- [ ] Explanation is portable.
+
+Execution
+
+- [ ] Runtime adaptation is constrained.
+- [ ] Resilience preserves semantics.
+- [ ] Simulation is treated as an execution strategy.
+- [ ] Sandboxing is policy-driven.
+
+Compatibility
+
+- [ ] Language versioning is addressed.
+- [ ] AST compatibility is addressed.
+- [ ] IR compatibility is addressed.
+- [ ] Dialect compatibility is addressed.
+- [ ] Target compatibility is addressed.
+
+Safety
+
+- [ ] Rust 1.97+ is required.
+- [ ] Rust 2021 is required.
+- [ ] Safe Rust is required.
+- [ ] Rust "unsafe" is forbidden.
+
+Testing
+
+- [ ] Lexical tests are defined.
+- [ ] Parser tests are defined.
+- [ ] Semantic tests are defined.
+- [ ] IR tests are defined.
+- [ ] scalability tests are defined.
+- [ ] cross-domain tests are defined.
+- [ ] target-variation tests are defined.
+- [ ] determinism tests are defined.
+- [ ] compatibility tests are defined.
+- [ ] POCO-REAF end-to-end tests are defined.
+
+---
+
+153. Final POCO-REAF Invariant
+
+The complete Zamani architecture is:
+
+                         ONE SOURCE PROGRAM
+                                │
+                                ▼
+                       ONE PROGRAM MEANING
+                                │
+                                ▼
+                         DOMAIN-NEUTRAL AST
+                                │
+                                ▼
+                   ┌────────────┼────────────┐
+                   │            │            │
+                   ▼            ▼            ▼
+                 TYPES       EFFECTS      POLICIES
+                   │            │            │
+                   └────────────┼────────────┘
+                                │
+                   ┌────────────┼────────────┐
+                   │            │            │
+                   ▼            ▼            ▼
+             CAPABILITIES   RESOURCES    CONTRACTS
+                   │            │            │
+                   └────────────┼────────────┘
+                                │
+                                ▼
+                           PROVENANCE
+                                │
+                                ▼
+                         SEMANTIC MODEL
+                                │
+                  ┌─────────────┴─────────────┐
+                  │                           │
+                  ▼                           ▼
+             Classical IR                 quantum::ir
+                  │                           │
+                  └─────────────┬─────────────┘
+                                │
+                                ▼
+                         OPTIMIZATION
+                                │
+                                ▼
+                         SPECIALIZATION
+                                │
+                                ▼
+                           ROUTING
+                                │
+                                ▼
+                         SCHEDULING
+                                │
+                                ▼
+                      RESILIENCE / QEC
+                                │
+                                ▼
+                              ZQN
+                                │
+                                ▼
+                         TARGET LOWERING
+                                │
+                  ┌─────────────┼─────────────┐
+                  │             │             │
+                  ▼             ▼             ▼
+                 CPU           GPU           FPGA
+                  │             │             │
+                  ├─────────────┼─────────────┤
+                  │             │             │
+                  ▼             ▼             ▼
+                 ASIC       Accelerator       QPU
+                  │             │             │
+                  └─────────────┼─────────────┘
+                                │
+                 ┌──────────────┼──────────────┐
+                 │              │              │
+                 ▼              ▼              ▼
+             Simulator         HPC        Distributed
+                 │              │              │
+                 └──────────────┼──────────────┘
+                                │
+                                ▼
+                         FUTURE TARGETS
+                                │
+                                ▼
+                             RUNTIME
+
+The invariant is:
+
+«One Zamani program has one semantic meaning.»
+
+Target differences MAY change:
+
+- representation;
+- optimization;
+- specialization;
+- routing;
+- scheduling;
+- resource allocation;
+- execution strategy;
+- physical realization.
+
+They MUST NOT silently change:
+
+- program meaning;
+- required correctness;
+- declared effects;
+- mandatory capabilities;
+- mandatory resource requirements;
+- contracts;
+- security policies;
+- explicit semantic guarantees.
+
+Therefore:
+
+PROGRAM ONCE
+     ↓
+SEMANTICALLY STABLE
+     ↓
+COMPILE ONCE
+     ↓
+REUSABLE CANONICAL SEMANTIC ARTIFACT
+     ↓
+TARGET-SPECIFIC REALIZATION
+     ↓
+RUN WHERE REQUIREMENTS ARE SATISFIED
+     ↓
+SCALE WITH AVAILABLE RESOURCES
+     ↓
+REMAIN COMPATIBLE AS TARGETS EVOLVE
+
+The ultimate POCO-REAF rule is:
+
+«Zamani source describes computation, not today's machine. The compiler preserves that computation's meaning, and target systems realize it according to the capabilities, resources, constraints, contracts, policies, and execution conditions actually available.»
+
+This is what permits Zamani to scale from the smallest supported computational substrate to arbitrarily large computational systems without making an arbitrary machine capacity part of the language itself.
