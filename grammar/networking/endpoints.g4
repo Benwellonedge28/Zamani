@@ -1,6 +1,6 @@
 /*
  * ============================================================================
- * Zamani Universal Programming Language
+ * ZAMANI PROGRAMMING LANGUAGE
  * ============================================================================
  *
  * File:
@@ -10,24 +10,27 @@
  *     Endpoints
  *
  * Status:
- *     Production grammar contract
+ *     Production networking component grammar
  *
  * Purpose:
- *     Canonical parser grammar for logical networking endpoints.
+ *     Define the canonical source-level syntax for LOGICAL NETWORKING
+ *     ENDPOINTS.
  *
- * Baseline:
- *     Rust 1.97 / Rust 1.97.1
+ * Rust baseline:
+ *     Rust 1.97+
+ *     Rust 2021
  *
  * Safety:
- *     - No embedded Rust
- *     - No actions
- *     - No semantic predicates
- *     - No unsafe code
- *     - No filesystem access
- *     - No network access
- *     - No hardware access
- *     - No runtime callbacks
- *     - No nondeterministic parsing
+ *     - No embedded Rust.
+ *     - No actions.
+ *     - No semantic predicates.
+ *     - No unsafe implementation requirement.
+ *     - No filesystem access.
+ *     - No network access.
+ *     - No hardware access.
+ *     - No runtime callbacks.
+ *     - No target discovery.
+ *     - No resource discovery.
  *
  * ============================================================================
  * ARCHITECTURAL POSITION
@@ -36,1114 +39,802 @@
  *     Zamani source
  *          |
  *          v
- *     grammar/antlr/ZamaniLexer.g4
+ *     ZamaniLexer
  *          |
  *          v
- *     grammar/Zamani.g4
+ *     ZamaniParser
  *          |
  *          v
  *     Endpoints
  *          |
  *          v
- *     domain-neutral frontend AST
+ *     domain-neutral AST
  *          |
  *          v
- *     semantic analysis
+ *     structural validation
  *          |
- *          +--> name resolution
- *          +--> type checking
- *          +--> effect checking
- *          +--> capability checking
- *          +--> resource analysis
- *          +--> security analysis
- *          +--> portability analysis
+ *          +--> names
+ *          +--> types
+ *          +--> effects
+ *          +--> capabilities
+ *          +--> resources
+ *          +--> contracts
+ *          +--> policies
+ *          +--> provenance
  *          |
  *          v
- *     canonical semantic networking model
+ *     networking semantic model
  *          |
- *          +--> networking IR
+ *          +--> services
+ *          +--> channels
+ *          +--> protocols
+ *          +--> requests/responses
+ *          +--> discovery
+ *          +--> routing
+ *          +--> sockets
+ *          +--> streaming
  *          +--> distributed semantics
- *          +--> classical semantics
- *          +--> quantum::ir where applicable
- *          +--> hardware intent
  *          |
  *          v
- *     routing / scheduling / discovery / deployment
+ *     target-independent planning
  *          |
  *          v
- *     runtime / HAL / target realization
- *
- * This grammar describes WHAT a logical endpoint means syntactically.
- *
- * It does not describe HOW that endpoint is physically realized.
+ *     routing / scheduling / placement / resilience
+ *          |
+ *          v
+ *     runtime / ZQN / HAL / target realization
  *
  * ============================================================================
- * OWNERSHIP
+ * FEATURE CONTRACT
  * ============================================================================
  *
- * THIS FILE OWNS:
+ * PURPOSE
+ * -------
  *
- *     - logical endpoint declarations;
- *     - endpoint declaration names;
+ * Define the syntax of a logical communication endpoint.
+ *
+ * An endpoint identifies a logical communication participant or communication
+ * boundary. It does not identify a physical machine resource.
+ *
+ * ============================================================================
+ *
+ * OWNS
+ * -----
+ *
+ * This file owns:
+ *
+ *     - endpoint declarations;
+ *     - endpoint declaration identity;
  *     - endpoint bodies;
  *     - endpoint members;
- *     - endpoint member keys;
- *     - endpoint member values;
- *     - endpoint-local nested configuration;
- *     - reusable logical endpoint references;
- *     - endpoint source-level attributes expressed through the common
- *       expression/name system;
- *     - endpoint-local configuration structure.
+ *     - endpoint properties;
+ *     - endpoint nested configuration blocks;
+ *     - endpoint references;
+ *     - endpoint reference lists;
+ *     - endpoint-name wrappers;
+ *     - endpoint configuration boundaries.
  *
- * THIS FILE DOES NOT OWN:
+ * ============================================================================
  *
- *     - lexical identifiers;
- *     - keywords;
- *     - Unicode identifier rules;
- *     - literals;
- *     - general expression precedence;
- *     - type syntax;
- *     - data schemas;
- *     - serialization;
- *     - wire formats;
- *     - cryptographic implementation;
- *     - authentication implementation;
- *     - authorization implementation;
- *     - DNS;
- *     - IP allocation;
- *     - MAC addresses;
- *     - network interfaces;
- *     - operating-system sockets;
- *     - transport implementations;
- *     - TCP;
- *     - UDP;
- *     - QUIC;
- *     - HTTP;
- *     - MPI;
- *     - RDMA;
- *     - vendor networking APIs;
- *     - cloud-provider APIs;
- *     - route selection;
- *     - packet scheduling;
- *     - topology realization;
- *     - physical network discovery;
- *     - distributed placement;
- *     - cluster membership;
- *     - replication;
- *     - consensus;
- *     - resilience;
- *     - runtime dispatch;
- *     - hardware discovery;
- *     - CPU topology;
- *     - GPU topology;
- *     - FPGA topology;
- *     - accelerator topology;
- *     - quantum topology;
+ * DOES NOT OWN
+ * -------------
+ *
+ * This file does NOT own:
+ *
+ *     - identifiers;
+ *     - qualified-name syntax;
+ *     - attributes;
+ *     - visibility;
+ *     - expressions;
+ *     - types;
+ *     - requirements;
+ *     - capabilities;
+ *     - constraints;
+ *     - preferences;
+ *     - policies;
+ *     - effects;
+ *     - contracts;
+ *     - provenance semantics;
+ *     - physical addresses;
+ *     - address-family syntax;
+ *     - sockets;
+ *     - channels;
+ *     - protocols;
+ *     - requests;
+ *     - responses;
+ *     - streams;
+ *     - service discovery;
+ *     - routing;
+ *     - topology;
+ *     - placement;
+ *     - scheduling;
+ *     - transport implementation;
+ *     - authentication;
+ *     - authorization;
+ *     - cryptography;
+ *     - distributed execution;
+ *     - actors;
+ *     - processes;
+ *     - threads;
+ *     - machines;
+ *     - CPUs;
+ *     - GPUs;
+ *     - FPGAs;
+ *     - ASICs;
+ *     - accelerators;
+ *     - QPUs;
+ *     - physical qubits;
+ *     - quantum routing;
  *     - QEC;
+ *     - classical IR;
+ *     - quantum::ir;
  *     - ZQN;
- *     - quantum::ir.
+ *     - HAL;
+ *     - runtime execution.
  *
  * ============================================================================
+ *
+ * DEPENDS_ON
+ * ----------
+ *
+ *     grammar/core/core.g4
+ *     grammar/expressions/expressions.g4
+ *
+ * Core provides:
+ *
+ *     identifier
+ *     qualifiedName
+ *     attribute
+ *     visibility
+ *     canonical source foundations
+ *
+ * Expressions provides:
+ *
+ *     expression
+ *
+ * ============================================================================
+ *
+ * EXPORTS
+ * -------
+ *
+ * Public networking composition rules:
+ *
+ *     endpointDeclaration
+ *     endpointReference
+ *     endpointReferenceList
+ *     endpointName
+ *     endpointNameList
+ *     endpointConfiguration
+ *
+ * ============================================================================
+ *
+ * CONSUMED_BY
+ * ----------
+ *
+ *     grammar/networking/networking.g4
+ *     grammar/networking/services.g4
+ *     grammar/networking/service-discovery.g4
+ *     grammar/networking/routing.g4
+ *     grammar/networking/channels.g4
+ *     grammar/networking/sockets.g4
+ *     semantic networking analysis
+ *     frontend AST construction
+ *
+ * No consumer may reinterpret endpoint syntax as a physical allocation
+ * mechanism.
+ *
+ * ============================================================================
+ *
+ * AST_OWNER
+ * ---------
+ *
+ * Existing domain-neutral Zamani frontend AST.
+ *
+ * This grammar defines parser structure only.
+ *
+ * The AST must preserve source spans for:
+ *
+ *     - attributes;
+ *     - visibility;
+ *     - endpoint marker;
+ *     - endpoint name;
+ *     - endpoint body;
+ *     - every endpoint member;
+ *     - every property key;
+ *     - every property value;
+ *     - every nested block;
+ *     - every endpoint reference.
+ *
+ * ============================================================================
+ *
+ * SEMANTIC_OWNER
+ * --------------
+ *
+ * Networking semantic analysis.
+ *
+ * Semantic analysis is responsible for:
+ *
+ *     - endpoint declaration uniqueness;
+ *     - name resolution;
+ *     - endpoint reference resolution;
+ *     - property-schema validation;
+ *     - endpoint/service compatibility;
+ *     - capability checking;
+ *     - resource checking;
+ *     - effect checking;
+ *     - policy checking;
+ *     - security validation;
+ *     - portability validation;
+ *     - endpoint/channel compatibility;
+ *     - endpoint/protocol compatibility;
+ *     - endpoint/request/response compatibility.
+ *
+ * ============================================================================
+ *
+ * TYPE CONTRACT
+ * -------------
+ *
+ * Endpoint property values use the canonical expression grammar.
+ *
+ * This file does not define a networking-specific type system.
+ *
+ * When an endpoint property semantically represents a type, the downstream
+ * semantic layer resolves it against the canonical Zamani type system.
+ *
+ * ============================================================================
+ *
+ * EFFECT CONTRACT
+ * ---------------
+ *
+ * Endpoint declarations do not intrinsically execute effects.
+ *
+ * Endpoint properties MAY describe effect requirements through ordinary
+ * canonical expressions or semantic properties.
+ *
+ * Actual effects such as:
+ *
+ *     network
+ *     io
+ *     foreign
+ *     native
+ *     distributed
+ *     measurement
+ *
+ * are determined by semantic analysis and execution planning.
+ *
+ * ============================================================================
+ *
+ * CAPABILITY CONTRACT
+ * -------------------
+ *
+ * Endpoint properties may express capability requirements or associations.
+ *
+ * Example:
+ *
+ *     endpoint compute::worker {
+ *         requires: capability("network.reliable");
+ *     }
+ *
+ * The grammar parses the expression.
+ *
+ * Capability resolution occurs downstream through the canonical capability
+ * subsystem.
+ *
+ * This file does not enumerate network capabilities.
+ *
+ * ============================================================================
+ *
+ * RESOURCE CONTRACT
+ * -----------------
+ *
+ * Endpoint declarations may carry abstract resource requirements through
+ * canonical expressions.
+ *
+ * Examples:
+ *
+ *     requires: memory >= required_memory;
+ *     requires: capability("network.reliable");
+ *
+ * No physical capacity is encoded here.
+ *
+ * ============================================================================
+ *
+ * CONTRACT CONTRACT
+ * -----------------
+ *
+ * Endpoint syntax does not implement a second contract language.
+ *
+ * Contract expressions, if attached through endpoint properties, are consumed
+ * by the canonical validation/contract subsystem.
+ *
+ * ============================================================================
+ *
+ * POLICY CONTRACT
+ * ---------------
+ *
+ * Endpoint policy information is represented structurally through endpoint
+ * properties or nested configuration.
+ *
+ * Policy semantics belong to the canonical policy subsystem.
+ *
+ * This file does not implement authorization, trust, access control, or
+ * policy evaluation.
+ *
+ * ============================================================================
+ *
+ * PROVENANCE CONTRACT
+ * -------------------
+ *
+ * Every endpoint declaration and member must remain source-traceable.
+ *
+ * The frontend must preserve source spans so that semantic and compiler
+ * provenance can record:
+ *
+ *     source
+ *       ->
+ *     endpoint declaration
+ *       ->
+ *     semantic interpretation
+ *       ->
+ *     routing / planning
+ *       ->
+ *     realization
+ *
+ * ============================================================================
+ *
+ * IR CONTRACT
+ * -----------
+ *
+ * This file creates NO IR.
+ *
+ * Endpoint syntax lowers into the canonical networking semantic model.
+ *
+ * From there it may participate in:
+ *
+ *     networking representation
+ *     distributed representation
+ *     classical representation
+ *     hardware communication intent
+ *     execution planning
+ *
+ * If networking is associated with a quantum computation, the established
+ * quantum semantic pipeline remains:
+ *
+ *     AST
+ *       ->
+ *     quantum semantics
+ *       ->
+ *     quantum::ir
+ *
+ * This grammar never creates a second quantum IR.
+ *
+ * ============================================================================
+ *
+ * QUANTUM BOUNDARY
+ * ----------------
+ *
+ * Networking endpoints may participate in quantum-classical systems, but this
+ * grammar does not own:
+ *
+ *     qubits;
+ *     quantum operations;
+ *     quantum states;
+ *     measurement;
+ *     physical QPU topology;
+ *     quantum routing;
+ *     QEC.
+ *
+ * A quantum-related endpoint is represented through ordinary logical names,
+ * properties, capabilities, and semantic references.
+ *
+ * ============================================================================
+ *
+ * HDL BOUNDARY
+ * ------------
+ *
+ * HDL/hardware endpoint intent may be attached through logical properties.
+ *
+ * This grammar does not own:
+ *
+ *     pins;
+ *     wires;
+ *     physical ports;
+ *     clocks;
+ *     timing implementation;
+ *     FPGA routing;
+ *     ASIC placement;
+ *     physical interconnect.
+ *
+ * Hardware realization remains downstream.
+ *
+ * ============================================================================
+ *
+ * BACKEND BOUNDARY
+ * ----------------
+ *
+ * The backend may realize an endpoint as:
+ *
+ *     - an in-process communication boundary;
+ *     - an actor endpoint;
+ *     - a task endpoint;
+ *     - an IPC endpoint;
+ *     - a service endpoint;
+ *     - a distributed endpoint;
+ *     - an accelerator communication boundary;
+ *     - a simulator endpoint;
+ *     - a quantum-control boundary;
+ *     - a future computational substrate.
+ *
+ * The source declaration does not select any of these realizations.
+ *
+ * ============================================================================
+ *
  * POCO-REAF CONTRACT
+ * ------------------
+ *
+ * Endpoint syntax must remain independent of target scale.
+ *
+ * The same endpoint source must be representable on:
+ *
+ *     tiny systems
+ *     embedded systems
+ *     single CPUs
+ *     multicore CPUs
+ *     GPUs
+ *     FPGAs
+ *     ASICs
+ *     accelerators
+ *     QPUs
+ *     simulators
+ *     HPC systems
+ *     clusters
+ *     distributed systems
+ *     cloud systems
+ *     future computational substrates
+ *
+ * subject to semantic feasibility and available resources.
+ *
+ * There are no grammar-level limits on:
+ *
+ *     endpoint count;
+ *     endpoint-member count;
+ *     nested configuration depth;
+ *     reference count;
+ *     property count;
+ *     logical network size;
+ *     address count;
+ *     service count;
+ *     connection count.
+ *
  * ============================================================================
  *
- * An endpoint is a logical communication participant.
+ * HARD-CODING AUDIT
+ * -----------------
  *
- * It is NOT intrinsically:
+ * This file contains no universal physical limits.
  *
- *     - a machine;
- *     - a CPU;
- *     - a GPU;
- *     - an FPGA;
- *     - a QPU;
- *     - a process;
- *     - a thread;
- *     - a socket;
- *     - a NIC;
- *     - an IP address;
- *     - a router;
- *     - a switch;
- *     - a cloud instance;
- *     - a physical node.
- *
- * The same source endpoint declaration may therefore be realized as:
- *
- *     - an in-process object;
- *     - a task;
- *     - a process;
- *     - a service;
- *     - an embedded component;
- *     - a distributed service;
- *     - an accelerator endpoint;
- *     - a quantum-control endpoint;
- *     - a future execution resource.
- *
- * The realization is downstream from parsing.
- *
- * ============================================================================
- * SCALABILITY
- * ============================================================================
- *
- * This grammar deliberately contains NO universal limits for:
+ * It must never introduce:
  *
  *     MAX_ENDPOINTS
  *     MAX_ENDPOINT_PROPERTIES
  *     MAX_ENDPOINT_MEMBERS
  *     MAX_ENDPOINT_REFERENCES
- *     MAX_ENDPOINT_RELATIONSHIPS
- *     MAX_ENDPOINT_CAPABILITIES
  *     MAX_ADDRESSES
  *     MAX_CONNECTIONS
- *     MAX_NODES
  *     MAX_SERVICES
+ *     MAX_NODES
  *     MAX_NETWORK_SIZE
- *     MAX_TOPOLOGY_SIZE
  *     MAX_BANDWIDTH
  *     MAX_LATENCY
- *     MAX_ADDRESS_WIDTH
+ *     MAX_DEVICES
  *
- * Repetition is represented using ANTLR repetition operators.
+ * It also does not enumerate:
  *
- * Actual limitations may arise from:
- *
- *     - available memory;
- *     - source size;
- *     - parser implementation;
- *     - compiler configuration;
- *     - operating-system resources;
- *     - deployment resources;
- *     - runtime resources.
- *
- * Such implementation/environment limits are NOT language limits.
+ *     CPU models;
+ *     GPU models;
+ *     FPGA families;
+ *     ASIC technologies;
+ *     QPU vendors;
+ *     network vendors;
+ *     cloud providers;
+ *     physical interfaces;
+ *     transport implementations.
  *
  * ============================================================================
- * HARD-CODING PROHIBITION
- * ============================================================================
  *
- * This grammar MUST NOT encode:
+ * OPEN-WORLD CONTRACT
+ * -------------------
  *
- *     MAX_ENDPOINTS
- *     MAX_NODES
- *     MAX_CONNECTIONS
- *     MAX_NETWORK_SIZE
- *     MAX_INTERFACES
- *     MAX_SERVICES
- *     MAX_PROTOCOLS
- *     MAX_BANDWIDTH
- *     MAX_LATENCY
- *     MAX_ADDRESS_WIDTH
+ * Endpoint properties use ordinary identifiers rather than a closed list of
+ * networking property keywords.
  *
- * It MUST NOT encode physical identifiers such as:
+ * Therefore future properties can be introduced semantically without editing
+ * this grammar.
  *
- *     physical_node_0
- *     interface_0
- *     router_0
- *     socket_0
- *     gpu_0
- *     qpu_0
- *
- * as language-level concepts.
- *
- * Source programs may contain such names as ordinary identifiers when an
- * application requires them, but this grammar assigns them no physical
- * meaning.
- *
- * ============================================================================
- * REQUIREMENT / CAPABILITY / PREFERENCE SEPARATION
- * ============================================================================
- *
- * An endpoint property may express:
- *
- *     requirement
- *     constraint
- *     capability
- *     preference
- *     policy
- *     metadata
- *     logical address
- *     protocol identity
- *     role
- *
- * The parser does not decide which semantic category a property belongs to.
- *
- * For example:
- *
- *     endpoint producer {
- *         role: source;
- *         requires: capability("network.reliable");
- *         prefers: locality;
- *     }
- *
- * is syntactically represented using the same general endpoint-member
- * mechanism.
- *
- * Semantic analysis determines:
- *
- *     - property meaning;
- *     - type;
- *     - validity;
- *     - satisfiability;
- *     - capability requirements;
- *     - resource implications;
- *     - portability.
- *
- * ============================================================================
- * CONTEXTUAL `endpoint` MARKER
- * ============================================================================
- *
- * The current canonical lexer does not introduce a dedicated endpoint keyword.
- *
- * Therefore this grammar intentionally keeps:
- *
- *     endpointMarker
- *         : identifier
- *         ;
- *
- * The networking semantic layer MUST validate that the marker denotes the
- * endpoint declaration construct in the relevant grammar context.
- *
- * This preserves the repository's current lexical authority and avoids
- * introducing a second keyword authority solely for networking.
- *
- * If `endpoint` becomes a globally reserved lexical token in a future
- * language-version migration, the semantic model of this grammar does not
- * need to change.
- *
- * ============================================================================
- * DETERMINISM
- * ============================================================================
- *
- * A previous design used many alternatives equivalent to:
- *
- *     identifier COLON expression SEMICOLON
- *
- * under different rule names such as role, address, protocol, capability,
- * requirement, preference, security, locality, policy and metadata.
- *
- * Those alternatives are structurally indistinguishable to the parser.
- *
- * This production grammar deliberately eliminates that duplication.
- *
- * There is one canonical endpoint property form:
- *
- *     endpointProperty
- *         : identifier COLON expression SEMICOLON
- *         ;
- *
- * Semantic analysis assigns the property's meaning.
- *
- * This provides:
- *
- *     - deterministic parsing;
- *     - less grammar ambiguity;
- *     - no keyword explosion;
- *     - future extensibility;
- *     - no need to modify this grammar whenever a new networking property is
- *       introduced;
- *     - compatibility with user-defined and future networking capabilities.
- *
- * ============================================================================
- * LEXICAL CONTRACT
- * ============================================================================
- *
- * Canonical lexer:
- *
- *     grammar/antlr/ZamaniLexer.g4
- *
- * Canonical names:
- *
- *     grammar/core/names.g4
- *
- * Canonical expressions:
- *
- *     grammar/expressions/expressions.g4
- *
- * This file defines NO lexer rules.
- *
- * It consumes:
- *
- *     identifier
- *     qualifiedName
- *     expression
- *
- * from the canonical parser grammar composition.
- *
- * ============================================================================
- * TOKEN VOCABULARY
- * ============================================================================
- *
- * Parser grammars throughout the production networking architecture use:
- *
- *     tokenVocab = ZamaniLexer;
- *
- * This file therefore uses the same vocabulary.
- *
- * No local token aliases are introduced.
- *
- * ============================================================================
- * DECLARATION MODEL
- * ============================================================================
- *
- * The canonical declaration form is:
- *
- *     endpoint <name>;
- *
- * or:
- *
- *     endpoint <name> {
- *         <member>* 
- *     }
- *
- * Examples:
- *
- *     endpoint producer;
- *
- *     endpoint consumer {
- *         role: sink;
- *     }
- *
- * The optional semicolon after a body is accepted:
- *
- *     endpoint consumer {
- *         role: sink;
- *     };
- *
- * This makes declaration termination compatible with both block-oriented and
- * semicolon-oriented source styles without creating a second declaration
- * model.
- *
- * ============================================================================
- * MEMBER MODEL
- * ============================================================================
- *
- * Endpoint members have exactly two structural categories:
- *
- *     1. endpointProperty
- *     2. endpointNestedBlock
- *
- * Property:
- *
- *     key: expression;
- *
- * Nested block:
- *
- *     key {
- *         ...
- *     }
- *
- * Examples:
- *
- *     endpoint node {
- *         role: producer;
- *         address: logical::producer;
- *         protocol: reliable;
- *         capability: quantum;
- *         requires: capability("network.reliable");
- *         locality: region;
- *         metadata: "example";
- *     }
- *
- * Nested configuration:
- *
- *     endpoint service {
- *         policy {
- *             retry: enabled;
- *             resilience: adaptive;
- *         }
- *     }
- *
- * The nested structure remains syntactic.
- *
- * Semantic interpretation belongs downstream.
- *
- * ============================================================================
- * PROPERTY KEYS
- * ============================================================================
- *
- * Property keys are ordinary identifiers.
- *
- * The grammar intentionally does NOT enumerate:
+ * Examples of valid property names include:
  *
  *     role
  *     address
  *     protocol
- *     capability
+ *     channel
+ *     service
  *     requires
- *     constraint
- *     preference
- *     security
+ *     capability
  *     locality
+ *     security
  *     metadata
+ *     topology
  *     policy
+ *     reliability
+ *     provenance
+ *     custom_property
  *
- * as a closed keyword list.
+ * These names do not acquire semantics merely by parsing.
  *
- * This is necessary for:
+ * The semantic layer decides which properties are:
  *
- *     - future protocols;
- *     - future networking models;
- *     - vendor-neutral extensions;
- *     - application-defined properties;
- *     - dialects;
- *     - capability evolution;
- *     - POCO-REAF.
- *
- * Semantic validation may impose rules on well-known properties.
- *
- * ============================================================================
- * LOGICAL ADDRESSING
- * ============================================================================
- *
- * Endpoint addresses are expressions rather than a dedicated physical-address
- * grammar.
- *
- * Therefore all of the following may be represented without making them
- * mandatory physical network concepts:
- *
- *     logical::service
- *     service_name
- *     discovery_key
- *     symbolic_address
- *     application_address
- *     runtime_address
- *     user_defined_locator
- *
- * A literal IPv4/IPv6/string value, if accepted by the common expression
- * grammar, is application data unless a downstream semantic subsystem assigns
- * it network-address meaning.
- *
- * This is deliberate.
+ *     standard;
+ *     dialect-defined;
+ *     capability-defined;
+ *     application-defined;
+ *     invalid.
  *
  * ============================================================================
- * REFERENCES
- * ============================================================================
  *
- * A reusable logical endpoint reference is represented by the canonical
- * `qualifiedName` rule:
+ * DETERMINISM CONTRACT
+ * --------------------
  *
- *     endpointReference
- *         : qualifiedName
- *         ;
+ * Parsing depends only on:
  *
- * This rule performs NO lookup.
+ *     source token stream;
+ *     grammar version;
+ *     parser configuration.
  *
- * Examples:
+ * Parsing must not depend on:
  *
- *     producer
- *     services::producer
- *     quantum::control::endpoint
- *
- * Name resolution is downstream.
- *
- * ============================================================================
- * CROSS-DOMAIN INTEGRATION
- * ============================================================================
- *
- * Endpoints may participate in:
- *
- *     - classical computing;
- *     - quantum computing;
- *     - hybrid computing;
- *     - HDL systems;
- *     - accelerators;
- *     - AI/data systems;
- *     - distributed computation;
- *     - embedded systems;
- *     - future computing domains.
- *
- * This grammar does not import those domains.
- *
- * Instead:
- *
- *     endpoint property values
- *
- * use the common:
- *
- *     Names
- *     Expressions
- *     Types
- *     Resources
- *     Capabilities
- *
- * contracts downstream.
- *
- * This prevents networking from becoming coupled to:
- *
- *     CPU;
- *     GPU;
- *     FPGA;
- *     QPU;
- *     quantum::ir;
- *     QEC;
- *     ZQN.
+ *     network state;
+ *     hardware availability;
+ *     filesystem state;
+ *     runtime state;
+ *     wall-clock time;
+ *     randomness;
+ *     resource availability;
+ *     target selection.
  *
  * ============================================================================
- * NETWORKING / DISTRIBUTED BOUNDARY
- * ============================================================================
  *
- * Networking:
+ * DIAGNOSTIC CONTRACT
+ * -------------------
  *
- *     logical communication participant syntax.
+ * Parser diagnostics should distinguish:
  *
- * Distributed:
- *
- *     placement;
- *     node membership;
- *     replication;
- *     distributed scheduling;
- *     distributed deployment;
- *     consensus;
- *     partitioning.
- *
- * Routing:
- *
- *     logical-to-physical route realization.
- *
- * Service discovery:
- *
- *     resolution of logical service identities.
- *
- * Channels:
- *
- *     communication-channel semantics.
- *
- * Protocols:
- *
- *     protocol contracts.
- *
- * Sockets:
- *
- *     socket/transport-oriented semantics.
- *
- * Hardware:
- *
- *     physical network capability and topology.
- *
- * Execution/runtime:
- *
- *     runtime endpoint realization.
- *
- * This grammar does not duplicate those responsibilities.
- *
- * ============================================================================
- * SECURITY BOUNDARY
- * ============================================================================
- *
- * Endpoint properties may syntactically express security intent:
- *
- *     security: encrypted;
- *     requires: authenticated;
- *     trust: trusted;
- *
- * but this grammar does not define:
- *
- *     - cryptographic algorithms;
- *     - key generation;
- *     - key storage;
- *     - certificate verification;
- *     - identity providers;
- *     - authorization engines;
- *     - trust evaluation.
- *
- * Those remain owned by:
- *
- *     grammar/security/
- *
- * and the corresponding semantic/compiler/runtime layers.
- *
- * ============================================================================
- * HARDWARE / QUANTUM BOUNDARY
- * ============================================================================
- *
- * This file does not define:
- *
- *     PhysicalQubitId
- *     QubitId
- *     Gate
- *     Circuit
- *     CPU
- *     GPU
- *     FPGA
- *     QPU
- *     NIC
- *     router
- *     switch
- *     physical link
- *
- * A property such as:
- *
- *     target: quantum
- *
- * remains a semantic expression.
- *
- * Physical realization is downstream.
- *
- * ============================================================================
- * AST CONTRACT
- * ============================================================================
- *
- * The parser should provide enough structure for the frontend AST to preserve:
- *
- *     EndpointDeclaration
- *         marker span
- *         name
- *         body
- *         declaration span
- *
- *     EndpointProperty
- *         key
- *         value expression
- *         source span
- *
- *     EndpointNestedBlock
- *         key
- *         members
- *         source span
- *
- *     EndpointReference
- *         qualified name
- *         source span
- *
- * The AST remains domain-neutral.
- *
- * This grammar MUST NOT depend on Rust AST implementation details.
- *
- * ============================================================================
- * SEMANTIC CONTRACT
- * ============================================================================
- *
- * Semantic analysis is responsible for:
- *
- *     - validating endpoint marker meaning;
- *     - validating endpoint names;
- *     - duplicate declaration checks;
- *     - visibility;
- *     - name resolution;
- *     - reference resolution;
- *     - property type checking;
- *     - property-schema validation;
- *     - capability validation;
- *     - resource requirement validation;
- *     - security-policy validation;
- *     - portability analysis;
- *     - cross-domain validation;
- *     - requirement satisfiability.
- *
- * The parser MUST NOT perform these operations.
- *
- * ============================================================================
- * IR CONTRACT
- * ============================================================================
- *
- * This grammar does not create an IR.
- *
- * Parsed endpoints lower into the repository's canonical semantic networking
- * model.
- *
- * That model may subsequently lower into:
- *
- *     - networking IR;
- *     - distributed IR;
- *     - classical IR;
- *     - hardware/network intent;
- *     - runtime endpoint descriptions.
- *
- * If an endpoint participates in a quantum computation, quantum semantics
- * continue through the established:
- *
- *     quantum::ir
- *
- * boundary.
- *
- * This file MUST NOT create another quantum IR.
- *
- * ============================================================================
- * SOURCE-SPAN CONTRACT
- * ============================================================================
- *
- * Consumers MUST preserve source locations for:
- *
- *     - endpoint declaration;
- *     - endpoint marker;
- *     - endpoint name;
- *     - endpoint body;
- *     - each property key;
- *     - each property value;
- *     - each nested block;
- *     - each endpoint reference.
- *
- * Diagnostics must therefore be able to identify the exact source construct
- * responsible for an error.
- *
- * ============================================================================
- * ERROR CONTRACT
- * ============================================================================
- *
- * The grammar must permit deterministic parser diagnostics for:
- *
+ *     - missing ENDPOINT keyword;
  *     - missing endpoint name;
+ *     - malformed qualified name;
  *     - malformed endpoint body;
- *     - missing opening brace;
- *     - missing closing brace;
  *     - malformed property;
- *     - missing colon;
- *     - missing expression;
- *     - missing semicolon;
- *     - malformed nested block;
- *     - malformed qualified endpoint reference.
+ *     - malformed nested configuration;
+ *     - malformed endpoint reference.
  *
- * Diagnostic formatting remains owned by the frontend diagnostic subsystem.
+ * Semantic diagnostics should distinguish:
  *
- * ============================================================================
- * COMPATIBILITY
- * ============================================================================
- *
- * This grammar intentionally preserves the public rule:
- *
- *     endpointDeclaration
- *
- * Existing networking composition should therefore import this grammar rather
- * than rename the rule.
- *
- * The following existing conceptual rules are intentionally consolidated:
- *
- *     endpointRoleDeclaration
- *     endpointAddressDeclaration
- *     endpointProtocolDeclaration
- *     endpointCapabilityDeclaration
- *     endpointRequirementDeclaration
- *     endpointConstraintDeclaration
- *     endpointPreferenceDeclaration
- *     endpointSecurityDeclaration
- *     endpointLocalityDeclaration
- *     endpointPropertyDeclaration
- *     endpointPolicyDeclaration
- *     endpointMetadataDeclaration
- *
- * They were structurally equivalent because each ultimately represented:
- *
- *     identifier COLON expression SEMICOLON
- *
- * Their semantic distinction belongs downstream.
- *
- * This consolidation avoids grammar ambiguity while preserving their source
- * vocabulary as ordinary property keys.
+ *     - duplicate endpoint;
+ *     - unresolved endpoint reference;
+ *     - invalid endpoint property;
+ *     - incompatible endpoint/service;
+ *     - incompatible endpoint/channel;
+ *     - incompatible endpoint/protocol;
+ *     - unsatisfied capability;
+ *     - unsatisfied resource requirement;
+ *     - invalid policy;
+ *     - invalid security requirement;
+ *     - invalid portability requirement.
  *
  * ============================================================================
- * INTEGRATION WITH networking.g4
- * ============================================================================
  *
- * The aggregate networking grammar MUST import this grammar:
- *
- *     import Endpoints;
- *
- * It MUST NOT redefine:
- *
- *     endpointDeclaration
- *     endpointMarker
- *     endpointBody
- *     endpointMember
- *     endpointProperty
- *     endpointNestedBlock
- *     endpointReference
- *
- * The aggregate grammar should expose:
- *
- *     endpointDeclaration
- *
- * through its networking declaration/statement/expression composition.
- *
- * ============================================================================
- * INTEGRATION WITH Zamani.g4
- * ============================================================================
- *
- * `grammar/Zamani.g4` remains the canonical root grammar.
- *
- * It does not duplicate endpoint syntax.
- *
- * The integration path is:
- *
- *     Zamani.g4
- *         |
- *         v
- *     networking aggregate
- *         |
- *         v
- *     Endpoints
- *
- * No second root grammar is introduced.
- *
- * ============================================================================
- * INTEGRATION WITH NAMES
- * ============================================================================
- *
- * This grammar imports:
- *
- *     Names
- *
- * and therefore reuses:
- *
- *     identifier
- *     qualifiedName
- *
- * without defining a second name grammar.
- *
- * ============================================================================
- * INTEGRATION WITH EXPRESSIONS
- * ============================================================================
- *
- * This grammar imports:
- *
- *     Expressions
- *
- * and therefore reuses:
- *
- *     expression
- *
- * for endpoint property values.
- *
- * Endpoint properties may consequently evolve with the universal expression
- * language without requiring endpoint grammar changes.
- *
- * ============================================================================
- * INTEGRATION WITH RESOURCES / CAPABILITIES
- * ============================================================================
- *
- * This grammar does not import the resource/capability implementation.
- *
- * Instead:
- *
- *     requires: ...
- *     capability: ...
- *     constraint: ...
- *     preference: ...
- *
- * are parsed as ordinary property/value pairs.
- *
- * Semantic analysis later maps them to the canonical resource/capability
- * model.
- *
- * This avoids coupling endpoint syntax to any particular resource backend.
- *
- * ============================================================================
- * INTEGRATION WITH SERVICE DISCOVERY
- * ============================================================================
- *
- * Logical endpoint identity may be represented by:
- *
- *     endpointReference
- *
- * but this grammar does not resolve it.
- *
- * Service discovery owns:
- *
- *     logical identity -> discovered service realization
- *
- * downstream.
- *
- * ============================================================================
- * INTEGRATION WITH ROUTING
- * ============================================================================
- *
- * Endpoint syntax describes communication participants.
- *
- * Routing owns:
- *
- *     logical endpoint -> route realization.
- *
- * This grammar does not select routes.
- *
- * ============================================================================
- * INTEGRATION WITH SCHEDULING
- * ============================================================================
- *
- * This grammar does not schedule endpoint communication.
- *
- * Scheduling owns:
- *
- *     temporal order;
- *     timing;
- *     resource scheduling;
- *     synchronization.
- *
- * ============================================================================
- * INTEGRATION WITH RUNTIME
- * ============================================================================
- *
- * The runtime may realize an endpoint as any available execution resource.
- *
- * This grammar makes no assumption about:
- *
- *     - process model;
- *     - operating system;
- *     - network stack;
- *     - machine count;
- *     - hardware topology;
- *     - accelerator availability.
- *
- * ============================================================================
- * RUST CONTRACT
- * ============================================================================
- *
- * Generated/parser integration must remain compatible with:
- *
- *     Rust 1.97
- *     Rust 1.97.1
- *
- * and must use safe Rust only.
- *
- * This grammar introduces no Rust actions and therefore introduces no
- * opportunity for unsafe Rust inside the grammar itself.
- *
- * ============================================================================
  * TEST CONTRACT
- * ============================================================================
+ * -------------
  *
  * POSITIVE:
  *
- *     endpoint producer;
+ *     endpoint compute::worker;
  *
- *     endpoint producer {
- *         role: source;
+ *     endpoint compute::worker {
+ *         role: producer;
  *     }
  *
- *     endpoint consumer {
- *         role: sink;
- *         protocol: reliable;
- *         requires: capability("network.reliable");
+ *     public endpoint telemetry::source {
+ *         role: producer;
+ *         service: telemetry::Service;
+ *         protocol: network::reliable;
  *     }
  *
- *     endpoint quantum_control {
- *         capability: quantum;
- *         target: quantum;
+ *     endpoint quantum::control {
+ *         capability: capability("quantum.measurement");
  *     }
  *
- *     endpoint service {
- *         address: services::compute;
- *         locality: region;
- *     }
- *
- *     endpoint distributed::worker {
- *         role: worker;
- *     }
- *
- *     endpoint nested {
+ *     endpoint compute::worker {
  *         policy {
- *             retry: adaptive;
+ *             reliability: required;
+ *             locality: preferred;
  *         }
  *     }
  *
- *     endpointReference
- *         -> producer
- *         -> services::producer
- *         -> quantum::control::endpoint
+ *     endpoint::not-valid;
+ *
+ * The last example is intentionally NOT valid because `endpoint` is a
+ * reserved lexical token and therefore cannot be an ordinary identifier in
+ * that position.
  *
  * NEGATIVE:
  *
  *     endpoint;
  *
- *     endpoint { ... };
+ *     endpoint {
+ *     }
  *
- *     endpoint producer {
+ *     endpoint compute::worker {
  *         role
  *     }
  *
- *     endpoint producer {
- *         : source;
+ *     endpoint compute::worker {
+ *         role:
  *     }
  *
- *     endpoint producer {
- *         role source;
+ *     endpoint compute::worker {
+ *         role: value
  *     }
  *
- *     endpoint producer {
- *         role:;
- *     }
- *
- *     endpoint producer {
- *         role: source
- *     }
- *
- *     endpoint producer {
- *         policy {
- *     }
+ * The final example is invalid because endpoint properties require their
+ * canonical statement terminator.
  *
  * BOUNDARY:
  *
- *     one endpoint;
- *     many endpoints;
- *     deeply qualified names;
- *     large property sets;
- *     large nested configuration;
- *     arbitrarily large expression values;
- *     arbitrarily many endpoint references.
+ *     endpoint a;
+ *     endpoint a::b;
+ *     endpoint a::b::c;
+ *
+ *     endpoint service::producer {
+ *         service: services::Telemetry;
+ *         channel: channels::Results;
+ *         protocol: protocols::Reliable;
+ *     }
+ *
+ * CROSS-DOMAIN:
+ *
+ *     endpoint classical::worker {
+ *         capability: capability("cpu.compute");
+ *     }
+ *
+ *     endpoint accelerator::worker {
+ *         capability: capability("gpu.compute");
+ *     }
+ *
+ *     endpoint quantum::worker {
+ *         capability: capability("quantum.measurement");
+ *     }
+ *
+ *     endpoint hybrid::worker {
+ *         requires: capability("quantum.measurement");
+ *         requires_memory: required_memory;
+ *     }
  *
  * SCALABILITY:
  *
- *     The test suite must demonstrate that grammar acceptance does not depend
- *     on an artificial endpoint/network/device count.
+ *     - arbitrarily many endpoint declarations;
+ *     - arbitrarily many endpoint members;
+ *     - arbitrarily deep qualified names subject to implementation resources;
+ *     - arbitrarily many references;
+ *     - arbitrarily many nested configuration members;
+ *     - no language-level machine capacity.
  *
  * DETERMINISM:
  *
- *     Identical token streams must produce identical parse structures.
+ *     Identical token streams produce equivalent parse structures.
  *
- * PORTABILITY:
+ * COMPATIBILITY:
  *
- *     Endpoint declarations must not require a specific:
+ *     The canonical declaration spelling is:
  *
- *         CPU
- *         GPU
- *         FPGA
- *         QPU
- *         node
- *         NIC
- *         network topology
- *         transport
+ *         endpoint qualified::name { ... }
  *
- * HARD-CODING AUDIT:
+ *     or:
  *
- *     The grammar must reject no valid program merely because a target has
- *     fewer or more network resources than another target.
+ *         endpoint qualified::name;
+ *
+ *     Because ENDPOINT is now consumed as the canonical lexical token, an
+ *     older implementation that treated the marker as an arbitrary identifier
+ *     must migrate to the canonical tokenized form.
  *
  * ============================================================================
+ *
+ * INTEGRATION CONTRACT
+ * --------------------
+ *
+ * `networking.g4` must consume:
+ *
+ *     endpointDeclaration
+ *
+ * through:
+ *
+ *     networkingEndpoint
+ *         : endpointDeclaration
+ *         ;
+ *
+ * Services consume endpoint references through their existing:
+ *
+ *     networkServiceEndpointReference
+ *
+ * and do NOT import or duplicate endpoint declaration syntax.
+ *
+ * Channels, protocols, routes, sockets and discovery may consume:
+ *
+ *     endpointReference
+ *
+ * but must perform resolution semantically.
+ *
+ * Service discovery owns discovery.
+ *
+ * Routing owns route realization.
+ *
+ * Sockets own socket semantics.
+ *
+ * Channels own channel semantics.
+ *
+ * Protocols own protocol semantics.
+ *
+ * Addresses own address semantics.
+ *
+ * This file remains the logical endpoint boundary between them.
+ *
+ * ============================================================================
+ *
  * COMPLETION CRITERIA
- * ============================================================================
+ * -------------------
  *
- * [x] Single endpoint grammar owner.
- * [x] Canonical ZamaniLexer vocabulary.
- * [x] Canonical Names integration.
- * [x] Canonical Expressions integration.
- * [x] No lexer rules.
- * [x] No embedded Rust.
- * [x] No unsafe code.
- * [x] No semantic predicates.
- * [x] No physical address grammar.
- * [x] No transport grammar.
- * [x] No routing grammar.
- * [x] No discovery implementation.
- * [x] No distributed placement.
- * [x] No hardware topology.
- * [x] No QEC.
- * [x] No ZQN.
- * [x] No second quantum IR.
- * [x] No artificial capacity limits.
- * [x] Deterministic endpoint-member structure.
- * [x] Extensible property vocabulary.
- * [x] Nested logical configuration.
- * [x] Logical endpoint references.
- * [x] Source-span-preserving structure.
- * [x] AST contract defined.
- * [x] Semantic contract defined.
- * [x] IR boundary defined.
- * [x] networking.g4 integration defined.
- * [x] Zamani.g4 integration defined.
- * [x] resource/capability integration defined.
- * [x] routing integration defined.
- * [x] discovery integration defined.
- * [x] scheduling integration defined.
- * [x] runtime integration defined.
- * [x] scalability contract defined.
- * [x] compatibility contract defined.
+ * This file is DONE when:
+ *
+ *     [x] The grammar is a parser grammar.
+ *     [x] tokenVocab is ZamaniLexer.
+ *     [x] ENDPOINT is the canonical endpoint marker.
+ *     [x] Endpoint names use qualifiedName.
+ *     [x] Attributes use the canonical Core layer.
+ *     [x] Visibility uses the canonical Core layer.
+ *     [x] Endpoint properties use canonical expressions.
+ *     [x] Endpoint nested blocks are open-ended.
+ *     [x] Endpoint references use qualifiedName.
+ *     [x] No endpoint lookup occurs in parsing.
+ *     [x] No physical networking semantics are encoded.
+ *     [x] No hardware topology is encoded.
+ *     [x] No resource limits are encoded.
+ *     [x] No protocol catalog is encoded.
+ *     [x] No transport catalog is encoded.
+ *     [x] No second policy system is encoded.
+ *     [x] No second capability system is encoded.
+ *     [x] No second type system is encoded.
+ *     [x] No second expression system is encoded.
+ *     [x] No IR is created.
+ *     [x] No runtime behavior is created.
+ *     [x] No embedded Rust exists.
+ *     [x] No unsafe implementation is required.
+ *     [x] Parsing is deterministic.
+ *     [x] Source structure can be preserved for provenance.
+ *     [x] The grammar is open to future networking properties.
+ *
+ * Repository-level verification still required:
+ *
+ *     [ ] ANTLR generation succeeds.
+ *     [ ] ZamaniParser generation succeeds.
+ *     [ ] networking.g4 composition succeeds.
+ *     [ ] endpoint tests pass.
+ *     [ ] networking integration tests pass.
+ *     [ ] AST construction tests pass.
+ *     [ ] semantic endpoint tests pass.
+ *     [ ] negative tests pass.
+ *     [ ] cross-domain tests pass.
+ *     [ ] scalability tests pass.
+ *     [ ] determinism tests pass.
+ *     [ ] compatibility tests pass.
  *
  * ============================================================================
  */
@@ -1154,41 +845,59 @@ options {
     tokenVocab = ZamaniLexer;
 }
 
-import Names, Expressions;
+import
+    Core,
+    Expressions
+;
 
 
-/* ============================================================================
- * PUBLIC ENDPOINT DECLARATION
+/*
+ * ============================================================================
+ * PUBLIC ENDPOINT CONSTRUCT
  * ============================================================================
  *
- * Contextual form:
+ * The aggregate networking grammar consumes endpointDeclaration.
  *
- *     endpoint name;
- *     endpoint name { ... }
- *
- * The marker is validated semantically because the current lexical architecture
- * does not make `endpoint` a globally reserved token.
+ * Endpoint references are deliberately separate from declarations so that
+ * services, channels, protocols, discovery and routing can reference logical
+ * endpoints without accidentally creating declarations.
+ * ============================================================================
  */
+
 endpointDeclaration
-    : endpointMarker
-      identifier
-      endpointBody?
+    : attribute*
+      visibility?
+      ENDPOINT
+      qualifiedName
+      endpointBody
       SEMICOLON?
     ;
 
 
-/* ============================================================================
- * CONTEXTUAL ENDPOINT MARKER
+/*
  * ============================================================================
- */
-
-endpointMarker
-    : identifier
-    ;
-
-
-/* ============================================================================
  * ENDPOINT BODY
+ * ============================================================================
+ *
+ * A body is mandatory for the block form.
+ *
+ * The declaration rule therefore supports exactly:
+ *
+ *     endpoint name { ... }
+ *
+ * and:
+ *
+ *     endpoint name { ... };
+ *
+ * A declaration without a body uses the explicit declaration terminator:
+ *
+ *     endpoint name;
+ *
+ * This prevents an incomplete:
+ *
+ *     endpoint name
+ *
+ * from being accepted as a complete declaration.
  * ============================================================================
  */
 
@@ -1199,96 +908,199 @@ endpointBody
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
+ * EMPTY / FORWARD DECLARATION
+ * ============================================================================
+ *
+ * Separate rule retained for parser composition where a declaration is
+ * intentionally body-less.
+ * ============================================================================
+ */
+
+endpointForwardDeclaration
+    : attribute*
+      visibility?
+      ENDPOINT
+      qualifiedName
+      SEMICOLON
+    ;
+
+
+/*
+ * ============================================================================
+ * ENDPOINT DECLARATION ADAPTER
+ * ============================================================================
+ *
+ * Public declaration accepts either a complete body or an explicit forward
+ * declaration.
+ * ============================================================================
+ */
+
+endpointDeclaration
+    : attribute*
+      visibility?
+      ENDPOINT
+      qualifiedName
+      (
+          endpointBody SEMICOLON?
+        | SEMICOLON
+      )
+    ;
+
+
+/*
+ * ============================================================================
  * ENDPOINT MEMBER
  * ============================================================================
  *
- * Every endpoint member has an unambiguous structural form.
+ * Exactly two structural forms exist:
  *
- * Property:
+ *     property:
+ *         name: expression;
  *
- *     name: expression;
+ *     nested configuration:
+ *         name { ... }
  *
- * Nested block:
- *
- *     name { ... }
- *
- * The meaning of `name` is semantic.
+ * This avoids a large closed keyword catalogue while retaining deterministic
+ * structural parsing.
+ * ============================================================================
  */
+
 endpointMember
     : endpointProperty
     | endpointNestedBlock
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ENDPOINT PROPERTY
  * ============================================================================
  */
 
 endpointProperty
-    : identifier
+    : endpointPropertyKey
       COLON
-      expression
+      endpointPropertyValue
       SEMICOLON
     ;
 
 
-/* ============================================================================
- * ENDPOINT NESTED BLOCK
+/*
  * ============================================================================
- *
- * Nested blocks are intentionally generic.
- *
- * They permit future endpoint configuration domains without requiring this
- * grammar to enumerate every future networking concept.
+ * ENDPOINT PROPERTY KEY
+ * ============================================================================
  */
-endpointNestedBlock
+
+endpointPropertyKey
     : identifier
-      endpointBody
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
+ * ENDPOINT PROPERTY VALUE
+ * ============================================================================
+ *
+ * All values use the canonical Zamani expression system.
+ * ============================================================================
+ */
+
+endpointPropertyValue
+    : expression
+    ;
+
+
+/*
+ * ============================================================================
+ * ENDPOINT NESTED BLOCK
+ * ============================================================================
+ *
+ * Nested configuration remains structurally generic.
+ *
+ * The semantic subsystem determines whether a nested key represents:
+ *
+ *     policy;
+ *     security;
+ *     metadata;
+ *     capabilities;
+ *     requirements;
+ *     transport intent;
+ *     service binding;
+ *     channel binding;
+ *     protocol intent;
+ *     vendor/dialect extension;
+ *     application metadata;
+ *     another supported endpoint configuration.
+ *
+ * No such semantic catalog is encoded here.
+ * ============================================================================
+ */
+
+endpointNestedBlock
+    : endpointPropertyKey
+      endpointBody
+      SEMICOLON?
+    ;
+
+
+/*
+ * ============================================================================
  * ENDPOINT REFERENCE
  * ============================================================================
  *
- * A reference is a canonical qualified name.
+ * Symbolic only.
  *
- * It performs no lookup.
+ * This rule performs NO:
+ *
+ *     - lookup;
+ *     - discovery;
+ *     - routing;
+ *     - address resolution;
+ *     - placement;
+ *     - transport selection.
+ * ============================================================================
  */
+
 endpointReference
     : qualifiedName
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ENDPOINT REFERENCE LIST
  * ============================================================================
  *
- * Reuses the canonical qualified-name list structure.
- *
- * The list itself remains unbounded by language design.
+ * Unbounded by language design.
+ * ============================================================================
  */
+
 endpointReferenceList
     : endpointReference
       (COMMA endpointReference)*
+      COMMA?
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ENDPOINT NAME
  * ============================================================================
  *
- * Explicit wrapper for contexts that need to state that a name is an endpoint
- * identity without changing the underlying name grammar.
+ * Explicit semantic boundary for contexts that need to identify an endpoint
+ * name while retaining the canonical qualified-name syntax.
+ * ============================================================================
  */
+
 endpointName
     : qualifiedName
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ENDPOINT NAME LIST
  * ============================================================================
  */
@@ -1296,51 +1108,68 @@ endpointName
 endpointNameList
     : endpointName
       (COMMA endpointName)*
+      COMMA?
     ;
 
 
-/* ============================================================================
- * ENDPOINT PROPERTY KEY
+/*
+ * ============================================================================
+ * ENDPOINT REFERENCE EXPRESSION
  * ============================================================================
  *
- * Explicit reusable wrapper.
- *
- * This is deliberately an identifier rather than a closed keyword list.
- */
-endpointPropertyKey
-    : identifier
-    ;
-
-
-/* ============================================================================
- * ENDPOINT PROPERTY VALUE
+ * Networking consumers may use this boundary when they need to distinguish a
+ * logical endpoint reference from a generic expression.
  * ============================================================================
- *
- * Endpoint values use the universal expression grammar.
  */
-endpointPropertyValue
-    : expression
-    ;
 
-
-/* ============================================================================
- * ENDPOINT DECLARATION REFERENCE
- * ============================================================================
- *
- * This rule is useful to aggregate grammars and semantic tooling that need a
- * named endpoint-reference boundary.
- */
 endpointReferenceExpression
     : endpointReference
     ;
 
 
-/* ============================================================================
+/*
+ * ============================================================================
  * ENDPOINT CONFIGURATION
  * ============================================================================
  *
- * Reusable body boundary for downstream grammar composition.
+ * Reusable endpoint-body boundary.
+ * ============================================================================
  */
+
 endpointConfiguration
     : endpointBody
     ;
+
+
+/*
+ * ============================================================================
+ * FINAL OWNERSHIP INVARIANT
+ * ============================================================================
+ *
+ *     ENDPOINT declaration
+ *          |
+ *          v
+ *     logical endpoint AST
+ *          |
+ *          v
+ *     semantic endpoint model
+ *          |
+ *          +--> address semantics
+ *          +--> service semantics
+ *          +--> protocol semantics
+ *          +--> channel semantics
+ *          +--> discovery semantics
+ *          +--> routing semantics
+ *          +--> socket semantics
+ *          +--> distributed semantics
+ *          |
+ *          v
+ *     target-independent execution planning
+ *          |
+ *          v
+ *     physical realization
+ *
+ * The endpoint grammar never chooses the physical realization.
+ *
+ * ============================================================================
+ */
