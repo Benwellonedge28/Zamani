@@ -1,0 +1,4396 @@
+# =============================================================================
+#
+# Zamani Programming Language
+#
+# grammar/contracts/ast-mappings.yaml
+#
+# =============================================================================
+#
+# PURPOSE
+#
+# Canonical machine-checkable contract connecting Zamani source grammar
+# productions to the frontend AST.
+#
+# This contract is deliberately independent of:
+#
+#   - physical hardware;
+#   - target devices;
+#   - compiler backend selection;
+#   - runtime state;
+#   - resource availability;
+#   - scheduling;
+#   - routing;
+#   - calibration;
+#   - vendor instruction sets;
+#   - physical qubit allocation;
+#   - finite machine capacities.
+#
+# The AST represents source structure and portable computation intent.
+#
+# The AST does NOT represent target realization.
+#
+# Canonical pipeline:
+#
+#   Zamani source
+#       |
+#       v
+#   lexer
+#       |
+#       v
+#   parser
+#       |
+#       v
+#   frontend AST
+#       |
+#       v
+#   structural validation
+#       |
+#       +--> types
+#       +--> effects
+#       +--> capabilities
+#       +--> resources
+#       +--> contracts
+#       +--> policies
+#       +--> provenance
+#       |
+#       v
+#   semantic model
+#       |
+#       +--> Classical IR
+#       +--> quantum::ir
+#       +--> HDL / Hardware IR
+#       |
+#       v
+#   optimization / lowering / routing / scheduling / resilience
+#       |
+#       v
+#   ZQN
+#       |
+#       v
+#   HAL / runtime / realization
+#
+# =============================================================================
+
+schema:
+  version: "2.0"
+  kind: "zamani-grammar-ast-mapping-contract"
+  format: "YAML"
+  status: "NORMATIVE"
+  repository: "Benwellonedge28/Zamani"
+  language: "Zamani"
+  root: "grammar/"
+  canonical_file: "grammar/contracts/ast-mappings.yaml"
+
+  implementation:
+    rust:
+      edition: "2021"
+      minimum_version: "1.97"
+      recommended_version: "1.97-or-later"
+      safety_policy: "safe-rust-only"
+      unsafe_code: "forbidden"
+
+  scalability:
+    model: "open-world"
+    principle: >
+      The language and AST impose no artificial finite machine-size ceiling.
+      Concrete compilation and execution remain bounded by actual resources,
+      implementation representation limits, explicit program constraints,
+      deployment policy, and physical reality.
+
+  portability:
+    model: "target-independent-source-semantics"
+
+  poco_reaf:
+    enabled: true
+    name: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
+    meaning: >
+      Source meaning and its portable compilation contract remain independent
+      of any particular realization target. Target-specific realization is
+      performed only after capability, resource, policy, effect, and
+      compatibility validation.
+
+# =============================================================================
+# 1. AUTHORITY
+# =============================================================================
+
+authority:
+  architecture:
+    path: "grammar/DESIGN.md"
+    role: "architectural_authority"
+
+  normative_language:
+    path: "grammar/specification/"
+    role: "normative_language_specification"
+
+  machine_specification:
+    path: "grammar/spec/"
+    role: "machine_oriented_language_contracts"
+
+  ownership:
+    path: "grammar/contracts/ownership.yaml"
+    role: "canonical_concept_ownership"
+
+  dependencies:
+    path: "grammar/contracts/dependencies.yaml"
+    role: "canonical_dependency_graph"
+
+  exports:
+    path: "grammar/contracts/exports.yaml"
+    role: "canonical_export_registry"
+
+  semantic_mappings:
+    path: "grammar/contracts/semantic-mappings.yaml"
+    role: "AST_to_semantic_mapping"
+
+  ir_mappings:
+    path: "grammar/contracts/ir-mappings.yaml"
+    role: "semantic_to_IR_mapping"
+
+  diagnostics:
+    path: "grammar/contracts/diagnostics.yaml"
+    role: "diagnostic_contract"
+
+  compatibility:
+    path: "grammar/contracts/compatibility.yaml"
+    role: "cross_version_compatibility"
+
+  feature_status:
+    path: "grammar/contracts/feature-status.yaml"
+    role: "feature_lifecycle_status"
+
+  ast_conformance:
+    path: "grammar/compatibility/ast-conformance.md"
+    role: "AST_conformance_requirements"
+
+  syntax_specification:
+    path: "grammar/spec/syntax.md"
+    role: "syntax_to_AST_contract"
+
+  source_spans:
+    path: "grammar/spec/source-spans.md"
+    role: "source_span_contract"
+
+  AST_coverage:
+    path: "grammar/validation/ast-coverage.md"
+    role: "AST_coverage_validation"
+
+  frontend:
+    current_legacy_boundary:
+      path: "src/ast/mod.rs"
+      role: "legacy_AST_compatibility_boundary"
+
+    canonical_boundary:
+      path: "src/frontend/ast/node/mod.rs"
+      role: "canonical_frontend_AST_node_boundary"
+
+  parser:
+    path: "src/parser.rs"
+    role: "legacy_executable_parser_boundary"
+
+  historical_reference:
+    path: "grammar/Zamani-Grammar.md"
+    normative: false
+    ownership_effect: "none"
+
+  derived_reference:
+    path: "grammar/grammar.md"
+    normative: false
+    role: "implementation_conformance_reference"
+
+# =============================================================================
+# 2. AUTHORITY RULES
+# =============================================================================
+
+authority_rules:
+
+  grammar_does_not_own_AST:
+    severity: "error"
+    rule: >
+      Grammar files define source syntax. They do not define Rust AST
+      implementation structures.
+
+  AST_does_not_define_source_language:
+    severity: "error"
+    rule: >
+      Existing Rust AST implementation must not silently become the source
+      language authority. Normative source meaning remains owned by
+      grammar/specification/.
+
+  one_canonical_AST_boundary:
+    severity: "error"
+    rule: >
+      The decomposed frontend AST under src/frontend/ast/node/ is the
+      forward canonical AST boundary.
+
+  legacy_AST_is_not_parallel_authority:
+    severity: "error"
+    rule: >
+      src/ast/mod.rs is a compatibility and migration boundary while the
+      frontend AST decomposition is completed. It must not become a second
+      independent language model.
+
+  parser_to_AST:
+    severity: "error"
+    rule: >
+      Every meaning-bearing parser production must map to an AST
+      representation or to an explicitly declared syntax-only construct.
+
+  no_hidden_AST:
+    severity: "error"
+    rule: >
+      A grammar production may not depend on an undocumented Rust structure.
+
+  no_backend_AST:
+    severity: "error"
+    rule: >
+      AST nodes must not contain backend-specific realization decisions.
+
+  no_target_AST:
+    severity: "error"
+    rule: >
+      AST nodes must not encode physical CPU, GPU, FPGA, ASIC, accelerator,
+      QPU, simulator, cluster, cloud, vendor, or operating-system selection.
+
+  no_runtime_AST:
+    severity: "error"
+    rule: >
+      AST nodes must not contain live runtime state or mutable resource
+      availability.
+
+  no_machine_capacity_AST:
+    severity: "error"
+    rule: >
+      AST mappings must not turn implementation or target capacity into
+      language-level limits.
+
+  source_structure_only:
+    severity: "error"
+    rule: >
+      The AST records source structure, source intent, syntactic metadata,
+      and source provenance. Semantic realization belongs downstream.
+
+# =============================================================================
+# 3. AST LAYERS
+# =============================================================================
+
+layers:
+
+  syntax_AST:
+    purpose: "faithful source structure"
+    owns:
+      - "source ordering"
+      - "grammar structure"
+      - "names"
+      - "expressions"
+      - "statements"
+      - "declarations"
+      - "patterns"
+      - "type expressions"
+      - "attributes"
+      - "modifiers"
+      - "source spans"
+      - "literal source values"
+      - "source-level domain constructs"
+      - "source-level resource requirements"
+      - "source-level capability requirements"
+      - "source-level effect declarations"
+      - "source-level contracts"
+      - "source-level policies"
+      - "source-level provenance"
+
+  structural_validation:
+    purpose: "validate AST structure before semantic interpretation"
+    owns:
+      - "well_formedness"
+      - "duplicate declarations"
+      - "structural constraints"
+      - "syntax-derived invariants"
+
+  semantic_model:
+    purpose: "meaning and validity"
+    owns:
+      - "name resolution"
+      - "type checking"
+      - "effect checking"
+      - "capability validation"
+      - "resource validation"
+      - "contract validation"
+      - "policy evaluation"
+      - "provenance validation"
+      - "domain semantics"
+
+  canonical_IR:
+    purpose: "compiler representation after semantic validation"
+    owns:
+      - "Classical IR"
+      - "quantum::ir"
+      - "HDL/Hardware IR"
+
+  realization:
+    purpose: "target-specific realization"
+    owns:
+      - "target discovery"
+      - "resource negotiation"
+      - "placement"
+      - "routing"
+      - "scheduling"
+      - "lowering"
+      - "calibration"
+      - "device selection"
+      - "backend instruction selection"
+
+# =============================================================================
+# 4. NODE CONTRACT
+# =============================================================================
+
+node_contract:
+
+  required_properties:
+    - "kind"
+    - "source_span"
+    - "children"
+    - "syntactic_attributes"
+    - "provenance"
+
+  optional_properties:
+    - "stable_node_id"
+    - "generated_origin"
+    - "dialect"
+    - "version"
+    - "source_metadata"
+
+  forbidden_properties:
+    - "physical_device_id"
+    - "physical_qubit_id"
+    - "CPU_core_assignment"
+    - "GPU_assignment"
+    - "FPGA_placement"
+    - "ASIC_cell_selection"
+    - "QPU_calibration"
+    - "runtime_handle"
+    - "live_resource_count"
+    - "scheduler_slot"
+    - "routing_result"
+    - "backend_instruction"
+    - "target_native_register"
+
+  invariants:
+    source_reconstructability:
+      rule: >
+        The AST must retain sufficient structural information for downstream
+        semantic analysis without reparsing ordinary syntax from raw source.
+
+    deterministic_traversal:
+      rule: >
+        AST traversal order must be deterministic and independent of hash-map
+        iteration order or machine-specific execution.
+
+    source_order:
+      rule: >
+        Source ordering must be preserved wherever language semantics depend
+        on declaration or evaluation order.
+
+    no_address_identity:
+      rule: >
+        AST identity must never depend on memory addresses or pointer identity.
+
+    no_target_identity:
+      rule: >
+        AST identity must never depend on a physical target identifier.
+
+# =============================================================================
+# 5. SOURCE SPAN CONTRACT
+# =============================================================================
+
+source_span:
+
+  canonical_type:
+    path: "src/source_map.rs"
+    symbol: "Span"
+
+  authority:
+    specification: "grammar/spec/source-spans.md"
+
+  requirements:
+    every_source_node: true
+    deterministic: true
+    reproducible: true
+    source_order_preserved: true
+    diagnostic_compatible: true
+    tooling_compatible: true
+    target_independent: true
+    runtime_independent: true
+
+  origin_kinds:
+    - "source"
+    - "generated"
+    - "synthetic"
+    - "desugared"
+
+  forbidden:
+    - "memory_address"
+    - "pointer_address"
+    - "device_address"
+    - "runtime_handle"
+    - "physical_resource_identifier"
+
+  mapping_rule: >
+    Every AST mapping below assumes the canonical Span representation.
+    Individual nodes must not introduce alternate span structures.
+
+# =============================================================================
+# 6. MAPPING SCHEMA
+# =============================================================================
+
+mapping_schema:
+
+  required:
+    - "id"
+    - "grammar_owner"
+    - "grammar_symbols"
+    - "ast_boundary"
+    - "ast_kind"
+    - "representation"
+    - "fields"
+    - "source_span"
+    - "semantic_consumer"
+    - "status"
+    - "tests"
+    - "freeze"
+
+  fields_schema:
+    id:
+      type: "string"
+      uniqueness: "global"
+
+    grammar_owner:
+      type: "repository_path"
+      must_match:
+        - "grammar/contracts/ownership.yaml"
+        - "grammar/OWNERSHIP.yaml"
+
+    grammar_symbols:
+      type: "list"
+
+    ast_boundary:
+      enum:
+        - "canonical"
+        - "legacy_compatibility"
+        - "migration"
+
+    ast_kind:
+      type: "string"
+
+    representation:
+      type: "string"
+
+    fields:
+      type: "list"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      type: "repository_path_or_contract"
+
+    IR_consumer:
+      optional: true
+
+    status:
+      enum:
+        - "specified"
+        - "implemented"
+        - "partial"
+        - "migration_required"
+        - "planned"
+        - "experimental"
+        - "deprecated"
+        - "rejected"
+
+    tests:
+      required: true
+
+    freeze:
+      required: true
+
+# =============================================================================
+# 7. CANONICAL ROOT MAPPINGS
+# =============================================================================
+
+mappings:
+
+  - id: "AST-ROOT-001"
+    grammar_owner: "grammar/core/program.g4"
+    grammar_symbols:
+      - "program"
+      - "sourceUnit"
+
+    ast_boundary: "canonical"
+    ast_kind: "Program"
+    representation: "src/frontend/ast/node/"
+
+    fields:
+      - name: "items"
+        type: "ordered collection of top-level AST nodes"
+        source: "program contents"
+      - name: "span"
+        type: "Span"
+        source: "complete program/source unit"
+
+    source_span:
+      required: true
+      representation: "Span"
+
+    semantic_consumer: "semantic program validation"
+    IR_consumer: "compiler semantic lowering"
+
+    status: "implemented"
+    tests:
+      required:
+        - "grammar/conformance/syntax/program"
+        - "grammar/conformance/ast/program"
+        - "grammar/tests/ast/program"
+    freeze:
+      requires:
+        - "source span validation"
+        - "deterministic ordering"
+        - "single root ownership"
+
+  - id: "AST-CORE-001"
+    grammar_owner: "grammar/core/names.g4"
+    grammar_symbols:
+      - "identifier"
+
+    ast_boundary: "canonical"
+    ast_kind: "Identifier"
+    representation: "src/frontend/ast/node/"
+
+    fields:
+      - name: "name"
+        type: "source identifier representation"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer: "name resolution"
+
+    status: "implemented"
+    tests:
+      required:
+        - "grammar/tests/ast/identifiers"
+        - "grammar/conformance/ast/identifiers"
+
+    freeze:
+      requires:
+        - "Unicode policy resolved"
+        - "normalization policy resolved"
+        - "source spelling preservation resolved"
+
+# =============================================================================
+# 8. DECLARATION MAPPINGS
+# =============================================================================
+
+  - id: "AST-DECL-001"
+    grammar_owner: "grammar/declarations/variables.g4"
+    grammar_symbols:
+      - "variableDeclaration"
+      - "letDeclaration"
+      - "constDeclaration"
+
+    ast_boundary: "canonical"
+    ast_kind: "BindingDeclaration"
+
+    representation:
+      legacy:
+        "src/ast/mod.rs::Statement::Let"
+        "src/ast/mod.rs::Statement::Const"
+      canonical:
+        "src/frontend/ast/node/statements/let_stmt.rs"
+        "src/frontend/ast/node/statements/const_stmt.rs"
+
+    fields:
+      - name: "binding_name"
+        type: "Identifier"
+      - name: "type_annotation"
+        type: "optional TypeExpr"
+      - name: "initializer"
+        type: "Expression"
+      - name: "mutability"
+        type: "source-level mutability"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "name resolution"
+      - "type checking"
+      - "ownership analysis"
+      - "effect analysis"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/declarations/variables"
+        - "grammar/conformance/ast/declarations"
+        - "grammar/conformance/ast/source-spans"
+
+    freeze:
+      requires:
+        - "canonical BindingDeclaration representation"
+        - "legacy adapter retained"
+        - "mutability preserved"
+        - "initializer absence/presence preserved"
+        - "source span preserved"
+
+  - id: "AST-DECL-002"
+    grammar_owner: "grammar/declarations/functions.g4"
+    grammar_symbols:
+      - "functionDeclaration"
+      - "function"
+      - "parameterList"
+      - "returnType"
+
+    ast_boundary: "canonical"
+    ast_kind: "FunctionDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/"
+      legacy:
+        "src/ast/mod.rs::Statement::Function"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "generic_parameters"
+        type: "ordered collection of TypeParameter"
+      - name: "parameters"
+        type: "ordered collection of Parameter"
+      - name: "return_type"
+        type: "optional TypeExpr"
+      - name: "where_constraints"
+        type: "constraint collection"
+      - name: "body"
+        type: "Expression"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "effects"
+        type: "effect syntax"
+      - name: "contracts"
+        type: "contract syntax"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "function signature validation"
+      - "generic/type checking"
+      - "effect checking"
+      - "contract checking"
+
+    IR_consumer:
+      - "Classical IR"
+      - "quantum::ir where semantically applicable"
+      - "HDL/Hardware IR where semantically applicable"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/functions"
+        - "grammar/conformance/ast/functions"
+        - "grammar/conformance/ast/source-spans"
+
+    freeze:
+      requires:
+        - "generic parameter preservation"
+        - "effect preservation"
+        - "contract preservation"
+        - "attribute preservation"
+        - "source ordering"
+
+  - id: "AST-DECL-003"
+    grammar_owner: "grammar/declarations/structs.g4"
+    grammar_symbols:
+      - "structDeclaration"
+      - "structField"
+
+    ast_boundary: "canonical"
+    ast_kind: "StructDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/"
+      legacy:
+        "src/ast/mod.rs::Statement::Struct"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "generic_parameters"
+        type: "ordered collection of TypeParameter"
+      - name: "fields"
+        type: "ordered collection of StructField"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "visibility"
+        type: "Visibility"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "type declaration validation"
+      - "layout-independent type checking"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/struct"
+        - "grammar/conformance/ast/types"
+
+    freeze:
+      requires:
+        - "field order preservation"
+        - "generic preservation"
+        - "visibility preservation"
+
+  - id: "AST-DECL-004"
+    grammar_owner: "grammar/declarations/enums.g4"
+    grammar_symbols:
+      - "enumDeclaration"
+      - "enumVariant"
+
+    ast_boundary: "canonical"
+    ast_kind: "EnumDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/"
+      legacy:
+        "src/ast/mod.rs::Statement::Enum"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "generic_parameters"
+        type: "ordered collection of TypeParameter"
+      - name: "variants"
+        type: "ordered collection of EnumVariant"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "sum type validation"
+      - "pattern checking"
+      - "exhaustiveness analysis"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/enums"
+        - "grammar/conformance/ast/types"
+
+    freeze:
+      requires:
+        - "variant order preservation"
+        - "variant field structure preservation"
+        - "pattern compatibility"
+
+  - id: "AST-DECL-005"
+    grammar_owner: "grammar/declarations/traits.g4"
+    grammar_symbols:
+      - "traitDeclaration"
+      - "traitItem"
+      - "associatedType"
+
+    ast_boundary: "canonical"
+    ast_kind: "TraitDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/"
+      legacy:
+        "src/ast/mod.rs::Statement::Trait"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "generic_parameters"
+        type: "ordered collection of TypeParameter"
+      - name: "items"
+        type: "ordered collection of TraitItem"
+      - name: "constraints"
+        type: "constraint collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "trait/type-class validation"
+      - "generic constraint resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/traits"
+        - "grammar/conformance/ast/generics"
+
+    freeze:
+      requires:
+        - "associated members preserved"
+        - "generic bounds preserved"
+        - "default bodies preserved"
+
+  - id: "AST-DECL-006"
+    grammar_owner: "grammar/declarations/impl.g4"
+    grammar_symbols:
+      - "implDeclaration"
+      - "implItem"
+
+    ast_boundary: "canonical"
+    ast_kind: "ImplDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/"
+      legacy:
+        "src/ast/mod.rs::Statement::Impl"
+
+    fields:
+      - name: "trait_type"
+        type: "optional Identifier/TypeExpr"
+      - name: "target_type"
+        type: "TypeExpr"
+      - name: "items"
+        type: "ordered collection of ImplItem"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "trait implementation checking"
+      - "method resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/impl"
+        - "grammar/conformance/ast/traits"
+
+    freeze:
+      requires:
+        - "trait-for-type relationship preserved"
+        - "implementation item order preserved"
+
+  - id: "AST-DECL-007"
+    grammar_owner: "grammar/declarations/type-aliases.g4"
+    grammar_symbols:
+      - "typeAlias"
+      - "typeAliasDeclaration"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeAliasDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/declarations/type_alias.rs"
+      legacy:
+        "src/ast/mod.rs::Statement::TypeAlias"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "generic_parameters"
+        type: "ordered collection of TypeParameter"
+      - name: "target"
+        type: "TypeExpr"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "type alias resolution"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/type-alias"
+        - "grammar/conformance/ast/types"
+
+    freeze:
+      requires:
+        - "generic parameters preserved"
+        - "target type preserved"
+
+# =============================================================================
+# 9. MODULE / IMPORT MAPPINGS
+# =============================================================================
+
+  - id: "AST-MOD-001"
+    grammar_owner: "grammar/modules/modules.g4"
+    grammar_symbols:
+      - "moduleDeclaration"
+      - "modulePath"
+
+    ast_boundary: "canonical"
+    ast_kind: "ModuleDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/modules/"
+      legacy:
+        "src/ast/mod.rs::Statement::Module"
+
+    fields:
+      - name: "path"
+        type: "qualified source path"
+      - name: "items"
+        type: "ordered AST collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "module resolution"
+      - "visibility analysis"
+      - "name resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/modules"
+        - "grammar/conformance/ast/modules"
+
+    freeze:
+      requires:
+        - "qualified path preservation"
+        - "nested item ordering"
+
+  - id: "AST-MOD-002"
+    grammar_owner: "grammar/modules/imports.g4"
+    grammar_symbols:
+      - "importDeclaration"
+      - "importPath"
+
+    ast_boundary: "canonical"
+    ast_kind: "ImportDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/modules/"
+      legacy:
+        "src/ast/mod.rs::Statement::Import"
+
+    fields:
+      - name: "path"
+        type: "qualified source path"
+      - name: "selectors"
+        type: "optional import selectors"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "module resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/modules/imports"
+
+    freeze:
+      requires:
+        - "import path preservation"
+        - "selector preservation"
+
+  - id: "AST-MOD-003"
+    grammar_owner: "grammar/modules/use.g4"
+    grammar_symbols:
+      - "useDeclaration"
+      - "usePath"
+
+    ast_boundary: "canonical"
+    ast_kind: "UseDeclaration"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/modules/"
+      legacy:
+        "src/ast/mod.rs::Statement::Use"
+
+    fields:
+      - name: "segments"
+        type: "ordered string collection"
+      - name: "kind"
+        type: "UseKind"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "name resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/modules/use"
+
+    freeze:
+      requires:
+        - "single/glob/named semantics preserved"
+
+# =============================================================================
+# 10. FUNCTION / PARAMETER MAPPINGS
+# =============================================================================
+
+  - id: "AST-FN-001"
+    grammar_owner: "grammar/functions/parameters.g4"
+    grammar_symbols:
+      - "parameter"
+      - "parameterList"
+
+    ast_boundary: "canonical"
+    ast_kind: "Parameter"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/functions/"
+      legacy:
+        "src/ast/mod.rs::Parameter"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "type"
+        type: "optional TypeExpr"
+      - name: "default"
+        type: "optional Expression"
+      - name: "self_parameter"
+        type: "boolean"
+      - name: "mutable"
+        type: "boolean"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "signature checking"
+      - "type checking"
+      - "ownership analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/functions/parameters"
+
+    freeze:
+      requires:
+        - "parameter order preserved"
+        - "default values preserved"
+        - "mutability preserved"
+
+  - id: "AST-FN-002"
+    grammar_owner: "grammar/types/type-parameters.g4"
+    grammar_symbols:
+      - "typeParameter"
+      - "typeParameterList"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeParameter"
+
+    representation:
+      legacy:
+        "src/ast/mod.rs::TypeParameter"
+      canonical:
+        "src/frontend/ast/node/types/"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "bounds"
+        type: "ordered TypeBound collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "generic constraint resolution"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/generics"
+
+    freeze:
+      requires:
+        - "bounds preserve source order"
+        - "generic identity deterministic"
+
+# =============================================================================
+# 11. EXPRESSION MAPPINGS
+# =============================================================================
+
+  - id: "AST-EXPR-001"
+    grammar_owner: "grammar/expressions/expressions.g4"
+    grammar_symbols:
+      - "expression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/expressions/"
+      legacy:
+        "src/ast/mod.rs::Expression"
+
+    dispatch:
+      - "identifier"
+      - "literal"
+      - "prefix"
+      - "infix"
+      - "if"
+      - "block"
+      - "match"
+      - "loop"
+      - "call"
+      - "lambda"
+      - "array"
+      - "tuple"
+      - "struct"
+      - "index"
+      - "range"
+      - "memberAccess"
+      - "methodCall"
+      - "cast"
+      - "typeAscription"
+      - "assignment"
+      - "compoundAssignment"
+      - "try"
+      - "tryCatch"
+      - "await"
+      - "async"
+      - "spawn"
+      - "new"
+      - "domainOperation"
+      - "macroExpression"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "expression semantic analysis"
+      - "type checking"
+      - "effect analysis"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions"
+        - "grammar/conformance/ast/expressions"
+        - "grammar/conformance/ast/source-spans"
+
+    freeze:
+      requires:
+        - "single canonical expression dispatcher"
+        - "precedence preservation"
+        - "associativity preservation"
+        - "source span preservation"
+        - "domain operations remain extensible"
+
+# =============================================================================
+# 12. BASIC EXPRESSION NODES
+# =============================================================================
+
+  - id: "AST-EXPR-002"
+    grammar_owner: "grammar/expressions/identifiers.g4"
+    grammar_symbols:
+      - "identifierExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Identifier"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Identifier"
+      canonical: "src/frontend/ast/node/expressions/identifier.rs"
+
+    fields:
+      - name: "identifier"
+        type: "Identifier"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer: "name resolution"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/identifier"
+
+    freeze:
+      requires:
+        - "identifier span preserved"
+
+  - id: "AST-EXPR-003"
+    grammar_owner: "grammar/expressions/unary.g4"
+    grammar_symbols:
+      - "prefixExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Prefix"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Prefix"
+
+    fields:
+      - name: "operator"
+        type: "canonical operator identity"
+      - name: "operand"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "operator resolution"
+      - "type checking"
+      - "effect analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/unary"
+
+    freeze:
+      requires:
+        - "operator identity preserved"
+        - "operand preserved"
+
+  - id: "AST-EXPR-004"
+    grammar_owner: "grammar/expressions/binary.g4"
+    grammar_symbols:
+      - "binaryExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Infix"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Infix"
+
+    fields:
+      - name: "left"
+        type: "Expression"
+      - name: "operator"
+        type: "canonical operator identity"
+      - name: "right"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "operator resolution"
+      - "type checking"
+      - "effect analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/binary"
+        - "grammar/conformance/ast/precedence"
+
+    freeze:
+      requires:
+        - "precedence contract frozen"
+        - "associativity contract frozen"
+        - "operator ownership frozen"
+
+  - id: "AST-EXPR-005"
+    grammar_owner: "grammar/expressions/calls.g4"
+    grammar_symbols:
+      - "callExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Call"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Call"
+
+    fields:
+      - name: "callee"
+        type: "Expression"
+      - name: "arguments"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "call resolution"
+      - "type checking"
+      - "effect checking"
+      - "capability checking"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/call"
+
+    freeze:
+      requires:
+        - "argument order preserved"
+        - "callee preserved"
+
+  - id: "AST-EXPR-006"
+    grammar_owner: "grammar/expressions/lambda.g4"
+    grammar_symbols:
+      - "lambdaExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Lambda"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Lambda"
+
+    fields:
+      - name: "parameters"
+        type: "ordered Parameter collection"
+      - name: "body"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "closure capture analysis"
+      - "type inference"
+      - "effect checking"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/lambda"
+
+    freeze:
+      requires:
+        - "duplicate lambda grammar ownership resolved"
+        - "lambda/closure distinction documented"
+
+  - id: "AST-EXPR-007"
+    grammar_owner: "grammar/expressions/closures.g4"
+    grammar_symbols:
+      - "closureExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Lambda"
+
+    representation:
+      rule: >
+        Closure syntax must map to the common callable-expression AST
+        representation unless the language specification establishes a
+        semantically distinct closure construct.
+
+    fields:
+      - name: "parameters"
+        type: "ordered Parameter collection"
+      - name: "body"
+        type: "Expression"
+      - name: "captures"
+        type: "optional source capture metadata"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "closure capture analysis"
+      - "type checking"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/closures"
+
+    freeze:
+      requires:
+        - "closure.g4 versus closures.g4 ownership conflict resolved"
+        - "no duplicate AST meaning"
+
+  - id: "AST-EXPR-008"
+    grammar_owner: "grammar/expressions/arrays.g4"
+    grammar_symbols:
+      - "arrayExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Array"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Array"
+
+    fields:
+      - name: "elements"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "type checking"
+      - "shape inference"
+      - "resource analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/arrays"
+
+    freeze:
+      requires:
+        - "no AST-level maximum element count"
+
+  - id: "AST-EXPR-009"
+    grammar_owner: "grammar/expressions/tuples.g4"
+    grammar_symbols:
+      - "tupleExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Tuple"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Tuple"
+
+    fields:
+      - name: "elements"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer: "type checking"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/tuples"
+
+    freeze:
+      requires:
+        - "ordered elements preserved"
+        - "no artificial tuple arity ceiling"
+
+  - id: "AST-EXPR-010"
+    grammar_owner: "grammar/expressions/indexing.g4"
+    grammar_symbols:
+      - "indexExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Index"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Index"
+
+    fields:
+      - name: "base"
+        type: "Expression"
+      - name: "index"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "index resolution"
+      - "bounds/resource analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/index"
+
+    freeze:
+      requires:
+        - "index remains semantic expression"
+        - "no physical memory address semantics"
+
+  - id: "AST-EXPR-011"
+    grammar_owner: "grammar/expressions/ranges.g4"
+    grammar_symbols:
+      - "rangeExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Range"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Range"
+
+    fields:
+      - name: "start"
+        type: "Expression"
+      - name: "end"
+        type: "Expression"
+      - name: "inclusive"
+        type: "boolean"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "range typing"
+      - "iteration semantics"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/expressions/ranges"
+
+    freeze:
+      requires:
+        - "inclusive/exclusive semantics frozen"
+
+# =============================================================================
+# 13. CONTROL-FLOW EXPRESSION MAPPINGS
+# =============================================================================
+
+  - id: "AST-CFLOW-001"
+    grammar_owner: "grammar/expressions/conditional.g4"
+    grammar_symbols:
+      - "ifExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::If"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::If"
+
+    fields:
+      - name: "condition"
+        type: "Expression"
+      - name: "then_branch"
+        type: "Expression"
+      - name: "else_branch"
+        type: "optional Expression"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "control-flow analysis"
+      - "type checking"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/control-flow/if"
+
+    freeze:
+      requires:
+        - "branch structure preserved"
+
+  - id: "AST-CFLOW-002"
+    grammar_owner: "grammar/expressions/block.g4"
+    grammar_symbols:
+      - "blockExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Block"
+
+    representation:
+      legacy: "src/ast/mod.rs::Expression::Block"
+
+    fields:
+      - name: "statements"
+        type: "ordered Statement collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "scope analysis"
+      - "control-flow analysis"
+      - "effect analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/control-flow/block"
+
+    freeze:
+      requires:
+        - "statement ordering preserved"
+
+  - id: "AST-CFLOW-003"
+    grammar_owner: "grammar/expressions/match.g4"
+    grammar_symbols:
+      - "matchExpression"
+      - "matchCase"
+      - "matchGuard"
+
+    ast_boundary: "canonical"
+    ast_kind: "Expression::Match"
+
+    representation:
+      legacy:
+        - "src/ast/mod.rs::Expression::Match"
+        - "src/ast/mod.rs::MatchCase"
+        - "src/ast/mod.rs::Pattern"
+
+    fields:
+      - name: "scrutinee"
+        type: "Expression"
+      - name: "cases"
+        type: "ordered MatchCase collection"
+      - name: "span"
+        type: "Span"
+
+    match_case:
+      fields:
+        - name: "pattern"
+          type: "Pattern"
+        - name: "guard"
+          type: "optional Expression"
+        - name: "body"
+          type: "Expression"
+        - name: "span"
+          type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "pattern checking"
+      - "exhaustiveness analysis"
+      - "control-flow analysis"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/patterns"
+        - "grammar/conformance/ast/match"
+
+    freeze:
+      requires:
+        - "pattern structure preserved"
+        - "guard preserved"
+        - "case ordering preserved"
+
+# =============================================================================
+# 14. PATTERN MAPPINGS
+# =============================================================================
+
+  - id: "AST-PAT-001"
+    grammar_owner: "grammar/expressions/patterns.g4"
+    grammar_symbols:
+      - "pattern"
+      - "wildcardPattern"
+      - "identifierPattern"
+      - "literalPattern"
+      - "tuplePattern"
+      - "structPattern"
+      - "enumPattern"
+      - "orPattern"
+      - "rangePattern"
+      - "referencePattern"
+
+    ast_boundary: "canonical"
+    ast_kind: "Pattern"
+
+    representation:
+      legacy: "src/ast/mod.rs::Pattern"
+      canonical: "src/frontend/ast/node/patterns/"
+
+    variants:
+      - "Wildcard"
+      - "Identifier"
+      - "Literal"
+      - "Tuple"
+      - "Struct"
+      - "Enum"
+      - "Or"
+      - "Range"
+      - "Ref"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "pattern typing"
+      - "exhaustiveness"
+      - "binding analysis"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/patterns"
+        - "grammar/conformance/ast/patterns"
+
+    freeze:
+      requires:
+        - "all pattern variants represented"
+        - "pattern source spans preserved"
+        - "no domain-specific duplicate pattern system"
+
+# =============================================================================
+# 15. LITERAL MAPPINGS
+# =============================================================================
+
+  - id: "AST-LIT-001"
+    grammar_owner: "grammar/lexer/literals.g4"
+    grammar_symbols:
+      - "literal"
+
+    ast_boundary: "canonical"
+    ast_kind: "Literal"
+
+    representation:
+      canonical:
+        "src/frontend/ast/node/expressions/literals/"
+      legacy:
+        "src/ast/mod.rs::Literal"
+
+    required_literal_kinds:
+      - "integer"
+      - "floating"
+      - "decimal"
+      - "rational"
+      - "complex"
+      - "boolean"
+      - "character"
+      - "string"
+      - "byte"
+      - "null"
+      - "unit"
+      - "duration"
+      - "size"
+      - "probability"
+      - "confidence"
+      - "quantum"
+      - "domain_extension"
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "literal decoding"
+      - "type inference"
+      - "constant evaluation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/literals"
+        - "grammar/conformance/ast/literals"
+
+    freeze:
+      requires:
+        - "source precision preservation"
+        - "radix preservation where semantically required"
+        - "no host-width truncation"
+        - "literal kind ownership resolved"
+
+  - id: "AST-LIT-002"
+    grammar_owner: "grammar/lexer/numeric-literals.g4"
+    grammar_symbols:
+      - "integerLiteral"
+      - "floatingLiteral"
+      - "decimalLiteral"
+      - "rationalLiteral"
+
+    ast_boundary: "canonical"
+    ast_kind: "NumericLiteral"
+
+    representation:
+      canonical: "frontend AST numeric literal representation"
+
+    mandatory_properties:
+      - "source_value"
+      - "literal_form"
+      - "radix"
+      - "sign_information"
+      - "span"
+
+    semantic_conversion:
+      owner: "semantic/type system"
+
+    forbidden:
+      - "implicit i64 language ceiling"
+      - "implicit f64 language ceiling"
+      - "host usize as language dimension limit"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/literals/numeric"
+        - "grammar/conformance/ast/literals/numeric"
+
+    freeze:
+      requires:
+        - "exact source value preservation"
+        - "no silent narrowing"
+
+  - id: "AST-LIT-003"
+    grammar_owner: "grammar/lexer/string-literals.g4"
+    grammar_symbols:
+      - "stringLiteral"
+
+    ast_boundary: "canonical"
+    ast_kind: "StringLiteral"
+
+    representation:
+      canonical: "frontend AST string literal representation"
+      legacy: "src/ast/mod.rs::Literal::String"
+
+    fields:
+      - name: "value"
+        type: "decoded or lossless source-preserving representation"
+      - name: "source_form"
+        type: "optional source representation"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "string typing"
+      - "Unicode validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/literals/strings"
+
+    freeze:
+      requires:
+        - "Unicode policy frozen"
+        - "escape policy frozen"
+        - "source diagnostics preserved"
+
+# =============================================================================
+# 16. TYPE EXPRESSION MAPPINGS
+# =============================================================================
+
+  - id: "AST-TYPE-001"
+    grammar_owner: "grammar/types/types.g4"
+    grammar_symbols:
+      - "type"
+      - "typeExpr"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeExpr"
+
+    representation:
+      legacy: "src/ast/mod.rs::TypeExpr"
+      canonical: "src/frontend/ast/node/types/"
+
+    source_variants:
+      - "Identifier"
+      - "Generic"
+      - "Tuple"
+      - "Array"
+      - "Slice"
+      - "Function"
+      - "Reference"
+      - "Pointer"
+      - "Optional"
+      - "Result"
+      - "Never"
+      - "Unit"
+      - "SelfType"
+      - "Quantum"
+      - "Linear"
+      - "Affine"
+      - "Temporal"
+      - "Pi"
+      - "Sigma"
+      - "Identity"
+      - "Hkt"
+
+    semantic_boundary:
+      rule: >
+        TypeExpr is source syntax. It must not be treated as a resolved
+        semantic Type.
+
+    source_span:
+      required: true
+
+    semantic_consumer:
+      - "type resolution"
+      - "generic checking"
+      - "constraint checking"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types"
+        - "grammar/conformance/ast/types"
+
+    freeze:
+      requires:
+        - "TypeExpr and resolved Type remain distinct"
+        - "generic structure preserved"
+        - "parameterized dimensions preserved symbolically"
+
+  - id: "AST-TYPE-002"
+    grammar_owner: "grammar/types/generic.g4"
+    grammar_symbols:
+      - "genericType"
+      - "genericArguments"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeExpr::Generic"
+
+    representation:
+      legacy: "src/ast/mod.rs::TypeExpr::Generic"
+
+    fields:
+      - name: "base"
+        type: "TypeExpr"
+      - name: "arguments"
+        type: "ordered TypeExpr collection"
+      - name: "span"
+        type: "Span"
+
+    source_span:
+      required: true
+
+    semantic_consumer: "generic type resolution"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/generic"
+
+    freeze:
+      requires:
+        - "no artificial generic arity ceiling"
+
+  - id: "AST-TYPE-003"
+    grammar_owner: "grammar/types/array.g4"
+    grammar_symbols:
+      - "arrayType"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeExpr::Array"
+
+    representation:
+      legacy: "src/ast/mod.rs::TypeExpr::Array"
+
+    fields:
+      - name: "element_type"
+        type: "TypeExpr"
+      - name: "dimension"
+        type: "optional symbolic/source dimension expression"
+      - name: "span"
+        type: "Span"
+
+    scalability:
+      rule: >
+        Array dimensions are language-level expressions or symbolic values.
+        They must not be constrained by the Rust host usize representation.
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/array"
+        - "grammar/conformance/ast/scalability"
+
+    freeze:
+      requires:
+        - "array.g4 versus array-types.g4 ownership conflict resolved"
+        - "dimension representation is host-width independent"
+
+  - id: "AST-TYPE-004"
+    grammar_owner: "grammar/types/map.g4"
+    grammar_symbols:
+      - "mapType"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeExpr::Generic"
+
+    representation:
+      rule: >
+        Map types use the common generic/collection type representation unless
+        the normative type system establishes a distinct semantic type.
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/map"
+
+    freeze:
+      requires:
+        - "map.g4 versus map-types.g4 ownership conflict resolved"
+        - "one canonical map representation"
+
+  - id: "AST-TYPE-005"
+    grammar_owner: "grammar/types/option.g4"
+    grammar_symbols:
+      - "optionType"
+
+    ast_boundary: "canonical"
+    ast_kind: "TypeExpr::Optional"
+
+    representation:
+      legacy: "src/ast/mod.rs::TypeExpr::Optional"
+
+    fields:
+      - name: "inner"
+        type: "TypeExpr"
+      - name: "span"
+        type: "Span"
+
+    status: "implemented"
+
+    tests:
+      required:
+        - "grammar/tests/ast/types/option"
+
+    freeze:
+      requires:
+        - "option.g4 versus option-types.g4 ownership conflict resolved"
+
+# =============================================================================
+# 17. RESOLVED TYPE BOUNDARY
+# =============================================================================
+
+resolved_types:
+
+  canonical_rule:
+    source_type:
+      symbol: "TypeExpr"
+      meaning: "source-level type syntax"
+
+    resolved_type:
+      symbol: "Type"
+      meaning: "semantic type after validation/resolution"
+
+  implementation:
+    legacy_path: "src/ast/mod.rs"
+    canonical_future_owner: "semantic/type-system"
+
+  critical_invariant:
+    rule: >
+      The Rust representation of a resolved type must never silently become
+      a limit on source-language expressiveness.
+
+  forbidden_examples:
+    - "source integer limited to i64 because AST stores i64"
+    - "source floating value limited to f64 because AST stores f64"
+    - "array dimension limited by host usize"
+    - "tensor rank limited by a compiler enum"
+    - "qubit count limited by a Rust integer width"
+
+  diagnostic_policy:
+    rule: >
+      If a concrete compiler representation cannot represent a valid source
+      construct, the compiler must report a representation/resource diagnostic
+      rather than redefining the source language.
+
+# =============================================================================
+# 18. QUANTUM AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-Q-001"
+    grammar_owner: "grammar/quantum/operations.g4"
+    grammar_symbols:
+      - "quantumOperation"
+      - "operationSpecifier"
+      - "quantumOperationAttributes"
+
+    ast_boundary: "canonical"
+    ast_kind: "QuantumOperation"
+
+    representation:
+      canonical:
+        "frontend AST domain operation node"
+      legacy:
+        "src/ast/mod.rs::Expression::QuantumOp"
+
+    required_fields:
+      - name: "operation"
+        type: "qualified operation identifier"
+      - name: "namespace"
+        type: "optional qualified namespace"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "results"
+        type: "ordered result collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "modifiers"
+        type: "modifier collection"
+      - name: "controls"
+        type: "optional operand collection"
+      - name: "targets"
+        type: "operand collection"
+      - name: "conditions"
+        type: "optional Expression collection"
+      - name: "span"
+        type: "Span"
+
+    operation_kinds:
+      - "builtin"
+      - "custom"
+      - "vendor"
+      - "parameterized"
+      - "dialect"
+      - "future"
+
+    extensibility:
+      closed_operation_enumeration: false
+      rule: >
+        Adding a quantum operation must not require modifying the core AST
+        schema merely because the operation name is new.
+
+    semantic_consumer: "quantum semantic model"
+
+    IR_consumer: "quantum::ir"
+
+    physical_realization:
+      forbidden_in_AST:
+        - "physical qubit assignment"
+        - "QPU selection"
+        - "calibration"
+        - "pulse realization"
+        - "routing result"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/quantum/operations"
+        - "grammar/conformance/ast/quantum"
+        - "grammar/conformance/ast/extensible-operations"
+
+    freeze:
+      requires:
+        - "generic operation representation"
+        - "operation namespace preservation"
+        - "targets and controls preserved"
+        - "parameters preserved"
+        - "attributes preserved"
+        - "modifiers preserved"
+        - "no closed gate enumeration"
+
+  - id: "AST-Q-002"
+    grammar_owner: "grammar/quantum/measurement.g4"
+    grammar_symbols:
+      - "measurement"
+      - "measureOperation"
+
+    ast_boundary: "canonical"
+    ast_kind: "QuantumMeasurement"
+
+    representation:
+      canonical:
+        "frontend AST quantum operation node with measurement semantics"
+
+    fields:
+      - name: "targets"
+        type: "ordered expression collection"
+      - name: "results"
+        type: "ordered result collection"
+      - name: "basis"
+        type: "optional expression/operation specification"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "quantum measurement semantics"
+      - "effect analysis"
+      - "capability validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/quantum/measurement"
+
+    freeze:
+      requires:
+        - "measurement represented structurally"
+        - "measurement effect preserved"
+        - "measurement capability requirement preserved"
+
+  - id: "AST-Q-003"
+    grammar_owner: "grammar/quantum/controls.g4"
+    grammar_symbols:
+      - "quantumControl"
+      - "controlledOperation"
+
+    ast_boundary: "canonical"
+    ast_kind: "QuantumOperationModifier"
+
+    representation:
+      rule: >
+        Controls are represented as structured operation metadata and are not
+        lowered to physical routing during AST construction.
+
+    fields:
+      - name: "controls"
+        type: "ordered Expression collection"
+      - name: "condition"
+        type: "optional Expression"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "quantum semantic model"
+
+    IR_consumer: "quantum::ir"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/quantum/controls"
+
+    freeze:
+      requires:
+        - "control semantics preserved"
+        - "no physical qubit assignment"
+
+  - id: "AST-Q-004"
+    grammar_owner: "grammar/quantum/error-correction.g4"
+    grammar_symbols:
+      - "errorCorrectionRequirement"
+      - "logicalQubit"
+      - "codeDistance"
+
+    ast_boundary: "canonical"
+    ast_kind: "QuantumResilienceIntent"
+
+    representation:
+      canonical:
+        "frontend AST quantum resilience/resource intent node"
+
+    fields:
+      - name: "code"
+        type: "qualified identifier or symbolic specification"
+      - name: "distance"
+        type: "Expression"
+      - name: "logical_resources"
+        type: "resource expression collection"
+      - name: "capabilities"
+        type: "capability reference collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "quantum resilience semantics"
+      - "resource analysis"
+
+    IR_consumer: "quantum::ir"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/quantum/error-correction"
+        - "grammar/conformance/ast/quantum/resilience"
+
+    freeze:
+      requires:
+        - "distance preserved as source expression"
+        - "no physical-code selection during parsing"
+        - "resource intent preserved"
+
+# =============================================================================
+# 19. RESOURCE / CAPABILITY AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-RESOURCE-001"
+    grammar_owner: "grammar/resources/requirements.g4"
+    grammar_symbols:
+      - "resourceRequirement"
+      - "requiresClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "ResourceRequirement"
+
+    representation:
+      canonical:
+        "frontend AST resource-intent node"
+
+    fields:
+      - name: "resource"
+        type: "qualified resource identifier"
+      - name: "operator"
+        type: "constraint operator"
+      - name: "quantity"
+        type: "Expression"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    examples:
+      - "requires qubits >= required_qubits"
+      - "requires memory >= required_memory"
+
+    semantic_consumer:
+      - "resource validation"
+      - "target negotiation"
+
+    IR_consumer:
+      - "target-independent compilation artifact"
+      - "Classical IR"
+      - "quantum::ir"
+      - "HDL/Hardware IR"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/resources"
+        - "grammar/conformance/ast/resources"
+
+    freeze:
+      requires:
+        - "symbolic quantities preserved"
+        - "no machine maximum embedded"
+        - "resource kind remains extensible"
+
+  - id: "AST-RESOURCE-002"
+    grammar_owner: "grammar/core/capabilities.g4"
+    grammar_symbols:
+      - "capabilityReference"
+      - "capabilityRequirement"
+
+    ast_boundary: "canonical"
+    ast_kind: "CapabilityRequirement"
+
+    representation:
+      canonical:
+        "frontend AST capability reference"
+
+    fields:
+      - name: "capability"
+        type: "qualified capability identifier"
+      - name: "arguments"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    examples:
+      - "capability(\"quantum.measurement\")"
+      - "capability(\"gpu.compute\")"
+      - "capability(\"tensor.compute\")"
+
+    semantic_consumer:
+      - "capability validation"
+      - "resource negotiation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/capabilities"
+        - "grammar/conformance/ast/capabilities"
+
+    freeze:
+      requires:
+        - "capability namespace preserved"
+        - "no vendor-only hard coding"
+        - "new capabilities do not require AST redesign"
+
+  - id: "AST-RESOURCE-003"
+    grammar_owner: "grammar/resources/constraints.g4"
+    grammar_symbols:
+      - "resourceConstraint"
+      - "constraintExpression"
+
+    ast_boundary: "canonical"
+    ast_kind: "ResourceConstraint"
+
+    representation:
+      canonical:
+        "frontend AST constraint node"
+
+    fields:
+      - name: "expression"
+        type: "Expression"
+      - name: "scope"
+        type: "optional source scope"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "constraint validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/resources/constraints"
+
+    freeze:
+      requires:
+        - "constraint expressions remain target-independent"
+
+  - id: "AST-RESOURCE-004"
+    grammar_owner: "grammar/resources/preferences.g4"
+    grammar_symbols:
+      - "preference"
+      - "preferClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "ResourcePreference"
+
+    fields:
+      - name: "expression"
+        type: "Expression"
+      - name: "priority"
+        type: "optional Expression"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "target ranking"
+      - "optimization"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/resources/preferences"
+
+    freeze:
+      requires:
+        - "preference cannot alter semantic correctness"
+
+# =============================================================================
+# 20. EFFECT AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-EFFECT-001"
+    grammar_owner: "grammar/effects/effects.g4"
+    grammar_symbols:
+      - "effect"
+      - "effectDeclaration"
+      - "effectReference"
+
+    ast_boundary: "canonical"
+    ast_kind: "EffectSyntax"
+
+    representation:
+      legacy:
+        "src/ast/mod.rs::Statement::EffectDeclaration"
+      canonical:
+        "frontend AST effect node"
+
+    fields:
+      - name: "effect"
+        type: "qualified effect identifier"
+      - name: "arguments"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    canonical_effect_categories:
+      - "io"
+      - "network"
+      - "mutation"
+      - "randomness"
+      - "native"
+      - "foreign"
+      - "distributed"
+      - "measurement"
+      - "quantum"
+      - "learning"
+      - "adaptation"
+      - "reflection"
+      - "code_generation"
+      - "simulation"
+
+    semantic_consumer: "effect checker"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/effects"
+        - "grammar/conformance/ast/effects"
+
+    freeze:
+      requires:
+        - "one canonical effect representation"
+        - "domain-specific effects use the common effect model"
+
+# =============================================================================
+# 21. CONTRACT AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-CONTRACT-001"
+    grammar_owner: "grammar/contracts/requires.g4"
+    grammar_symbols:
+      - "requiresClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "ContractRequirement"
+
+    fields:
+      - name: "condition"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "contract validator"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/contracts/requires"
+
+    freeze:
+      requires:
+        - "condition preserved without evaluation during parsing"
+
+  - id: "AST-CONTRACT-002"
+    grammar_owner: "grammar/contracts/ensures.g4"
+    grammar_symbols:
+      - "ensuresClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "ContractGuarantee"
+
+    fields:
+      - name: "condition"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "contract validator"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/contracts/ensures"
+
+    freeze:
+      requires:
+        - "postcondition expression preserved"
+
+  - id: "AST-CONTRACT-003"
+    grammar_owner: "grammar/contracts/invariants.g4"
+    grammar_symbols:
+      - "invariantClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "ContractInvariant"
+
+    fields:
+      - name: "condition"
+        type: "Expression"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "contract validator"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/contracts/invariants"
+
+    freeze:
+      requires:
+        - "invariant scope preserved"
+
+# =============================================================================
+# 22. POLICY AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-POLICY-001"
+    grammar_owner: "grammar/policies/policy.g4"
+    grammar_symbols:
+      - "policyReference"
+      - "policyDeclaration"
+      - "policyClause"
+
+    ast_boundary: "canonical"
+    ast_kind: "PolicyReference"
+
+    fields:
+      - name: "policy"
+        type: "qualified policy identifier"
+      - name: "arguments"
+        type: "ordered Expression collection"
+      - name: "scope"
+        type: "source-level policy scope"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "policy validation"
+      - "authorization"
+      - "execution governance"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/policies"
+
+    freeze:
+      requires:
+        - "policy is represented as source intent"
+        - "authorization remains downstream"
+        - "no runtime authorization result in AST"
+
+# =============================================================================
+# 23. PROVENANCE AST MAPPINGS
+# =============================================================================
+
+  - id: "AST-PROV-001"
+    grammar_owner: "grammar/provenance/"
+    grammar_symbols:
+      - "provenance"
+      - "evidence"
+      - "explanation"
+      - "decisionRecord"
+
+    ast_boundary: "canonical"
+    ast_kind: "ProvenanceMetadata"
+
+    fields:
+      - name: "kind"
+        type: "provenance category"
+      - name: "value"
+        type: "source expression or metadata"
+      - name: "source_span"
+        type: "Span"
+
+    semantic_consumer:
+      - "provenance validation"
+      - "explainability"
+      - "reproducibility"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/provenance"
+
+    freeze:
+      requires:
+        - "provenance remains source-derived"
+        - "runtime provenance may be attached downstream without altering source AST"
+
+# =============================================================================
+# 24. CLASSICAL AST
+# =============================================================================
+
+  - id: "AST-CLASSICAL-001"
+    grammar_owner: "grammar/classical/"
+    grammar_symbols:
+      - "classicalOperation"
+      - "numericOperation"
+      - "tensorOperation"
+      - "linearAlgebraOperation"
+
+    ast_boundary: "canonical"
+    ast_kind: "DomainOperation"
+
+    representation:
+      rule: >
+        Classical domain operations use the common expression/operation
+        representation. A new mathematical library operation must not require
+        a new AST enum variant unless it has language-level semantic meaning.
+
+    fields:
+      - name: "operation"
+        type: "qualified identifier"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "classical semantic model"
+
+    IR_consumer: "Classical IR"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/classical"
+
+    freeze:
+      requires:
+        - "classical operations remain target-neutral"
+        - "no fixed vector/matrix/tensor limits"
+
+# =============================================================================
+# 25. HDL / HARDWARE AST
+# =============================================================================
+
+  - id: "AST-HDL-001"
+    grammar_owner: "grammar/hdl/"
+    grammar_symbols:
+      - "hdlModule"
+      - "port"
+      - "signal"
+      - "register"
+      - "memory"
+      - "clock"
+      - "reset"
+      - "process"
+      - "generate"
+
+    ast_boundary: "canonical"
+    ast_kind: "HardwareIntent"
+
+    fields:
+      - name: "kind"
+        type: "hardware intent category"
+      - name: "name"
+        type: "Identifier"
+      - name: "type"
+        type: "TypeExpr where applicable"
+      - name: "parameters"
+        type: "ordered expression collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "children"
+        type: "ordered hardware intent nodes"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "HDL semantic model"
+      - "hardware semantic validation"
+
+    IR_consumer: "HDL/Hardware IR"
+
+    forbidden:
+      - "fixed universal bus width"
+      - "fixed register count"
+      - "fixed clock count"
+      - "fixed memory capacity"
+      - "vendor cell identity as universal syntax"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/hdl"
+        - "grammar/conformance/ast/hdl"
+
+    freeze:
+      requires:
+        - "hardware intent remains abstract"
+        - "parameterized widths preserved"
+        - "no target placement in AST"
+
+# =============================================================================
+# 26. HYBRID AST
+# =============================================================================
+
+  - id: "AST-HYBRID-001"
+    grammar_owner: "grammar/hybrid/"
+    grammar_symbols:
+      - "hybridOperation"
+      - "classicalQuantumBoundary"
+      - "hostDeviceBoundary"
+      - "quantumClassicalBoundary"
+
+    ast_boundary: "canonical"
+    ast_kind: "HybridOperation"
+
+    fields:
+      - name: "operation"
+        type: "qualified operation identity"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "boundary"
+        type: "hybrid boundary metadata"
+      - name: "effects"
+        type: "effect syntax"
+      - name: "capabilities"
+        type: "capability references"
+      - name: "resources"
+        type: "resource requirements"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "hybrid semantic model"
+
+    IR_consumer:
+      - "Classical IR"
+      - "quantum::ir"
+      - "HDL/Hardware IR"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/hybrid"
+        - "grammar/conformance/ast/hybrid"
+
+    freeze:
+      requires:
+        - "common AST operation model"
+        - "no duplicate classical or quantum semantics"
+
+# =============================================================================
+# 27. DATA AST
+# =============================================================================
+
+  - id: "AST-DATA-001"
+    grammar_owner: "grammar/data/"
+    grammar_symbols:
+      - "dataDeclaration"
+      - "dataset"
+      - "stream"
+      - "schema"
+      - "query"
+
+    ast_boundary: "canonical"
+    ast_kind: "DataOperation"
+
+    fields:
+      - name: "operation"
+        type: "qualified identifier"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "schema"
+        type: "optional schema representation"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "data semantic model"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/data"
+
+    freeze:
+      requires:
+        - "external query formats remain dialect/interoperability concerns"
+        - "data operations use common AST foundations"
+
+# =============================================================================
+# 28. AI / REASONING AST
+# =============================================================================
+
+  - id: "AST-AI-001"
+    grammar_owner: "grammar/ai/"
+    grammar_symbols:
+      - "infer"
+      - "deduce"
+      - "reason"
+      - "learn"
+      - "query"
+      - "evidence"
+      - "explain"
+      - "decision"
+
+    ast_boundary: "canonical"
+    ast_kind: "DomainOperation"
+
+    representation:
+      rule: >
+        AI operations are represented using the common domain-operation AST
+        unless the construct has source-language structural semantics.
+
+    fields:
+      - name: "operation"
+        type: "qualified identifier"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "evidence"
+        type: "optional provenance metadata"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "AI semantic model"
+      - "effect checker"
+      - "resource checker"
+      - "provenance checker"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/ai"
+        - "grammar/conformance/ast/ai"
+
+    freeze:
+      requires:
+        - "AI does not establish a separate type system"
+        - "AI effects use common effect model"
+        - "AI resources use common resource model"
+        - "AI operations remain extensible"
+
+# =============================================================================
+# 29. CONCURRENCY AST
+# =============================================================================
+
+  - id: "AST-CONCURRENCY-001"
+    grammar_owner: "grammar/concurrency/"
+    grammar_symbols:
+      - "task"
+      - "future"
+      - "actor"
+      - "parallel"
+      - "pipeline"
+      - "spawn"
+
+    ast_boundary: "canonical"
+    ast_kind: "ConcurrencyOperation"
+
+    fields:
+      - name: "kind"
+        type: "concurrency category"
+      - name: "body"
+        type: "Expression or statement collection"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "concurrency semantics"
+      - "effect analysis"
+      - "resource analysis"
+
+    IR_consumer:
+      - "Classical IR"
+      - "target-independent parallel representation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/concurrency"
+
+    freeze:
+      requires:
+        - "no mandatory physical thread count"
+        - "no hardware worker assignment"
+
+# =============================================================================
+# 30. DISTRIBUTED AST
+# =============================================================================
+
+  - id: "AST-DIST-001"
+    grammar_owner: "grammar/distributed/"
+    grammar_symbols:
+      - "node"
+      - "process"
+      - "remote"
+      - "message"
+      - "channel"
+      - "collective"
+      - "placement"
+      - "replication"
+
+    ast_boundary: "canonical"
+    ast_kind: "DistributedOperation"
+
+    fields:
+      - name: "operation"
+        type: "qualified identifier"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "topology"
+        type: "optional abstract topology expression"
+      - name: "resources"
+        type: "resource requirements"
+      - name: "capabilities"
+        type: "capability requirements"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer: "distributed semantic model"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/distributed"
+
+    freeze:
+      requires:
+        - "node counts remain symbolic"
+        - "network size remains symbolic"
+        - "physical placement deferred"
+
+# =============================================================================
+# 31. NETWORK AST
+# =============================================================================
+
+  - id: "AST-NET-001"
+    grammar_owner: "grammar/networking/"
+    grammar_symbols:
+      - "endpoint"
+      - "channel"
+      - "message"
+      - "service"
+      - "protocol"
+      - "stream"
+      - "route"
+
+    ast_boundary: "canonical"
+    ast_kind: "NetworkOperation"
+
+    fields:
+      - name: "kind"
+        type: "network operation category"
+      - name: "operands"
+        type: "ordered Expression collection"
+      - name: "protocol"
+        type: "qualified identifier"
+      - name: "attributes"
+        type: "attribute collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "network semantic model"
+      - "security policy"
+      - "resource validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/networking"
+
+    freeze:
+      requires:
+        - "no fixed network-size limit"
+        - "routing remains downstream"
+
+# =============================================================================
+# 32. MEMORY AST
+# =============================================================================
+
+  - id: "AST-MEM-001"
+    grammar_owner: "grammar/memory/"
+    grammar_symbols:
+      - "ownership"
+      - "borrow"
+      - "reference"
+      - "lifetime"
+      - "allocation"
+      - "region"
+      - "addressSpace"
+
+    ast_boundary: "canonical"
+    ast_kind: "MemoryIntent"
+
+    fields:
+      - name: "kind"
+        type: "memory intent category"
+      - name: "target"
+        type: "Expression or TypeExpr"
+      - name: "parameters"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "ownership analysis"
+      - "lifetime analysis"
+      - "memory semantic validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/memory"
+
+    freeze:
+      requires:
+        - "source memory semantics separated from physical capacity"
+        - "address spaces remain abstract"
+
+# =============================================================================
+# 33. EXECUTION AST
+# =============================================================================
+
+  - id: "AST-EXEC-001"
+    grammar_owner: "grammar/execution/"
+    grammar_symbols:
+      - "executionContext"
+      - "simulate"
+      - "adaptiveExecution"
+      - "checkpoint"
+      - "recovery"
+      - "parallelExecution"
+
+    ast_boundary: "canonical"
+    ast_kind: "ExecutionIntent"
+
+    fields:
+      - name: "kind"
+        type: "execution intent category"
+      - name: "body"
+        type: "Expression or statement collection"
+      - name: "requirements"
+        type: "resource/capability collection"
+      - name: "policy"
+        type: "optional PolicyReference"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "execution semantic model"
+      - "policy validation"
+      - "resource negotiation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/execution"
+
+    freeze:
+      requires:
+        - "runtime state absent from AST"
+        - "target selection absent from AST"
+
+# =============================================================================
+# 34. COMPILE AST
+# =============================================================================
+
+  - id: "AST-COMPILE-001"
+    grammar_owner: "grammar/compile/"
+    grammar_symbols:
+      - "compileDirective"
+      - "targetRequirement"
+      - "optimizationHint"
+      - "specialization"
+      - "reproducibility"
+
+    ast_boundary: "canonical"
+    ast_kind: "CompilationIntent"
+
+    fields:
+      - name: "kind"
+        type: "compilation intent category"
+      - name: "value"
+        type: "Expression or metadata"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "compilation policy"
+      - "specialization analysis"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/compile"
+
+    freeze:
+      requires:
+        - "optimization hints cannot change semantics"
+        - "target requirements remain declarative"
+        - "target-specific realization remains downstream"
+
+# =============================================================================
+# 35. DIALECT AST
+# =============================================================================
+
+  - id: "AST-DIALECT-001"
+    grammar_owner: "grammar/dialects/"
+    grammar_symbols:
+      - "dialectDeclaration"
+      - "dialectReference"
+      - "dialectVersion"
+
+    ast_boundary: "canonical"
+    ast_kind: "DialectReference"
+
+    fields:
+      - name: "namespace"
+        type: "qualified identifier"
+      - name: "version"
+        type: "version expression"
+      - name: "arguments"
+        type: "ordered Expression collection"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "dialect resolution"
+      - "compatibility validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/dialects"
+
+    freeze:
+      requires:
+        - "dialect identity preserved"
+        - "dialect version preserved"
+        - "dialect AST cannot bypass common semantic validation"
+
+# =============================================================================
+# 36. INTEROPERABILITY AST
+# =============================================================================
+
+  - id: "AST-INTEROP-001"
+    grammar_owner: "grammar/interoperability/"
+    grammar_symbols:
+      - "ffiDeclaration"
+      - "abi"
+      - "foreignFunction"
+      - "foreignType"
+      - "callingConvention"
+
+    ast_boundary: "canonical"
+    ast_kind: "InteropDeclaration"
+
+    fields:
+      - name: "kind"
+        type: "interop category"
+      - name: "name"
+        type: "Identifier"
+      - name: "signature"
+        type: "source-level signature"
+      - name: "abi"
+        type: "optional ABI identifier"
+      - name: "calling_convention"
+        type: "optional calling convention identifier"
+      - name: "effects"
+        type: "effect syntax"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "FFI validation"
+      - "ABI compatibility"
+      - "effect validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/interoperability"
+
+    freeze:
+      requires:
+        - "foreign operations are explicit"
+        - "FFI effects are preserved"
+        - "foreign implementation does not redefine core AST"
+
+# =============================================================================
+# 37. MACRO AST
+# =============================================================================
+
+  - id: "AST-MACRO-001"
+    grammar_owner: "grammar/macros/"
+    grammar_symbols:
+      - "macroDeclaration"
+      - "macroInvocation"
+      - "macroExpansion"
+
+    ast_boundary: "canonical"
+    ast_kind: "MacroSyntax"
+
+    fields:
+      - name: "name"
+        type: "Identifier"
+      - name: "arguments"
+        type: "ordered syntax/AST collection"
+      - name: "body"
+        type: "syntax representation"
+      - name: "hygiene"
+        type: "hygiene metadata"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "macro expansion"
+      - "post-expansion AST validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/macros"
+
+    freeze:
+      requires:
+        - "macro expansion cannot bypass AST validation"
+        - "hygiene preserved"
+        - "source provenance preserved"
+
+# =============================================================================
+# 38. METAPROGRAMMING AST
+# =============================================================================
+
+  - id: "AST-META-001"
+    grammar_owner: "grammar/metaprogramming/"
+    grammar_symbols:
+      - "quote"
+      - "unquote"
+      - "reflection"
+      - "introspection"
+      - "codeGeneration"
+
+    ast_boundary: "canonical"
+    ast_kind: "MetaOperation"
+
+    fields:
+      - name: "operation"
+        type: "qualified identifier"
+      - name: "payload"
+        type: "syntax/Expression representation"
+      - name: "effects"
+        type: "effect syntax"
+      - name: "capabilities"
+        type: "capability references"
+      - name: "policy"
+        type: "optional PolicyReference"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "metaprogramming validation"
+      - "effect checking"
+      - "capability checking"
+      - "policy checking"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/metaprogramming"
+
+    freeze:
+      requires:
+        - "reflection is controlled"
+        - "code generation is effect/capability governed"
+        - "generated source retains provenance"
+
+# =============================================================================
+# 39. SECURITY / SANDBOX AST
+# =============================================================================
+
+  - id: "AST-SECURITY-001"
+    grammar_owner: "grammar/security/"
+    grammar_symbols:
+      - "authorization"
+      - "permission"
+      - "sandbox"
+      - "trust"
+      - "audit"
+      - "securityConstraint"
+
+    ast_boundary: "canonical"
+    ast_kind: "SecurityIntent"
+
+    fields:
+      - name: "kind"
+        type: "security intent category"
+      - name: "expression"
+        type: "Expression"
+      - name: "scope"
+        type: "source scope"
+      - name: "span"
+        type: "Span"
+
+    semantic_consumer:
+      - "security semantic validation"
+      - "policy validation"
+
+    status: "migration_required"
+
+    tests:
+      required:
+        - "grammar/tests/ast/security"
+
+    freeze:
+      requires:
+        - "AST represents requested security intent"
+        - "actual authorization result remains downstream"
+        - "no runtime secret material in AST"
+
+# =============================================================================
+# 40. DOMAIN OPERATION UNIVERSAL MODEL
+# =============================================================================
+
+domain_operation_model:
+
+  purpose: >
+    Prevent every computational domain from creating an independent AST
+    hierarchy when a common structured operation is sufficient.
+
+  canonical_shape:
+    name:
+      type: "qualified identifier"
+
+    namespace:
+      type: "optional qualified identifier"
+
+    operands:
+      type: "ordered Expression collection"
+
+    parameters:
+      type: "ordered Expression collection"
+
+    results:
+      type: "ordered result collection"
+
+    attributes:
+      type: "attribute collection"
+
+    modifiers:
+      type: "modifier collection"
+
+    effects:
+      type: "effect reference collection"
+
+    capabilities:
+      type: "capability reference collection"
+
+    resources:
+      type: "resource requirement collection"
+
+    contracts:
+      type: "contract collection"
+
+    policies:
+      type: "policy reference collection"
+
+    provenance:
+      type: "provenance metadata"
+
+    span:
+      type: "Span"
+
+  applicable_domains:
+    - "classical"
+    - "quantum"
+    - "HDL"
+    - "hardware"
+    - "AI"
+    - "data"
+    - "distributed"
+    - "networking"
+    - "accelerator"
+    - "hybrid"
+    - "future"
+
+  invariant: >
+    New operation names, vendors, algorithms, devices, accelerators, or
+    future computational mechanisms must not require modification of the
+    common AST structure merely because the operation is new.
+
+# =============================================================================
+# 41. SOURCE-LEVEL RESOURCE SCALABILITY
+# =============================================================================
+
+scalability_contract:
+
+  open_world: true
+
+  allowed:
+    - "symbolic quantities"
+    - "generic parameters"
+    - "runtime quantities"
+    - "resource expressions"
+    - "capability expressions"
+    - "abstract topology"
+    - "dynamic dimensions"
+    - "parameterized types"
+    - "resource negotiation"
+
+  prohibited_AST_limits:
+    - "maximum qubit count"
+    - "maximum CPU count"
+    - "maximum GPU count"
+    - "maximum FPGA count"
+    - "maximum ASIC count"
+    - "maximum node count"
+    - "maximum memory"
+    - "maximum thread count"
+    - "maximum register width"
+    - "maximum vector width"
+    - "maximum tensor rank"
+    - "maximum tensor dimension"
+    - "maximum network size"
+    - "maximum device count"
+    - "maximum accelerator count"
+
+  representation_rule: >
+    A Rust integer type used internally by one compiler stage must never
+    silently become a source-language capacity limit.
+
+  failure_rule: >
+    If a compiler implementation cannot represent a valid source construct,
+    it must produce an explicit implementation/resource diagnostic rather
+    than rejecting the construct through an undocumented AST limitation.
+
+# =============================================================================
+# 42. POCO-REAF AST CONTRACT
+# =============================================================================
+
+poco_reaf_contract:
+
+  source_artifact:
+    must_contain:
+      - "source semantics"
+      - "AST structure"
+      - "source provenance"
+      - "language version"
+      - "dialect identity where applicable"
+      - "resource requirements"
+      - "capability requirements"
+      - "effects"
+      - "contracts"
+      - "policies"
+
+  must_not_contain:
+    - "physical device selection"
+    - "physical qubit allocation"
+    - "backend instruction"
+    - "scheduler decision"
+    - "routing decision"
+    - "calibration result"
+    - "live hardware inventory"
+
+  invariant: >
+    The same AST semantics must remain valid when the realization target
+    changes, provided the target satisfies the program's declared semantic
+    requirements and policies.
+
+  scaling:
+    rule: >
+      Program parameters may scale without changing the AST schema. The AST
+      schema must not contain finite target capacities.
+
+# =============================================================================
+# 43. LEGACY AST MIGRATION
+# =============================================================================
+
+legacy_migration:
+
+  legacy_boundary:
+    path: "src/ast/mod.rs"
+    role: "compatibility_boundary"
+
+  canonical_boundary:
+    path: "src/frontend/ast/node/mod.rs"
+    role: "forward_AST_boundary"
+
+  migration_rule: >
+    New grammar features must map directly to the canonical frontend AST.
+    They must not add new permanent semantic variants to the legacy monolithic
+    AST merely for convenience.
+
+  adapter:
+    required: true
+    owner: "src/frontend/ast/"
+    responsibility:
+      - "legacy_to_canonical conversion"
+      - "canonical_to_legacy compatibility where required"
+      - "source span preservation"
+      - "semantic equivalence verification"
+
+  legacy_changes:
+    prohibited_without_migration_plan: true
+
+  completion:
+    condition: >
+      The legacy AST can be removed only after all production grammar
+      mappings, parser consumers, semantic consumers, tests, and downstream
+      compiler stages consume the canonical frontend AST.
+
+# =============================================================================
+# 44. KNOWN IMPLEMENTATION GAPS
+# =============================================================================
+
+implementation_gaps:
+
+  - id: "GAP-AST-001"
+    issue: >
+      The repository contains both src/ast/mod.rs and
+      src/frontend/ast/node/.
+    required_action: >
+      Complete the canonical frontend AST migration and retain the old AST
+      only as an explicit compatibility boundary.
+    blocking: true
+
+  - id: "GAP-AST-002"
+    issue: >
+      The legacy AST stores integer literals as i64 and floating literals
+      as f64.
+    required_action: >
+      Introduce lossless source-level numeric literal representation before
+      declaring numeric AST mappings permanently frozen.
+    blocking: true
+
+  - id: "GAP-AST-003"
+    issue: >
+      The legacy resolved Type representation uses fixed-width integer and
+      floating variants.
+    required_action: >
+      Ensure resolved semantic representations do not impose source-language
+      limits and distinguish implementation representation from language
+      semantics.
+    blocking: true
+
+  - id: "GAP-AST-004"
+    issue: >
+      The legacy array type representation uses Option<usize>.
+    required_action: >
+      Preserve source-level array dimensions independently of host usize.
+    blocking: true
+
+  - id: "GAP-AST-005"
+    issue: >
+      Existing AST variants include several domain-specific constructs that
+      may represent overlapping concepts.
+    required_action: >
+      Reconcile them through the common domain-operation model and the
+      ownership registry.
+    blocking: true
+
+  - id: "GAP-AST-006"
+    issue: >
+      Multiple grammar filenames represent apparently overlapping concepts,
+      including closure/closures, lambda/lambdas, array/array-types,
+      map/map-types, and option/option-types.
+    required_action: >
+      Resolve ownership before AST mappings are marked stable.
+    blocking: true
+
+  - id: "GAP-AST-007"
+    issue: >
+      Some source constructs currently exist in parser/AST implementation
+      without corresponding production-ready common semantic contracts.
+    required_action: >
+      Register each construct in ownership, exports, semantic mappings,
+      diagnostics, compatibility, and this AST mapping contract.
+    blocking: true
+
+  - id: "GAP-AST-008"
+    issue: >
+      Some grammar domains require structured resource, capability, effect,
+      policy, and provenance AST carriers that are not represented uniformly
+      by the legacy AST.
+    required_action: >
+      Use canonical metadata/domain-operation nodes rather than adding
+      independent AST systems.
+    blocking: true
+
+# =============================================================================
+# 45. REJECTED AST DESIGN PATTERNS
+# =============================================================================
+
+rejected_patterns:
+
+  - "one Rust enum variant for every vendor instruction"
+
+  - "one Rust enum variant for every quantum gate"
+
+  - "one AST node for every GPU model"
+
+  - "one AST node for every QPU model"
+
+  - "one AST node for every FPGA family"
+
+  - "one AST node for every accelerator vendor"
+
+  - "physical qubit IDs embedded in portable quantum AST"
+
+  - "runtime resource counts embedded in AST"
+
+  - "scheduler slots embedded in AST"
+
+  - "routing results embedded in AST"
+
+  - "fixed array dimension limits embedded in AST"
+
+  - "fixed tensor rank limits embedded in AST"
+
+  - "fixed machine width treated as language width"
+
+  - "backend-specific IR represented as source AST"
+
+  - "AST generated from a backend instead of source semantics"
+
+# =============================================================================
+# 46. AST -> SEMANTIC INTEGRATION
+# =============================================================================
+
+semantic_integration:
+
+  required_sequence:
+    - "parse"
+    - "construct AST"
+    - "validate AST structure"
+    - "resolve names"
+    - "resolve types"
+    - "validate effects"
+    - "validate capabilities"
+    - "validate resources"
+    - "validate contracts"
+    - "validate policies"
+    - "validate provenance"
+    - "construct semantic model"
+
+  AST_must_not_perform:
+    - "type inference"
+    - "target selection"
+    - "resource negotiation"
+    - "routing"
+    - "scheduling"
+    - "QEC realization"
+    - "calibration"
+    - "backend lowering"
+
+  required_companion_contract:
+    path: "grammar/contracts/semantic-mappings.yaml"
+
+  invariant: >
+    Every mapping in this file must have a corresponding semantic mapping
+    before it may be marked STABLE.
+
+# =============================================================================
+# 47. AST -> IR INTEGRATION
+# =============================================================================
+
+IR_integration:
+
+  required_sequence:
+    - "AST"
+    - "structural validation"
+    - "semantic model"
+    - "canonical IR"
+
+  classical:
+    IR: "Classical IR"
+    mapping_contract: "grammar/contracts/ir-mappings.yaml"
+
+  quantum:
+    IR: "quantum::ir"
+    mapping_contract: "grammar/contracts/ir-mappings.yaml"
+
+  HDL:
+    IR: "HDL/Hardware IR"
+    mapping_contract: "grammar/contracts/ir-mappings.yaml"
+
+  invariant: >
+    AST nodes must never bypass semantic validation to directly become
+    target-specific instructions.
+
+  invariant_2: >
+    No second canonical quantum IR may be introduced between the frontend AST
+    and quantum::ir.
+
+# =============================================================================
+# 48. DIAGNOSTIC INTEGRATION
+# =============================================================================
+
+diagnostics:
+
+  canonical_contract:
+    path: "grammar/contracts/diagnostics.yaml"
+
+  AST_diagnostics_must_identify:
+    - "diagnostic code"
+    - "source span"
+    - "construct"
+    - "expected structure"
+    - "actual structure"
+    - "relevant context"
+    - "compatibility information where applicable"
+
+  AST_diagnostics_must_not_depend_on:
+    - "physical device IDs"
+    - "runtime memory addresses"
+    - "backend implementation details unless explicitly a downstream diagnostic"
+
+  diagnostic_layers:
+    syntax:
+      owner: "parser/frontend"
+    structural:
+      owner: "AST validation"
+    semantic:
+      owner: "semantic analysis"
+    resource:
+      owner: "resource validation"
+    target:
+      owner: "compiler/realization"
+    runtime:
+      owner: "runtime"
+
+# =============================================================================
+# 49. COMPATIBILITY
+# =============================================================================
+
+compatibility:
+
+  canonical_contract:
+    path: "grammar/contracts/compatibility.yaml"
+
+  AST_version:
+    required: true
+
+  compatibility_identity:
+    every_stable_mapping:
+      required_fields:
+        - "mapping_id"
+        - "AST_kind"
+        - "field_schema"
+        - "source_span_policy"
+        - "version"
+
+  breaking_changes:
+    examples:
+      - "remove AST field"
+      - "change field meaning"
+      - "change source-to-node cardinality"
+      - "change source ordering semantics"
+      - "change literal precision semantics"
+      - "change operation representation"
+      - "change node identity semantics"
+
+    required:
+      - "version increment"
+      - "migration specification"
+      - "golden AST updates"
+      - "compatibility tests"
+
+  non_breaking:
+    examples:
+      - "new domain operation represented by existing generic operation node"
+      - "new capability name"
+      - "new resource kind"
+      - "new dialect operation"
+      - "new optional attribute"
+
+# =============================================================================
+# 50. TEST CONTRACT
+# =============================================================================
+
+tests:
+
+  required_layers:
+
+    lexer:
+      directory: "grammar/tests/lexer/"
+      required: true
+
+    parser:
+      directory: "grammar/tests/parser/"
+      required: true
+
+    AST:
+      directory: "grammar/tests/ast/"
+      required: true
+
+    structural:
+      directory: "grammar/conformance/ast/"
+      required: true
+
+    semantic:
+      directory: "grammar/tests/semantic/"
+      required: true
+
+    IR:
+      directory: "grammar/tests/ir/"
+      required: true
+
+    compatibility:
+      directory: "grammar/tests/compatibility/"
+      required: true
+
+  every_mapping:
+    positive_test: true
+    negative_test: true
+    span_test: true
+    deterministic_test: true
+
+  domain_tests:
+    - "classical"
+    - "quantum"
+    - "HDL"
+    - "hybrid"
+    - "AI"
+    - "data"
+    - "concurrency"
+    - "distributed"
+    - "networking"
+    - "hardware"
+    - "execution"
+    - "interoperability"
+    - "dialects"
+    - "macros"
+    - "metaprogramming"
+    - "security"
+
+  scalability_tests:
+    required: true
+    rule: >
+      Tests must vary symbolic/program resource quantities without changing
+      the AST schema.
+
+  no_fixed_capacity_test:
+    required: true
+    rejects:
+      - "MAX_QUBITS"
+      - "MAX_CPUS"
+      - "MAX_CORES"
+      - "MAX_THREADS"
+      - "MAX_GPUS"
+      - "MAX_FPGAS"
+      - "MAX_ASICS"
+      - "MAX_QPUS"
+      - "MAX_NODES"
+      - "MAX_MEMORY"
+      - "MAX_STORAGE"
+      - "MAX_REGISTER_WIDTH"
+      - "MAX_VECTOR_WIDTH"
+      - "MAX_TENSOR_RANK"
+      - "MAX_NETWORK_SIZE"
+      - "MAX_DEVICE_COUNT"
+
+# =============================================================================
+# 51. GOLDEN AST CONTRACT
+# =============================================================================
+
+golden:
+
+  directory: "grammar/golden/ast/"
+
+  every_stable_mapping:
+    required: true
+
+  golden_record:
+    must_contain:
+      - "source"
+      - "mapping_id"
+      - "AST_kind"
+      - "field_structure"
+      - "source_span"
+      - "serialization_version"
+
+  deterministic_serialization:
+    required: true
+
+  prohibited:
+    - "memory addresses"
+    - "hash iteration order"
+    - "backend IDs"
+    - "runtime handles"
+    - "physical device identifiers"
+
+# =============================================================================
+# 52. MANIFEST / OWNERSHIP / EXPORT INTEGRATION
+# =============================================================================
+
+repository_integration:
+
+  manifest:
+    path: "grammar/MANIFEST.yaml"
+    requirements:
+      - "every mapped grammar file listed"
+      - "every AST mapping ID listed"
+      - "status synchronized"
+      - "test paths synchronized"
+
+  ownership:
+    path: "grammar/contracts/ownership.yaml"
+    requirements:
+      - "grammar owner matches mapping"
+      - "one owner per grammar concept"
+      - "one AST semantic representation per concept"
+
+  repository_ownership:
+    path: "grammar/OWNERSHIP.yaml"
+    requirements:
+      - "mapping owner must exist"
+      - "canonical owner must match"
+
+  exports:
+    path: "grammar/contracts/exports.yaml"
+    requirements:
+      - "every public export requiring AST mapping references this file"
+      - "mapping IDs are unique"
+
+  dependencies:
+    path: "grammar/contracts/dependencies.yaml"
+    requirements:
+      - "grammar -> AST dependency explicit"
+      - "AST -> semantic dependency explicit"
+      - "AST -> tests dependency remains test-only"
+      - "no AST -> backend upstream edge"
+
+  status:
+    path: "grammar/STATUS.yaml"
+    requirements:
+      - "AST status synchronized"
+      - "stable requires freeze gates"
+
+# =============================================================================
+# 53. VALIDATOR CONTRACT
+# =============================================================================
+
+validator:
+
+  executable_requirement:
+    rule: >
+      CI must validate this file mechanically. Human review alone is not
+      sufficient for AST conformance.
+
+  checks:
+
+    unique_mapping_ids:
+      severity: "error"
+
+    owner_exists:
+      severity: "error"
+
+    owner_matches_registry:
+      severity: "error"
+
+    grammar_symbol_exists:
+      severity: "error"
+
+    one_AST_owner:
+      severity: "error"
+
+    source_span_declared:
+      severity: "error"
+
+    semantic_mapping_exists:
+      severity: "error"
+
+    IR_mapping_exists_when_required:
+      severity: "error"
+
+    diagnostic_contract_exists:
+      severity: "error"
+
+    compatibility_contract_exists:
+      severity: "error"
+
+    test_contract_exists:
+      severity: "error"
+
+    no_backend_fields:
+      severity: "error"
+
+    no_target_fields:
+      severity: "error"
+
+    no_capacity_constants:
+      severity: "error"
+
+    no_duplicate_semantics:
+      severity: "error"
+
+    no_host_width_language_limit:
+      severity: "error"
+
+    deterministic_structure:
+      severity: "error"
+
+    canonical_span:
+      severity: "error"
+
+    stable_requires_dependency_closure:
+      severity: "error"
+
+    stable_requires_all_tests:
+      severity: "error"
+
+    stable_requires_no_blocking_gaps:
+      severity: "error"
+
+# =============================================================================
+# 54. FREEZE RULES
+# =============================================================================
+
+freeze:
+
+  mapping_status_STABLE_requires:
+
+    - "grammar owner frozen"
+    - "grammar export frozen"
+    - "AST representation frozen"
+    - "source span mapping frozen"
+    - "semantic mapping frozen"
+    - "IR mapping frozen where applicable"
+    - "diagnostic mapping frozen"
+    - "compatibility identity assigned"
+    - "positive tests passing"
+    - "negative tests passing"
+    - "source span tests passing"
+    - "determinism tests passing"
+    - "scalability audit passing"
+    - "hard-coding audit passing"
+    - "dependency closure passing"
+    - "ownership audit passing"
+    - "no duplicate semantic ownership"
+    - "no blocking implementation gap"
+
+  stable_means:
+    rule: >
+      The mapping interface may be consumed by downstream compiler stages
+      without requiring semantic changes merely because a new target,
+      operation, resource scale, algorithm, dialect, or backend is introduced.
+
+  new_backend_rule:
+    required: >
+      Adding a backend must not require changing a frozen AST mapping unless
+      the source language meaning itself changes.
+
+  new_device_rule:
+    required: >
+      Adding a device must not require changing a frozen AST mapping.
+
+  new_quantum_operation_rule:
+    required: >
+      Adding a quantum operation must use the existing extensible operation
+      representation whenever its semantics fit that representation.
+
+  new_resource_scale_rule:
+    required: >
+      Increasing a program resource quantity must not require changing AST
+      structure.
+
+# =============================================================================
+# 55. PRODUCTION COMPLETION CRITERIA
+# =============================================================================
+
+production_ready:
+
+  required:
+
+    architecture:
+      - "single canonical frontend AST boundary"
+      - "legacy AST migration boundary explicitly controlled"
+      - "one source concept -> one canonical AST meaning"
+
+    grammar:
+      - "every meaning-bearing production mapped"
+      - "no orphan production"
+      - "no duplicate semantic mapping"
+      - "no hidden AST dependency"
+
+    source_spans:
+      - "every source construct mapped to Span"
+      - "generated/synthetic provenance defined"
+
+    semantics:
+      - "every stable AST mapping has semantic mapping"
+      - "types separated from TypeExpr"
+      - "effects separated from runtime behavior"
+      - "resources represented symbolically"
+      - "capabilities represented declaratively"
+      - "policies represented declaratively"
+
+    domains:
+      - "classical"
+      - "quantum"
+      - "HDL"
+      - "hybrid"
+      - "AI"
+      - "data"
+      - "concurrency"
+      - "distributed"
+      - "networking"
+      - "hardware"
+      - "execution"
+      - "interoperability"
+      - "dialects"
+
+    quantum:
+      - "generic operation representation"
+      - "no closed gate enum"
+      - "logical/physical separation"
+      - "quantum::ir remains canonical downstream boundary"
+
+    scalability:
+      - "no finite universal hardware ceiling"
+      - "no host-width semantic leakage"
+      - "symbolic resource expressions supported"
+      - "parameterized dimensions supported"
+
+    safety:
+      - "Rust 2021"
+      - "Rust 1.97 or later"
+      - "safe Rust only"
+      - "no unsafe implementation dependency"
+
+    testing:
+      - "AST positive tests"
+      - "AST negative tests"
+      - "span tests"
+      - "determinism tests"
+      - "compatibility tests"
+      - "scalability tests"
+      - "domain tests"
+      - "IR integration tests"
+
+# =============================================================================
+# 56. FINAL ARCHITECTURAL INVARIANT
+# =============================================================================
+
+final_invariant:
+
+  source:
+    statement: >
+      Zamani source describes computation and its constraints.
+
+  AST:
+    statement: >
+      The AST preserves that source meaning structurally and independently of
+      physical realization.
+
+  semantic_model:
+    statement: >
+      Semantic analysis determines whether the requested computation is valid
+      and what it means.
+
+  IR:
+    statement: >
+      Canonical IR represents validated computation before target realization.
+
+  realization:
+    statement: >
+      Compiler and runtime components negotiate actual resources and perform
+      target-specific lowering, routing, scheduling, resilience, and execution.
+
+  scalability:
+    statement: >
+      Increasing available resources does not require changing the grammar or
+      AST schema merely to represent the larger realization.
+
+  portability:
+    statement: >
+      Changing CPU, GPU, FPGA, ASIC, accelerator, QPU, simulator, HPC,
+      cluster, distributed environment, or future target does not require
+      changing source AST semantics merely because the target changed.
+
+  freeze:
+    statement: >
+      Once every mapping satisfies this contract and all companion contracts
+      pass validation, grammar/contracts/ast-mappings.yaml itself can be
+      frozen. Downstream implementation evolution must occur behind the
+      declared AST interface rather than by silently changing source meaning.
