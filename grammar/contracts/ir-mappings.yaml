@@ -1,0 +1,5744 @@
+# =============================================================================
+#
+# Zamani Programming Language
+#
+# grammar/contracts/ir-mappings.yaml
+#
+# =============================================================================
+#
+# PURPOSE
+#
+# Canonical machine-checkable contract connecting the validated Zamani
+# semantic model to canonical intermediate-representation boundaries.
+#
+# This file owns:
+#
+#   - semantic -> IR ownership;
+#   - canonical IR boundary selection;
+#   - semantic-to-IR mapping identities;
+#   - IR applicability;
+#   - lowering prerequisites;
+#   - preservation invariants;
+#   - target independence;
+#   - scalability requirements;
+#   - resource/capability/effect/contract/policy/provenance preservation;
+#   - quantum -> quantum::ir integration;
+#   - classical -> Classical IR integration;
+#   - HDL/hardware -> HDL/Hardware IR integration;
+#   - hybrid multi-domain IR composition;
+#   - IR compatibility;
+#   - IR diagnostics;
+#   - IR conformance and freeze gates.
+#
+# This file DOES NOT own:
+#
+#   - source grammar;
+#   - lexer tokens;
+#   - parser rules;
+#   - AST structure;
+#   - semantic definitions;
+#   - target discovery;
+#   - physical device selection;
+#   - physical placement;
+#   - routing algorithms;
+#   - scheduling algorithms;
+#   - calibration;
+#   - backend instruction selection;
+#   - runtime resource availability;
+#   - vendor SDK semantics;
+#   - target-specific machine limits.
+#
+# Those responsibilities belong to downstream contracts.
+#
+# Canonical pipeline:
+#
+#   Zamani source
+#       |
+#       v
+#   Lexer
+#       |
+#       v
+#   Parser
+#       |
+#       v
+#   Domain-neutral AST
+#       |
+#       v
+#   Structural validation
+#       |
+#       v
+#   Semantic model
+#       |
+#       +----------------------+-----------------------+
+#       |                      |                       |
+#       v                      v                       v
+#   Classical semantics   Quantum semantics    HDL/Hardware semantics
+#       |                      |                       |
+#       v                      v                       v
+#   Classical IR         quantum::ir          HDL/Hardware IR
+#       |                      |                       |
+#       +----------------------+-----------------------+
+#                              |
+#                              v
+#                       verified transformations
+#                              |
+#                              v
+#                 optimization / lowering / routing /
+#                 scheduling / resilience / QEC / ZQN
+#                              |
+#                              v
+#                         target realization
+#
+# =============================================================================
+
+schema:
+  version: "2.0"
+  kind: "zamani-grammar-ir-mapping-contract"
+  format: "YAML"
+  status: "NORMATIVE"
+  repository: "Benwellonedge28/Zamani"
+  language: "Zamani"
+  root: "grammar/"
+  canonical_file: "grammar/contracts/ir-mappings.yaml"
+
+  implementation:
+    rust:
+      edition: "2021"
+      minimum_version: "1.97"
+      supported: "1.97-or-later"
+      memory_safety: "required"
+      implementation_policy: "memory-safe Rust only"
+      compiler_features: "stable-only"
+
+  authority:
+    architecture:
+      path: "grammar/DESIGN.md"
+      role: "architectural_authority"
+
+    semantic_specification:
+      path: "grammar/spec/semantics.md"
+      role: "semantic_authority"
+
+    ast_mapping:
+      path: "grammar/contracts/ast-mappings.yaml"
+      role: "AST_mapping_authority"
+
+    semantic_mapping:
+      path: "grammar/contracts/semantic-mappings.yaml"
+      role: "semantic_mapping_authority"
+
+    ownership:
+      path: "grammar/contracts/ownership.yaml"
+      role: "concept_ownership_authority"
+
+    dependencies:
+      path: "grammar/contracts/dependencies.yaml"
+      role: "dependency_graph_authority"
+
+    exports:
+      path: "grammar/contracts/exports.yaml"
+      role: "export_registry_authority"
+
+    diagnostics:
+      path: "grammar/contracts/diagnostics.yaml"
+      role: "diagnostic_authority"
+
+    compatibility:
+      path: "grammar/contracts/compatibility.yaml"
+      role: "compatibility_authority"
+
+    status:
+      path: "grammar/contracts/feature-status.yaml"
+      role: "feature_lifecycle_authority"
+
+    manifest:
+      path: "grammar/MANIFEST.yaml"
+      role: "repository_inventory_authority"
+
+    repository_status:
+      path: "grammar/STATUS.yaml"
+      role: "repository_status_authority"
+
+    historical_reference:
+      path: "grammar/Zamani-Grammar.md"
+      normative: false
+
+    implementation_reference:
+      path: "grammar/grammar.md"
+      normative: false
+      role: "implementation_conformance_reference"
+
+# =============================================================================
+# 1. FUNDAMENTAL IR PRINCIPLES
+# =============================================================================
+
+principles:
+
+  one_canonical_semantic_boundary:
+    rule: >
+      All meaning-bearing source constructs MUST pass through the canonical
+      semantic model before canonical IR lowering.
+
+  no_ast_to_vendor_ir:
+    severity: "error"
+    rule: >
+      AST nodes MUST NOT lower directly to vendor-specific machine or device
+      representations.
+
+  no_semantic_to_vendor_ir:
+    severity: "error"
+    rule: >
+      The canonical semantic model MUST NOT lower directly to a vendor-specific
+      representation when a canonical domain IR exists.
+
+  canonical_domain_ir:
+    severity: "error"
+    rule: >
+      Each supported computational domain MUST identify one canonical IR
+      boundary or an explicitly declared target-independent IR composition.
+
+  quantum_canonical_boundary:
+    severity: "error"
+    rule: >
+      Quantum semantics MUST converge through quantum::ir.
+
+  classical_canonical_boundary:
+    severity: "error"
+    rule: >
+      Classical computation MUST converge through the canonical Classical IR.
+
+  hardware_canonical_boundary:
+    severity: "error"
+    rule: >
+      HDL and hardware semantics MUST converge through the repository's
+      canonical HDL/Hardware IR boundary.
+
+  no_competing_frontend_ir:
+    severity: "error"
+    rule: >
+      A grammar or semantic subsystem MUST NOT create a competing frontend IR
+      merely to support a new feature.
+
+  target_independent:
+    severity: "error"
+    rule: >
+      Canonical IR semantics MUST remain independent of a particular physical
+      CPU, GPU, FPGA, ASIC, accelerator, QPU, simulator, operating system,
+      vendor, cluster, or deployment environment.
+
+  open_world:
+    severity: "error"
+    rule: >
+      New target families, devices, operations, resource kinds, capabilities,
+      execution strategies, and realization technologies MUST be addable
+      downstream without changing an established semantic-to-IR identity merely
+      because the new realization did not previously exist.
+
+# =============================================================================
+# 2. IR LAYERS
+# =============================================================================
+
+layers:
+
+  semantic_model:
+    role: "validated portable meaning"
+
+    owns:
+      - "names"
+      - "types"
+      - "values"
+      - "operations"
+      - "control flow"
+      - "effects"
+      - "capabilities"
+      - "resources"
+      - "requirements"
+      - "constraints"
+      - "preferences"
+      - "contracts"
+      - "policies"
+      - "provenance"
+      - "uncertainty"
+      - "domain semantics"
+
+    does_not_own:
+      - "physical device placement"
+      - "backend instruction selection"
+      - "target scheduling"
+      - "calibration"
+      - "physical routing"
+
+  canonical_ir:
+    role: "stable compiler representation"
+
+    properties:
+      - "target-independent"
+      - "semantically typed"
+      - "deterministic"
+      - "versioned"
+      - "serializable where required"
+      - "source-provenance-aware"
+      - "resource-aware"
+      - "effect-aware"
+      - "capability-aware"
+      - "contract-aware"
+      - "policy-aware"
+
+  realization_ir:
+    role: "downstream target-specific representation"
+
+    owns:
+      - "target lowering"
+      - "instruction selection"
+      - "physical placement"
+      - "device mapping"
+      - "routing"
+      - "scheduling"
+      - "calibration"
+      - "target-specific optimization"
+
+    rule: >
+      Realization representations MUST NOT be treated as the canonical source
+      semantic representation.
+
+# =============================================================================
+# 3. CANONICAL IR BOUNDARIES
+# =============================================================================
+
+canonical_boundaries:
+
+  classical:
+    id: "ir.classical"
+    name: "Classical IR"
+    semantic_owner: "semantic/classical"
+    implementation_reference:
+      preferred: "src/ir/"
+      fallback: "repository-defined canonical classical IR boundary"
+    status: "required"
+
+    rule: >
+      Classical semantic operations MUST converge through the canonical
+      Classical IR before target-specific lowering.
+
+  quantum:
+    id: "ir.quantum"
+    name: "quantum::ir"
+    semantic_owner: "semantic/quantum"
+    implementation_reference: "src/quantum/ir/"
+    root_module: "src/quantum/ir/mod.rs"
+    status: "implemented"
+
+    rule: >
+      Quantum semantic constructs MUST converge through src/quantum/ir/.
+      No second quantum frontend IR is permitted.
+
+    current_module_families:
+      - "analysis"
+      - "classical"
+      - "compatibility"
+      - "control"
+      - "core"
+      - "dialect"
+      - "hashing"
+      - "metadata"
+      - "model"
+      - "program"
+      - "pulse"
+      - "quantum"
+      - "resources"
+      - "scheduling"
+
+  hdl_hardware:
+    id: "ir.hdl-hardware"
+    name: "HDL/Hardware IR"
+    semantic_owner: "semantic/hdl-hardware"
+    implementation_reference:
+      - "src/"
+      - "repository-defined hardware/HDL IR implementation"
+    status: "required"
+
+    rule: >
+      HDL and hardware semantic intent MUST converge through one canonical
+      HDL/Hardware IR boundary before synthesis or physical realization.
+
+  hybrid:
+    id: "ir.hybrid-composition"
+    name: "canonical domain IR composition"
+    semantic_owner: "semantic/hybrid"
+    status: "required"
+
+    rule: >
+      Hybrid programs MUST compose canonical domain IRs rather than creating a
+      competing universal hybrid IR.
+
+# =============================================================================
+# 4. IR MAPPING RECORD SCHEMA
+# =============================================================================
+
+mapping_schema:
+
+  required_fields:
+    - "id"
+    - "semantic_identity"
+    - "semantic_owner"
+    - "source_mapping"
+    - "canonical_ir"
+    - "lowering_kind"
+    - "operands"
+    - "results"
+    - "attributes"
+    - "effects"
+    - "capabilities"
+    - "resources"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "preservation"
+    - "diagnostics"
+    - "compatibility"
+    - "tests"
+    - "scalability"
+    - "target_independence"
+    - "status"
+    - "freeze"
+
+  identity:
+    id:
+      type: "stable_string"
+      globally_unique: true
+      immutable_after_stability: true
+
+    semantic_identity:
+      type: "stable_semantic_id"
+      rule: >
+        Semantic identity MUST NOT be derived solely from a Rust type name,
+        source filename, memory address, generated symbol, or backend symbol.
+
+  source_mapping:
+    required:
+      - "grammar_owner"
+      - "grammar_symbols"
+      - "ast_mapping"
+
+  canonical_ir:
+    required:
+      - "boundary"
+      - "operation_or_model"
+      - "version"
+
+  lowering_kind:
+    allowed:
+      - "direct"
+      - "structured"
+      - "desugared"
+      - "composition"
+      - "metadata_only"
+      - "analysis_only"
+      - "deferred"
+
+  source_span:
+    required: true
+
+  status:
+    allowed:
+      - "specified"
+      - "implemented"
+      - "partial"
+      - "migration_required"
+      - "planned"
+      - "experimental"
+      - "deprecated"
+      - "rejected"
+      - "stable"
+
+# =============================================================================
+# 5. OPERAND AND RESULT CONTRACT
+# =============================================================================
+
+value_contract:
+
+  operand_identity:
+    rule: >
+      Every IR operand MUST refer to a canonical semantic value, resource,
+      block, region, symbol, or domain-defined entity.
+
+  result_identity:
+    rule: >
+      Every IR result MUST have a stable semantic identity and declared type
+      where applicable.
+
+  ordering:
+    rule: >
+      Operand and result ordering MUST be deterministic and semantically
+      significant where the operation defines positional semantics.
+
+  ownership:
+    rule: >
+      IR values MUST have exactly one canonical identity owner.
+
+  no_physical_identity:
+    rule: >
+      Canonical semantic IR values MUST NOT acquire physical target identity
+      merely because lowering is possible.
+
+  source_spans:
+    rule: >
+      Meaning-bearing IR entities MUST retain source provenance sufficient for
+      diagnostics and required source-to-IR tracing.
+
+# =============================================================================
+# 6. ATTRIBUTE CONTRACT
+# =============================================================================
+
+attributes:
+
+  categories:
+
+    semantic:
+      rule: >
+        Semantic attributes affect program meaning and MUST participate in
+        validation and preservation.
+
+    optimization:
+      rule: >
+        Optimization attributes MAY affect implementation strategy but MUST NOT
+        alter semantics.
+
+    provenance:
+      rule: >
+        Provenance attributes describe origin and transformation history.
+
+    target_independent:
+      rule: >
+        Canonical IR attributes MUST be target-independent unless explicitly
+        marked as deferred realization metadata.
+
+    realization:
+      rule: >
+        Physical realization attributes belong only to downstream realization
+        layers.
+
+  forbidden_canonical_attributes:
+    - "physical_device_id"
+    - "physical_cpu_id"
+    - "physical_gpu_id"
+    - "physical_fpga_id"
+    - "physical_asic_id"
+    - "physical_qpu_id"
+    - "physical_qubit_assignment"
+    - "runtime_handle"
+    - "live_resource_count"
+    - "scheduler_slot"
+    - "backend_instruction"
+    - "vendor_register"
+    - "device_calibration_handle"
+
+  hint_rule:
+    rule: >
+      Optimization hints MUST be semantically ignorable. Removing a hint MUST
+      not invalidate or change the program's semantic result.
+
+# =============================================================================
+# 7. EFFECT PRESERVATION
+# =============================================================================
+
+effect_contract:
+
+  required: true
+
+  rule: >
+    Every IR lowering MUST preserve the semantic effect set required by the
+    source construct.
+
+  effect_identity:
+    stable: true
+
+  effect_transformations:
+
+    pure_to_pure:
+      allowed: true
+
+    pure_to_effectful:
+      allowed: false
+      exception:
+        - "explicitly declared implementation effect that is observationally
+           invisible under the language contract"
+
+    effect_removal:
+      allowed_only_if:
+        - "effect is proven unobservable"
+        - "semantic contract permits removal"
+
+    effect_reordering:
+      allowed_only_if:
+        - "dependency analysis proves equivalence"
+        - "observable ordering is preserved"
+
+  required_cross_domain_effects:
+    - "io"
+    - "network"
+    - "mutation"
+    - "randomness"
+    - "native"
+    - "foreign"
+    - "distributed"
+    - "measurement"
+    - "quantum"
+    - "learning"
+    - "adaptation"
+    - "reflection"
+    - "code_generation"
+    - "simulation"
+
+  rule_for_new_effects: >
+    New effect identities MUST be registered through the effect contract and
+    MUST NOT be encoded as anonymous IR flags.
+
+# =============================================================================
+# 8. CAPABILITY PRESERVATION
+# =============================================================================
+
+capability_contract:
+
+  required: true
+
+  rule: >
+    Capability requirements expressed by semantic analysis MUST remain
+    available to downstream compilation and realization.
+
+  representation:
+    identity: "extensible capability identifier"
+    parameters: "typed semantic values"
+    target_specificity: "forbidden in canonical IR"
+
+  examples:
+    - "quantum.measurement"
+    - "gpu.compute"
+    - "tensor.compute"
+    - "distributed.execution"
+    - "persistent.storage"
+
+  rules:
+
+    no_closed_world_enum:
+      severity: "error"
+      rule: >
+        The canonical IR MUST NOT require a permanently exhaustive list of all
+        future capabilities.
+
+    no_vendor_lock:
+      severity: "error"
+      rule: >
+        A vendor-specific capability MUST remain explicitly namespaced and
+        MUST NOT redefine the universal semantic meaning of the operation.
+
+    preservation:
+      rule: >
+        A lowering pass MUST preserve capability requirements unless it proves
+        that the transformation eliminates the requirement.
+
+# =============================================================================
+# 9. RESOURCE PRESERVATION
+# =============================================================================
+
+resource_contract:
+
+  required: true
+
+  model: "symbolic-resource-semantics"
+
+  allowed:
+    - "symbolic quantities"
+    - "parameterized quantities"
+    - "runtime quantities"
+    - "derived quantities"
+    - "resource predicates"
+    - "resource budgets"
+    - "resource preferences"
+    - "resource constraints"
+
+  examples:
+    - expression: "qubits >= required_qubits"
+      meaning: "minimum logical quantum resource requirement"
+
+    - expression: "memory >= required_memory"
+      meaning: "minimum memory requirement"
+
+    - expression: "capability(\"quantum.measurement\")"
+      meaning: "measurement capability requirement"
+
+    - expression: "capability(\"gpu.compute\")"
+      meaning: "accelerated compute capability requirement"
+
+    - expression: "capability(\"tensor.compute\")"
+      meaning: "tensor compute capability requirement"
+
+    - expression: "topology(required_topology)"
+      meaning: "abstract topology requirement"
+
+  forbidden:
+    - "universal finite capacity constants"
+    - "physical device counts"
+    - "machine-specific maximums"
+    - "vendor-specific architectural limits"
+    - "hidden target capacities"
+
+  scaling:
+    rule: >
+      Resource expressions MUST remain representable for every supported
+      semantic scale without imposing an artificial language-level maximum.
+
+  implementation_limit:
+    rule: >
+      If an implementation cannot represent a resource expression because of
+      its own finite implementation capacity, it MUST report an explicit
+      diagnostic. The implementation limit MUST NOT become a language semantic
+      limit.
+
+  preservation:
+    rule: >
+      Lowering MUST preserve mandatory resource requirements unless it proves
+      that the transformed representation requires no such resource.
+
+# =============================================================================
+# 10. CONTRACT PRESERVATION
+# =============================================================================
+
+contract_contract:
+
+  required: true
+
+  kinds:
+    - "requires"
+    - "ensures"
+    - "invariant"
+    - "assume"
+    - "guarantee"
+    - "property"
+    - "assertion"
+
+  rule: >
+    Canonical IR lowering MUST preserve every contract obligation whose
+    validity or observability extends beyond source analysis.
+
+  compile_time_contracts:
+    may_be_discharged: true
+    requirement:
+      - "proof or validation evidence recorded where required"
+      - "failure remains diagnosable"
+
+  runtime_contracts:
+    may_be_lowered: true
+    requirement:
+      - "runtime enforcement remains semantically equivalent"
+
+  erased_contracts:
+    allowed_only_if:
+      - "statically proven"
+      - "proof evidence retained where required by policy"
+
+  failed_contract:
+    rule: >
+      A failed mandatory contract MUST NOT be converted into successful IR.
+
+# =============================================================================
+# 11. POLICY PRESERVATION
+# =============================================================================
+
+policy_contract:
+
+  required: true
+
+  rule: >
+    Policies governing allowed, required, prohibited, preferred, fallback, or
+    adaptive behavior MUST remain available to the compilation and execution
+    layers that depend on them.
+
+  policy_kinds:
+    - "authorization"
+    - "security"
+    - "resource"
+    - "execution"
+    - "adaptation"
+    - "simulation"
+    - "deployment"
+    - "fallback"
+    - "target-selection"
+
+  priority:
+    semantic_correctness: 1
+    mandatory_requirements: 2
+    mandatory_constraints: 3
+    mandatory_policies: 4
+    capabilities: 5
+    resources: 6
+    preferences: 7
+    optimization_hints: 8
+
+  rule: >
+    Preferences and optimization hints MUST NOT override semantic correctness,
+    mandatory requirements, constraints, or prohibitions.
+
+# =============================================================================
+# 12. PROVENANCE PRESERVATION
+# =============================================================================
+
+provenance_contract:
+
+  required: true
+
+  source:
+    required: true
+
+  supported_relations:
+    - "derived_from"
+    - "generated_by"
+    - "transformed_by"
+    - "verified_by"
+    - "supported_by"
+    - "decided_by"
+    - "specialized_from"
+    - "lowered_from"
+
+  deterministic:
+    required: true
+
+  source_span:
+    required: true
+
+  transformation_identity:
+    required: true
+
+  rule: >
+    Every semantics-changing IR transformation MUST be attributable to a
+    deterministic transformation identity.
+
+  storage:
+    rule: >
+      The semantic requirement for provenance does not require unlimited
+      in-memory history. Implementations MAY compact or externalize provenance
+      according to the provenance contract.
+
+# =============================================================================
+# 13. CORE SEMANTIC MAPPINGS
+# =============================================================================
+
+mappings:
+
+  # ---------------------------------------------------------------------------
+  # CORE
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-CORE-PROGRAM-001"
+    semantic_identity: "semantic.program"
+    semantic_owner: "semantic/program"
+    source_mapping:
+      grammar_owner: "grammar/core/program.g4"
+      grammar_symbols:
+        - "program"
+        - "sourceUnit"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "program"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "program inputs"
+      - "environmental semantic context"
+
+    results:
+      - "program result"
+      - "program effects"
+
+    attributes:
+      required:
+        - "language_version"
+        - "semantic_version"
+        - "provenance"
+
+    effects: "inherited_from_semantic_model"
+    capabilities: "inherited_from_semantic_model"
+    resources: "inherited_from_semantic_model"
+    contracts: "inherited_from_semantic_model"
+    policies: "inherited_from_semantic_model"
+    provenance: "required"
+
+    preservation:
+      - "program meaning"
+      - "evaluation semantics"
+      - "effects"
+      - "requirements"
+      - "contracts"
+      - "policies"
+      - "provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      contract: "grammar/contracts/compatibility.yaml"
+      identity: "semantic.program"
+
+    tests:
+      required:
+        - "grammar/conformance/semantic/program/"
+        - "grammar/conformance/ast/program/"
+        - "grammar/conformance/ir/program/"
+
+    scalability:
+      open_world: true
+      symbolic_scale: true
+      finite_capacity_in_grammar: false
+
+    target_independence: true
+    status: "specified"
+
+    freeze:
+      required: true
+      gates:
+        - "AST mapping stable"
+        - "semantic mapping stable"
+        - "canonical IR owner resolved"
+        - "diagnostics resolved"
+        - "compatibility resolved"
+        - "determinism validated"
+        - "scalability audit passed"
+
+  - id: "IR-CORE-DECLARATION-001"
+    semantic_identity: "semantic.declaration"
+    semantic_owner: "semantic/declarations"
+    source_mapping:
+      grammar_owner: "grammar/declarations/"
+      grammar_symbols:
+        - "declaration"
+        - "item"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "declaration"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "declared symbols"
+      - "types"
+      - "initializers"
+      - "constraints"
+
+    results:
+      - "symbol definitions"
+      - "semantic bindings"
+
+    attributes:
+      required:
+        - "name"
+        - "visibility"
+        - "declaration_kind"
+        - "source_span"
+
+    effects: []
+    capabilities: []
+    resources: []
+    contracts: []
+    policies: []
+    provenance: "required"
+
+    preservation:
+      - "name identity"
+      - "scope"
+      - "visibility"
+      - "type information"
+      - "generic constraints"
+      - "source provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.declaration"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/declarations/"
+
+    scalability:
+      open_world: true
+      no_fixed_declaration_count: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # TYPES
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-TYPE-001"
+    semantic_identity: "semantic.type"
+    semantic_owner: "semantic/types"
+    source_mapping:
+      grammar_owner: "grammar/types/"
+      grammar_symbols:
+        - "type"
+        - "typeExpression"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.type"
+      operation_or_model: "type"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "type parameters"
+      - "bounds"
+      - "constraints"
+
+    results:
+      - "canonical type identity"
+
+    attributes:
+      required:
+        - "type_identity"
+        - "source_span"
+
+    effects: []
+    capabilities: []
+    resources: "type-dependent"
+    contracts: "type-dependent"
+    policies: []
+    provenance: "required"
+
+    preservation:
+      - "type identity"
+      - "generic parameters"
+      - "bounds"
+      - "constraints"
+      - "ownership properties"
+      - "resource properties"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.type"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/types/"
+        - "grammar/conformance/types/"
+
+    scalability:
+      symbolic_dimensions: true
+      symbolic_widths: true
+      symbolic_ranks: true
+      finite_machine_limits: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-TYPE-LINEAR-001"
+    semantic_identity: "semantic.type.linear"
+    semantic_owner: "semantic/types/linear"
+    source_mapping:
+      grammar_owner: "grammar/types/linear.g4"
+      grammar_symbols:
+        - "linearType"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.type"
+      operation_or_model: "linear_resource_type"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "resource value"
+
+    results:
+      - "linear value"
+
+    attributes:
+      required:
+        - "linearity"
+
+    effects:
+      - "resource"
+
+    capabilities: []
+    resources:
+      - "resource ownership"
+
+    contracts:
+      - "single-consumption"
+
+    policies: []
+    provenance: "required"
+
+    preservation:
+      - "linearity"
+      - "ownership"
+      - "consumption rules"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.type.linear"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/types/linear/"
+        - "grammar/conformance/types/linear/"
+
+    scalability:
+      open_world: true
+      finite_resource_limit: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # EXPRESSIONS
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-EXPR-VALUE-001"
+    semantic_identity: "semantic.expression.value"
+    semantic_owner: "semantic/expressions"
+    source_mapping:
+      grammar_owner: "grammar/expressions/"
+      grammar_symbols:
+        - "expression"
+        - "literalExpression"
+        - "nameExpression"
+        - "callExpression"
+        - "memberExpression"
+        - "indexExpression"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "value_expression"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "expression operands"
+
+    results:
+      - "typed semantic value"
+
+    attributes:
+      required:
+        - "type"
+        - "source_span"
+
+    effects: "semantic_effect_set"
+    capabilities: "semantic_capability_set"
+    resources: "semantic_resource_set"
+    contracts: "semantic_contract_set"
+    policies: "semantic_policy_set"
+    provenance: "required"
+
+    preservation:
+      - "value semantics"
+      - "evaluation dependencies"
+      - "effects"
+      - "type"
+      - "resource obligations"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.expression.value"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/expressions/"
+
+    scalability:
+      symbolic_parameters: true
+      open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # FUNCTIONS
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-FUNCTION-001"
+    semantic_identity: "semantic.function"
+    semantic_owner: "semantic/functions"
+    source_mapping:
+      grammar_owner: "grammar/functions/"
+      grammar_symbols:
+        - "function"
+        - "functionDeclaration"
+        - "parameterList"
+        - "returnType"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "function"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "parameters"
+      - "captured values where applicable"
+      - "generic parameters"
+
+    results:
+      - "function result"
+
+    attributes:
+      required:
+        - "function_identity"
+        - "signature"
+        - "calling_semantics"
+        - "source_span"
+
+    effects: "declared_or_inferred_effects"
+    capabilities: "declared_capabilities"
+    resources: "declared_resources"
+    contracts: "function_contracts"
+    policies: "function_policies"
+    provenance: "required"
+
+    preservation:
+      - "parameter order"
+      - "type signature"
+      - "generic constraints"
+      - "effects"
+      - "contracts"
+      - "resource requirements"
+      - "capability requirements"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.function"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/functions/"
+
+    scalability:
+      generic: true
+      recursive: true
+      distributed: true
+      quantum: true
+      hardware: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # EFFECTS
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-EFFECT-001"
+    semantic_identity: "semantic.effect"
+    semantic_owner: "semantic/effects"
+    source_mapping:
+      grammar_owner: "grammar/effects/"
+      grammar_symbols:
+        - "effect"
+        - "effectDeclaration"
+        - "effectSet"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "effect_metadata"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "effect identity"
+      - "effect parameters"
+
+    results:
+      - "effect annotation"
+
+    attributes:
+      required:
+        - "effect_identity"
+        - "effect_parameters"
+
+    effects:
+      self_describing: true
+
+    capabilities: "effect-dependent"
+    resources: "effect-dependent"
+    contracts: []
+    policies: "effect-dependent"
+    provenance: "required"
+
+    preservation:
+      - "effect identity"
+      - "effect parameters"
+      - "effect ordering where observable"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.effect"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/effects/"
+
+    scalability:
+      extensible_effect_registry: true
+      finite_effect_count: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # RESOURCES
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-RESOURCE-001"
+    semantic_identity: "semantic.resource.requirement"
+    semantic_owner: "semantic/resources"
+    source_mapping:
+      grammar_owner: "grammar/resources/"
+      grammar_symbols:
+        - "resourceRequirement"
+        - "requires"
+        - "resourceExpression"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.resources"
+      operation_or_model: "resource_requirement"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "resource expression"
+      - "comparison"
+      - "resource identity"
+
+    results:
+      - "resource predicate"
+
+    attributes:
+      required:
+        - "resource_identity"
+        - "predicate"
+        - "source_span"
+
+    effects: []
+    capabilities: "associated_capabilities"
+    resources: "requirement_itself"
+    contracts: []
+    policies: "resource_policies"
+    provenance: "required"
+
+    preservation:
+      - "resource identity"
+      - "quantity expression"
+      - "comparison"
+      - "mandatory status"
+      - "source provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.resource.requirement"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/resources/"
+        - "grammar/conformance/scalability/resources/"
+
+    scalability:
+      symbolic: true
+      parameterized: true
+      arbitrary_feasible_scale: true
+      fixed_capacity_constants: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+      gates:
+        - "symbolic resource tests"
+        - "hard-coding audit"
+        - "resource negotiation integration"
+
+  - id: "IR-CAPABILITY-001"
+    semantic_identity: "semantic.capability.requirement"
+    semantic_owner: "semantic/resources/capabilities"
+    source_mapping:
+      grammar_owner: "grammar/resources/capabilities.g4"
+      grammar_symbols:
+        - "capabilityRequirement"
+        - "capabilityReference"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.resources"
+      operation_or_model: "capability_requirement"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "capability identity"
+      - "capability parameters"
+
+    results:
+      - "capability predicate"
+
+    attributes:
+      required:
+        - "capability_identity"
+
+    effects: []
+    capabilities:
+      required: true
+    resources: []
+    contracts: []
+    policies: "capability_policies"
+    provenance: "required"
+
+    preservation:
+      - "capability identity"
+      - "parameters"
+      - "mandatory/optional status"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.capability.requirement"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/capabilities/"
+
+    scalability:
+      extensible: true
+      closed_world: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # CONTRACTS AND POLICIES
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-CONTRACT-001"
+    semantic_identity: "semantic.contract"
+    semantic_owner: "semantic/contracts"
+    source_mapping:
+      grammar_owner: "grammar/contracts/"
+      grammar_symbols:
+        - "requires"
+        - "ensures"
+        - "invariant"
+        - "assume"
+        - "guarantee"
+        - "property"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "contract"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "predicate"
+      - "expression"
+      - "scope"
+
+    results:
+      - "contract obligation"
+
+    attributes:
+      required:
+        - "contract_kind"
+        - "predicate"
+        - "source_span"
+
+    effects: []
+    capabilities: []
+    resources: "contract-dependent"
+    contracts:
+      self_describing: true
+    policies: "contract_policies"
+    provenance: "required"
+
+    preservation:
+      - "contract kind"
+      - "predicate semantics"
+      - "scope"
+      - "verification status"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.contract"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/contracts/"
+
+    scalability:
+      symbolic: true
+      open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-POLICY-001"
+    semantic_identity: "semantic.policy"
+    semantic_owner: "semantic/policies"
+    source_mapping:
+      grammar_owner: "grammar/policies/"
+      grammar_symbols:
+        - "policy"
+        - "policyRule"
+        - "allow"
+        - "forbid"
+        - "prefer"
+        - "constrain"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "policy"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "policy predicates"
+      - "policy actions"
+
+    results:
+      - "policy set"
+
+    attributes:
+      required:
+        - "policy_identity"
+        - "scope"
+        - "priority"
+
+    effects: []
+    capabilities: "policy-dependent"
+    resources: "policy-dependent"
+    contracts: []
+    policies:
+      self_describing: true
+    provenance: "required"
+
+    preservation:
+      - "policy identity"
+      - "scope"
+      - "priority"
+      - "prohibitions"
+      - "requirements"
+      - "fallback rules"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.policy"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/policies/"
+
+    scalability:
+      open_world: true
+      finite_policy_count: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # CLASSICAL
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-CLASSICAL-001"
+    semantic_identity: "semantic.classical"
+    semantic_owner: "semantic/classical"
+    source_mapping:
+      grammar_owner: "grammar/classical/"
+      grammar_symbols:
+        - "classicalComputation"
+        - "numericExpression"
+        - "linearAlgebraExpression"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.classical"
+      operation_or_model: "classical_operation"
+      version: "canonical-classical-ir"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "typed values"
+      - "memory references"
+      - "control values"
+
+    results:
+      - "classical values"
+      - "classical memory effects"
+
+    attributes:
+      required:
+        - "operation_identity"
+        - "types"
+        - "source_span"
+
+    effects: "semantic_effect_set"
+    capabilities: "semantic_capability_set"
+    resources: "semantic_resource_set"
+    contracts: "semantic_contract_set"
+    policies: "semantic_policy_set"
+    provenance: "required"
+
+    preservation:
+      - "numeric semantics"
+      - "type semantics"
+      - "overflow semantics where specified"
+      - "precision semantics where specified"
+      - "effects"
+      - "resource requirements"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.classical"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/classical/"
+
+    scalability:
+      arbitrary_dimensions: true
+      symbolic_dimensions: true
+      arbitrary_feasible_data_size: true
+      fixed_machine_width_as_language_limit: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # QUANTUM
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-QUANTUM-PROGRAM-001"
+    semantic_identity: "semantic.quantum.program"
+    semantic_owner: "semantic/quantum"
+    source_mapping:
+      grammar_owner: "grammar/quantum/"
+      grammar_symbols:
+        - "quantumProgram"
+        - "quantumBlock"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/"
+      operation_or_model: "program::QuantumProgram"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "logical quantum values"
+      - "classical control values"
+      - "semantic resources"
+
+    results:
+      - "quantum results"
+      - "classical measurement results"
+
+    attributes:
+      required:
+        - "program_identity"
+        - "model_kind"
+        - "source_span"
+        - "provenance"
+
+    effects:
+      - "quantum"
+
+    capabilities:
+      inherited: true
+
+    resources:
+      inherited: true
+
+    contracts:
+      inherited: true
+
+    policies:
+      inherited: true
+
+    provenance: "required"
+
+    preservation:
+      - "quantum semantics"
+      - "logical identity"
+      - "operation ordering where semantically required"
+      - "measurement semantics"
+      - "classical feedback"
+      - "resource requirements"
+      - "effects"
+      - "contracts"
+      - "policies"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.program"
+      canonical_ir: "quantum::ir"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/program/"
+        - "grammar/conformance/quantum/"
+
+    scalability:
+      open_world: true
+      symbolic_qubit_counts: true
+      symbolic_operation_counts: true
+      symbolic_depth: true
+      symbolic_arity: true
+      fixed_qubit_ceiling: false
+      fixed_depth_ceiling: false
+      fixed_operation_ceiling: false
+
+    target_independence: true
+    status: "implemented"
+
+    freeze:
+      required: true
+      gates:
+        - "quantum::ir canonical boundary confirmed"
+        - "no duplicate quantum IR"
+        - "logical/physical identity separation validated"
+        - "resource model validated"
+        - "provenance validated"
+
+  - id: "IR-QUANTUM-OPERATION-001"
+    semantic_identity: "semantic.quantum.operation"
+    semantic_owner: "semantic/quantum/operations"
+    source_mapping:
+      grammar_owner: "grammar/quantum/operations.g4"
+      grammar_symbols:
+        - "quantumOperation"
+        - "operationSpecifier"
+        - "operationTargetList"
+        - "operationParameterList"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/quantum/"
+      operation_or_model: "gate/operation semantic representation"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "operation targets"
+      - "controls where applicable"
+      - "parameters"
+      - "classical inputs where applicable"
+
+    results:
+      - "quantum outputs"
+      - "classical outputs where applicable"
+
+    attributes:
+      required:
+        - "operation_identity"
+        - "parameters"
+        - "modifiers"
+        - "source_span"
+
+      optional:
+        - "dialect"
+        - "operation_metadata"
+        - "semantic_tags"
+
+    effects:
+      - "quantum"
+      conditional:
+        measurement:
+          - "measurement"
+
+    capabilities:
+      derived: true
+
+    resources:
+      derived: true
+
+    contracts:
+      inherited: true
+
+    policies:
+      inherited: true
+
+    provenance: "required"
+
+    preservation:
+      - "operation identity"
+      - "parameter semantics"
+      - "target semantics"
+      - "control semantics"
+      - "modifier semantics"
+      - "result semantics"
+      - "operation ordering"
+
+    operation_registry:
+      model: "open-world"
+      supported_specifiers:
+        - "builtin"
+        - "custom"
+        - "vendor"
+        - "parameterized"
+        - "dialect"
+      rule: >
+        Adding a quantum operation MUST NOT require changing the universal
+        operation grammar solely because the operation is new.
+
+    prohibited:
+      - "fixed universal gate enumeration"
+      - "physical qubit assignment"
+      - "vendor instruction selection"
+      - "hardware calibration"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.operation"
+      canonical_ir: "quantum::ir"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/operations/"
+        - "grammar/conformance/quantum/operations/"
+
+    scalability:
+      arbitrary_operation_count: true
+      arbitrary_target_count: true
+      arbitrary_parameter_count: true
+      arbitrary_arity: true
+      fixed_gate_set: false
+      fixed_qubit_limit: false
+
+    target_independence: true
+    status: "implemented"
+
+    freeze:
+      required: true
+      gates:
+        - "generic operation representation"
+        - "operation registry open-world audit"
+        - "no physical target leakage"
+        - "quantum::ir mapping validated"
+
+  - id: "IR-QUANTUM-QUBIT-001"
+    semantic_identity: "semantic.quantum.qubit"
+    semantic_owner: "semantic/quantum/qubit"
+    source_mapping:
+      grammar_owner: "grammar/quantum/"
+      grammar_symbols:
+        - "logicalQubit"
+        - "qubitReference"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/quantum/qubit"
+      operation_or_model: "QubitId / logical qubit semantic identity"
+      version: "repository-defined"
+
+    lowering_kind: "direct"
+
+    operands:
+      - "logical qubit identity"
+
+    results:
+      - "canonical logical qubit identity"
+
+    attributes:
+      required:
+        - "logical_identity"
+        - "source_span"
+
+    effects: []
+    capabilities: []
+    resources:
+      - "quantum resource relationship"
+    contracts: []
+    policies: []
+    provenance: "required"
+
+    preservation:
+      - "logical identity"
+      - "scope"
+      - "ownership"
+      - "source provenance"
+
+    rule: >
+      Logical qubit identity MUST remain distinct from physical qubit placement.
+      PhysicalQubitId belongs to downstream realization semantics.
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.qubit"
+      implementation_owner: "src/quantum/ir/quantum/qubit"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/qubits/"
+        - "grammar/conformance/portability/quantum/"
+
+    scalability:
+      symbolic_count: true
+      fixed_qubit_limit: false
+      arbitrary_feasible_count: true
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  - id: "IR-QUANTUM-MEASUREMENT-001"
+    semantic_identity: "semantic.quantum.measurement"
+    semantic_owner: "semantic/quantum/measurement"
+    source_mapping:
+      grammar_owner: "grammar/quantum/measurement.g4"
+      grammar_symbols:
+        - "measurement"
+        - "measure"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/quantum/measurement"
+      operation_or_model: "measurement"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "measurement target"
+      - "basis where applicable"
+      - "observable where applicable"
+
+    results:
+      - "measurement result"
+      - "classical result where applicable"
+
+    attributes:
+      required:
+        - "measurement_mode"
+        - "source_span"
+
+    effects:
+      - "quantum"
+      - "measurement"
+
+    capabilities:
+      required:
+        - "quantum.measurement"
+
+    resources:
+      inherited: true
+
+    contracts:
+      inherited: true
+
+    policies:
+      inherited: true
+
+    provenance: "required"
+
+    preservation:
+      - "measurement semantics"
+      - "basis"
+      - "observable"
+      - "result type"
+      - "effect"
+      - "probabilistic semantics"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.measurement"
+      canonical_ir: "quantum::ir"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/measurement/"
+        - "grammar/conformance/quantum/measurement/"
+
+    scalability:
+      arbitrary_measurement_count: true
+      fixed_measurement_limit: false
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  - id: "IR-QUANTUM-CONTROL-001"
+    semantic_identity: "semantic.quantum.control"
+    semantic_owner: "semantic/quantum/control"
+    source_mapping:
+      grammar_owner: "grammar/quantum/control.g4"
+      grammar_symbols:
+        - "controlledOperation"
+        - "controlTarget"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/control/"
+      operation_or_model: "dynamic/control representation"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "control values"
+      - "controlled operation"
+
+    results:
+      - "controlled computation"
+
+    attributes:
+      required:
+        - "control_relation"
+        - "source_span"
+
+    effects: "inherited"
+    capabilities: "inherited"
+    resources: "inherited"
+    contracts: "inherited"
+    policies: "inherited"
+    provenance: "required"
+
+    preservation:
+      - "control dependency"
+      - "evaluation order"
+      - "classical/quantum dependency"
+      - "measurement feed-forward"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.control"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/control/"
+
+    scalability:
+      arbitrary_control_arity: true
+      fixed_control_limit: false
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  - id: "IR-QUANTUM-MODEL-001"
+    semantic_identity: "semantic.quantum.computational-model"
+    semantic_owner: "semantic/quantum/model"
+    source_mapping:
+      grammar_owner: "grammar/quantum/models.g4"
+      grammar_symbols:
+        - "quantumModel"
+        - "circuitModel"
+        - "analogModel"
+        - "hamiltonianModel"
+        - "annealingModel"
+        - "quboModel"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/model/"
+      operation_or_model: "ModelKind / model representation"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "model parameters"
+      - "model operators"
+      - "initial conditions"
+
+    results:
+      - "quantum model"
+
+    attributes:
+      required:
+        - "model_kind"
+        - "source_span"
+
+    effects: "model-dependent"
+    capabilities: "model-dependent"
+    resources: "model-dependent"
+    contracts: "model-dependent"
+    policies: "model-dependent"
+    provenance: "required"
+
+    preservation:
+      - "model identity"
+      - "mathematical semantics"
+      - "parameter semantics"
+      - "initial conditions"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.computational-model"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/models/"
+
+    scalability:
+      open_world: true
+      model_specific_dimensions: "symbolic"
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  - id: "IR-QUANTUM-PULSE-001"
+    semantic_identity: "semantic.quantum.pulse"
+    semantic_owner: "semantic/quantum/pulse"
+    source_mapping:
+      grammar_owner: "grammar/quantum/pulse.g4"
+      grammar_symbols:
+        - "pulse"
+        - "waveform"
+        - "frame"
+        - "port"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/pulse/"
+      operation_or_model: "pulse semantic representation"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "waveform"
+      - "frame"
+      - "port"
+      - "timing information"
+
+    results:
+      - "pulse semantic operation"
+
+    attributes:
+      required:
+        - "pulse_identity"
+        - "source_span"
+
+    effects:
+      - "quantum"
+
+    capabilities:
+      inherited: true
+
+    resources:
+      inherited: true
+
+    contracts:
+      inherited: true
+
+    policies:
+      inherited: true
+
+    provenance: "required"
+
+    preservation:
+      - "waveform semantics"
+      - "timing semantics where declared"
+      - "frame semantics"
+      - "port identity"
+      - "calibration intent"
+
+    rule: >
+      Pulse semantics MUST remain hardware-independent at the canonical IR
+      boundary. Physical control synthesis belongs downstream.
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.pulse"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/pulse/"
+
+    scalability:
+      waveform_size: "symbolic"
+      pulse_count: "unbounded_by_language"
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  - id: "IR-QUANTUM-RESOURCE-001"
+    semantic_identity: "semantic.quantum.resource"
+    semantic_owner: "semantic/quantum/resources"
+    source_mapping:
+      grammar_owner: "grammar/quantum/resources.g4"
+      grammar_symbols:
+        - "quantumResource"
+        - "qubitRequirement"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.quantum"
+      module: "src/quantum/ir/resources/"
+      operation_or_model: "quantum resource requirement"
+      version: "repository-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "resource expression"
+
+    results:
+      - "resource requirement"
+
+    attributes:
+      required:
+        - "resource_identity"
+        - "predicate"
+
+    effects: []
+    capabilities: "quantum_capabilities"
+    resources: "quantum_resources"
+    contracts: []
+    policies: "quantum_resource_policies"
+    provenance: "required"
+
+    preservation:
+      - "resource quantity"
+      - "resource relation"
+      - "capability relationship"
+      - "policy relationship"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.quantum.resource"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/quantum/resources/"
+
+    scalability:
+      symbolic: true
+      fixed_qubit_limit: false
+      arbitrary_feasible_scale: true
+
+    target_independence: true
+    status: "implemented"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # HDL / HARDWARE
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-HDL-MODULE-001"
+    semantic_identity: "semantic.hdl.module"
+    semantic_owner: "semantic/hdl"
+    source_mapping:
+      grammar_owner: "grammar/hdl/"
+      grammar_symbols:
+        - "module"
+        - "hdlModule"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.hdl-hardware"
+      operation_or_model: "module"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "ports"
+      - "signals"
+      - "submodules"
+      - "behavior"
+
+    results:
+      - "hardware module semantic object"
+
+    attributes:
+      required:
+        - "module_identity"
+        - "ports"
+        - "source_span"
+
+    effects: "hardware-dependent"
+    capabilities: "hardware-dependent"
+    resources: "hardware-dependent"
+    contracts: "hardware_contracts"
+    policies: "hardware_policies"
+    provenance: "required"
+
+    preservation:
+      - "interface semantics"
+      - "signal semantics"
+      - "clock/reset semantics"
+      - "combinational/sequential behavior"
+      - "timing constraints where semantic"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.hdl.module"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/hdl/modules/"
+
+    scalability:
+      arbitrary_module_count: true
+      symbolic_signal_count: true
+      symbolic_widths: true
+      fixed_bus_limit: false
+      fixed_register_limit: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-HDL-SIGNAL-001"
+    semantic_identity: "semantic.hdl.signal"
+    semantic_owner: "semantic/hdl/signals"
+    source_mapping:
+      grammar_owner: "grammar/hdl/signals.g4"
+      grammar_symbols:
+        - "signal"
+        - "wire"
+        - "net"
+        - "register"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.hdl-hardware"
+      operation_or_model: "signal"
+      version: "repository-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "signal type"
+      - "driver"
+      - "source"
+
+    results:
+      - "signal"
+
+    attributes:
+      required:
+        - "signal_identity"
+        - "width_expression"
+        - "source_span"
+
+    effects: "hardware-dependent"
+    capabilities: []
+    resources: "hardware-resource-dependent"
+    contracts: "signal_contracts"
+    policies: []
+    provenance: "required"
+
+    preservation:
+      - "signal width semantics"
+      - "driver semantics"
+      - "read/write semantics"
+      - "clocking semantics where applicable"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.hdl.signal"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/hdl/signals/"
+
+    scalability:
+      symbolic_width: true
+      arbitrary_signal_count: true
+      finite_width_ceiling: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # HYBRID
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-HYBRID-001"
+    semantic_identity: "semantic.hybrid.computation"
+    semantic_owner: "semantic/hybrid"
+    source_mapping:
+      grammar_owner: "grammar/hybrid/"
+      grammar_symbols:
+        - "hybridComputation"
+        - "classicalQuantumBoundary"
+        - "quantumClassicalBoundary"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.hybrid-composition"
+      operation_or_model: "domain_ir_composition"
+      version: "contract-defined"
+
+    lowering_kind: "composition"
+
+    operands:
+      - "Classical IR values"
+      - "quantum::ir values"
+      - "HDL/Hardware IR values where applicable"
+
+    results:
+      - "composed semantic values"
+
+    attributes:
+      required:
+        - "boundary_identity"
+        - "conversion_semantics"
+        - "source_span"
+
+    effects: "combined_effect_set"
+    capabilities: "combined_capability_set"
+    resources: "combined_resource_set"
+    contracts: "combined_contract_set"
+    policies: "combined_policy_set"
+    provenance: "required"
+
+    preservation:
+      - "cross-domain value semantics"
+      - "conversion semantics"
+      - "measurement semantics"
+      - "synchronization semantics"
+      - "effect ordering"
+      - "resource requirements"
+
+    prohibited:
+      - "duplicate quantum IR"
+      - "duplicate classical IR"
+      - "implicit lossy conversion"
+      - "implicit target selection"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.hybrid.computation"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/hybrid/"
+
+    scalability:
+      arbitrary_domain_composition: true
+      arbitrary_boundary_count: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # DATA
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-DATA-001"
+    semantic_identity: "semantic.data"
+    semantic_owner: "semantic/data"
+    source_mapping:
+      grammar_owner: "grammar/data/"
+      grammar_symbols:
+        - "dataExpression"
+        - "dataset"
+        - "schema"
+        - "query"
+        - "stream"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "data_operation"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "datasets"
+      - "records"
+      - "streams"
+      - "schemas"
+      - "query predicates"
+
+    results:
+      - "data values"
+      - "data streams"
+
+    attributes:
+      required:
+        - "data_schema"
+        - "source_span"
+
+    effects: "data-dependent"
+    capabilities: "data-dependent"
+    resources: "data-dependent"
+    contracts: "data_contracts"
+    policies: "data_policies"
+    provenance: "required"
+
+    preservation:
+      - "schema semantics"
+      - "record semantics"
+      - "query semantics"
+      - "ordering where observable"
+      - "nullability semantics"
+      - "provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.data"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/data/"
+
+    scalability:
+      arbitrary_dataset_size: true
+      symbolic_dimensions: true
+      streaming: true
+      fixed_record_count: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # AI / REASONING / LEARNING
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-AI-INFERENCE-001"
+    semantic_identity: "semantic.ai.inference"
+    semantic_owner: "semantic/ai/inference"
+    source_mapping:
+      grammar_owner: "grammar/ai/"
+      grammar_symbols:
+        - "infer"
+        - "inference"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "inference"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "model"
+      - "input"
+      - "context"
+
+    results:
+      - "inference result"
+
+    attributes:
+      required:
+        - "model_identity"
+        - "input_types"
+        - "source_span"
+
+    effects: "model-dependent"
+    capabilities: "model-dependent"
+    resources: "model-dependent"
+    contracts: "inference_contracts"
+    policies: "inference_policies"
+    provenance: "required"
+
+    preservation:
+      - "model semantics"
+      - "input semantics"
+      - "result semantics"
+      - "uncertainty"
+      - "confidence"
+      - "provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.ai.inference"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/ai/inference/"
+
+    scalability:
+      model_size_symbolic: true
+      input_size_symbolic: true
+      batch_size_symbolic: true
+      fixed_model_capacity: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-AI-LEARNING-001"
+    semantic_identity: "semantic.ai.learning"
+    semantic_owner: "semantic/ai/learning"
+    source_mapping:
+      grammar_owner: "grammar/ai/"
+      grammar_symbols:
+        - "learn"
+        - "training"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "learning"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "model"
+      - "dataset"
+      - "objective"
+      - "training configuration"
+
+    results:
+      - "updated model"
+
+    attributes:
+      required:
+        - "learning_identity"
+        - "objective"
+        - "source_span"
+
+    effects:
+      - "learning"
+
+    capabilities: "learning_capabilities"
+    resources: "training_resources"
+    contracts: "learning_contracts"
+    policies: "learning_policies"
+    provenance: "required"
+
+    preservation:
+      - "learning objective"
+      - "data semantics"
+      - "model semantics"
+      - "declared stochastic behavior"
+      - "resource requirements"
+      - "provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.ai.learning"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/ai/learning/"
+
+    scalability:
+      dataset_size_symbolic: true
+      model_size_symbolic: true
+      iteration_count_symbolic: true
+      resource_scalable: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-REASONING-001"
+    semantic_identity: "semantic.reasoning"
+    semantic_owner: "semantic/reasoning"
+    source_mapping:
+      grammar_owner: "grammar/ai/"
+      grammar_symbols:
+        - "reason"
+        - "deduce"
+        - "infer"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "domain-selected"
+      operation_or_model: "reasoning"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "premises"
+      - "rules"
+      - "evidence"
+      - "context"
+
+    results:
+      - "conclusion"
+      - "decision"
+      - "confidence where declared"
+
+    attributes:
+      required:
+        - "reasoning_kind"
+        - "source_span"
+
+    effects: "reasoning-dependent"
+    capabilities: "reasoning-dependent"
+    resources: "reasoning-dependent"
+    contracts: "reasoning_contracts"
+    policies: "reasoning_policies"
+    provenance: "required"
+
+    preservation:
+      - "premise semantics"
+      - "rule semantics"
+      - "conclusion semantics"
+      - "evidence"
+      - "confidence"
+      - "provenance"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.reasoning"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/reasoning/"
+
+    scalability:
+      open_world: true
+      knowledge_size_symbolic: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-ADAPTATION-001"
+    semantic_identity: "semantic.adaptation"
+    semantic_owner: "semantic/execution/adaptation"
+    source_mapping:
+      grammar_owner: "grammar/execution/adaptive.g4"
+      grammar_symbols:
+        - "adapt"
+        - "adaptiveExecution"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "adaptive_execution_intent"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "adaptation trigger"
+      - "candidate strategies"
+      - "policy"
+      - "resource requirements"
+
+    results:
+      - "adaptation decision"
+
+    attributes:
+      required:
+        - "adaptation_identity"
+        - "policy_reference"
+        - "source_span"
+
+    effects:
+      - "adaptation"
+
+    capabilities:
+      required:
+        - "adaptation"
+
+    resources: "adaptation-dependent"
+    contracts: "adaptation_contracts"
+    policies:
+      required: true
+    provenance: "required"
+
+    preservation:
+      - "adaptation authorization"
+      - "policy constraints"
+      - "semantic equivalence requirement"
+      - "provenance"
+      - "effects"
+
+    rule: >
+      Adaptation MUST NOT become unrestricted semantic mutation. Every
+      adaptation path MUST be represented as an explicitly authorized
+      semantic choice governed by effects, capabilities, resources, policies,
+      contracts, and provenance.
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.adaptation"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/adaptation/"
+        - "grammar/conformance/security/adaptation/"
+
+    scalability:
+      strategy_count_symbolic: true
+      resource_driven: true
+      target_independent: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+      gates:
+        - "authorization validation"
+        - "policy validation"
+        - "provenance validation"
+        - "semantic preservation validation"
+
+  # ---------------------------------------------------------------------------
+  # CONCURRENCY
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-CONCURRENCY-001"
+    semantic_identity: "semantic.concurrency"
+    semantic_owner: "semantic/concurrency"
+    source_mapping:
+      grammar_owner: "grammar/concurrency/"
+      grammar_symbols:
+        - "task"
+        - "future"
+        - "actor"
+        - "channel"
+        - "parallel"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "concurrency"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "computations"
+      - "dependencies"
+      - "synchronization"
+
+    results:
+      - "concurrent computation"
+
+    attributes:
+      required:
+        - "concurrency_identity"
+        - "dependency_graph"
+        - "source_span"
+
+    effects:
+      - "concurrency"
+
+    capabilities: "concurrency_capabilities"
+    resources: "concurrency_resources"
+    contracts: "concurrency_contracts"
+    policies: "concurrency_policies"
+    provenance: "required"
+
+    preservation:
+      - "happens-before constraints"
+      - "synchronization"
+      - "data race semantics where applicable"
+      - "observable ordering"
+      - "failure semantics"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.concurrency"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/concurrency/"
+
+    scalability:
+      arbitrary_task_count: true
+      arbitrary_channel_count: true
+      no_fixed_thread_limit: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # DISTRIBUTED
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-DISTRIBUTED-001"
+    semantic_identity: "semantic.distributed"
+    semantic_owner: "semantic/distributed"
+    source_mapping:
+      grammar_owner: "grammar/distributed/"
+      grammar_symbols:
+        - "distributedComputation"
+        - "node"
+        - "message"
+        - "topology"
+        - "placement"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "distributed_computation"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "distributed tasks"
+      - "messages"
+      - "topology requirements"
+      - "consistency constraints"
+
+    results:
+      - "distributed semantic computation"
+
+    attributes:
+      required:
+        - "distributed_identity"
+        - "communication_semantics"
+        - "source_span"
+
+    effects:
+      - "distributed"
+
+    capabilities: "distributed_capabilities"
+    resources: "distributed_resources"
+    contracts: "distributed_contracts"
+    policies: "distributed_policies"
+    provenance: "required"
+
+    preservation:
+      - "message semantics"
+      - "ordering where specified"
+      - "consistency semantics"
+      - "failure semantics"
+      - "replication semantics"
+      - "partitioning semantics"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.distributed"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/distributed/"
+
+    scalability:
+      node_count_symbolic: true
+      topology_symbolic: true
+      arbitrary_feasible_scale: true
+      fixed_node_limit: false
+      fixed_network_size: false
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # NETWORKING
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-NETWORKING-001"
+    semantic_identity: "semantic.networking"
+    semantic_owner: "semantic/networking"
+    source_mapping:
+      grammar_owner: "grammar/networking/"
+      grammar_symbols:
+        - "endpoint"
+        - "service"
+        - "message"
+        - "stream"
+        - "protocol"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "network_operation"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "endpoint"
+      - "message"
+      - "protocol"
+      - "stream"
+
+    results:
+      - "network result"
+
+    attributes:
+      required:
+        - "operation_identity"
+        - "protocol_identity"
+        - "source_span"
+
+    effects:
+      - "network"
+
+    capabilities:
+      - "network"
+
+    resources: "network_resources"
+    contracts: "network_contracts"
+    policies: "network_policies"
+    provenance: "required"
+
+    preservation:
+      - "message semantics"
+      - "protocol semantics"
+      - "ordering where observable"
+      - "failure semantics"
+      - "security requirements"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.networking"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/networking/"
+
+    scalability:
+      endpoint_count_symbolic: true
+      stream_count_symbolic: true
+      network_size_unbounded_by_language: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # EXECUTION
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-EXECUTION-001"
+    semantic_identity: "semantic.execution.intent"
+    semantic_owner: "semantic/execution"
+    source_mapping:
+      grammar_owner: "grammar/execution/"
+      grammar_symbols:
+        - "executionContext"
+        - "dispatch"
+        - "simulation"
+        - "adaptiveExecution"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "execution_intent"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "execution policy"
+      - "resource requirements"
+      - "capabilities"
+      - "fallback rules"
+
+    results:
+      - "execution intent"
+
+    attributes:
+      required:
+        - "execution_identity"
+        - "source_span"
+
+    effects: "execution-dependent"
+    capabilities: "execution-capabilities"
+    resources: "execution-resources"
+    contracts: "execution-contracts"
+    policies: "execution-policies"
+    provenance: "required"
+
+    preservation:
+      - "execution intent"
+      - "fallback authorization"
+      - "policy semantics"
+      - "resource constraints"
+      - "semantic guarantees"
+
+    rule: >
+      Execution intent MUST NOT directly encode a physical target assignment in
+      canonical IR.
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.execution.intent"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/execution/"
+
+    scalability:
+      target_count: "open-world"
+      execution_strategy_count: "open-world"
+      resource_scalable: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # COMPILATION
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-COMPILE-001"
+    semantic_identity: "semantic.compilation"
+    semantic_owner: "semantic/compile"
+    source_mapping:
+      grammar_owner: "grammar/compile/"
+      grammar_symbols:
+        - "compilation"
+        - "targetSelection"
+        - "optimization"
+        - "lowering"
+        - "specialization"
+        - "reproducibility"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "compilation_intent"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "compilation profile"
+      - "semantic artifact"
+      - "requirements"
+      - "compatibility constraints"
+
+    results:
+      - "compilation intent"
+
+    attributes:
+      required:
+        - "language_version"
+        - "semantic_version"
+        - "IR_version"
+        - "source_span"
+
+    effects: []
+    capabilities: "compiler_capabilities"
+    resources: "compiler_resources"
+    contracts: "compilation_contracts"
+    policies: "compilation_policies"
+    provenance: "required"
+
+    preservation:
+      - "semantic identity"
+      - "version identity"
+      - "reproducibility requirements"
+      - "optimization constraints"
+      - "target compatibility policy"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.compilation"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/compile/"
+        - "grammar/conformance/compatibility/"
+
+    scalability:
+      artifact_size_symbolic: true
+      target_set_open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # SECURITY
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-SECURITY-001"
+    semantic_identity: "semantic.security"
+    semantic_owner: "semantic/security"
+    source_mapping:
+      grammar_owner: "grammar/security/"
+      grammar_symbols:
+        - "identity"
+        - "authorization"
+        - "permission"
+        - "sandbox"
+        - "trust"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "security_policy"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "identity"
+      - "permissions"
+      - "trust requirements"
+      - "security policy"
+
+    results:
+      - "security obligations"
+
+    attributes:
+      required:
+        - "security_identity"
+        - "policy"
+        - "source_span"
+
+    effects:
+      - "security"
+
+    capabilities: "security_capabilities"
+    resources: "security_resources"
+    contracts: "security_contracts"
+    policies: "security_policies"
+    provenance: "required"
+
+    preservation:
+      - "authorization requirements"
+      - "permission semantics"
+      - "sandbox requirements"
+      - "trust requirements"
+      - "audit requirements"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.security"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/security/"
+
+    scalability:
+      identity_count_symbolic: true
+      policy_count_open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # DIALECTS / INTEROPERABILITY
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-DIALECT-001"
+    semantic_identity: "semantic.dialect"
+    semantic_owner: "semantic/dialects"
+    source_mapping:
+      grammar_owner: "grammar/dialects/"
+      grammar_symbols:
+        - "dialect"
+        - "dialectDeclaration"
+        - "dialectImport"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.dialect"
+      operation_or_model: "dialect_descriptor"
+      version: "contract-defined"
+
+    lowering_kind: "metadata_only"
+
+    operands:
+      - "dialect identity"
+      - "version"
+      - "dependencies"
+      - "semantic registrations"
+
+    results:
+      - "dialect descriptor"
+
+    attributes:
+      required:
+        - "dialect_identity"
+        - "dialect_version"
+        - "source_span"
+
+    effects: []
+    capabilities: "dialect_capabilities"
+    resources: []
+    contracts: []
+    policies: "dialect_policies"
+    provenance: "required"
+
+    preservation:
+      - "dialect identity"
+      - "version"
+      - "dependency constraints"
+      - "semantic registration identity"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.dialect"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/dialects/"
+
+    scalability:
+      dialect_count_open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  - id: "IR-INTEROP-001"
+    semantic_identity: "semantic.interoperability"
+    semantic_owner: "semantic/interoperability"
+    source_mapping:
+      grammar_owner: "grammar/interoperability/"
+      grammar_symbols:
+        - "ffi"
+        - "abi"
+        - "foreignFunction"
+        - "linkage"
+        - "serialization"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "foreign_interoperability"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "foreign symbol"
+      - "ABI contract"
+      - "calling convention"
+      - "serialization contract"
+
+    results:
+      - "foreign call/result"
+
+    attributes:
+      required:
+        - "foreign_identity"
+        - "ABI_identity"
+        - "source_span"
+
+    effects:
+      - "foreign"
+
+    capabilities:
+      - "foreign.interoperability"
+
+    resources: "foreign_resources"
+    contracts: "ABI_contracts"
+    policies: "foreign_policies"
+    provenance: "required"
+
+    preservation:
+      - "calling convention"
+      - "type conversion"
+      - "ownership"
+      - "error semantics"
+      - "serialization semantics"
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.interoperability"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/interoperability/"
+
+    scalability:
+      external_symbol_count_open_world: true
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+  # ---------------------------------------------------------------------------
+  # MACROS / METAPROGRAMMING
+  # ---------------------------------------------------------------------------
+
+  - id: "IR-METAPROGRAMMING-001"
+    semantic_identity: "semantic.metaprogramming"
+    semantic_owner: "semantic/metaprogramming"
+    source_mapping:
+      grammar_owner: "grammar/metaprogramming/"
+      grammar_symbols:
+        - "quote"
+        - "unquote"
+        - "reflection"
+        - "generation"
+        - "introspection"
+      ast_mapping:
+        contract: "grammar/contracts/ast-mappings.yaml"
+
+    canonical_ir:
+      boundary: "ir.program"
+      operation_or_model: "metaprogramming_operation"
+      version: "contract-defined"
+
+    lowering_kind: "structured"
+
+    operands:
+      - "syntax representation"
+      - "semantic context"
+      - "generation inputs"
+
+    results:
+      - "generated semantic representation"
+
+    attributes:
+      required:
+        - "generation_identity"
+        - "stage"
+        - "source_span"
+
+    effects:
+      - "reflection"
+      - "code_generation"
+
+    capabilities:
+      - "reflection"
+      - "code_generation"
+
+    resources: "generation_resources"
+    contracts: "generation_contracts"
+    policies: "generation_policies"
+    provenance: "required"
+
+    preservation:
+      - "hygiene"
+      - "scope"
+      - "generated provenance"
+      - "semantic validation"
+
+    rule: >
+      Generated constructs MUST pass through the same semantic validation and
+      canonical IR mapping rules as ordinary source constructs.
+
+    diagnostics:
+      contract: "grammar/contracts/diagnostics.yaml"
+
+    compatibility:
+      identity: "semantic.metaprogramming"
+
+    tests:
+      required:
+        - "grammar/conformance/ir/metaprogramming/"
+
+    scalability:
+      generated_size_symbolic: true
+      recursive_generation: "policy-controlled"
+
+    target_independence: true
+    status: "specified"
+    freeze:
+      required: true
+
+# =============================================================================
+# 14. DOMAIN COVERAGE REQUIREMENT
+# =============================================================================
+
+domain_coverage:
+
+  required_domains:
+
+    classical:
+      semantic_prefix: "semantic.classical"
+      canonical_ir: "ir.classical"
+      required: true
+
+    quantum:
+      semantic_prefix: "semantic.quantum"
+      canonical_ir: "ir.quantum"
+      required: true
+
+    hdl:
+      semantic_prefix: "semantic.hdl"
+      canonical_ir: "ir.hdl-hardware"
+      required: true
+
+    hardware:
+      semantic_prefix: "semantic.hardware"
+      canonical_ir: "ir.hdl-hardware"
+      required: true
+
+    hybrid:
+      semantic_prefix: "semantic.hybrid"
+      canonical_ir: "ir.hybrid-composition"
+      required: true
+
+    ai:
+      semantic_prefix: "semantic.ai"
+      canonical_ir: "domain-selected"
+      required: true
+
+    data:
+      semantic_prefix: "semantic.data"
+      canonical_ir: "domain-selected"
+      required: true
+
+    concurrency:
+      semantic_prefix: "semantic.concurrency"
+      canonical_ir: "ir.program"
+      required: true
+
+    distributed:
+      semantic_prefix: "semantic.distributed"
+      canonical_ir: "ir.program"
+      required: true
+
+    networking:
+      semantic_prefix: "semantic.networking"
+      canonical_ir: "ir.program"
+      required: true
+
+    execution:
+      semantic_prefix: "semantic.execution"
+      canonical_ir: "ir.program"
+      required: true
+
+    security:
+      semantic_prefix: "semantic.security"
+      canonical_ir: "ir.program"
+      required: true
+
+    interoperability:
+      semantic_prefix: "semantic.interoperability"
+      canonical_ir: "ir.program"
+      required: true
+
+    dialects:
+      semantic_prefix: "semantic.dialect"
+      canonical_ir: "ir.dialect"
+      required: true
+
+# =============================================================================
+# 15. EXHAUSTIVE REGISTRY CLOSURE
+# =============================================================================
+
+coverage:
+
+  mode: "exhaustive_by_registry"
+
+  purpose: >
+    This contract intentionally does not manually enumerate every grammar
+    leaf rule. Repository-wide completeness is obtained by requiring every
+    registered semantic identity and every lowering-relevant grammar export to
+    resolve through the companion ownership, semantic, AST, export, and
+    manifest contracts.
+
+  required_sources:
+    - "grammar/MANIFEST.yaml"
+    - "grammar/OWNERSHIP.yaml"
+    - "grammar/contracts/ownership.yaml"
+    - "grammar/contracts/exports.yaml"
+    - "grammar/contracts/ast-mappings.yaml"
+    - "grammar/contracts/semantic-mappings.yaml"
+    - "grammar/contracts/ir-mappings.yaml"
+    - "grammar/STATUS.yaml"
+    - "grammar/contracts/feature-status.yaml"
+
+  closure_rules:
+
+    every_semantic_identity:
+      severity: "error"
+      rule: >
+        Every stable or implemented semantic identity MUST have exactly one
+        IR mapping unless explicitly classified as syntax-only or
+        analysis-only.
+
+    every_lowering_relevant_export:
+      severity: "error"
+      rule: >
+        Every grammar export that contributes executable or semantically
+        observable meaning MUST resolve to a semantic identity and applicable
+        canonical IR mapping.
+
+    syntax_only:
+      allowed: true
+      requirement: >
+        A syntax-only export MUST explicitly state that no semantic or IR
+        mapping is required.
+
+    analysis_only:
+      allowed: true
+      requirement: >
+        An analysis-only construct MUST identify its analysis owner and MUST NOT
+        be falsely represented as executable IR.
+
+    no_orphans:
+      severity: "error"
+      rule: >
+        No implemented semantic identity may exist without a declared canonical
+        IR disposition.
+
+    no_duplicates:
+      severity: "error"
+      rule: >
+        One semantic identity MUST map to exactly one canonical IR ownership
+        record.
+
+# =============================================================================
+# 16. LOWERING RULES
+# =============================================================================
+
+lowering:
+
+  general:
+
+    semantic_to_ir:
+      rule: >
+        Lowering converts validated semantic meaning into a canonical IR
+        representation without changing semantic identity.
+
+    normalization:
+      rule: >
+        Canonical normalization MUST be deterministic and target-independent.
+
+    desugaring:
+      rule: >
+        Syntactic sugar MAY be removed before canonical IR construction when
+        the semantic result is equivalent.
+
+    optimization:
+      rule: >
+        Optimization MUST occur only after semantic validity is established or
+        within a formally validated semantic-preserving transformation.
+
+    specialization:
+      rule: >
+        Specialization MAY depend on symbolic values, requirements, policies,
+        or later target information, but the canonical semantic identity MUST
+        remain stable.
+
+  ordering:
+
+    required_pipeline:
+      - "AST"
+      - "structural validation"
+      - "semantic analysis"
+      - "canonical IR construction"
+      - "IR validation"
+      - "verified optimization"
+      - "target-independent lowering"
+      - "target negotiation"
+      - "target-specific realization"
+
+    prohibited_pipeline:
+      - "AST -> vendor IR"
+      - "AST -> physical device"
+      - "grammar -> physical device"
+      - "semantic model -> physical device without canonical IR"
+
+# =============================================================================
+# 17. SEMANTIC PRESERVATION
+# =============================================================================
+
+semantic_preservation:
+
+  required: true
+
+  equivalence:
+    rule: >
+      A lowering transformation is valid only when the transformed IR preserves
+      every observable behavior required by the source semantic contract.
+
+  must_preserve:
+    - "values"
+    - "types"
+    - "effects"
+    - "resource requirements"
+    - "capability requirements"
+    - "contracts"
+    - "policies"
+    - "provenance"
+    - "control dependencies"
+    - "ownership"
+    - "error semantics"
+    - "declared nondeterminism"
+    - "quantum measurement semantics"
+    - "HDL timing semantics where declared"
+    - "distributed consistency semantics where declared"
+
+  may_change:
+    - "representation"
+    - "instruction grouping"
+    - "data layout when semantically invisible"
+    - "parallelization"
+    - "vectorization"
+    - "operation decomposition"
+    - "memory placement"
+    - "execution schedule where timing is not semantic"
+    - "target-specific implementation"
+
+  forbidden_silent_changes:
+    - "precision reduction violating contract"
+    - "qubit reduction"
+    - "dimension reduction"
+    - "operation deletion"
+    - "effect deletion"
+    - "contract weakening"
+    - "policy bypass"
+    - "security weakening"
+    - "implicit approximation"
+    - "implicit fallback to different semantics"
+
+# =============================================================================
+# 18. QUANTUM-SPECIFIC PRESERVATION
+# =============================================================================
+
+quantum:
+
+  canonical_ir:
+    boundary: "src/quantum/ir/"
+    identity: "quantum::ir"
+
+  required_semantics:
+    - "logical qubit identity"
+    - "operation identity"
+    - "parameters"
+    - "controls"
+    - "targets"
+    - "results"
+    - "measurement"
+    - "dynamic control"
+    - "classical feedback"
+    - "channels"
+    - "observables"
+    - "models"
+    - "pulse semantics where applicable"
+    - "resource requirements"
+    - "provenance"
+
+  physical_separation:
+
+    logical_qubit:
+      belongs_to: "canonical semantic IR"
+
+    physical_qubit:
+      belongs_to: "realization"
+
+    routing:
+      belongs_to: "downstream realization"
+
+    scheduling:
+      belongs_to: "downstream realization"
+
+    calibration:
+      belongs_to: "downstream realization"
+
+    vendor_instruction:
+      belongs_to: "downstream realization"
+
+  operation_registry:
+    model: "open-world"
+
+    allowed:
+      - "builtin"
+      - "custom"
+      - "vendor"
+      - "parameterized"
+      - "dialect"
+
+    rule: >
+      The universal semantic operation model MUST remain generic enough to
+      represent future operations without grammar redesign.
+
+  qec:
+    source_intent:
+      may_require:
+        - "fault tolerance"
+        - "logical protection"
+        - "code properties"
+        - "resilience"
+        - "syndrome semantics"
+
+    canonical_ir:
+      rule: >
+        QEC intent may be represented in canonical quantum semantics, while
+        decoder choice, physical code layout, syndrome routing, and device
+        implementation remain downstream.
+
+  zqn:
+    rule: >
+      Quantum noise and fault representation remains owned by the ZQN boundary.
+      This contract MUST NOT create a competing noise ontology.
+
+# =============================================================================
+# 19. HDL / HARDWARE-SPECIFIC PRESERVATION
+# =============================================================================
+
+hdl_hardware:
+
+  required_semantics:
+    - "module"
+    - "port"
+    - "signal"
+    - "net"
+    - "register"
+    - "memory"
+    - "combinational behavior"
+    - "sequential behavior"
+    - "clock"
+    - "reset"
+    - "timing"
+    - "pipeline"
+    - "generate"
+    - "interface"
+    - "protocol"
+    - "state machine"
+    - "verification intent"
+    - "synthesis intent"
+
+  symbolic_dimensions:
+    required:
+      - "signal width"
+      - "array dimensions"
+      - "memory dimensions"
+      - "pipeline dimensions"
+      - "parallelism"
+
+  forbidden:
+    - "universal fixed bus maximum"
+    - "universal fixed register maximum"
+    - "universal fixed memory maximum"
+    - "universal fixed clock count"
+    - "universal fixed device count"
+
+  realization:
+    downstream:
+      - "logic synthesis"
+      - "technology mapping"
+      - "placement"
+      - "routing"
+      - "timing closure"
+      - "physical design"
+
+# =============================================================================
+# 20. CLASSICAL-SPECIFIC PRESERVATION
+# =============================================================================
+
+classical:
+
+  canonical_ir:
+    boundary: "Classical IR"
+
+  required:
+    - "numeric semantics"
+    - "memory semantics"
+    - "control flow"
+    - "function semantics"
+    - "type semantics"
+    - "effects"
+    - "resource requirements"
+
+  numerical_portability:
+    rule: >
+      Numerical representation MAY vary across targets only when the declared
+      semantic numerical contract remains satisfied.
+
+  precision:
+    rule: >
+      Precision requirements MUST be represented semantically when they are
+      correctness-relevant.
+
+  vectorization:
+    rule: >
+      Vectorization is an implementation strategy and MUST NOT change the
+      semantic dimensionality of the source computation.
+
+# =============================================================================
+# 21. HYBRID PRESERVATION
+# =============================================================================
+
+hybrid:
+
+  composition:
+    allowed_boundaries:
+      - "classical <-> quantum"
+      - "classical <-> HDL"
+      - "quantum <-> HDL"
+      - "classical <-> accelerator"
+      - "quantum <-> accelerator"
+      - "distributed <-> quantum"
+      - "distributed <-> classical"
+
+  rule: >
+    Each side of a hybrid boundary MUST retain ownership of its own canonical
+    semantic IR.
+
+  conversion:
+    required:
+      - "explicit type semantics"
+      - "ownership semantics"
+      - "effect semantics"
+      - "resource semantics"
+      - "precision semantics where applicable"
+      - "provenance"
+
+  forbidden:
+    - "implicit lossy conversion"
+    - "implicit physical target selection"
+    - "duplicate hybrid IR"
+
+# =============================================================================
+# 22. DISTRIBUTED AND NETWORK IR
+# =============================================================================
+
+distributed:
+
+  topology:
+    representation: "abstract"
+    physical_realization: "downstream"
+
+  node_identity:
+    semantic:
+      rule: >
+        Logical node identities MAY exist in the semantic model when required
+        by program meaning.
+
+    physical:
+      rule: >
+        Physical host identity belongs to realization.
+
+  scaling:
+    node_count: "symbolic_or_dynamic"
+    message_count: "symbolic_or_dynamic"
+    channel_count: "symbolic_or_dynamic"
+    topology_size: "open-world"
+
+  preservation:
+    - "message semantics"
+    - "ordering"
+    - "consistency"
+    - "failure semantics"
+    - "replication semantics"
+
+# =============================================================================
+# 23. TARGET INDEPENDENCE
+# =============================================================================
+
+target_independence:
+
+  canonical_ir_must_not_contain:
+
+    physical:
+      - "device identifiers"
+      - "physical addresses"
+      - "physical core assignments"
+      - "physical GPU assignments"
+      - "physical FPGA placement"
+      - "physical ASIC cells"
+      - "physical qubit assignments"
+
+    finite_capacity_constants:
+      - "universal CPU count"
+      - "universal GPU count"
+      - "universal FPGA count"
+      - "universal ASIC count"
+      - "universal QPU count"
+      - "universal node count"
+      - "universal memory capacity"
+      - "universal thread count"
+      - "universal register width"
+      - "universal tensor rank"
+      - "universal network size"
+      - "universal device count"
+
+  allowed_downstream_information:
+    - "target capabilities"
+    - "available resources"
+    - "target topology"
+    - "target constraints"
+    - "target performance characteristics"
+    - "calibration"
+    - "device state"
+    - "runtime availability"
+
+  rule: >
+    Downstream target information may influence realization but MUST NOT
+    retroactively redefine canonical semantic identity.
+
+# =============================================================================
+# 24. SCALABILITY
+# =============================================================================
+
+scalability:
+
+  model: "open-world"
+
+  principle: >
+    Canonical IR must scale from the smallest supported computational instance
+    to arbitrarily large feasible computations without imposing artificial
+    language-level finite ceilings.
+
+  dimensions:
+
+    program_size:
+      symbolic: true
+      fixed_maximum: false
+
+    operation_count:
+      symbolic: true
+      fixed_maximum: false
+
+    value_count:
+      symbolic: true
+      fixed_maximum: false
+
+    memory:
+      symbolic: true
+      fixed_maximum: false
+
+    qubits:
+      symbolic: true
+      fixed_maximum: false
+
+    classical_bits:
+      symbolic: true
+      fixed_maximum: false
+
+    tensor_dimensions:
+      symbolic: true
+      fixed_maximum: false
+
+    tensor_rank:
+      symbolic: true
+      fixed_maximum: false
+
+    nodes:
+      symbolic: true
+      fixed_maximum: false
+
+    devices:
+      symbolic: true
+      fixed_maximum: false
+
+    concurrency:
+      symbolic: true
+      fixed_maximum: false
+
+    signal_widths:
+      symbolic: true
+      fixed_maximum: false
+
+  infinity_definition:
+    rule: >
+      Architectural infinity means absence of an artificial finite ceiling in
+      the language or canonical IR. Every concrete artifact remains finite and
+      subject to actual implementation, storage, computation, and physical
+      resource availability.
+
+  failure:
+    rule: >
+      When a concrete implementation cannot realize a semantically valid IR
+      because of finite resources, the failure MUST be explicit and
+      diagnosable.
+
+# =============================================================================
+# 25. DETERMINISM
+# =============================================================================
+
+determinism:
+
+  canonicalization:
+    required: true
+
+  ordering:
+    required: true
+
+  hashing:
+    rule: >
+      Where canonical IR hashing is supported, semantically equivalent
+      canonical artifacts MUST use the repository-defined canonicalization
+      procedure before hashing.
+
+  serialization:
+    rule: >
+      Canonical serialization MUST NOT depend on map iteration order,
+      allocation order, process identifiers, physical addresses, or target
+      discovery order.
+
+  transformation_identity:
+    required: true
+
+# =============================================================================
+# 26. VERSIONING
+# =============================================================================
+
+versioning:
+
+  required_identities:
+    - "language_version"
+    - "grammar_version"
+    - "ast_version"
+    - "semantic_version"
+    - "ir_version"
+    - "dialect_versions"
+
+  IR_version:
+    rule: >
+      Every canonical IR artifact MUST carry or be associated with an explicit
+      IR compatibility identity.
+
+  compatibility:
+    authority: "grammar/contracts/compatibility.yaml"
+
+  migration:
+    rule: >
+      Breaking IR changes MUST have explicit migration semantics or be rejected
+      according to the compatibility contract.
+
+  semantic_identity:
+    rule: >
+      A compatible IR version change MUST NOT silently change the meaning of a
+      stable semantic identity.
+
+# =============================================================================
+# 27. DIAGNOSTIC CONTRACT
+# =============================================================================
+
+diagnostics:
+
+  authority:
+    path: "grammar/contracts/diagnostics.yaml"
+
+  every_mapping:
+    required:
+      - "diagnostic identity"
+      - "failure stage"
+      - "source span"
+      - "semantic identity"
+
+  failure_stages:
+    - "AST-to-IR mapping"
+    - "semantic validation"
+    - "IR construction"
+    - "IR validation"
+    - "compatibility"
+    - "resource feasibility"
+    - "capability feasibility"
+    - "target realization"
+
+  distinction:
+    semantic_error:
+      rule: >
+        Invalid program meaning MUST be distinguished from target inability to
+        realize a valid meaning.
+
+    resource_error:
+      rule: >
+        Resource infeasibility MUST NOT be reported as a grammar error.
+
+    capability_error:
+      rule: >
+        Missing capability MUST NOT be reported as malformed source syntax.
+
+    target_error:
+      rule: >
+        Target realization failure MUST NOT redefine semantic validity.
+
+# =============================================================================
+# 28. AST / SEMANTIC / IR CONSISTENCY
+# =============================================================================
+
+cross_contract_consistency:
+
+  ast:
+    source: "grammar/contracts/ast-mappings.yaml"
+    requirement: >
+      Every IR mapping MUST reference an AST mapping for the corresponding
+      meaning-bearing source construct unless explicitly marked metadata-only
+      or analysis-only.
+
+  semantic:
+    source: "grammar/contracts/semantic-mappings.yaml"
+    requirement: >
+      Every IR mapping MUST reference exactly one canonical semantic identity.
+
+  ownership:
+    source: "grammar/contracts/ownership.yaml"
+    requirement: >
+      The semantic owner MUST agree with the ownership contract.
+
+  exports:
+    source: "grammar/contracts/exports.yaml"
+    requirement: >
+      Every grammar export participating in executable semantics MUST resolve
+      to an applicable IR mapping.
+
+  dependencies:
+    source: "grammar/contracts/dependencies.yaml"
+    requirement: >
+      IR ownership MUST NOT introduce an upstream dependency from grammar or
+      AST into target realization.
+
+  diagnostics:
+    source: "grammar/contracts/diagnostics.yaml"
+    requirement: >
+      Every stable IR mapping MUST have deterministic diagnostic coverage.
+
+  compatibility:
+    source: "grammar/contracts/compatibility.yaml"
+    requirement: >
+      Every stable canonical IR identity MUST have a compatibility identity.
+
+  status:
+    source: "grammar/contracts/feature-status.yaml"
+    requirement: >
+      IR status MUST agree with the feature lifecycle status.
+
+# =============================================================================
+# 29. DEPENDENCY DIRECTION
+# =============================================================================
+
+dependency_direction:
+
+  allowed:
+
+    source_to_ast:
+      - "grammar -> AST"
+
+    ast_to_semantic:
+      - "AST -> semantic model"
+
+    semantic_to_ir:
+      - "semantic model -> canonical IR"
+
+    ir_to_realization:
+      - "canonical IR -> realization"
+
+  forbidden:
+
+    grammar_to_backend: true
+    grammar_to_runtime: true
+    ast_to_vendor_backend: true
+    semantic_to_physical_device: true
+    canonical_ir_to_source_grammar: true
+
+  rule: >
+    Downstream implementation details MUST NOT become upstream semantic
+    dependencies.
+
+# =============================================================================
+# 30. TARGET REALIZATION BOUNDARY
+# =============================================================================
+
+realization_boundary:
+
+  starts_after:
+    - "semantic validation"
+    - "canonical IR validation"
+    - "required optimization validation"
+
+  may_perform:
+    - "target discovery"
+    - "capability matching"
+    - "resource negotiation"
+    - "specialization"
+    - "lowering"
+    - "routing"
+    - "scheduling"
+    - "placement"
+    - "instruction selection"
+    - "calibration"
+    - "device selection"
+    - "runtime dispatch"
+
+  must_not:
+    - "change source semantics silently"
+    - "weaken mandatory contracts"
+    - "ignore mandatory policies"
+    - "ignore mandatory capabilities"
+    - "ignore mandatory resources"
+    - "silently change declared effects"
+
+# =============================================================================
+# 31. POCO-REAF CONTRACT
+# =============================================================================
+
+poco_reaf:
+
+  enabled: true
+
+  identity:
+    name: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
+
+  semantic_definition:
+    rule: >
+      One source program MUST correspond to one stable semantic identity.
+      Canonical IR preserves that semantic identity independently of a specific
+      target realization.
+
+  compile_once:
+    meaning: >
+      A canonical semantic IR artifact MAY be reused for multiple compatible
+      target realizations without reparsing or redefining the source semantics.
+
+  run_everywhere:
+    condition: >
+      A target may execute the program when its capabilities, resources,
+      policies, compatibility constraints, and realization mechanisms satisfy
+      the semantic artifact.
+
+  anywhere:
+    condition: >
+      Different compatible execution environments MAY realize the same
+      canonical semantic artifact through different lowering strategies.
+
+  forever:
+    condition: >
+      Long-term reuse is governed by explicit language, semantic, IR, dialect,
+      compatibility, migration, and provenance contracts.
+
+  incompatible_target:
+    rule: >
+      A target that cannot satisfy mandatory semantic requirements MUST reject
+      the realization or select an explicitly authorized semantically valid
+      fallback.
+
+  forbidden:
+    - "silent semantic substitution"
+    - "silent precision reduction"
+    - "silent qubit reduction"
+    - "silent data truncation"
+    - "silent policy bypass"
+    - "silent effect removal"
+    - "silent contract weakening"
+
+# =============================================================================
+# 32. FALLBACK CONTRACT
+# =============================================================================
+
+fallback:
+
+  allowed: true
+
+  requirements:
+    - "explicitly authorized"
+    - "policy-valid"
+    - "capability-valid"
+    - "resource-valid"
+    - "contract-valid"
+    - "semantically equivalent or explicitly permitted approximation"
+    - "provenance recorded"
+
+  examples:
+
+    quantum_to_simulation:
+      allowed_only_if:
+        - "simulation capability exists"
+        - "program permits simulation fallback"
+        - "simulation semantics satisfy requested contract"
+
+    accelerator_to_classical:
+      allowed_only_if:
+        - "classical fallback is explicitly permitted"
+        - "semantic equivalence is established"
+
+  forbidden:
+    implicit_fallback: true
+
+# =============================================================================
+# 33. RESOURCE NEGOTIATION
+# =============================================================================
+
+resource_negotiation:
+
+  location: "downstream of canonical IR validation"
+
+  input:
+    - "canonical IR"
+    - "resource requirements"
+    - "capability requirements"
+    - "constraints"
+    - "preferences"
+    - "policies"
+
+  output:
+    - "feasible realization"
+    - "infeasible realization"
+    - "authorized fallback"
+
+  canonical_ir_rule:
+    rule: >
+      Negotiation MUST NOT mutate semantic identities merely because target
+      resources differ.
+
+  priority:
+    - "correctness"
+    - "mandatory requirements"
+    - "mandatory constraints"
+    - "mandatory policies"
+    - "capabilities"
+    - "resources"
+    - "preferences"
+    - "optimization hints"
+
+# =============================================================================
+# 34. IR TRANSFORMATION CONTRACT
+# =============================================================================
+
+transformations:
+
+  every_transformation:
+    required:
+      - "transformation_id"
+      - "input_ir_version"
+      - "output_ir_version"
+      - "semantic_preconditions"
+      - "semantic_postconditions"
+      - "preservation_claim"
+      - "provenance"
+      - "diagnostics"
+
+  deterministic:
+    required: true
+
+  semantic_proof:
+    required_for:
+      - "meaning-changing-looking normalization"
+      - "operation elimination"
+      - "reordering"
+      - "fusion"
+      - "decomposition"
+      - "specialization"
+      - "precision transformation"
+
+  target_specific:
+    rule: >
+      Target-specific transformations MUST occur after the canonical semantic
+      IR boundary unless explicitly defined as target-independent and proven
+      semantics-preserving.
+
+# =============================================================================
+# 35. QUANTUM TRANSFORMATION CONTRACT
+# =============================================================================
+
+quantum_transformations:
+
+  allowed:
+    - "operation fusion"
+    - "operation decomposition"
+    - "adjoint transformation"
+    - "controlled transformation"
+    - "measurement-preserving optimization"
+    - "logical optimization"
+    - "model normalization"
+
+  downstream_only:
+    - "physical qubit routing"
+    - "physical qubit assignment"
+    - "device calibration"
+    - "pulse calibration"
+    - "hardware gate decomposition"
+    - "physical scheduling"
+
+  rule: >
+    A quantum optimization MUST preserve the semantics represented by
+    quantum::ir.
+
+# =============================================================================
+# 36. HDL TRANSFORMATION CONTRACT
+# =============================================================================
+
+hdl_transformations:
+
+  allowed:
+    - "Boolean simplification"
+    - "logic normalization"
+    - "pipeline transformation"
+    - "combinational optimization"
+    - "sequential optimization"
+    - "state machine normalization"
+
+  downstream:
+    - "technology mapping"
+    - "cell selection"
+    - "placement"
+    - "routing"
+    - "physical timing closure"
+
+  rule: >
+    Physical technology decisions MUST NOT become canonical HDL semantic
+    identities.
+
+# =============================================================================
+# 37. RESOURCE AND CAPACITY AUDIT
+# =============================================================================
+
+capacity_audit:
+
+  forbidden_patterns:
+
+    symbolic_identifiers:
+      - "MAX_*"
+      - "MIN_*_CAPACITY"
+      - "DEFAULT_*_COUNT"
+      - "FIXED_*_COUNT"
+      - "UNIVERSAL_*_LIMIT"
+
+    physical_dimensions:
+      - "fixed universal CPU count"
+      - "fixed universal GPU count"
+      - "fixed universal FPGA count"
+      - "fixed universal QPU count"
+      - "fixed universal qubit count"
+      - "fixed universal memory size"
+      - "fixed universal register width"
+      - "fixed universal tensor rank"
+      - "fixed universal network size"
+      - "fixed universal device count"
+
+  required:
+    - "symbolic resource expressions"
+    - "parameterized resource expressions"
+    - "capability predicates"
+    - "abstract topology"
+    - "resource negotiation"
+
+  severity: "error"
+
+# =============================================================================
+# 38. SOURCE SPAN CONTRACT
+# =============================================================================
+
+source_spans:
+
+  authority: "grammar/spec/source-spans.md"
+
+  every_mapping:
+    required: true
+
+  every_ir_entity:
+    required_when:
+      - "diagnostics may reference source"
+      - "semantic provenance is required"
+      - "transformation tracing is required"
+
+  origin_kinds:
+    - "source"
+    - "generated"
+    - "synthetic"
+    - "desugared"
+
+  rule: >
+    Generated and transformed IR MUST retain enough provenance to identify its
+    source semantic origin.
+
+# =============================================================================
+# 39. SERIALIZATION CONTRACT
+# =============================================================================
+
+serialization:
+
+  canonical:
+    required_for:
+      - "portable semantic artifacts"
+      - "persistent IR artifacts"
+      - "reproducibility workflows"
+
+  deterministic:
+    required: true
+
+  must_include:
+    - "IR version"
+    - "semantic version"
+    - "language version"
+    - "dialect versions where applicable"
+    - "semantic identity"
+    - "provenance"
+    - "required capabilities"
+    - "required resources"
+    - "contracts where persistence is required"
+    - "policies where persistence is required"
+
+  must_not_include_as_semantic_identity:
+    - "memory addresses"
+    - "process identifiers"
+    - "physical device identifiers"
+    - "scheduler slots"
+    - "runtime object addresses"
+
+# =============================================================================
+# 40. HASHING CONTRACT
+# =============================================================================
+
+hashing:
+
+  canonicalization:
+    required: true
+
+  inputs:
+    - "canonical IR"
+    - "semantic version"
+    - "IR version"
+    - "dialect versions"
+    - "semantic configuration where applicable"
+
+  forbidden_inputs:
+    - "memory addresses"
+    - "allocation order"
+    - "physical target identity unless explicitly part of a target artifact"
+    - "runtime timestamps"
+
+  rule: >
+    Canonical semantic artifact identity MUST be stable across compatible
+    target realizations.
+
+# =============================================================================
+# 41. TEST CONTRACT
+# =============================================================================
+
+tests:
+
+  mandatory_levels:
+
+    mapping:
+      - "semantic identity exists"
+      - "canonical IR identity exists"
+
+    structural:
+      - "operands validated"
+      - "results validated"
+      - "attributes validated"
+
+    semantic:
+      - "semantic preservation"
+
+    effects:
+      - "effect preservation"
+
+    resources:
+      - "resource preservation"
+
+    capabilities:
+      - "capability preservation"
+
+    contracts:
+      - "contract preservation"
+
+    policies:
+      - "policy preservation"
+
+    provenance:
+      - "source-to-IR provenance"
+
+    compatibility:
+      - "IR version compatibility"
+
+    scalability:
+      - "small instance"
+      - "parameterized instance"
+      - "large feasible instance"
+      - "resource exhaustion behavior"
+
+    portability:
+      - "target variation"
+      - "different execution strategies"
+
+    negative:
+      - "invalid semantic mapping"
+      - "missing capability"
+      - "insufficient resources"
+      - "incompatible IR version"
+      - "policy violation"
+      - "contract violation"
+
+  stable_mapping:
+    minimum:
+      - "positive test"
+      - "negative test"
+      - "boundary test"
+      - "integration test"
+      - "determinism test"
+      - "scalability test"
+      - "portability test"
+
+# =============================================================================
+# 42. CONFORMANCE EXAMPLES
+# =============================================================================
+
+conformance_examples:
+
+  symbolic_quantum:
+    semantic:
+      requires:
+        - "qubits >= n"
+        - "capability(\"quantum.measurement\")"
+
+    IR:
+      preserves:
+        - "symbolic qubit requirement"
+        - "measurement capability"
+        - "quantum semantics"
+
+    realization:
+      deferred:
+        - "physical qubit count"
+        - "physical qubit assignment"
+        - "routing"
+        - "scheduling"
+
+  symbolic_memory:
+    semantic:
+      requires:
+        - "memory >= required_memory"
+
+    IR:
+      preserves:
+        - "required_memory expression"
+
+    realization:
+      deferred:
+        - "physical memory device"
+        - "address assignment"
+        - "allocation strategy"
+
+  accelerator:
+    semantic:
+      requires:
+        - "capability(\"tensor.compute\")"
+
+    IR:
+      preserves:
+        - "tensor semantics"
+        - "capability requirement"
+
+    realization:
+      may_select:
+        - "CPU"
+        - "GPU"
+        - "FPGA"
+        - "ASIC"
+        - "accelerator"
+        - "other compatible target"
+
+  hybrid:
+    semantic:
+      contains:
+        - "classical computation"
+        - "quantum computation"
+
+    IR:
+      uses:
+        - "Classical IR"
+        - "quantum::ir"
+
+    forbidden:
+      - "new competing hybrid IR"
+
+# =============================================================================
+# 43. NO-DOWNSTREAM-REEDIT CONTRACT
+# =============================================================================
+
+downstream_reedit:
+
+  principle: >
+    Once a semantic-to-IR mapping is frozen, adding a compatible backend,
+    target, accelerator, simulator, QPU, FPGA, ASIC, scheduler, router, or
+    runtime MUST NOT require changing the mapping's semantic identity.
+
+  allowed_changes:
+    - "new target adapter"
+    - "new lowering pass"
+    - "new optimization"
+    - "new routing strategy"
+    - "new scheduling strategy"
+    - "new resource negotiation strategy"
+    - "new runtime"
+    - "new simulator"
+    - "new hardware backend"
+
+  prohibited_reason_for_mapping_change:
+    - "new physical device"
+    - "new vendor"
+    - "new CPU"
+    - "new GPU"
+    - "new FPGA"
+    - "new ASIC"
+    - "new QPU"
+    - "new cluster"
+    - "new operating system"
+
+  exception:
+    rule: >
+      A mapping may change only when the language semantic contract itself
+      changes, in which case the change MUST be versioned and processed through
+      the compatibility contract.
+
+# =============================================================================
+# 44. IMPLEMENTATION INTEGRATION
+# =============================================================================
+
+implementation:
+
+  frontend:
+
+    parser:
+      source: "src/parser.rs"
+      role: "legacy executable parser boundary"
+
+    canonical_ast:
+      source: "src/frontend/ast/"
+      role: "canonical frontend AST"
+
+    legacy_ast:
+      source: "src/ast/mod.rs"
+      role: "migration/compatibility boundary"
+
+    rule: >
+      Existing legacy AST structures MUST NOT become a second IR. They must
+      migrate or adapt into the canonical semantic pipeline.
+
+  quantum_ir:
+    root: "src/quantum/ir/mod.rs"
+    role: "canonical quantum IR boundary"
+
+    canonical_modules:
+      - "src/quantum/ir/core/"
+      - "src/quantum/ir/quantum/"
+      - "src/quantum/ir/classical/"
+      - "src/quantum/ir/control/"
+      - "src/quantum/ir/model/"
+      - "src/quantum/ir/program/"
+      - "src/quantum/ir/pulse/"
+      - "src/quantum/ir/resources/"
+      - "src/quantum/ir/scheduling/"
+      - "src/quantum/ir/metadata/"
+      - "src/quantum/ir/analysis/"
+      - "src/quantum/ir/dialect/"
+      - "src/quantum/ir/hashing/"
+      - "src/quantum/ir/compatibility/"
+
+    rule: >
+      These modules remain the canonical implementation owners for their
+      respective quantum IR concepts. This contract must not recreate them.
+
+  classical_ir:
+    source: "repository-defined canonical Classical IR"
+    rule: >
+      The classical semantic mapping must resolve to one canonical Classical IR
+      implementation before the grammar directory is declared frozen.
+
+  hdl_hardware_ir:
+    source: "repository-defined canonical HDL/Hardware IR"
+    rule: >
+      HDL/hardware mappings must resolve to one canonical implementation before
+      stable status is granted.
+
+# =============================================================================
+# 45. CURRENT IMPLEMENTATION RECONCILIATION
+# =============================================================================
+
+implementation_reconciliation:
+
+  current_quantum_boundary:
+    status: "confirmed"
+    source: "src/quantum/ir/mod.rs"
+    finding: >
+      The repository already establishes quantum::ir as a canonical,
+      hardware-independent quantum semantic boundary.
+
+  quantum_identity:
+    canonical:
+      - "quantum::ir::qubit::QubitId"
+      - "quantum::ir::qubit::PhysicalQubitId"
+
+    rule: >
+      No additional competing QubitId implementation may be introduced by the
+      grammar IR contract.
+
+  quantum_program:
+    canonical:
+      - "quantum::ir::program::QuantumProgram"
+
+  quantum_models:
+    canonical:
+      - "quantum::ir::model"
+
+  quantum_pulse:
+    canonical:
+      - "quantum::ir::pulse"
+
+  quantum_resources:
+    canonical:
+      - "quantum::ir::resources"
+
+  quantum_analysis:
+    canonical:
+      - "quantum::ir::analysis"
+
+  current_ast:
+    status: "migration_sensitive"
+    rule: >
+      Existing AST structures must be reconciled with the canonical AST and
+      semantic contracts before their corresponding IR mappings receive STABLE
+      status.
+
+  current_implementation_limits:
+    rule: >
+      Existing implementation-level limits or representation choices MUST NOT
+      be interpreted as universal language or canonical IR limits.
+
+# =============================================================================
+# 46. IR VALIDATION
+# =============================================================================
+
+validation:
+
+  ownership:
+    checks:
+      - "one semantic identity -> one IR mapping"
+      - "one IR concept -> one canonical owner"
+      - "owner agrees with ownership contract"
+
+  mapping:
+    checks:
+      - "semantic mapping exists"
+      - "AST mapping exists where required"
+      - "canonical IR boundary exists"
+      - "IR operation/model exists or is explicitly pending"
+
+  semantics:
+    checks:
+      - "types preserved"
+      - "effects preserved"
+      - "capabilities preserved"
+      - "resources preserved"
+      - "contracts preserved"
+      - "policies preserved"
+      - "provenance preserved"
+
+  target_independence:
+    checks:
+      - "no physical device identity"
+      - "no backend instruction"
+      - "no target capacity constant"
+      - "no vendor lock-in"
+      - "no runtime handle"
+
+  scalability:
+    checks:
+      - "symbolic dimensions allowed"
+      - "no fixed machine-size ceiling"
+      - "resource quantities remain parameterized"
+      - "implementation limits are diagnosable"
+
+  determinism:
+    checks:
+      - "canonical ordering"
+      - "canonical attributes"
+      - "canonical serialization"
+      - "stable transformation identity"
+
+  compatibility:
+    checks:
+      - "IR version declared"
+      - "semantic version declared"
+      - "migration policy available"
+      - "stable identities remain compatible"
+
+  diagnostics:
+    checks:
+      - "every failure is classified"
+      - "source span available"
+      - "semantic identity available"
+
+# =============================================================================
+# 47. FREEZE CONTRACT
+# =============================================================================
+
+freeze:
+
+  mapping_may_be_stable_only_when:
+
+    ownership:
+      - "exactly one semantic owner"
+      - "exactly one IR owner"
+
+    source:
+      - "grammar mapping resolved"
+      - "AST mapping resolved"
+
+    semantic:
+      - "semantic identity resolved"
+      - "semantic invariants resolved"
+
+    IR:
+      - "canonical IR boundary resolved"
+      - "IR operation/model resolved"
+      - "IR version resolved"
+
+    preservation:
+      - "type preservation validated"
+      - "effect preservation validated"
+      - "resource preservation validated"
+      - "capability preservation validated"
+      - "contract preservation validated"
+      - "policy preservation validated"
+      - "provenance preservation validated"
+
+    portability:
+      - "target independence validated"
+      - "no physical target leakage"
+
+    scalability:
+      - "no artificial finite capacity"
+      - "symbolic scaling supported where applicable"
+      - "resource exhaustion behavior defined"
+
+    diagnostics:
+      - "diagnostic contract resolved"
+
+    compatibility:
+      - "compatibility identity resolved"
+
+    testing:
+      - "positive tests"
+      - "negative tests"
+      - "boundary tests"
+      - "integration tests"
+      - "determinism tests"
+      - "scalability tests"
+      - "portability tests"
+
+    implementation:
+      - "Rust 1.97+"
+      - "Rust 2021"
+      - "memory-safe Rust"
+      - "stable toolchain"
+
+  blocking_conditions:
+
+    - "duplicate semantic identity"
+    - "duplicate IR owner"
+    - "missing semantic mapping"
+    - "missing AST mapping"
+    - "missing canonical IR"
+    - "direct vendor IR dependency"
+    - "physical target leakage"
+    - "fixed universal capacity"
+    - "missing source provenance"
+    - "missing diagnostics"
+    - "missing compatibility identity"
+    - "missing conformance tests"
+    - "nondeterministic canonicalization"
+    - "unresolved semantic ambiguity"
+    - "unresolved transformation preservation"
+
+# =============================================================================
+# 48. REPOSITORY-WIDE FREEZE GATE
+# =============================================================================
+
+repository_freeze:
+
+  prerequisite_contracts:
+
+    - "grammar/DESIGN.md"
+    - "grammar/MANIFEST.yaml"
+    - "grammar/OWNERSHIP.yaml"
+    - "grammar/DEPENDENCIES.yaml"
+    - "grammar/STATUS.yaml"
+    - "grammar/contracts/ownership.yaml"
+    - "grammar/contracts/dependencies.yaml"
+    - "grammar/contracts/exports.yaml"
+    - "grammar/contracts/ast-mappings.yaml"
+    - "grammar/contracts/semantic-mappings.yaml"
+    - "grammar/contracts/ir-mappings.yaml"
+    - "grammar/contracts/diagnostics.yaml"
+    - "grammar/contracts/compatibility.yaml"
+    - "grammar/contracts/feature-status.yaml"
+
+  required_closure:
+    - "every grammar export has an owner"
+    - "every meaning-bearing export has AST mapping"
+    - "every meaning-bearing export has semantic mapping"
+    - "every lowering-relevant semantic identity has IR mapping"
+    - "every stable IR identity has diagnostics"
+    - "every stable IR identity has compatibility identity"
+    - "every stable IR identity has tests"
+
+  root_freeze_rule:
+    rule: >
+      grammar/Zamani.g4 and grammar/antlr/ZamaniParser.g4 MUST NOT be declared
+      permanently frozen until this semantic-to-IR closure has passed.
+
+# =============================================================================
+# 49. CI CONTRACT
+# =============================================================================
+
+ci:
+
+  mandatory:
+
+    contract_validation:
+      - "YAML syntax validation"
+      - "schema validation"
+      - "ownership validation"
+      - "dependency validation"
+      - "semantic identity uniqueness"
+      - "IR identity uniqueness"
+      - "mapping closure validation"
+
+    semantic_validation:
+      - "AST coverage"
+      - "semantic coverage"
+      - "IR coverage"
+      - "effect coverage"
+      - "resource coverage"
+      - "capability coverage"
+      - "contract coverage"
+      - "policy coverage"
+      - "provenance coverage"
+
+    IR_validation:
+      - "canonical IR owner validation"
+      - "quantum::ir validation"
+      - "Classical IR validation"
+      - "HDL/Hardware IR validation"
+      - "hybrid composition validation"
+
+    portability:
+      - "target-independence audit"
+      - "capacity audit"
+      - "vendor leakage audit"
+      - "symbolic scalability audit"
+
+    determinism:
+      - "canonicalization tests"
+      - "serialization tests"
+      - "hash stability tests"
+      - "transformation identity tests"
+
+    rust:
+      - "cargo check"
+      - "cargo test"
+      - "cargo clippy"
+      - "minimum Rust version validation"
+      - "memory-safety policy validation"
+
+  release_rule:
+    rule: >
+      No mapping may be promoted to STABLE when a mandatory validation gate is
+      failed or unverified.
+
+# =============================================================================
+# 50. STATUS RULES
+# =============================================================================
+
+status_rules:
+
+  specified:
+    meaning: >
+      The semantic-to-IR contract has been formally defined but implementation
+      conformance is not yet fully established.
+
+  implemented:
+    meaning: >
+      A corresponding implementation exists and is known to represent the
+      declared mapping, but repository-wide freeze evidence may still be
+      incomplete.
+
+  partial:
+    meaning: >
+      Some implementation exists but the contract is not completely satisfied.
+
+  migration_required:
+    meaning: >
+      Existing implementation must be reconciled with the canonical mapping.
+
+  stable:
+    meaning: >
+      All freeze gates in this file and all companion contracts have passed.
+
+  experimental:
+    meaning: >
+      The mapping may change without stable compatibility guarantees.
+
+  planned:
+    meaning: >
+      The contract is defined for future implementation.
+
+  deprecated:
+    meaning: >
+      The mapping remains for compatibility but must not be used for new
+      semantic construction.
+
+  rejected:
+    meaning: >
+      The mapping is explicitly prohibited.
+
+# =============================================================================
+# 51. REQUIRED IR FAMILIES
+# =============================================================================
+
+required_ir_families:
+
+  universal:
+    - "program"
+    - "module"
+    - "symbol"
+    - "type"
+    - "value"
+    - "operation"
+    - "control_flow"
+    - "region"
+    - "block"
+    - "effect"
+    - "resource"
+    - "capability"
+    - "contract"
+    - "policy"
+    - "provenance"
+
+  classical:
+    - "numeric"
+    - "memory"
+    - "function"
+    - "control"
+    - "collection"
+    - "tensor"
+    - "data"
+
+  quantum:
+    - "qubit"
+    - "operation"
+    - "measurement"
+    - "control"
+    - "channel"
+    - "model"
+    - "pulse"
+    - "resource"
+    - "program"
+    - "metadata"
+    - "dialect"
+
+  hardware:
+    - "module"
+    - "port"
+    - "signal"
+    - "net"
+    - "register"
+    - "memory"
+    - "clock"
+    - "reset"
+    - "timing"
+    - "state_machine"
+    - "interface"
+
+  distributed:
+    - "node"
+    - "task"
+    - "message"
+    - "channel"
+    - "topology"
+    - "placement"
+    - "replication"
+    - "consistency"
+
+  execution:
+    - "execution_context"
+    - "dispatch"
+    - "simulation"
+    - "adaptation"
+    - "recovery"
+    - "resilience"
+
+# =============================================================================
+# 52. IR OWNERSHIP RULE
+# =============================================================================
+
+ownership:
+
+  one_concept_one_owner:
+    severity: "error"
+    rule: >
+      Every canonical IR semantic concept MUST have exactly one implementation
+      owner.
+
+  aliases:
+    allowed: true
+    rule: >
+      Compatibility aliases MAY exist, but they MUST resolve to the canonical
+      implementation and MUST NOT define duplicate semantics.
+
+  glob_exports:
+    discouraged: true
+    rule: >
+      Broad wildcard exports MUST NOT be used to create ambiguous IR ownership.
+
+  compatibility_modules:
+    rule: >
+      Compatibility paths may preserve historical APIs while forwarding to
+      canonical implementations.
+
+# =============================================================================
+# 53. FORWARD COMPATIBILITY
+# =============================================================================
+
+forward_compatibility:
+
+  new_target:
+    requirement: >
+      Adding a new target MUST require only downstream realization integration
+      when the target can implement an existing semantic IR contract.
+
+  new_quantum_operation:
+    requirement: >
+      A new quantum operation SHOULD be registered through the extensible
+      quantum operation/dialect system without changing this IR contract's
+      universal operation identity.
+
+  new_resource:
+    requirement: >
+      A new resource kind SHOULD be added through the resource registry without
+      changing existing IR identities.
+
+  new_capability:
+    requirement: >
+      A new capability SHOULD be added through the capability registry without
+      changing existing operation semantics.
+
+  new_domain:
+    requirement: >
+      A new computational domain MUST identify its canonical semantic and IR
+      boundary without redefining existing domain semantics.
+
+# =============================================================================
+# 54. BACKWARD COMPATIBILITY
+# =============================================================================
+
+backward_compatibility:
+
+  stable_mapping:
+    rule: >
+      Existing stable semantic identities MUST remain recognizable by future
+      compatible compilers.
+
+  removed_mapping:
+    rule: >
+      Removing a stable mapping requires compatibility handling and migration
+      according to the repository compatibility contract.
+
+  renamed_mapping:
+    rule: >
+      A renamed semantic or IR identity MUST retain an explicit compatibility
+      alias or migration record.
+
+  semantic_change:
+    rule: >
+      A semantic change MUST NOT be disguised as an implementation refactor.
+
+# =============================================================================
+# 55. SECURITY BOUNDARY
+# =============================================================================
+
+security:
+
+  canonical_ir:
+    must_preserve:
+      - "authorization"
+      - "permissions"
+      - "trust requirements"
+      - "sandbox requirements"
+      - "security policies"
+      - "audit requirements"
+
+  rule: >
+    IR transformations MUST NOT bypass security obligations merely because the
+    transformed representation no longer resembles the original syntax.
+
+  generated_code:
+    rule: >
+      Generated or reflected code MUST enter the same semantic and IR validation
+      pipeline as ordinary code.
+
+# =============================================================================
+# 56. SAFE RUST IMPLEMENTATION CONTRACT
+# =============================================================================
+
+rust:
+
+  minimum_version: "1.97"
+  edition: "2021"
+  toolchain: "stable"
+
+  required:
+    - "memory-safe implementation"
+    - "deterministic data structures where semantic ordering matters"
+    - "explicit error handling"
+    - "typed IR identities"
+    - "versioned public interfaces"
+
+  prohibited:
+    - "memory-unsafe implementation techniques"
+    - "hidden machine-capacity assumptions"
+    - "target-dependent semantic identity"
+    - "implicit backend dependencies"
+
+  enforcement:
+    compiler:
+      - "repository-wide memory-safety lint/policy"
+    ci:
+      - "cargo check"
+      - "cargo test"
+      - "cargo clippy"
+
+# =============================================================================
+# 57. COMPLETION CRITERIA
+# =============================================================================
+
+completion:
+
+  file_is_complete_when:
+
+    authority:
+      - "canonical authority is declared"
+      - "no competing IR mapping authority exists"
+
+    ownership:
+      - "every mapping has one semantic owner"
+      - "every canonical IR family has one owner"
+
+    coverage:
+      - "registry closure passes"
+      - "no orphan semantic identity"
+      - "no orphan lowering-relevant export"
+
+    semantics:
+      - "semantic identity is stable"
+      - "type semantics are preserved"
+      - "effect semantics are preserved"
+      - "resource semantics are preserved"
+      - "capability semantics are preserved"
+      - "contract semantics are preserved"
+      - "policy semantics are preserved"
+      - "provenance semantics are preserved"
+
+    domains:
+      - "Classical IR covered"
+      - "quantum::ir covered"
+      - "HDL/Hardware IR covered"
+      - "hybrid composition covered"
+      - "AI/data covered"
+      - "distributed/networking covered"
+      - "execution covered"
+      - "interoperability covered"
+
+    quantum:
+      - "quantum::ir is the sole canonical quantum boundary"
+      - "logical/physical identity is separated"
+      - "operations are open-world"
+      - "no fixed gate enumeration is required"
+      - "routing is downstream"
+      - "scheduling is downstream"
+      - "calibration is downstream"
+
+    scalability:
+      - "symbolic resources supported"
+      - "symbolic dimensions supported where applicable"
+      - "no artificial finite machine-size ceiling"
+      - "resource exhaustion is explicit"
+
+    portability:
+      - "target-independent canonical IR"
+      - "capability negotiation supported downstream"
+      - "resource negotiation supported downstream"
+      - "explicit fallback semantics"
+      - "semantic preservation validated"
+
+    compatibility:
+      - "language version"
+      - "semantic version"
+      - "IR version"
+      - "dialect version"
+      - "migration policy"
+
+    diagnostics:
+      - "source spans"
+      - "stable diagnostic identities"
+      - "semantic vs target failures distinguished"
+
+    testing:
+      - "positive tests"
+      - "negative tests"
+      - "determinism tests"
+      - "scalability tests"
+      - "portability tests"
+      - "cross-domain tests"
+      - "integration tests"
+
+    implementation:
+      - "Rust 1.97+"
+      - "Rust 2021"
+      - "stable Rust"
+      - "memory-safe implementation"
+
+# =============================================================================
+# 58. FINAL ARCHITECTURAL INVARIANTS
+# =============================================================================
+
+invariants:
+
+  one_source_meaning:
+    rule: >
+      One Zamani source program has one canonical semantic meaning.
+
+  one_semantic_identity:
+    rule: >
+      Every meaning-bearing construct has one stable semantic identity.
+
+  one_canonical_ir:
+    rule: >
+      Every semantic domain has one canonical IR boundary or an explicitly
+      defined canonical composition.
+
+  classical:
+    rule: >
+      Classical computation uses Classical IR.
+
+  quantum:
+    rule: >
+      Quantum computation uses quantum::ir.
+
+  hdl:
+    rule: >
+      HDL and hardware intent use the canonical HDL/Hardware IR.
+
+  hybrid:
+    rule: >
+      Hybrid computation composes canonical domain IRs.
+
+  no_vendor_frontend:
+    rule: >
+      Vendor representations are downstream realization artifacts.
+
+  no_physical_frontend:
+    rule: >
+      Physical resources and target assignments are downstream realization
+      information.
+
+  no_artificial_capacity:
+    rule: >
+      Neither the semantic model nor canonical IR imposes artificial finite
+      machine-size limits.
+
+  symbolic_scalability:
+    rule: >
+      Resource quantities, dimensions, counts, widths, ranks, topology sizes,
+      and similar scalable properties remain symbolic or parameterized whenever
+      their semantics require scalability.
+
+  semantic_preservation:
+    rule: >
+      Every valid lowering preserves the declared program semantics.
+
+  explicit_failure:
+    rule: >
+      Inability to realize a valid semantic artifact is reported explicitly
+      rather than silently changing the program.
+
+  explicit_fallback:
+    rule: >
+      Alternative realization is permitted only when explicitly authorized and
+      semantically valid.
+
+  deterministic:
+    rule: >
+      Canonical IR construction and serialization are deterministic.
+
+  provenance:
+    rule: >
+      Meaning-bearing transformations remain traceable to their source semantic
+      identity.
+
+  compatibility:
+    rule: >
+      Stable IR identities are versioned and migratable.
+
+  memory_safe:
+    rule: >
+      The reference implementation remains memory-safe Rust on Rust 1.97 or
+      later.
+
+  future_targets:
+    rule: >
+      Future targets can be integrated through realization layers without
+      redefining stable semantic-to-IR contracts.
+
+# =============================================================================
+# END OF grammar/contracts/ir-mappings.yaml
+# =============================================================================
