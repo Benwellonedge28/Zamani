@@ -1,3275 +1,818 @@
-
-
 Zamani Language Principles
 
-Path: "grammar/specification/language-principles.md"
+Canonical path: "grammar/specification/language-principles.md"
 Status: Normative
-Scope: Zamani language and grammar architecture
-Minimum implementation toolchain: Rust 1.97 / Rust 1.97.1
-Rust safety requirement: "unsafe" Rust is forbidden
-Primary compiler: ZUTC
-Primary portability objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Scope: Language-wide principles, semantic invariants, portability, scalability, safety, and architectural integration
+Language: Zamani
+Rust edition: 2021
+Minimum Rust version: 1.97
+Rust safety requirement: Safe Rust only; "unsafe" Rust is prohibited
+Primary objective: Program Once, Compile Once, Run Everywhere, Anywhere, Forever (POCO-REAF)
+Scalability objective: From the smallest supported computation to arbitrarily large computations, subject to actual resource availability and the limits inherent in representation, implementation, semantics, and physical reality.
 
 ---
 
 1. Purpose
 
-This document defines the fundamental principles that govern the Zamani programming language.
+This document defines the fundamental principles governing the design, implementation, evolution, and conformance of the Zamani programming language.
 
-These principles apply to:
+These principles apply to every current and future language feature, including:
 
-- source syntax;
-- lexical design;
-- parsing;
-- AST construction;
-- semantic analysis;
-- type checking;
-- effect checking;
-- capability checking;
-- resource requirements;
-- classical computation;
-- quantum computation;
-- hybrid computation;
-- HDL;
-- hardware/software co-design;
-- distributed computation;
-- parallel computation;
-- AI and data computation;
-- networking;
-- security;
-- compilation;
-- execution;
-- interoperability;
-- future language extensions.
+- Lexical analysis and parsing.
+- Declarations, expressions, statements, functions, modules, and types.
+- Classical and systems programming.
+- Embedded and resource-constrained computing.
+- Parallel, concurrent, distributed, and high-performance computing.
+- Numerical, symbolic, scientific, tensor, and data computation.
+- Quantum computation, quantum simulation, and quantum error correction.
+- Hybrid quantum-classical computation.
+- Hardware description and hardware/software co-design.
+- Artificial intelligence, machine learning, reasoning, and autonomous agents.
+- Networking, cryptography, and secure computation.
+- Memory management, ownership, borrowing, and resource lifetimes.
+- Effects, capabilities, requirements, constraints, contracts, and policies.
+- Compilation, optimization, lowering, scheduling, and execution.
+- Interoperability, dialects, metaprogramming, and language evolution.
+- Diagnostics, source provenance, reproducibility, and compatibility.
 
-This document is normative.
+The purpose is not to enumerate every possible computational feature. It is to establish principles under which new features can be added without destabilizing the language or creating incompatible subsystems.
 
-A grammar rule, AST representation, semantic rule, compiler transformation, runtime interface, or backend implementation must not contradict these principles unless the language specification is explicitly versioned and the change is intentionally approved.
+A feature MUST NOT be considered production-ready merely because its syntax has been documented, its grammar production exists, or an implementation prototype compiles.
 
-The fundamental objective is:
+Production readiness requires conformance with the applicable syntax, semantic, safety, integration, compatibility, and testing contracts.
 
-«Zamani describes computation and its meaning independently of the accidental limitations of the machine on which that computation happens to execute.»
+The governing principle is:
 
-The resulting language must support:
+«Zamani specifies computational meaning independently of accidental limitations or implementation choices of the environment that realizes it.»
 
-«Zamani: From Atom to Everywhere»
-
-and:
-
-«Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).»
-
----
-
-2. Fundamental Language Principle
-
-A Zamani program represents computation, intent, semantics, requirements, constraints, capabilities, and permitted effects.
-
-It does not primarily represent:
-
-- a particular CPU;
-- a particular QPU;
-- a particular GPU;
-- a particular FPGA;
-- a particular ASIC;
-- a particular machine topology;
-- a particular memory capacity;
-- a particular number of qubits;
-- a particular number of cores;
-- a particular deployment;
-- a particular vendor implementation.
-
-Machine-specific information belongs to target, resource, compilation, scheduling, deployment, calibration, or runtime layers unless that information is itself part of the program's intended semantics.
-
-The distinction is mandatory:
-
-Program semantics
-        │
-        ▼
-Target-independent semantic representation
-        │
-        ▼
-Resource/capability analysis
-        │
-        ▼
-Target selection
-        │
-        ▼
-Optimization
-        │
-        ▼
-Scheduling / routing / placement
-        │
-        ▼
-Target lowering
-        │
-        ▼
-Execution
-
-The source language must not collapse these layers into one.
-
----
-
-3. POCO-REAF
-
-POCO-REAF is a core Zamani design principle.
-
-3.1 Program Once
-
-A developer should express an algorithm, system, computation, circuit, hardware design, or hybrid computation once.
-
-The semantic meaning of the source must not need to be rewritten merely because execution moves between different resource configurations.
-
-Examples include:
-
-one qubit → many logical qubits
-one core → many cores
-one device → many devices
-one accelerator → many accelerators
-one node → many nodes
-local → distributed
-CPU → GPU
-CPU → FPGA
-classical → hybrid quantum-classical
-simulator → physical quantum hardware
-
-The source may contain explicit semantic requirements when those requirements are genuinely part of the program.
-
-It must not contain accidental assumptions merely because one development machine happened to have a particular configuration.
-
----
-
-3.2 Compile Once
-
-Compilation must preserve the program's semantic identity.
-
-Where technically possible, the compiler should establish a target-independent compiled representation that can subsequently be specialized for available execution resources.
-
-Compilation must therefore distinguish:
-
-semantic compilation
-
-from:
-
-target realization
-
-A target-specific artifact may legitimately exist, but target specialization must not redefine the source program's meaning.
-
-The compiler architecture must not force source-level rewriting merely because target resources differ.
-
----
-
-3.3 Run Everywhere
-
-The same semantic program must be capable of being realized on different supported execution environments.
-
-The environment may provide different:
-
-- resources;
-- capabilities;
-- performance;
-- topology;
-- instruction sets;
-- native operations;
-- memory;
-- timing;
-- energy budgets;
-- reliability;
-- quantum hardware characteristics.
-
-These differences must be handled through the compilation and execution architecture.
-
----
-
-3.4 Run Anywhere
-
-Execution may occur:
-
-- locally;
-- remotely;
-- embedded;
-- on a workstation;
-- on a server;
-- on a cluster;
-- on a supercomputer;
-- in a cloud environment;
-- on an accelerator;
-- on a simulator;
-- on quantum hardware;
-- on heterogeneous systems;
-- on future execution systems.
-
-The grammar must not assume a single deployment model.
-
----
-
-3.5 Run Forever
-
-"Forever" does not mean that every historical binary remains executable on every future machine without adaptation.
-
-It means that the language semantics must remain evolvable and representable as execution technology changes.
-
-Future targets must be able to implement existing semantic programs through new lowering mechanisms without requiring the language to encode every future machine in advance.
-
-Therefore:
-
-Stable semantics
-+
-Versioned language evolution
-+
-Extensible capabilities
-+
-Target-independent representations
-=
-Long-lived Zamani programs
-
----
-
-4. Semantic Independence From Hardware
-
-The language must distinguish:
-
-Semantic requirement
-
-What the program means.
-
-Resource requirement
-
-What resources are necessary to execute the program.
-
-Capability requirement
-
-What capabilities an execution environment must provide.
-
-Constraint
-
-What must remain true during compilation or execution.
-
-Preference
-
-What implementation is preferred but not required.
-
-Hint
-
-Information intended to assist optimization without changing semantics.
-
-Target description
-
-A description of a concrete target.
-
-Runtime observation
-
-A property discovered from the actual execution environment.
-
-These concepts must never be silently conflated.
-
-For example:
-
-requires quantum
-
-does not mean:
-
-use device X
-
-and:
-
-requires at least N logical qubits
-
-does not mean:
-
-hardware must contain exactly N physical qubits
-
-Likewise:
-
-prefer GPU
-
-does not mean:
-
-the program is invalid without a GPU
-
----
-
-5. No Accidental Hard-Coding
-
-Zamani must not encode arbitrary scalability limits into language syntax or semantic structures.
-
-The following must not be fixed by grammar design:
-
-- maximum qubits;
-- maximum logical qubits;
-- maximum physical qubits;
-- maximum CPU count;
-- maximum core count;
-- maximum thread count;
-- maximum GPU count;
-- maximum FPGA count;
-- maximum accelerator count;
-- maximum node count;
-- maximum cluster size;
-- maximum memory capacity;
-- maximum register count;
-- maximum vector width;
-- maximum tensor dimension;
-- maximum tensor rank;
-- maximum network size;
-- maximum device count;
-- maximum resource identifiers;
-- fixed hardware addresses;
-- fixed topology sizes.
-
-A program may explicitly contain a number because that number is part of its algorithm.
-
-For example:
-
-register[1024]
-
-is not an artificial compiler limit if "1024" is semantically required by the program.
-
-The compiler must not infer from this:
-
-register[1024]
-
-that:
-
-register[1025]
-
-is syntactically or semantically impossible.
-
-Resource availability belongs to later stages.
-
----
-
-6. Scaling Principle
-
-Zamani must scale from the smallest useful computation to arbitrarily large computations subject only to:
-
-- available resources;
-- representational limits;
-- explicit resource budgets;
-- implementation-defined operational limits that are documented and not falsely represented as language limits.
-
-The architecture must avoid unnecessary constants whose purpose is merely to make implementation convenient.
-
-Examples of prohibited architecture:
-
-const MAX_QUBITS: usize = 32;
-const MAX_CORES: usize = 128;
-const MAX_DEVICES: usize = 16;
-
-when those values represent supposed language limits.
-
-Implementation-specific limits may exist where unavoidable, but they must be:
-
-1. outside language semantics;
-2. explicitly documented;
-3. represented as resource/implementation limits;
-4. diagnostically reported;
-5. replaceable without changing source semantics.
-
----
-
-7. Separation of Syntax and Semantics
-
-Grammar answers:
-
-«What source forms are structurally valid?»
-
-Semantic analysis answers:
-
-«What does the valid source mean, and is that meaning valid?»
-
-Type analysis answers:
-
-«Are the values and operations type-compatible?»
-
-Effect analysis answers:
-
-«What effects may this computation perform?»
-
-Capability analysis answers:
-
-«What execution capabilities are required?»
-
-Resource analysis answers:
-
-«What resources are required?»
-
-Compilation answers:
-
-«How can the semantics be transformed into executable representations?»
-
-Scheduling answers:
-
-«When and where should operations execute?»
-
-Backend lowering answers:
-
-«How is the semantic computation represented on this target?»
-
-Runtime answers:
-
-«How is the resulting computation actually executed?»
-
-These responsibilities must remain distinct.
-
----
-
-8. Grammar Must Not Become the IR
-
-The grammar is not an intermediate representation.
-
-The grammar defines source syntax.
-
-The AST represents parsed source structure.
-
-Semantic structures represent validated meaning.
-
-IR represents canonical executable semantics.
-
-Backends represent target realizations.
-
-The architecture is:
-
-Zamani source
-     │
-     ▼
-Lexer
-     │
-     ▼
-Parser
-     │
-     ▼
-AST
-     │
-     ▼
-Name/module resolution
-     │
-     ▼
-Type/effect/capability/resource analysis
-     │
-     ▼
-Canonical semantic IR
-     │
-     ├──────── classical IR
-     │
-     ├──────── quantum::ir
-     │
-     ├──────── control/data representations
-     │
-     └──────── effect/resource/temporal metadata
-     │
-     ▼
-Optimization
-     │
-     ▼
-Scheduling / routing / resilience / ZQN
-     │
-     ▼
-Target lowering
-     │
-     ▼
-Execution
-
-The grammar must not create a second semantic universe that competes with the canonical IR.
-
----
-
-9. Canonical Quantum Boundary
-
-Quantum computing is a first-class Zamani domain.
-
-However, grammar/frontend structures must not become a competing quantum IR.
-
-The canonical quantum semantic boundary is:
-
-crate::quantum::ir
-
-The repository already contains structured "quantum::ir" modules covering quantum program and semantic concerns, including qubit identities and physical qubit identities.
-
-Quantum source syntax must therefore follow:
-
-Quantum syntax
-      ↓
-Frontend AST
-      ↓
-Semantic validation
-      ↓
-quantum::ir
-      ↓
-Optimization
-      ↓
-Routing
-      ↓
-Scheduling
-      ↓
-ZQN / resilience / calibration
-      ↓
-Target lowering
-
-The grammar must not introduce an alternative canonical quantum operation model.
-
----
-
-10. Quantum Hardware Independence
-
-Quantum syntax must not assume:
-
-- a fixed number of qubits;
-- a fixed native gate set;
-- a fixed coupling topology;
-- a fixed measurement model;
-- a fixed calibration;
-- a fixed pulse representation;
-- a fixed error model;
-- a fixed QPU vendor;
-- a fixed physical qubit numbering scheme.
-
-The language may express these properties when they are explicitly part of a program's requirements.
-
-For example:
-
-requires:
-    logical_qubits >= N
-
-is fundamentally different from:
-
-use_physical_qubit(7)
-
-The latter is a target-specific statement and must therefore remain within the appropriate target/hardware boundary unless physical identity itself is deliberately part of the program's semantics.
-
----
-
-11. Quantum Operation Principle
-
-Quantum operations must be represented according to semantic meaning rather than an arbitrary finite keyword catalog.
-
-The language must be capable of representing:
-
-- standard gates;
-- user-defined operations;
-- parameterized operations;
-- controlled operations;
-- multi-target operations;
-- inverse/adjoint operations;
-- measurement;
-- reset;
-- observables;
-- dynamic circuits;
-- mid-circuit measurement;
-- classical feedback;
-- logical operations;
-- error-correction operations;
-- future quantum operations.
-
-A backend may have a finite native gate set.
-
-That is a backend property.
-
-The source language must not become limited to that native set.
-
-The conceptual pipeline is:
-
-Portable quantum operation
-        ↓
-Canonical quantum semantic representation
-        ↓
-Decomposition
-        ↓
-Target capability analysis
-        ↓
-Routing
-        ↓
-Scheduling
-        ↓
-Calibration/noise-aware realization
-        ↓
-Native target operations
-
----
-
-12. Classical Computing Principle
-
-Classical computation is a first-class foundation of Zamani.
-
-The language must support, subject to implementation of each feature:
-
-- scalar values;
-- structured values;
-- functions;
-- generic programming;
-- algebraic data;
-- control flow;
-- memory management;
-- ownership/resource semantics;
-- concurrency;
-- parallelism;
-- numerical computation;
-- symbolic computation;
-- vectors;
-- matrices;
-- tensors;
-- accelerator computation;
-- systems programming.
-
-Classical computation must not be designed as a subsystem that prevents quantum, HDL, hardware, distributed, or future domains from interoperating with it.
-
----
-
-13. Hybrid Computing Principle
-
-Classical and quantum computation must be able to coexist in one semantic program.
-
-Hybrid computation includes:
-
-classical → quantum
-quantum → classical
-classical control → quantum operation
-quantum measurement → classical control
-classical optimization → quantum execution
-quantum result → classical post-processing
-
-The language must not require developers to split a single semantic algorithm into unrelated languages merely because it crosses computational domains.
-
-Domain boundaries must be represented explicitly in semantics and effects rather than through incompatible language silos.
-
----
-
-14. HDL and Hardware Principle
-
-Zamani must support hardware description and hardware/software co-design.
-
-Hardware syntax may describe:
-
-- modules;
-- ports;
-- signals;
-- wires;
-- registers;
-- clocks;
-- timing;
-- combinational logic;
-- sequential logic;
-- processes;
-- state machines;
-- memories;
-- pipelines;
-- interfaces;
-- parameters;
-- generics;
-- hardware resources;
-- hardware capabilities;
-- target requirements.
-
-However:
-
-«Hardware semantics are not the same thing as a particular physical implementation.»
-
-The source may describe:
-
-a pipeline
-
-without requiring a particular FPGA family.
-
-It may describe:
-
-parallel computation
-
-without requiring a fixed number of physical execution units.
-
-Target-specific implementation belongs to hardware lowering.
-
----
-
-15. Hardware/Software Co-Design
-
-A Zamani program may contain both:
-
-software semantics
-
-and:
-
-hardware semantics
-
-where required.
-
-The compiler must preserve the distinction.
-
-For example:
-
-algorithm
-    ↓
-compute requirement
-    ↓
-hardware realization
-
-is different from:
-
-algorithm = one specific FPGA netlist
-
-unless the latter is intentionally expressed as a target-specific artifact.
-
-This distinction allows one semantic design to be realized across different hardware targets.
-
----
-
-16. Resource Principle
-
-Zamani must treat resources as dynamically describable properties.
-
-Resources may include:
-
-- computation;
-- memory;
-- storage;
-- bandwidth;
-- latency;
-- energy;
-- qubits;
-- logical qubits;
-- physical qubits;
-- classical processors;
-- accelerators;
-- devices;
-- network links;
-- execution time;
-- reliability;
-- thermal constraints;
-- power;
-- capacity.
-
-Resource expressions must be scalable.
-
-Resource descriptions must not require a fixed machine model.
-
----
-
-17. Capability Principle
-
-A capability describes what an execution environment can do.
-
-Examples include:
-
-supports quantum computation
-supports dynamic circuits
-supports floating-point operation X
-supports accelerator execution
-supports hardware feature Y
-supports required network protocol
-supports a particular cryptographic primitive
-
-Capabilities must not be confused with resources.
-
-For example:
-
-supports quantum computation
-
-is a capability.
-
-has N physical qubits
-
-is a resource.
-
-The compiler must be able to reason about both independently.
-
----
-
-18. Constraint Principle
-
-Constraints describe conditions that must be satisfied.
-
-Examples:
-
-latency <= L
-energy <= E
-reliability >= R
-requires capability C
-requires resource R
-
-A constraint is not automatically an instruction to use a particular implementation.
-
-The compiler may satisfy the same constraint through different realizations.
-
----
-
-19. Preference Principle
-
-Preferences are optional optimization guidance.
-
-Examples:
-
-prefer_gpu
-prefer_low_latency
-prefer_energy_efficiency
-prefer_local_execution
-prefer_parallelism
-
-Failure to satisfy a preference must not automatically make a program semantically invalid.
-
-Preferences must not be silently promoted to hard requirements.
-
----
-
-20. Hint Principle
-
-Hints provide optimization information without defining semantic meaning.
-
-A hint must not change the observable semantics of a valid program merely because a compiler chooses to ignore it.
-
-This distinction is especially important for:
-
-- scheduling;
-- vectorization;
-- parallelization;
-- quantum routing;
-- accelerator selection;
-- memory placement;
-- distributed placement.
-
----
-
-21. Effect Principle
-
-Effects describe computational behavior that is not adequately represented by pure value transformation.
-
-Potential effect domains include:
-
-- IO;
-- hardware;
-- quantum;
-- network;
-- distributed execution;
-- concurrency;
-- security;
-- external state;
-- persistent state;
-- timing;
-- resource consumption.
-
-Effects must be semantically explicit.
-
-The compiler must not infer arbitrary hidden effects merely because a parser recognized a keyword.
-
----
-
-22. Safety Principle
-
-Zamani language safety and Rust implementation safety are distinct concepts.
-
-The Zamani language may eventually define constructs for controlled low-level operations where those operations are semantically necessary.
-
-That does not permit the Zamani compiler implementation to use Rust "unsafe".
-
-All Rust implementation code in the relevant production toolchain must remain safe Rust.
-
-The implementation must target:
-
-Rust 1.97 / Rust 1.97.1
-
-and must not require:
-
-unsafe { ... }
-
-or:
-
-unsafe fn ...
-
-or:
-
-unsafe trait ...
-
-or unsafe implementations.
-
-Where low-level behavior is required, it must be represented through safe abstractions or explicitly isolated external interfaces whose safety contract is established outside the Rust implementation.
-
----
-
-23. Memory and Resource Safety
-
-Memory/resource semantics must be explicit where required.
-
-The language may evolve support for:
-
-- ownership;
-- borrowing;
-- lifetimes;
-- linear resources;
-- affine resources;
-- explicit allocation;
-- explicit deallocation;
-- shared resources;
-- distributed resources.
-
-These concepts must have one canonical semantic interpretation.
-
-Surface syntax must not create duplicate semantic concepts merely because multiple domains need resource ownership.
-
----
-
-24. Concurrency Principle
-
-Concurrency must be expressed independently of the number of available execution units.
-
-The language must not assume:
-
-exactly N threads
-
-or:
-
-exactly N cores
-
-A program expresses concurrency semantics.
-
-The runtime/compiler determines how that concurrency is realized given available resources.
-
-Potential execution strategies include:
-
-single-threaded
-multithreaded
-SIMD
-GPU
-distributed
-accelerator
-heterogeneous
-
-without requiring source rewriting.
-
----
-
-25. Parallelism Principle
-
-Parallelism is a semantic opportunity, not a fixed hardware count.
-
-The source may express:
-
-- independent tasks;
-- data parallelism;
-- task parallelism;
-- reductions;
-- pipelines;
-- synchronization;
-- distributed computation.
-
-The compiler and runtime determine feasible execution width.
-
-A program that can execute on one execution unit must remain semantically meaningful when more resources become available, subject to its synchronization and determinism requirements.
-
----
-
-26. Determinism Principle
-
-For identical:
-
-- source;
-- language version;
-- compilation configuration;
-- relevant semantic inputs;
-
-the frontend must produce deterministic results.
-
-Parsing must not depend on:
-
-- machine topology;
-- available CPU count;
-- available GPU count;
-- available qubits;
-- random runtime state;
-- filesystem ordering;
-- network timing.
-
-Any deliberate nondeterminism must be represented explicitly at the semantic/runtime layer.
-
----
-
-27. Source Stability
-
-Source syntax should remain stable whenever possible.
-
-A language change must not silently change the meaning of an existing valid program.
-
-Breaking changes require:
-
-- version identification;
-- compatibility documentation;
-- migration rules;
-- diagnostics;
-- explicit deprecation policy where applicable.
-
-The following must remain distinct:
-
-language evolution
-
-and:
-
-target evolution
-
-A new hardware generation must not require a new source language version merely because its implementation differs.
-
----
-
-28. Versioning Principle
-
-Language versions describe language semantics and syntax.
-
-Target versions describe target capabilities.
-
-Backend versions describe implementation behavior.
-
-Runtime versions describe execution infrastructure.
-
-These version domains must not be conflated.
-
-The language must be capable of expressing:
-
-language version
-+
-program semantics
-+
-required capabilities
-+
-resource constraints
-+
-target-independent intent
-
-without embedding a complete target specification into every source file.
-
----
-
-29. Extensibility Principle
-
-Zamani must support future computing models without requiring the grammar architecture to be redesigned every time a new domain appears.
-
-Future domains may include:
-
-- new quantum models;
-- new accelerators;
-- new neuromorphic architectures;
-- optical computing;
-- molecular computing;
-- biological computing;
-- new distributed execution models;
-- future hardware architectures;
-- future mathematical abstractions;
-- future AI execution models.
-
-The language should therefore provide extension mechanisms based on:
-
-- types;
-- capabilities;
-- effects;
-- resources;
-- attributes;
-- dialects;
-- semantic operations;
-- modules;
-- versioned extensions.
-
-New domain functionality should not require uncontrolled growth of core keywords.
-
----
-
-30. Keyword Discipline
-
-A concept should become a reserved keyword only when lexical reservation provides genuine language-level value.
-
-Domain operations that can be represented as:
-
-identifier + type + semantic resolution
-
-should not automatically become reserved keywords.
-
-This is especially important for:
-
-- quantum gates;
-- mathematical functions;
-- accelerator operations;
-- hardware primitives;
-- vendor operations.
-
-A finite keyword catalog must not become an artificial ceiling on the language.
-
----
-
-31. Mathematical Principle
-
-Mathematics is a fundamental Zamani capability.
-
-The language may support:
-
-- scalar mathematics;
-- vectors;
-- matrices;
-- tensors;
-- symbolic mathematics;
-- calculus;
-- probability;
-- statistics;
-- optimization;
-- signal processing;
-- numerical methods;
-- scientific computing.
-
-However, mathematics should primarily use:
-
-types
-+
-generic operations
-+
-functions
-+
-intrinsics
-+
-libraries
-+
-semantic interfaces
-
-rather than turning every mathematical function into a permanent grammar keyword.
-
-The existing broad "Zamani.g4" mathematics surface must therefore be reconciled with this principle rather than expanded indefinitely by keyword accumulation.
-
----
-
-32. AI and Data Principle
-
-AI and data computation must be expressed through composable language abstractions.
-
-The language must be able to represent, as implementations mature:
-
-- tensors;
-- datasets;
-- models;
-- training;
-- inference;
-- automatic differentiation;
-- agents;
-- pipelines;
-- accelerators;
-- distributed data processing.
-
-AI constructs must interoperate with classical, quantum, hardware, networking, and distributed semantics.
-
-AI must not become a separate language embedded inside Zamani.
-
----
-
-33. Distributed Computing Principle
-
-Distributed computation must be independent of a fixed node count.
-
-The language may express:
-
-- nodes;
-- tasks;
-- services;
-- messages;
-- channels;
-- replication;
-- consistency;
-- fault tolerance;
-- remote execution;
-- placement.
-
-However, the source must not assume a fixed cluster size unless cluster size is explicitly part of program semantics.
-
-The compiler/runtime must negotiate actual placement with available resources.
-
----
-
-34. Networking Principle
-
-Networking constructs must represent communication semantics rather than hard-coded network topology.
-
-A program may require:
-
-reliable communication
-
-without specifying:
-
-node A → node B → node C
-
-unless that topology is semantically necessary.
-
-Network-specific realization belongs to networking/runtime/deployment layers.
-
----
-
-35. Security Principle
-
-Security is part of program semantics where security properties affect correctness.
-
-The language must support future semantic representation of:
-
-- permissions;
-- capabilities;
-- identity;
-- cryptographic operations;
-- privacy requirements;
-- trust requirements;
-- security constraints.
-
-Security semantics must not be reduced to arbitrary backend configuration.
-
----
-
-36. Interoperability Principle
-
-Zamani must interoperate with external ecosystems where necessary.
-
-Potential boundaries include:
-
-- C;
-- C++;
-- Python;
-- OpenQASM;
-- Verilog;
-- other HDL representations;
-- system interfaces;
-- foreign ABIs.
-
-Interoperability syntax describes a boundary.
-
-It must not leak foreign language semantics into the Zamani core unless deliberately adopted.
-
-External representations must lower into Zamani's canonical semantic model.
-
----
-
-37. AST Completeness Principle
-
-Every accepted source construct must have an AST representation that preserves all semantically relevant information.
-
-The AST must not:
-
-- discard meaningful attributes;
-- discard source locations needed for diagnostics;
-- collapse distinct semantic constructs accidentally;
-- encode target-specific behavior prematurely;
-- lose resource/capability information.
-
-If a grammar construct has no complete semantic representation, it must not be presented as production-ready.
-
----
-
-38. Semantic Completeness Principle
-
-A syntactically valid construct is not automatically semantically valid.
-
-The implementation must distinguish:
-
-recognized syntax
-
-from:
-
-implemented semantics
-
-and:
-
-implemented target support
-
-A feature must not be documented as fully supported merely because its parser recognizes its syntax.
-
-The repository's current grammar reference already identifies examples where syntax is planned or partially implemented, such as the declared-but-not-yet-emitted MTS literal.
-
-Such distinctions must remain explicit.
-
----
-
-39. Diagnostics Principle
-
-Invalid programs must produce structured diagnostics rather than crashes.
-
-Diagnostics should provide, where available:
-
-- source location;
-- source span;
-- error code;
-- severity;
-- message;
-- relevant context;
-- expected syntax;
-- actual syntax;
-- semantic explanation;
-- suggested correction where reliable.
-
-The compiler must not silently ignore unsupported syntax.
-
----
-
-40. Error Recovery Principle
-
-The lexer/parser must:
-
-- avoid infinite loops;
-- make progress after recoverable errors;
-- preserve useful source positions;
-- report multiple independent errors where safe;
-- avoid silently interpreting invalid source as a different valid program.
-
-Error recovery must never alter the semantics of successfully parsed regions without explicit diagnostics.
-
----
-
-41. Deep-Structure Principle
-
-Zamani must be able to represent deeply nested programs subject to available resources rather than arbitrary small parser constants.
-
-Implementation may use:
-
-- iterative parsing strategies;
-- explicit worklists;
-- explicit stacks;
-- bounded diagnostic resources;
-- configurable operational budgets.
-
-Such implementation mechanisms must not become language-level semantic restrictions.
-
----
-
-42. Resource Exhaustion Principle
-
-"Unlimited" in the language architecture means:
-
-«No artificial fixed machine-size ceiling is encoded into language semantics.»
-
-It does not mean that physical machines have infinite resources.
-
-Execution can legitimately fail because:
-
-- memory is unavailable;
-- execution time exceeds a configured budget;
-- a target lacks a required capability;
-- required hardware is unavailable;
-- an explicitly requested resource exceeds the environment;
-- a representation cannot be materialized within available resources.
-
-Such failures must be represented as resource/target/execution failures, not as evidence that the language itself has an arbitrary fixed limit.
-
----
-
-43. Compilation Principle
-
-Compilation must preserve semantic equivalence.
-
-A transformation is valid only if the resulting representation preserves the defined observable behavior of the source program.
-
-Optimization must not:
-
-- change quantum measurement semantics;
-- violate synchronization;
-- violate resource ownership;
-- violate effect constraints;
-- violate security properties;
-- silently remove required operations;
-- silently replace unsupported operations with different computations.
-
-Target-specific optimization is permitted only after semantic meaning has been established.
-
----
-
-44. Optimization Principle
-
-Optimization may exploit available resources.
-
-For example:
-
-more cores
-more memory
-GPU
-QPU
-accelerator
-parallel hardware
-
-may permit better execution.
-
-However, optimization must not require the source program to be rewritten merely because the available resources change.
-
-This is central to POCO-REAF.
-
----
-
-45. Scheduling Principle
-
-Scheduling is downstream of semantic representation.
-
-The scheduler determines:
-
-- ordering;
-- timing;
-- placement;
-- resource use;
-- synchronization;
-- target-specific execution arrangements.
-
-Scheduling must not redefine program semantics.
-
-Quantum scheduling must consume canonical "quantum::ir" rather than create a competing semantic representation.
-
-The repository already separates "quantum::ir" from scheduling infrastructure, including dedicated scheduling/IR boundaries.
-
----
-
-46. ZQN and Noise Principle
-
-ZQN is a target/execution concern, not a replacement for the language's quantum semantics.
-
-The language may express noise-related requirements where those requirements are semantically meaningful.
-
-Noise models, calibration data, execution conditions, and noise-aware transformations belong downstream.
-
-ZQN must consume canonical quantum semantics and relevant target/resource information rather than become a second language-level quantum model.
-
-The repository's existing ZQN architecture already keeps canonical quantum resource identities in "quantum::ir", reinforcing this separation.
-
----
-
-47. Error-Correction Principle
-
-Quantum error correction may be represented at language and semantic levels where necessary.
-
-However, the distinction must remain clear between:
-
-logical quantum semantics
-
-and:
-
-physical error-correction implementation
-
-The source may specify logical requirements.
-
-Target-specific physical encoding, syndrome scheduling, calibration, and hardware realization belong to downstream layers.
-
----
-
-48. Target Independence
-
-The source language must not require knowledge of every target that may exist in the future.
-
-A new backend should be able to implement existing semantic operations by defining:
-
-- capabilities;
-- lowering rules;
-- resource mappings;
-- scheduling;
-- target constraints.
-
-The grammar should not need modification merely because a new target backend is added.
-
-This is a key production criterion.
-
----
-
-49. Target-Specific Extensions
-
-Target-specific constructs are permitted only when target specificity is genuinely part of the requested semantics.
-
-They must be isolated through:
-
-- target modules;
-- dialects;
-- explicit annotations;
-- capability declarations;
-- interoperability boundaries;
-- target specifications.
-
-A target extension must not silently modify core Zamani semantics.
-
----
-
-50. Dialect Principle
-
-Dialect extensions must be:
-
-- namespaced;
-- versioned;
-- capability-aware;
-- explicitly registered;
-- compatible with the core semantic model.
-
-A dialect may extend syntax, but it must eventually map to canonical semantics.
-
-A dialect must not redefine the meaning of existing core constructs without explicit language-version rules.
-
----
-
-51. Future-Proofing Principle
-
-Future-proofing must come from abstraction rather than speculative syntax.
-
-Do not create syntax solely because a hypothetical future machine might need it.
-
-Instead provide extensible semantic mechanisms for:
-
-- new types;
-- new operations;
-- new capabilities;
-- new resources;
-- new effects;
-- new targets;
-- new dialects.
-
-This minimizes language churn.
-
----
-
-52. One Meaning Principle
-
-A Zamani construct must have one canonical semantic meaning.
-
-Different surface forms may exist as syntactic sugar.
-
-For example:
-
-surface syntax A
-surface syntax B
-
-may both lower to:
-
-canonical semantic construct
-
-They must not create two unrelated semantic concepts.
-
----
-
-53. No Duplicate Domain Models
-
-A concept must have one owner.
-
-Examples:
-
-Qubit identity
-    → quantum::ir
-
-Quantum operation semantics
-    → canonical quantum semantic representation
-
-Hardware capability
-    → hardware/capability model
-
-Resource requirement
-    → resource model
-
-Scheduling
-    → scheduling subsystem
-
-Noise model
-    → ZQN
-
-Calibration
-    → calibration subsystem
-
-Grammar syntax references these concepts but must not duplicate their authoritative implementations.
-
----
-
-54. Repository Integration Principle
-
-The grammar work must be performed against the entire repository.
-
-At minimum, integration analysis must cover:
-
-- "grammar/Zamani.g4";
-- "grammar/grammar.md";
-- "grammar/Zamani-Grammar.md";
-- "grammar/DESIGN.md";
-- lexer implementation;
-- parser implementation;
-- AST;
-- semantic analysis;
-- IR generation;
-- "quantum::ir";
-- quantum optimization;
-- quantum scheduling;
-- QEC/resilience;
-- ZQN;
-- hardware;
-- calibration;
-- resource management;
-- benchmarking;
-- tests;
-- examples;
-- compiler tooling.
-
-The grammar must expand existing repository functionality rather than create isolated replacements.
-
----
-
-55. Grammar Authority Principle
-
-The repository must ultimately have one normative language authority.
-
-The architecture must distinguish:
-
-Normative specification
-
-Defines what Zamani means.
-
-Canonical grammar
-
-Defines the formal syntax corresponding to that specification.
-
-Reference implementation
-
-Implements the grammar and semantics.
-
-Implementation snapshot
-
-Documents what the current implementation actually accepts.
-
-Historical/aspirational documentation
-
-Records designs that have not yet been promoted into the language.
-
-The current repository contains multiple grammar surfaces, including "grammar/Zamani.g4", "grammar/grammar.md", and "grammar/Zamani-Grammar.md".
-
-They must not remain independent authorities.
-
----
-
-56. Specification-to-Implementation Principle
-
-Every production language feature must have a traceable path:
-
-Specification
-     ↓
-Grammar
-     ↓
-Lexer/parser
-     ↓
-AST
-     ↓
-Semantic analysis
-     ↓
-Canonical representation
-     ↓
-Compiler
-     ↓
-Tests
-     ↓
-Documentation
-
-A feature missing one of these necessary layers is incomplete.
-
----
-
-57. Implementation Independence Principle
-
-Each grammar/specification component should be completable against predefined contracts.
-
-Before implementing a grammar file, its:
-
-- inputs;
-- outputs;
-- dependencies;
-- ownership;
-- non-ownership;
-- AST contract;
-- semantic contract;
-- IR contract;
-- downstream consumers;
-- tests;
-- compatibility rules
-
-must already be known.
-
-This prevents:
-
-finish file A
-→ implement file B
-→ discover A was architecturally wrong
-→ rewrite A
-
-The intended workflow is:
-
-architecture
-→ contracts
-→ dependency order
-→ implementation
-→ validation
-→ completion
-
----
-
-58. Dependency Direction Principle
-
-The architecture must maintain a one-way dependency direction.
-
-The intended conceptual direction is:
-
-Specification
-      ↓
-Grammar
-      ↓
-Frontend
-      ↓
-AST
-      ↓
-Semantic analysis
-      ↓
-Canonical IR
-      ↓
-Optimization
-      ↓
-Scheduling
-      ↓
-Hardware/runtime
-
-Not:
-
-grammar ↔ runtime
-grammar ↔ hardware
-grammar ↔ quantum backend
-grammar ↔ scheduler
-
-Circular dependencies must be avoided.
-
----
-
-59. Quantum Dependency Direction
-
-Quantum syntax must not depend on a particular backend.
-
-Correct:
-
-quantum grammar
-      ↓
-quantum AST
-      ↓
-quantum semantic analysis
-      ↓
-quantum::ir
-      ↓
-backend
-
-Incorrect:
-
-quantum grammar
-      ↓
-IBM-like backend
-      ↓
-quantum grammar
-
-or:
-
-quantum grammar
-      ↓
-native gate set
-
-as the semantic authority.
-
----
-
-60. Hardware Dependency Direction
-
-Hardware syntax may describe hardware semantics.
-
-It must not require a specific hardware backend merely to parse.
-
-Correct:
-
-HDL grammar
-    ↓
-hardware AST
-    ↓
-hardware semantics
-    ↓
-hardware IR / lowering
-    ↓
-FPGA / ASIC / simulator / future target
-
----
-
-61. Testing Principle
-
-Every language feature must have tests at the appropriate layers.
-
-Tests must include:
-
-Positive tests
-
-Valid programs.
-
-Negative tests
-
-Invalid syntax.
-
-Semantic-negative tests
-
-Syntactically valid but semantically invalid programs.
-
-Boundary tests
-
-Very small and very large valid structures.
-
-Cross-domain tests
-
-Examples combining domains.
-
-Compatibility tests
-
-Programs from supported language versions.
-
-Determinism tests
-
-Repeated compilation/parsing produces stable results.
-
-Round-trip tests
-
-Where a canonical printer exists:
-
-source
-→ lexer
-→ parser
-→ AST
-→ printer
-→ parser
-
-must preserve intended semantics.
-
----
-
-62. Cross-Domain Principle
-
-The language must support composition of domains rather than isolated domain silos.
-
-Important integration combinations include:
-
-classical + quantum
-classical + HDL
-classical + hardware
-quantum + HDL
-quantum + hardware
-quantum + distributed
-AI + quantum
-AI + hardware
-classical + quantum + distributed
-classical + quantum + HDL + hardware
-
-Cross-domain semantics must be defined before individual domain implementations are declared complete.
-
----
-
-63. Portability Principle
-
-Portability means preserving program meaning, not pretending all targets are identical.
-
-Different targets may have:
-
-- different performance;
-- different precision;
-- different capabilities;
-- different timing;
-- different memory;
-- different native operations;
-- different quantum connectivity;
-- different reliability.
-
-The compiler must account for those differences while preserving semantics wherever the target is capable of implementing the required program.
-
----
-
-64. Graceful Capability Failure
-
-If a target cannot satisfy a program's semantic requirements, the compiler/runtime must produce a structured failure.
-
-It must not:
-
-- silently change the algorithm;
-- silently remove required operations;
-- silently change precision;
-- silently reduce qubit count;
-- silently ignore hardware requirements.
-
-The failure must identify the unsatisfied requirement or capability.
-
----
-
-65. Explicit Specialization
-
-A programmer may intentionally specialize a program for a target.
-
-Such specialization must be explicit.
-
-For example:
-
-generic semantic program
-
-and:
-
-target-specific implementation
-
-must be distinguishable.
-
-Specialization must not contaminate the portable semantic core unnecessarily.
-
----
-
-66. Compile-Time and Runtime Information
-
-Compile-time information includes:
-
-- source syntax;
-- static types;
-- statically known constants;
-- compile-time constraints;
-- compile-time capabilities.
-
-Runtime information may include:
-
-- available memory;
-- available devices;
-- runtime topology;
-- runtime calibration;
-- runtime load;
-- runtime capabilities.
-
-The language architecture must not force runtime information into compile-time syntax when it is inherently dynamic.
-
----
-
-67. Reflection and Discovery
-
-Where runtime discovery is needed, the language may expose controlled mechanisms for discovering:
-
-- capabilities;
-- resources;
-- target properties;
-- execution state.
-
-Discovery must not turn runtime-specific information into permanent source-level assumptions.
-
----
-
-68. Resource Negotiation
-
-For portable execution, resource requirements may need negotiation.
-
-The conceptual model is:
-
-program requirement
-        ↓
-available capabilities
-        ↓
-available resources
-        ↓
-constraint solving
-        ↓
-feasible execution plan
-
-The grammar expresses the requirement.
-
-The resource/compiler/runtime layers determine feasibility.
-
----
-
-69. Observability Principle
-
-Resource and target adaptation must not silently change observable semantics.
-
-For example, increasing available parallel resources may improve performance.
-
-It must not change the result unless the language explicitly defines nondeterminism.
-
-Likewise, changing QPU hardware must not change logical program semantics merely because native gate decomposition differs.
-
----
-
-70. Temporal Principle
-
-Where Zamani represents time, temporal semantics must be distinct from wall-clock implementation details.
-
-A semantic timestamp, duration, ordering requirement, or temporal relation must not automatically imply:
-
-- a particular processor clock;
-- a particular timer implementation;
-- a particular physical clock frequency.
-
-Temporal semantics are portable.
-
-Physical timing is target-specific unless explicitly part of the program's meaning.
-
----
-
-71. Precision Principle
-
-Numerical precision must be represented semantically.
-
-The language must distinguish:
-
-required precision
-
-from:
-
-target implementation precision
-
-A backend may use a different representation only when the semantic correctness requirements permit it.
-
----
-
-72. Numeric Scalability
-
-Numerical literals and data structures must not contain hidden machine-width assumptions.
-
-The grammar must support representations that can be semantically validated against types.
-
-Overflow must result in a diagnostic where the language requires a value that cannot be represented.
-
-The lexer/parser must not silently truncate values merely to fit host-machine types.
-
----
-
-73. Tensor and Shape Principle
-
-Tensor shapes may be:
-
-- statically known;
-- dynamically known;
-- symbolic;
-- generic;
-- runtime-derived.
-
-A grammar must not impose fixed tensor dimensions merely because a backend implementation has fixed hardware dimensions.
-
-Shape requirements belong to type/semantic/resource analysis.
-
----
-
-74. Generic Programming Principle
-
-Generic constructs must describe algorithms over abstractions rather than machine sizes.
-
-For example:
-
-fn transform<T>(...)
-
-may operate over many types.
-
-Likewise, generic resource-aware computations should be able to adapt to available scale without requiring duplicated source programs.
-
----
-
-75. Library Versus Language Principle
-
-Not every useful operation belongs in core syntax.
-
-Prefer:
-
-core language
-+
-standard library
-+
-semantic intrinsics
-+
-domain libraries
-
-over:
-
-ever-growing keyword catalog
-
-A feature belongs in the core language when it affects fundamental semantics, syntax, typing, effects, resource semantics, or compilation behavior.
-
----
-
-76. Macro and Metaprogramming Principle
-
-Metaprogramming must not allow arbitrary syntax to bypass semantic invariants.
-
-Generated syntax must still pass through:
-
-- parsing;
-- validation;
-- semantic analysis;
-- type checking;
-- effect checking;
-- capability/resource validation.
-
-Macros must not become an escape hatch from language correctness.
-
----
-
-77. Security of Compilation
-
-Compilation must treat source input as untrusted data.
-
-The frontend must not execute arbitrary source-controlled behavior merely because syntax was parsed.
-
-Compile-time execution must have an explicit semantic boundary and controlled resource model.
-
----
-
-78. Reproducibility Principle
-
-Where deterministic compilation is required, compilation must be reproducible with the same:
-
-- source;
-- language version;
-- relevant compiler version;
-- compilation configuration;
-- semantic inputs.
-
-Machine-specific resource discovery must not unexpectedly alter semantic output.
-
-Target-specific artifacts may differ when target selection is intentionally different.
-
----
-
-79. Documentation Principle
-
-Documentation must distinguish:
-
-implemented
-
-from:
-
-specified
-
-from:
-
-experimental
-
-from:
-
-planned
-
-from:
-
-deprecated
-
-from:
-
-historical
-
-No aspirational construct may be described as production functionality until its implementation and semantic contracts are complete.
-
----
-
-80. Compatibility Principle
-
-Backward compatibility should be preserved whenever possible.
-
-When compatibility cannot be maintained:
-
-1. identify the breaking change;
-2. identify affected constructs;
-3. provide diagnostics;
-4. provide migration guidance;
-5. update compatibility tests;
-6. version the language rule.
-
-Compatibility must be deliberate rather than accidental.
-
----
-
-81. Reserved Space Principle
-
-The language should reserve namespace and syntax space for future evolution without pretending that unimplemented constructs already exist.
-
-Reserved constructs must be explicitly documented.
-
-A reserved keyword or syntax form must not be silently interpreted as a different semantic feature.
-
----
-
-82. Repository Consistency Principle
-
-The repository must not contain contradictory definitions of the same language construct.
-
-If:
-
-Zamani.g4
-
-and:
-
-grammar/grammar.md
-
-disagree, the discrepancy must be resolved explicitly.
-
-The implementation snapshot must not silently become a second language.
-
-The repository's existing "grammar/DESIGN.md" already establishes this authority problem and calls for reconciliation among the grammar/specification surfaces.
-
----
-
-83. Production Readiness Principle
-
-A feature is production-ready only when all applicable layers are complete:
-
-Specification
-+
-Grammar
-+
-Lexer
-+
-Parser
-+
-AST
-+
-Semantic analysis
-+
-Type/effect/capability analysis
-+
-Canonical IR
-+
-Compiler integration
-+
-Runtime/target integration
-+
-Tests
-+
-Documentation
-
-Parser recognition alone is not production readiness.
-
----
-
-84. File Ownership Principle
-
-Every grammar/specification file must have explicit ownership.
-
-For each file, the project must be able to answer:
-
-What does this file define?
-What does it not define?
-What consumes it?
-What may depend on it?
-What must never depend on it?
-What tests prove it correct?
-What completion criteria make it finished?
-
-A file must not depend on an implementation decision that has not already been specified by its upstream contract.
-
----
-
-85. No Re-Edit Completion Principle
-
-A completed file must be complete against its predefined integration contract.
-
-If another downstream file later requires fundamental changes to an already completed file, that indicates a missing architectural contract rather than normal implementation flow.
-
-The correct sequence is:
-
-define contracts
-      ↓
-resolve dependencies
-      ↓
-implement independent foundations
-      ↓
-implement dependents
-      ↓
-integrate
-      ↓
-validate
-
-not:
-
-implement everything
-      ↓
-discover architecture conflicts
-      ↓
-rewrite everything
-
----
-
-86. Independent-First Implementation Principle
-
-Implementation should begin with the least dependent artifacts.
-
-The broad dependency order is:
-
-language principles
-        ↓
-language scope/version/authority
-        ↓
-syntax model
-        ↓
-semantic model
-        ↓
-lexical foundation
-        ↓
-core names and source units
-        ↓
-types
-        ↓
-expressions
-        ↓
-statements
-        ↓
-declarations
-        ↓
-functions
-        ↓
-modules
-        ↓
-effects/capabilities
-        ↓
-memory/concurrency
-        ↓
-classical computation
-        ↓
-quantum computation
-        ↓
-hybrid computation
-        ↓
-HDL
-        ↓
-hardware
-        ↓
-distributed computing
-        ↓
-AI/data
-        ↓
-networking/security
-        ↓
-resource model
-        ↓
-compilation
-        ↓
-execution
-        ↓
-interoperability
-        ↓
-dialects/macros/metaprogramming
-        ↓
-validation
-        ↓
-cross-domain tests
-
-Actual implementation order must be reconciled with repository dependencies before coding.
-
----
-
-87. Rust Implementation Principle
-
-The grammar specification itself is language-independent, but the repository implementation governed by this specification must target:
-
-Rust 1.97 / Rust 1.97.1
-
-and:
-
-unsafe Rust forbidden
-
-Production code must prefer:
-
-- safe ownership;
-- explicit data structures;
-- checked conversions;
-- structured errors;
-- deterministic algorithms;
-- explicit resource budgets;
-- safe concurrency;
-- iterative algorithms where deep nesting threatens stack exhaustion.
-
----
-
-88. No Host-Machine Leakage
-
-The compiler must not accidentally make the host machine part of language semantics.
-
-Examples of prohibited leakage include:
-
-host pointer width determines Zamani integer syntax
-host CPU count determines legal parallelism
-host memory determines valid source syntax
-host GPU presence determines whether syntax parses
-host QPU presence determines whether a quantum program parses
-
-The host environment may affect compilation feasibility, but not the definition of the language.
-
----
-
-89. Compiler Resource Limits
-
-Compiler implementation may have configurable limits for operational safety.
-
-Such limits must be:
-
-- explicit;
-- documented;
-- diagnosable;
-- configurable where practical;
-- separate from language semantics.
-
-For example:
-
-compiler diagnostic budget
-compiler memory budget
-compiler execution budget
-
-must not be confused with:
-
-maximum legal Zamani program size
-
-unless the language specification deliberately defines such a semantic limit.
-
----
-
-90. Runtime Resource Limits
-
-Runtime limits are execution concerns.
-
-A runtime may report:
-
-insufficient memory
-insufficient qubits
-insufficient accelerator capacity
-insufficient execution time
-unsupported capability
-
-without implying that the language itself has those fixed limits.
-
----
-
-91. Semantic Portability
-
-A program is portable when its semantics can be preserved across compatible targets.
-
-Portability does not require identical implementation.
-
-For example:
-
-same algorithm
-    ↓
-CPU implementation
-GPU implementation
-FPGA implementation
-QPU implementation
-distributed implementation
-
-may use radically different implementations while preserving the same intended semantics.
-
----
-
-92. Future Hardware Principle
-
-Future hardware must be treated as an extension of the target space rather than a reason to redesign the language core.
-
-The language should be able to represent future execution capabilities through:
-
-new capability
-new resource
-new semantic operation
-new dialect
-new lowering
-
-where appropriate.
-
-The core language should not attempt to enumerate every future architecture.
-
----
-
-93. Atomic-to-Universal Principle
-
-"From atom to everywhere" means that the semantic architecture must work at radically different scales.
-
-At the smallest scale:
-
-single operation
-single value
-single device
-
-At larger scales:
-
-parallel program
-heterogeneous system
-distributed system
-quantum/classical system
-cluster
-cloud
-future execution environment
-
-The same semantic architecture must remain valid across these scales.
-
----
-
-94. Composition Principle
-
-Every major language domain must be composable.
-
-A domain should not assume that it is the only computation occurring in a program.
-
-For example:
-
-quantum operation
-+
-classical computation
-+
-network communication
-+
-resource constraint
-+
-security requirement
-
-must be representable as one coherent semantic program.
-
----
-
-95. Canonical Identity Principle
-
-Every semantic entity that crosses subsystem boundaries must have a stable canonical identity.
-
-This is particularly important for:
-
-- qubits;
-- classical values;
-- resources;
-- operations;
-- modules;
-- types;
-- capabilities;
-- devices;
-- source entities.
-
-Frontend-local identifiers must not become competing identities once a canonical subsystem owns the entity.
-
-The existing quantum architecture explicitly treats canonical quantum identifiers as belonging to "quantum::ir"; downstream systems such as ZQN must consume those identities rather than redefine them.
-
----
-
-96. Observable Semantics Principle
-
-The specification must define what is observable.
-
-Compilation transformations are permitted only when they preserve required observable behavior.
-
-Observable behavior may include:
-
-- returned values;
-- state changes;
-- IO;
-- communication;
-- measurement results;
-- ordering;
-- synchronization;
-- security guarantees;
-- explicitly specified timing/resource behavior.
-
-An optimization that changes a required observable behavior is invalid even if it appears faster.
-
----
-
-97. Quantum Observability
-
-Quantum programs require particular care because measurement changes what is observable.
-
-The compiler must preserve the defined semantics of:
-
-- state preparation;
-- operations;
-- measurement;
-- classical control;
-- probabilities;
-- observables;
-- reset;
-- dynamic circuits.
-
-A backend transformation must not alter the defined quantum computation merely because a different native implementation is available.
-
----
-
-98. Hardware Observability
-
-Hardware descriptions may have observable properties including:
-
-- signal behavior;
-- timing;
-- clock relationships;
-- state transitions;
-- interface protocols.
-
-Hardware optimizations must preserve the specified hardware semantics.
-
-Physical implementation details may vary where the specification permits variation.
-
----
-
-99. Explicit Undefined/Unspecified Behavior
-
-The language specification must explicitly distinguish:
-
-defined behavior
-
-from:
-
-implementation-defined behavior
-
-and:
-
-unspecified behavior
-
-and:
-
-invalid program
-
-No compiler implementation may accidentally convert unspecified behavior into an undocumented permanent language guarantee.
-
----
-
-100. Principle for Standard Library Growth
-
-As Zamani expands, functionality should preferentially be added through:
-
-standard libraries
-semantic intrinsics
-generic abstractions
-domain libraries
-dialects
-
-rather than through permanent expansion of the core grammar.
-
-The core grammar should remain conceptually compact even if Zamani's capabilities become enormous.
-
----
-
-101. Principle for Examples
-
-Examples must demonstrate semantic portability.
-
-Production examples should include:
-
-- minimal classical program;
-- generic computation;
-- scalable data processing;
-- concurrent computation;
-- distributed computation;
-- quantum program;
-- hybrid quantum-classical program;
-- HDL program;
-- hardware/software co-design;
-- accelerator program;
-- AI/data program;
-- cross-domain program;
-- POCO-REAF program.
-
-Examples must not accidentally establish implementation limits.
-
----
-
-102. Principle for Validation
-
-Validation must operate at multiple levels:
-
-lexical validation
-syntax validation
-AST validation
-name resolution
-type validation
-effect validation
-capability validation
-resource validation
-semantic validation
-IR validation
-target validation
-runtime validation
-
-A parser must not attempt to perform all of these responsibilities.
-
----
-
-103. Principle for Diagnostics Across Layers
-
-Errors should identify the layer responsible.
-
-Examples:
-
-syntax error
-type error
-effect error
-capability error
-resource error
-quantum semantic error
-hardware semantic error
-target incompatibility
-runtime resource exhaustion
-
-This prevents target limitations from being misreported as language limitations.
-
----
-
-104. Principle for Repository Evolution
-
-When an existing feature is changed:
-
-1. Identify the existing syntax.
-2. Identify its implementation.
-3. Identify consumers.
-4. Identify its intended semantics.
-5. Determine whether it is correct.
-6. Preserve it if valid.
-7. Migrate it if necessary.
-8. Deprecate it when appropriate.
-9. Remove it only with explicit compatibility justification.
-10. Update all affected tests and documentation.
-
-No valid existing feature should disappear silently.
-
----
-
-105. Principle for Existing Grammar Reconciliation
-
-The current broad ANTLR grammar and the current implementation grammar must be reconciled.
-
-The repository currently has:
-
-grammar/Zamani.g4
-grammar/grammar.md
-grammar/Zamani-Grammar.md
-
-with materially different roles and maturity levels.
-
-Therefore:
-
-- "Zamani.g4" must not silently claim syntax that the implementation cannot support;
-- "grammar.md" must not become a permanent competing language authority;
-- aspirational constructs must be clearly marked;
-- implemented constructs must be promoted through the specification process;
-- tests must establish actual support.
-
----
-
-106. Principle for "grammar/DESIGN.md"
-
-"grammar/DESIGN.md" provides the repository's current production architecture for the relationship among:
-
-- grammar;
-- lexer;
-- parser;
-- AST;
-- semantic analysis;
-- IR;
-- optimization;
-- scheduling;
-- ZQN;
-- hardware;
-- runtime.
-
-This document complements that architecture by defining the language principles that those implementation layers must obey.
-
-Where this document defines a semantic principle, downstream implementation documents must conform to it.
-
-Where implementation details change, this document should remain stable unless the underlying language principle itself changes.
-
----
-
-107. Principle for "grammar/grammar.md"
-
-"grammar/grammar.md" is an implementation-conformance artifact.
-
-It must describe what the current implementation actually accepts.
-
-It must not be used to silently introduce new language semantics.
-
-When implementation changes:
-
-specification
-→ grammar
-→ implementation
-→ tests
-→ grammar.md
-
-must remain synchronized.
-
----
-
-108. Principle for "grammar/Zamani.g4"
-
-"grammar/Zamani.g4" is the canonical ANTLR grammar representation after reconciliation.
-
-It must:
-
-- implement the normative syntax;
-- avoid semantic actions that create hidden compiler state;
-- avoid target-specific assumptions;
-- avoid hard-coded resource limits;
-- remain deterministic;
-- preserve source structure needed by downstream AST construction;
-- remain compatible with the repository's Rust frontend architecture.
-
-ANTLR grammar structure must not become a second semantic implementation.
-
----
-
-109. Principle for Specification Subdocuments
-
-The following documents under "grammar/specification/" refine this document:
-
-language-scope.md
-language-version.md
-compatibility.md
-grammar-authority.md
-syntax-model.md
-semantic-model.md
-compilation-model.md
-execution-model.md
-scalability-model.md
-poco-reaf.md
-extensibility.md
-reserved-space.md
-
-They must not contradict these principles.
-
-Their responsibilities are:
-
-language-principles.md
-    → why and what the language fundamentally guarantees
-
-language-scope.md
-    → what domains belong to the language
-
-language-version.md
-    → language versioning
-
-compatibility.md
-    → compatibility guarantees
-
-grammar-authority.md
-    → source-of-truth rules
-
-syntax-model.md
-    → formal syntax architecture
-
-semantic-model.md
-    → meaning of constructs
-
-compilation-model.md
-    → compilation stages
-
-execution-model.md
-    → execution semantics
-
-scalability-model.md
-    → resource-independent scaling
-
-poco-reaf.md
-    → formal POCO-REAF contract
-
-extensibility.md
-    → future evolution
-
-reserved-space.md
-    → intentionally reserved syntax/semantic space
-
----
-
-110. Principle for Cross-Repository Integration
-
-This document governs grammar decisions, but it must integrate with the repository rather than duplicate repository architecture.
-
-The key boundaries are:
-
-grammar
-  → lexer/parser
-
-lexer/parser
-  → AST
-
-AST
-  → semantic analysis
-
-semantic analysis
-  → canonical IR
-
-quantum semantics
-  → quantum::ir
-
-quantum::ir
-  → optimization/routing/scheduling/resilience/ZQN
-
-hardware semantics
-  → hardware abstraction/lowering
-
-resource semantics
-  → resource management
-
-execution semantics
-  → runtime
-
-target semantics
-  → backend
-
-The grammar must not invert these dependencies.
-
----
-
-111. Principle for No Hidden Semantic State
-
-Parsing must not mutate hidden runtime state.
-
-Syntax such as:
-
-remember
-recall
-learn
-infer
-quantum
-nano
-zamani
-sasa
-
-must produce explicit semantic structures.
-
-The parser must not secretly execute:
-
-- memory operations;
-- quantum operations;
-- hardware operations;
-- network operations;
-- AI inference;
-- temporal state transitions.
-
-Those belong to later semantic/runtime layers.
-
----
-
-112. Principle for Domain-Neutral Core
-
-The core language should remain domain-neutral enough to support multiple computation models.
-
-The same core should be able to express:
-
-values
-types
-functions
-control flow
-resources
-effects
-capabilities
-modules
-composition
-
-and then compose those with:
-
-classical
-quantum
-hardware
-distributed
-AI
-data
-network
-security
-future domains
-
-without forcing the core language to become a collection of unrelated domain-specific languages.
-
----
-
-113. Principle for Semantic Lowering
-
-Surface syntax may be expressive.
-
-Lowering must converge toward canonical semantic concepts.
-
-For example:
-
-surface quantum syntax
-        ↓
-quantum semantic operation
-        ↓
-quantum::ir
-
-and:
-
-surface hardware syntax
-        ↓
-hardware semantic representation
-        ↓
-hardware lowering
-
-and:
-
-surface resource requirement
-        ↓
-resource semantic representation
-        ↓
-resource analysis
-
-The source syntax must not determine the eventual target representation prematurely.
-
----
-
-114. Principle for Backend Freedom
-
-Backends are free to choose implementation strategies provided they preserve semantics.
-
-A CPU backend may use:
-
-- scalar execution;
-- SIMD;
-- multithreading.
-
-A GPU backend may use:
-
-- kernels;
-- vectorization;
-- device memory.
-
-A quantum backend may use:
-
-- native gates;
-- decomposition;
-- routing;
-- pulse schedules.
-
-An FPGA backend may use:
-
-- synthesized logic;
-- pipelines;
-- memory structures.
-
-The source program must not have to know which strategy was selected unless the strategy itself is part of the program's explicit semantics.
-
----
-
-115. Principle for Resource Availability
-
-Available resources determine feasibility and optimization.
-
-They do not redefine the language.
-
-Therefore:
-
-small machine
-
-may execute a smaller feasible workload,
-
-while:
-
-large machine
-
-may execute a larger workload,
-
-without either machine changing the definition of the source language.
-
----
-
-116. Principle for "Infinity"
-
-The phrase "infinity" in Zamani's scalability objective is a semantic design goal, not a claim that physical machines have infinite resources.
-
-The correct formal interpretation is:
-
-«No artificial finite machine-size ceiling is encoded into the language merely for implementation convenience.»
-
-Actual execution remains bounded by available:
-
-- memory;
-- compute;
-- storage;
-- network;
-- quantum resources;
-- energy;
-- time;
-- target capabilities;
-- compiler/runtime representation.
-
----
-
-117. Principle for Permanent Semantics
-
-Only concepts that deserve long-term language meaning should become permanent core semantics.
-
-Temporary implementation mechanisms must remain implementation details.
-
-Vendor-specific details must remain target-specific unless intentionally standardized.
-
-Experimental features must remain versioned/experimental until promoted.
-
-This protects POCO-REAF from being broken by short-lived hardware assumptions.
-
----
-
-118. Principle for Language Minimality
-
-A universal language does not need a keyword for every possible operation.
-
-Universal capability comes from composability.
-
-A relatively small semantic core can represent a large computation space through:
-
-types
-+
-functions
-+
-genericity
-+
-effects
-+
-capabilities
-+
-resources
-+
-operations
-+
-modules
-+
-extensions
-
-This is preferable to an indefinitely growing list of specialized grammar productions.
-
----
-
-119. Principle for Completeness
-
-Zamani language completeness is measured by semantic coverage, not by the number of grammar productions.
-
-A grammar with thousands of keywords is not necessarily more universal than a grammar with a smaller, well-composed semantic core.
-
-Production readiness therefore requires:
-
-semantic completeness
-+
-implementation completeness
-+
-integration completeness
-+
-test completeness
-
-rather than maximum grammar size.
-
----
-
-120. Final Language Contract
-
-The Zamani language must satisfy the following contract:
-
-Zamani source
-    ↓
-describes computation and intent
-    ↓
-without accidental machine assumptions
-    ↓
-with explicit semantics
-    ↓
-with explicit effects/capabilities/resources where required
-    ↓
-lowered to canonical semantic representations
-    ↓
-with quantum semantics crossing through quantum::ir
-    ↓
-optimized and scheduled independently of source syntax
-    ↓
-adapted to available resources and target capabilities
-    ↓
-lowered to the selected execution environment
-
-Therefore:
-
-One Program
-      ↓
-One Semantic Meaning
-      ↓
-Many Compilers / Targets
-      ↓
-Many Architectures
-      ↓
-Many Hardware Configurations
-      ↓
-Many Scales
-      ↓
-Many Execution Environments
-      ↓
-Future Platforms
-
-The language must never require:
-
-one program per CPU
-one program per GPU
-one program per FPGA
-one program per QPU
-one program per cluster
-one program per machine size
-
-unless the programmer has deliberately requested target-specific semantics.
-
----
-
-121. Production Completion Criteria
-
-This document is considered integrated only when all of the following are true:
-
-- The grammar has one clearly defined normative authority.
-- "Zamani.g4" is reconciled with the normative specification.
-- "grammar.md" is an implementation-conformance artifact rather than a competing authority.
-- "Zamani-Grammar.md" is clearly classified as historical, design, or formally promoted specification material.
-- Lexer semantics conform to the language principles.
-- Parser semantics conform to the language principles.
-- AST representations preserve semantic information.
-- Semantic analysis owns semantic validation.
-- Type analysis owns type correctness.
-- Effect analysis owns effect correctness.
-- Capability analysis owns capability requirements.
-- Resource analysis owns resource requirements.
-- "quantum::ir" remains the canonical quantum semantic boundary.
-- Quantum frontend code does not introduce duplicate canonical quantum IR.
-- Scheduling consumes canonical quantum semantics.
-- Optimization consumes canonical semantic representations.
-- ZQN consumes canonical quantum semantics and target/noise information.
-- Hardware layers own hardware-specific realization.
-- Runtime layers own runtime resource discovery.
-- No artificial fixed machine-size limit exists in language semantics.
-- No fixed qubit maximum exists in grammar semantics.
-- No fixed core/thread/device/node maximum exists in grammar semantics.
-- Target-specific facts are represented through target/resource/capability mechanisms.
-- Rust implementation remains compatible with Rust 1.97 / 1.97.1.
-- Rust "unsafe" is not required.
-- Diagnostics are structured.
-- Parsing is deterministic.
-- Unsupported syntax is not silently accepted.
-- Existing valid features are preserved or explicitly migrated.
-- Cross-domain integration is tested.
-- Scalability is tested.
-- Compatibility is tested.
-- The complete language pipeline is documented.
-- Every downstream grammar specification has an explicit relationship to these principles.
-
----
-
-122. Non-Negotiable Final Principle
-
-Zamani must not be designed around today's machine.
-
-It must be designed around computation itself.
-
-The language therefore follows:
-
-«Semantics before hardware.»
-
-«Intent before implementation.»
-
-«Capabilities before assumptions.»
-
-«Resources before fixed limits.»
-
-«Canonical IR before optimization.»
-
-«"quantum::ir" before quantum backend realization.»
-
-«Portability before vendor dependence.»
-
-«Composition before domain isolation.»
-
-«Explicit constraints before hidden assumptions.»
-
-«Safe implementation before unsafe shortcuts.»
-
-«Versioned evolution before accidental incompatibility.»
-
-«Program Once, Compile Once, Run Everywhere, Anywhere, Forever.»
-
-The ultimate Zamani contract is:
-
-WRITE ONCE
-    ↓
-DEFINE MEANING ONCE
-    ↓
-COMPILE ONCE
-    ↓
-MAP TO AVAILABLE CAPABILITIES
-    ↓
-ADAPT TO AVAILABLE RESOURCES
-    ↓
-EXECUTE ANYWHERE
-    ↓
-PRESERVE SEMANTICS ACROSS SCALE
-    ↓
-REMAIN EXTENSIBLE FOR FUTURE COMPUTING
+The language MUST support the architectural objective:
 
 Zamani: From Atom to Everywhere.
 
-POCO-REAF is a language architecture principle, not merely a deployment feature.
+It MUST pursue:
+
+Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF).
+
+These objectives govern architecture and language evolution. They do not constitute a claim that every possible program can execute on every physical machine.
+
+2. Normative terminology
+
+The terms MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, and MAY have normative meanings throughout this document.
+
+- MUST / MUST NOT: An unconditional conformance requirement or prohibition.
+- SHOULD / SHOULD NOT: A strong recommendation that may be departed from only for a documented, justified reason.
+- MAY: A permitted choice that does not violate another requirement.
+- Program meaning: The defined semantics of a valid program, including its observable behavior and declared obligations.
+- Implementation: A lexer, parser, compiler, runtime, tool, or other system that implements part of Zamani.
+- Target: An execution or realization environment.
+- Resource: A quantity or service needed, consumed, reserved, or made available by a computation.
+- Capability: An operation or property that an environment can provide.
+- Requirement: A condition that MUST hold for a valid execution or realization.
+- Constraint: A condition restricting the set of permitted realizations.
+- Preference: A non-mandatory selection criterion.
+- Hint: Optimization guidance that does not change program meaning.
+- Semantic model: The validated, target-independent interpretation of a program.
+- IR: An intermediate representation with an explicit semantic contract and ownership boundary.
+- Realization: The process of mapping validated program meaning to a particular execution environment.
+- Conformance: Demonstrable satisfaction of the applicable normative requirements.
+- Frozen file: A file whose ownership, dependencies, interfaces, integration mappings, tests, and compatibility obligations have been approved and verified.
+
+Where another specification defines a more specific term, that specification MAY refine the definition but MUST NOT contradict the principles established here.
+
+3. One language, multiple computational domains
+
+Zamani MUST remain one coherent programming language.
+
+Classical, quantum, hybrid, hardware, AI, data, networking, and distributed computation are domains within that language. They MUST NOT become independent languages with incompatible foundational semantics.
+
+The domains MUST share the appropriate common facilities, including:
+
+- Names and module resolution.
+- Expressions and types.
+- Functions and control flow.
+- Source locations and diagnostics.
+- Effects and capabilities.
+- Resource requirements and constraints.
+- Contracts and policies.
+- Provenance and compatibility.
+- Semantic validation and controlled extensibility.
+
+A domain MAY define specialized syntax, types, operations, or semantic rules when those are genuinely required.
+
+It MUST reuse existing common concepts whenever their semantics apply. It MUST NOT create duplicate universal type systems, expression systems, resource models, capability registries, effect taxonomies, policy engines, or competing canonical representations.
+
+Domain integration MUST be explicit and testable.
+
+A new computational domain MUST identify its syntax, AST mapping, semantic ownership, canonical IR destination, resource and capability requirements, effects, diagnostics, compatibility rules, and conformance tests before its integration is considered complete.
+
+4. POCO-REAF is a semantic contract
+
+POCO-REAF means Program Once, Compile Once, Run Everywhere, Anywhere, Forever.
+
+It is an architectural objective implemented through stable semantics, portable representations, explicit requirements, extensible capabilities, compatibility rules, and target-aware realization.
+
+It is not a keyword, a grammar trick, or a guarantee that every existing machine instruction will execute on every future processor.
+
+4.1 Program Once
+
+A developer SHOULD express the intended computation once, without rewriting the program merely because the available machine, accelerator, quantum processor, memory configuration, or deployment topology changes.
+
+The same source MUST preserve its defined meaning across conforming implementations and compatible execution environments.
+
+Source code MAY express genuine target requirements where they are part of the program's intended meaning. It MUST NOT acquire accidental dependencies on the development machine's configuration.
+
+4.2 Compile Once
+
+The architecture SHOULD support a portable semantic compilation artifact that can be validated, transformed, specialized, and realized for multiple compatible targets.
+
+The artifact MUST preserve the semantic identity of the program and identify the language, semantic, IR, dialect, and compatibility contracts needed to interpret it correctly.
+
+Compilation MUST distinguish target-independent semantic analysis from target-specific realization.
+
+A target-specific binary MAY be produced, but its target restrictions MUST be explicit. It MUST NOT be misrepresented as universally executable.
+
+4.3 Run Everywhere
+
+A valid program MUST be eligible for realization on every environment that satisfies its semantic requirements, resource requirements, capabilities, constraints, policies, and other applicable obligations.
+
+A target that cannot satisfy those obligations MUST be rejected or handled through an explicitly authorized fallback.
+
+The compiler or runtime MUST NOT silently change program meaning to force execution on an incompatible target.
+
+4.4 Run Anywhere
+
+The architecture MUST permit appropriate programs to execute locally, remotely, on embedded systems, on workstations, on servers, on accelerators, on simulators, on quantum hardware, and across clusters, clouds, or distributed systems.
+
+The source language MUST NOT assume a single deployment topology.
+
+4.5 Run Forever
+
+Long-term portability requires stable semantics, versioned representations, explicit compatibility contracts, reproducible artifacts where requested, migration rules, and extensible target interfaces.
+
+Future hardware MUST be accommodated through compatible realization mechanisms rather than by requiring the original source language to enumerate every future device.
+
+Existing programs MUST NOT have their meaning silently redefined by language, compiler, runtime, or target evolution.
+
+5. Scalability without arbitrary architectural ceilings
+
+Zamani MUST be designed to scale from the smallest supported computation to arbitrarily large computations.
+
+Here, unbounded scalability means that the language architecture MUST NOT impose arbitrary finite upper limits on quantities whose size is determined by the program, its mathematical semantics, its explicit requirements, or the environment.
+
+It does NOT mean that physical execution can consume infinite resources or that every implementation can represent every mathematically possible object.
+
+5.1 Prohibited universal ceilings
+
+The language MUST NOT define arbitrary universal limits on:
+
+- Classical values, registers, or program elements.
+- Logical or physical qubits.
+- Quantum operations, circuit depth, or operation arity.
+- CPU count, core count, thread count, or parallel workers.
+- GPU, FPGA, ASIC, QPU, accelerator, or device count.
+- Memory, storage, registers, vector width, or tensor dimensions.
+- Tensor rank, collection size, module count, or operation count.
+- Network participants, channels, distributed nodes, or cluster size.
+- Hardware topology, resource identifiers, or deployment scale.
+
+The following are examples of prohibited architectural design:
+
+const MAX_QUBITS: usize = 32;
+const MAX_CPUS: usize = 128;
+const MAX_GPUS: usize = 8;
+const MAX_NODES: usize = 256;
+const MAX_TENSOR_RANK: usize = 16;
+
+These are prohibited when used to establish supposed universal language or architecture limits.
+
+This prohibition does not prevent an algorithm from declaring a meaningful finite size. For example, a circuit containing a program-defined number of logical qubits or an array with a program-defined length is valid when the relevant type and semantic rules permit it.
+
+A number that belongs to a program's meaning MUST NOT be confused with a limit imposed by the implementation.
+
+5.2 Representation and implementation limits
+
+Implementations MAY encounter genuine limitations involving address spaces, integer representations, available memory, execution budgets, parser capacity, compiler complexity, operating systems, hardware, or physical laws.
+
+Such limits MUST:
+
+1. Be distinguished from language-level restrictions.
+2. Be documented at the layer that owns them.
+3. Be reported accurately when they prevent an operation.
+4. Avoid silently changing program semantics.
+5. Be replaceable or extendable without requiring a language redesign whenever practical.
+6. Be tested at relevant boundaries.
+7. Avoid becoming accidental, undocumented ceilings in shared semantic models or public interfaces.
+
+A resource limit imposed by an explicit security policy or execution budget is permitted when it is intentional, visible, and enforced at the appropriate boundary.
+
+5.3 Resource availability
+
+Resource availability determines which valid realizations are feasible. It MUST NOT retroactively redefine the meaning of the source program.
+
+The architecture MUST distinguish:
+
+- What a program means.
+- What resources it requires.
+- What capabilities an environment offers.
+- Which implementations satisfy the requirements.
+- Which policies authorize execution.
+- Which physical realization is selected.
+
+If no permitted realization exists, the implementation MUST provide a meaningful diagnostic or execution outcome rather than silently weakening requirements.
+
+6. Semantic independence and target realization
+
+Zamani MUST separate program meaning from implementation choices.
+
+The conceptual pipeline is:
+
+Zamani source
+      |
+      v
+Lexical analysis and parsing
+      |
+      v
+Domain-neutral AST
+      |
+      v
+Structural validation
+      |
+      v
+Name resolution and semantic analysis
+      |
+      +--> Types
+      +--> Effects
+      +--> Capabilities
+      +--> Resources
+      +--> Contracts
+      +--> Policies
+      +--> Provenance
+      |
+      v
+Canonical semantic representation
+      |
+      v
+Target-independent optimization
+      |
+      v
+Capability and resource negotiation
+      |
+      v
+Domain-specific lowering
+      |
+      v
+Routing, placement, and scheduling
+      |
+      v
+Resilience and recovery where required
+      |
+      v
+ZQN / HAL / target interfaces
+      |
+      v
+Execution
+
+This is an architectural contract. The existence of a stage in this diagram does not establish that the corresponding implementation is already complete.
+
+The language MUST NOT collapse parsing, semantic validation, target discovery, resource allocation, scheduling, and physical execution into one responsibility.
+
+6.1 Requirements
+
+Requirements state what MUST be true for a permitted execution.
+
+Examples of the intended resource and capability model include:
+
+requires qubits >= n
+requires memory >= required_memory
+requires capability("quantum.measurement")
+requires capability("gpu.compute")
+requires capability("tensor.compute")
+requires topology(required_topology)
+
+These examples illustrate semantic intent; their exact source syntax MUST be governed by the canonical grammar and resource specification.
+
+A requirement MUST be validated according to its defined meaning.
+
+6.2 Constraints
+
+Constraints restrict the valid realization space.
+
+A constraint MUST be enforced when the relevant realization is selected or validated. It MUST NOT be mistaken for a universal implementation limit.
+
+6.3 Preferences
+
+Preferences describe desirable but non-mandatory choices.
+
+A preference MAY influence selection, ranking, placement, or optimization. Failure to satisfy a preference MUST NOT invalidate a program unless a separate normative requirement establishes that outcome.
+
+6.4 Hints
+
+Hints MAY guide optimization. Ignoring a hint MUST NOT change the program's defined observable behavior.
+
+6.5 Target descriptions and observations
+
+Target descriptions and runtime observations belong to the relevant target, compiler, deployment, or runtime interfaces.
+
+They MUST NOT be implicitly converted into universal source-language assumptions.
+
+7. Syntax, AST, semantics, and IR have different responsibilities
+
+Each representation MUST have a clearly defined purpose.
+
+7.1 Syntax
+
+The grammar defines which source forms are structurally valid.
+
+Grammar rules MUST NOT attempt to implement resource negotiation, hardware discovery, authorization, optimization, physical routing, scheduling, or execution.
+
+7.2 Abstract syntax tree
+
+The AST records the structure of parsed source constructs and the source information needed by subsequent stages.
+
+Every supported construct MUST have a documented AST mapping. Source spans and diagnostic context MUST be preserved to the extent required by the language's source-mapping contract.
+
+The AST MUST NOT become a substitute for validated semantic information or a competing target-specific IR.
+
+7.3 Semantic model
+
+Semantic analysis establishes the meaning and validity of the AST, including names, types, effects, capabilities, resources, contracts, policies, and applicable domain rules.
+
+It MUST report invalid or unresolved semantics explicitly.
+
+7.4 Intermediate representations
+
+Each canonical IR MUST have a defined owner, purpose, invariant set, versioning policy, and integration contract.
+
+Domain-specific IRs MAY coexist when their responsibilities are distinct. They MUST NOT compete to be the canonical representation of the same semantics.
+
+The repository's established quantum boundary is "quantum::ir", implemented under "src/quantum/ir/". Quantum source constructs MUST reach that boundary through the frontend and semantic validation path.
+
+Classical constructs MUST use the established Classical IR architecture. HDL and hardware constructs MUST use their designated semantic and representation boundaries.
+
+A grammar feature MUST NOT create a new canonical IR merely because its domain is new.
+
+8. Classical, quantum, hybrid, and hardware principles
+
+8.1 Classical computation
+
+Classical computation is a foundational domain.
+
+The language SHOULD support the required range of scalar and structured values, functions, generic programming, control flow, ownership, memory, concurrency, parallelism, numerical computing, symbolic computing, systems programming, and accelerator computation.
+
+Classical semantics MUST remain compatible with the shared language foundations.
+
+8.2 Quantum computation
+
+Quantum computation is a first-class computational domain.
+
+Quantum syntax MUST NOT assume a permanently fixed number of qubits, a finite universal gate catalog, a particular vendor, a fixed coupling topology, or a universal calibration or noise model.
+
+Quantum operations MUST be extensible through well-defined operation identities, parameters, targets, controls, results, attributes, modifiers, and registered extensions where appropriate.
+
+A backend MAY have a finite native operation set. That limitation MUST remain a target property, not a universal language restriction.
+
+Logical qubits, physical qubits, measurement, reset, dynamic circuits, feed-forward, noise, and error correction MUST have explicitly defined semantic boundaries.
+
+Physical qubit allocation, routing, pulse selection, calibration, scheduling, and device communication MUST remain downstream responsibilities.
+
+8.3 Hybrid computation
+
+Classical and quantum computation MUST be able to participate in a single program when the required semantics and implementation support exist.
+
+Data exchange, control flow, measurement results, effects, synchronization, and resource boundaries MUST be explicit.
+
+A domain crossing MUST NOT silently discard type information, effects, resource requirements, provenance, or policy obligations.
+
+8.4 HDL and hardware/software co-design
+
+Zamani MUST support hardware description and hardware/software co-design through explicit syntax and semantics.
+
+Hardware constructs MAY describe modules, ports, signals, registers, clocks, timing, state machines, pipelines, memories, interfaces, parameters, and implementation intent.
+
+The language MUST distinguish an abstract hardware design from its concrete physical realization.
+
+A design MUST NOT require a particular FPGA family, fixed bus width, fixed processor count, or specific device merely because one implementation uses those properties.
+
+Where a width, timing requirement, topology, or physical property is essential to correctness, the program MAY declare it explicitly.
+
+9. Shared semantic foundations
+
+All domains MUST integrate with the common semantic control model.
+
+9.1 Types
+
+Types describe valid values, operations, relationships, and constraints.
+
+A type MUST NOT implicitly encode a target's physical layout or capacity unless the language's defined type semantics explicitly require such a property.
+
+Generic, linear, affine, resource-aware, quantum, and hardware-related types MUST integrate with the shared type system rather than establish incompatible parallel type universes.
+
+9.2 Effects
+
+Effects describe semantically relevant consequences of computation, including external interaction, mutation, randomness, measurement, network communication, native calls, learning, adaptation, reflection, and code generation where supported.
+
+Effects MUST be explicit enough for semantic checking and policy enforcement.
+
+Domain-specific operations MUST reuse the canonical effect model.
+
+9.3 Capabilities
+
+Capabilities describe operations or properties an environment can provide.
+
+Examples include quantum measurement, tensor computation, distributed communication, accelerator execution, and secure execution.
+
+Capability identity and interpretation MUST be governed by the canonical capability contract.
+
+Capability availability MUST be resolved against the applicable environment, not assumed during parsing.
+
+9.4 Resources
+
+Resources describe quantities or services required, available, consumed, or reserved.
+
+Resource kinds and quantities MUST be extensible. The resource model MUST support abstract and symbolic requirements without imposing arbitrary universal maxima.
+
+9.5 Contracts
+
+Preconditions, postconditions, invariants, assumptions, guarantees, and properties MUST have defined validation and execution responsibilities.
+
+A contract MUST NOT be considered satisfied merely because its syntax parsed successfully.
+
+9.6 Policies and authorization
+
+Policies govern which operations, adaptations, fallbacks, deployments, and resource uses are permitted.
+
+Recognizing a source construct MUST NOT itself authorize its execution.
+
+Operations that alter behavior or generate code MUST undergo the applicable semantic, capability, effect, resource, authorization, and provenance checks.
+
+9.7 Provenance
+
+The implementation MUST preserve the source and transformation information required for diagnostics, auditing, reproducibility, explainability, and compatibility.
+
+Provenance MUST remain available across the applicable compilation and domain boundaries.
+
+10. Determinism, correctness, and reproducibility
+
+Zamani MUST define which behaviors are deterministic, nondeterministic, implementation-dependent, target-dependent, or unspecified.
+
+These categories MUST NOT be conflated.
+
+10.1 Semantic preservation
+
+A compiler transformation MUST preserve the defined program meaning unless the language explicitly authorizes a transformation that changes a declared approximation, precision, or execution contract.
+
+Target selection MUST NOT silently change correctness requirements.
+
+10.2 Floating-point and numerical behavior
+
+Numerical operations MUST follow the applicable type and numerical semantics.
+
+Differences in precision, rounding, parallel reduction order, hardware behavior, or accelerator support MUST be handled according to explicit language and execution contracts.
+
+A compiler MUST NOT claim exact equivalence where the specified numerical model permits observable differences.
+
+10.3 Quantum and probabilistic behavior
+
+Quantum measurement, probabilistic computation, stochastic algorithms, and nondeterministic execution MUST be distinguished from implementation defects.
+
+Where exact reproducibility is requested, the implementation MUST define which environmental and execution conditions are necessary to provide it.
+
+10.4 Reproducibility
+
+Where reproducible builds or executions are required, the artifact and applicable contracts MUST identify the relevant language, semantic, IR, dialect, compiler, configuration, and provenance information.
+
+Reproducibility MUST NOT be promised beyond the guarantees actually defined and enforced.
+
+11. Safety and secure implementation
+
+The Zamani implementation MUST use Rust 2021 and support Rust 1.97 or later, consistent with the repository's declared toolchain baseline.
+
+Production Rust code MUST NOT use "unsafe".
+
+This prohibition includes unsafe blocks, unsafe functions, unsafe traits, unsafe implementations, and other uses of Rust's unsafe facilities.
+
+The implementation MUST use safe Rust abstractions for memory management, concurrency, data access, parsing, semantic analysis, IR construction, and resource handling.
+
+If an external component has a safety contract, that contract MUST be documented and validated at the applicable boundary. It MUST NOT be used to justify introducing unsafe Rust into the prohibited implementation.
+
+11.1 Memory and concurrency safety
+
+The implementation SHOULD use Rust's ownership, borrowing, type system, and safe concurrency facilities to prevent memory unsafety and data races.
+
+Language constructs for low-level systems programming do not grant the Rust implementation permission to violate this requirement.
+
+11.2 Input validation
+
+Source files, manifests, serialized artifacts, dialect registrations, external inputs, and target descriptions MUST be validated before they are trusted.
+
+Malformed or adversarial inputs MUST produce controlled errors rather than unbounded resource consumption where enforceable protections are available.
+
+11.3 Controlled adaptation and reflection
+
+Adaptation, reflection, metaprogramming, and code generation MUST follow explicit authorization, capability, effect, policy, resource, provenance, and validation contracts.
+
+They MUST NOT bypass type checking, semantic validation, sandboxing, or security policy.
+
+12. Extensibility without a closed universe
+
+Zamani MUST be extensible without requiring every future operation, device, algorithm, application, or computational domain to become a permanent core-language keyword.
+
+12.1 Core language
+
+Core syntax MUST contain only concepts whose universality justifies their inclusion in the language foundation.
+
+Application-specific functionality SHOULD be provided through libraries, modules, dialects, registered operations, capabilities, and policies as appropriate.
+
+12.2 Dialects and extensions
+
+An extension MUST identify its namespace, version, dependencies, registration mechanism, syntax, semantic mapping, compatibility requirements, and applicable tests.
+
+Extensions MUST NOT silently redefine established core syntax or semantics.
+
+12.3 Quantum and hardware extensibility
+
+A new quantum operation or hardware capability SHOULD be introduced through its declared operation or capability interface and semantic mapping.
+
+It MUST NOT require redesigning the universal parser merely because the underlying hardware or operation is new.
+
+12.4 External formats
+
+External languages and formats MUST be handled through explicit interoperability or dialect boundaries.
+
+Supporting an external format MUST NOT imply that the format has become part of Zamani's universal source grammar.
+
+13. Compatibility and evolution
+
+The language MUST evolve through explicit, versioned contracts.
+
+Compatibility MUST cover the applicable dimensions of:
+
+- Source syntax and lexical behavior.
+- Language semantics and type rules.
+- AST contracts.
+- Semantic-model contracts.
+- Classical and quantum IR.
+- HDL and hardware representations.
+- Dialects and extension interfaces.
+- Compiler and runtime artifacts.
+- Diagnostics and tooling.
+- Resource and capability registries.
+
+A change MUST be classified according to its actual compatibility impact.
+
+Breaking changes MUST be versioned and accompanied by migration guidance where appropriate.
+
+Deprecated syntax MUST have an explicit status and migration policy.
+
+Experimental or planned features MUST NOT be represented as stable merely because they are described in the specification.
+
+Historical documentation MUST NOT silently override the normative language specification.
+
+14. Repository authority and file ownership
+
+The repository MUST maintain a single, explicit authority model.
+
+The intended responsibilities are:
+
+File or directory| Responsibility
+"grammar/DESIGN.md"| Overall grammar architecture, ownership, dependency rules, integration, and freeze governance.
+"grammar/specification/"| Normative human-readable language and semantic specifications.
+"grammar/spec/"| Machine-oriented contracts, schemas, registries, and formal requirements.
+"grammar/Zamani.g4"| Canonical ANTLR composition boundary; no competing domain-specific authority.
+"grammar/antlr/ZamaniLexer.g4"| Public ANTLR lexer boundary, composed from the canonical lexical system.
+"grammar/antlr/ZamaniParser.g4"| Public ANTLR parser composition boundary.
+"grammar/lexer/"| Canonical token and lexical definitions.
+"grammar/grammar.md"| Reference for syntax and behavior implemented by the current frontend.
+"grammar/Zamani-Grammar.md"| Historical and extended design reference, with explicit feature status.
+"src/lexer.rs" and "src/parser.rs"| Existing Rust frontend implementation and its conformance obligations.
+"src/ast/"| Existing AST implementation and source-structure contracts.
+"src/semantic.rs" and related semantic modules| Semantic validation and analysis.
+Classical IR modules| Canonical classical representation under their established ownership.
+"src/quantum/ir/"| Canonical quantum semantic representation.
+Compiler, execution, hardware, runtime, and backend modules| Target-independent transformations and target-specific realization according to their contracts.
+
+These responsibilities MUST be reconciled with the repository's actual implementation during the inventory and integration stages. A proposed architectural boundary MUST NOT be described as already implemented unless verified.
+
+No document or source file may silently establish a competing authority.
+
+Where a contradiction is found, the conflict MUST be documented, resolved by the responsible maintainers, and reflected in the appropriate normative and implementation-conformance contracts.
+
+15. Independent-file completion and integration
+
+Every new or modified language file MUST be independently completable before integration.
+
+Its contract MUST be defined before implementation is declared complete.
+
+At minimum, the file's accompanying specification or ownership record MUST establish:
+
+1. Purpose and normative status.
+2. Exactly one owner for every exported symbol or concept.
+3. Explicit non-ownership boundaries.
+4. Inputs, outputs, imports, exports, and dependencies.
+5. Dependency direction and cycle restrictions.
+6. Lexer and token dependencies where applicable.
+7. AST mapping and source-location requirements.
+8. Semantic interpretation and validation responsibilities.
+9. Type, effect, capability, resource, contract, policy, and provenance mappings where applicable.
+10. Canonical IR destination where applicable.
+11. Compiler, runtime, tooling, and downstream integration points.
+12. Diagnostic behavior.
+13. Compatibility and versioning obligations.
+14. Positive, negative, boundary, and regression tests.
+15. Portability and scalability tests where applicable.
+16. A hard-coding audit.
+17. Explicit completion and freeze criteria.
+
+A file MUST NOT depend on unspecified future behavior or on private implementation details of another subsystem.
+
+Stable interfaces MUST be agreed upon in advance.
+
+If a downstream implementation later changes, the integration MUST adapt through the agreed interface wherever possible. A frozen specification or grammar file MUST NOT require semantic modification merely because another subsystem's implementation has changed.
+
+A change that genuinely alters the language contract MUST undergo explicit review and versioning; it MUST NOT be disguised as routine integration work.
+
+16. Production conformance and testing
+
+Every normative principle MUST be supported by an appropriate conformance mechanism.
+
+The complete test strategy SHOULD include the following layers:
+
+1. Token and lexical conformance.
+2. Parser and grammar-generation conformance.
+3. AST and source-span conformance.
+4. Name resolution and structural validation.
+5. Type and semantic conformance.
+6. Effects, capabilities, resources, contracts, and policy validation.
+7. Domain-specific classical, quantum, hybrid, and HDL tests.
+8. Canonical IR mapping and invariant tests.
+9. Compiler transformation and target-lowering tests.
+10. Runtime and execution-boundary tests.
+11. Portability and compatibility tests.
+12. Scalability and resource-boundary tests.
+13. Diagnostics and negative tests.
+14. Fuzzing and malformed-input tests where appropriate.
+15. Determinism and reproducibility tests where required.
+16. Cross-domain integration tests.
+
+Tests MUST distinguish implemented behavior from planned behavior.
+
+A specification test MUST NOT be marked as passing merely because its source example is documented.
+
+16.1 Hard-coding audit
+
+Automated validation MUST search for arbitrary resource ceilings and equivalent disguised restrictions in grammar files, specifications, semantic structures, registries, and integration code.
+
+The audit MUST examine both obvious constants and constraints encoded through array sizes, enumerations, fixed device lists, finite operation catalogs, fixed-width assumptions, or special-case branches.
+
+A fixed number MAY be legitimate when it is intrinsic to the language definition, a particular algorithm, a representation contract, or an explicitly configured implementation limit. The reason and ownership MUST be documented.
+
+The audit MUST distinguish such legitimate uses from universal architectural restrictions.
+
+16.2 Grammar validation
+
+Grammar validation MUST check, as applicable:
+
+- Resolved imports and dependencies.
+- Unique ownership of exported rules and tokens.
+- Duplicate or conflicting definitions.
+- Unreachable rules and accidental left recursion.
+- Ambiguities and precedence conflicts.
+- Correct parser and lexer composition.
+- AST and semantic mappings.
+- Diagnostic and compatibility contracts.
+- Conformance of implemented syntax with the normative specification.
+
+16.3 Scalability validation
+
+Scalability tests MUST establish that the same semantic program can be considered for different resource configurations without source rewriting solely because the available resources change.
+
+Tests SHOULD cover small and large parameter values, symbolic resource requirements, insufficient resources, incompatible capabilities, and explicitly permitted fallbacks.
+
+They MUST NOT claim that every backend or every physical target is supported when no such implementation exists.
+
+17. Fallbacks and graceful failure
+
+Fallback is permitted only when the program's semantics and policies authorize it.
+
+A fallback MAY use another compatible backend, a simulator, a different decomposition, or another explicitly permitted realization.
+
+A fallback MUST preserve the required program meaning and obligations.
+
+An approximation MAY be used only when the relevant semantic contract and policy explicitly permit it.
+
+If a requirement cannot be satisfied and no permitted fallback exists, the compiler or runtime MUST report the failure clearly.
+
+The implementation MUST NOT silently convert a required capability into a preference, weaken a constraint, remove an effect, or substitute an approximation.
+
+18. Required architectural invariants
+
+The following invariants apply to every present and future Zamani language feature:
+
+1. Zamani remains one coherent programming language.
+2. Every language concept has an explicit authority and owner.
+3. Syntax and semantics have distinct responsibilities.
+4. The AST represents source structure rather than physical execution state.
+5. Semantic analysis validates meaning before realization.
+6. Canonical IR ownership remains explicit.
+7. Quantum semantics use the established "quantum::ir" boundary.
+8. Classical semantics use the established Classical IR boundary.
+9. HDL and hardware semantics use their designated representation boundaries.
+10. Requirements, capabilities, resources, constraints, preferences, and hints remain distinct.
+11. Effects and policies are shared semantic contracts.
+12. Physical device selection is not implicit.
+13. Hardware discovery does not occur during parsing.
+14. Routing, placement, and scheduling remain downstream realization responsibilities.
+15. New operations and targets remain extensible without a closed universal catalog.
+16. No arbitrary universal resource ceiling is introduced.
+17. Real implementation limits are documented and diagnosed honestly.
+18. Target variation does not silently redefine program meaning.
+19. Fallbacks preserve semantics or are explicitly authorized to use a different declared contract.
+20. Compatibility and language evolution are versioned.
+21. Rust implementation code remains safe; "unsafe" is prohibited.
+22. Every production feature has an integration contract and conformance evidence.
+23. Planned, experimental, partial, and implemented features are clearly distinguished.
+24. No feature is considered frozen without satisfying its completion criteria.
+25. POCO-REAF remains an architectural objective enforced through semantic portability, stable representations, and explicit realization contracts.
+
+19. Definition of production readiness
+
+The language architecture is ready to be frozen only when the following conditions have been demonstrated.
+
+Authority
+
+- [ ] Normative specification ownership is unambiguous.
+- [ ] The root grammar and parser composition boundaries are documented.
+- [ ] Implemented behavior is distinguished from planned behavior.
+- [ ] Conflicting or duplicate authorities have been resolved or explicitly classified.
+
+Semantics and integration
+
+- [ ] Every supported construct has an AST mapping.
+- [ ] Every supported construct has a defined semantic interpretation.
+- [ ] Shared types, effects, capabilities, resources, contracts, policies, and provenance are consistently integrated.
+- [ ] Canonical IR ownership is explicit.
+- [ ] Domain-specific representations do not compete for the same semantic authority.
+- [ ] Compiler, runtime, and target integration contracts are documented.
+
+Scalability and portability
+
+- [ ] No arbitrary universal hardware or resource ceilings exist.
+- [ ] Requirements and resource quantities can be expressed without assuming a fixed machine size.
+- [ ] Target feasibility is separated from source-language validity.
+- [ ] Insufficient resources and missing capabilities produce explicit outcomes.
+- [ ] Fallback behavior is controlled and documented.
+- [ ] Scalability and portability tests cover the implemented feature set.
+
+Safety and validation
+
+- [ ] Rust 2021 and Rust 1.97 or later are supported.
+- [ ] The implementation complies with the prohibition on "unsafe" Rust.
+- [ ] Grammar and import validation pass.
+- [ ] Ownership and dependency audits pass.
+- [ ] Positive, negative, boundary, and regression tests pass.
+- [ ] Compatibility and diagnostic contracts are established.
+- [ ] The documented implementation status matches verified behavior.
+
+A checkbox MUST NOT be marked complete without evidence from the relevant specification, source implementation, automated validation, or test results.
+
+20. Final principle
+
+Zamani MUST describe what a computation means, what it requires, which capabilities it needs, which constraints govern its realization, and which effects and policies apply.
+
+The compiler and runtime architecture MUST determine how that computation can be realized in a compatible environment.
+
+The intended relationship is:
+
+ONE ZAMANI PROGRAM
+        |
+        v
+DEFINED PROGRAM MEANING
+        |
+        v
+SHARED SEMANTIC CONTRACTS
+        |
+        v
+CANONICAL REPRESENTATIONS
+        |
+        v
+CAPABILITY AND RESOURCE NEGOTIATION
+        |
+        v
+TARGET-SPECIFIC REALIZATION
+        |
+        v
+EXECUTION WITH DEFINED GUARANTEES
+
+The same source may be realized on a small embedded system, a CPU, a multicore system, a GPU, an FPGA, an ASIC, a quantum processor, a simulator, a heterogeneous machine, a cluster, or a future computational platform when the applicable requirements can be satisfied.
+
+The language MUST NOT impose artificial architectural ceilings merely because current implementations or hardware are limited.
+
+At the same time, it MUST report genuine limitations accurately and preserve the distinction between semantic validity and execution feasibility.
+
+The fundamental Zamani principle is therefore:
+
+«A Zamani program defines computational meaning; available resources and compatible implementations determine how that meaning can be realized.»
+
+This principle governs language design, grammar composition, AST construction, semantic analysis, canonical IRs, compilation, execution, compatibility, and future extensions.
+
+It is the foundation for POCO-REAF and for scaling Zamani from the smallest supported computation to arbitrarily large computational systems without requiring a redesign of the language whenever the underlying technology evolves.
