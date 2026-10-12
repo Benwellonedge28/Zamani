@@ -1,0 +1,61 @@
+
+/*
+ * Zamani quantum parser conformance fixture.
+ *
+ * Path:
+ *   src/frontend/parser/tests/fixtures/quantum.zm
+ *
+ * Purpose:
+ *   Exercise quantum-domain entry, qualified operation names, parameterized
+ *   operations, multiple operands, measurement destinations, measurement
+ *   options, and ordinary expressions used as quantum operands.
+ *
+ * Authority:
+ *   grammar/spec/syntax.md
+ *   grammar/spec/quantum.md
+ *   grammar/quantum/quantum.g4
+ *   grammar/quantum/operations.g4
+ *   grammar/quantum/measurement.g4
+ *
+ * Compatibility:
+ *   Rust 1.97+, Rust 2021, safe Rust only.
+ *
+ * This fixture specifies source syntax, not hardware execution. The operation
+ * names and identifiers are symbolic; their declarations, types, capabilities,
+ * and target compatibility are resolved by later compiler stages.
+ *
+ * No fixed qubit count, operation count, parameter count, or device capacity
+ * is implied by this fixture.
+ */
+
+quantum {
+    // An operation with no explicit parameter-argument clause.
+    // The operation name is a qualified identifier, not a reserved gate list.
+    apply standard::hadamard(q0);
+
+    // A parameterized operation: parameter arguments and target operands
+    // occupy distinct parenthesized clauses.
+    apply standard::rotation(theta)(q1);
+
+    // A multi-operand operation. Its legal arity is determined by its
+    // semantic declaration, not by a global parser limit.
+    apply vendor::entangle(q0, q1);
+
+    // A future or third-party operation remains expressible without adding
+    // a new parser keyword or a new hard-coded operation branch.
+    apply future::adaptive_operation(angle, precision)(q0, q1);
+
+    // Measurement with an explicit classical result destination.
+    measure q0 -> result0;
+
+    // Measurement with an explicit option. The option vocabulary is
+    // intentionally open; semantic analysis validates its meaning.
+    measure q1 with { basis = X };
+
+    // Multiple measurement targets are represented by the grammar's target
+    // list. Result and target compatibility remain semantic concerns.
+    measure q0, q1;
+
+    // Parameter and operand expressions use the shared expression grammar.
+    apply algorithms::controlled_operation(theta + offset)(q0, q1);
+}
