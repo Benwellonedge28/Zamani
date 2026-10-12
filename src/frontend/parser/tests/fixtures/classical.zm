@@ -1,0 +1,185 @@
+
+/*
+ * Zamani Classical Computing Conformance Fixture
+ *
+ * Path:
+ *   src/frontend/parser/tests/fixtures/classical.zm
+ *
+ * Purpose:
+ *   Exercise classical source constructs for parser conformance:
+ *   declarations, functions, types, generics, expressions, control flow,
+ *   collections, modules, and symbolic problem sizes.
+ *
+ * Requirements:
+ *   - Rust frontend baseline: Rust 1.97 or later.
+ *   - Safe Rust implementation; no unsafe code.
+ *   - Source syntax is governed by the normative Zamani specification
+ *     and canonical ANTLR grammar.
+ *   - This file is a parser fixture, not a hardware benchmark.
+ *
+ * Scalability:
+ *   No machine-capacity assumptions are encoded in this source.
+ *   Actual execution depends on the implementation, semantics, and
+ *   resources available to the compiler and runtime.
+ */
+
+module classical_conformance {
+
+    /*
+     * Named data types.
+     *
+     * The parser must preserve field names, declared types, and source
+     * positions. Layout and representation are downstream concerns.
+     */
+    struct Point {
+        x: i64;
+        y: i64;
+    }
+
+    struct Bounds {
+        lower: Point;
+        upper: Point;
+    }
+
+    enum Direction {
+        North,
+        South,
+        East,
+        West
+    }
+
+    /*
+     * Constants and functions.
+     */
+    const ORIGIN: Point = Point {
+        x: 0,
+        y: 0
+    };
+
+    fn identity<T>(value: T) -> T {
+        return value;
+    }
+
+    fn add(left: i64, right: i64) -> i64 {
+        return left + right;
+    }
+
+    fn subtract(left: i64, right: i64) -> i64 {
+        return left - right;
+    }
+
+    fn squared_distance(point: Point) -> i64 {
+        let dx: i64 = subtract(point.x, ORIGIN.x);
+        let dy: i64 = subtract(point.y, ORIGIN.y);
+
+        return dx * dx + dy * dy;
+    }
+
+    /*
+     * Branching and iteration.
+     */
+    fn absolute(value: i64) -> i64 {
+        if value < 0 {
+            return -value;
+        } else {
+            return value;
+        }
+    }
+
+    fn sum_range(start: i64, end: i64) -> i64 {
+        let mut current: i64 = start;
+        let mut total: i64 = 0;
+
+        while current < end {
+            total = add(total, current);
+            current = current + 1;
+        }
+
+        return total;
+    }
+
+    /*
+     * Recursive computation.
+     *
+     * Termination and integer-overflow behavior are semantic/runtime
+     * concerns; the parser must preserve the recursive call structure.
+     */
+    fn factorial(value: u64) -> u64 {
+        if value <= 1 {
+            return 1;
+        }
+
+        return value * factorial(value - 1);
+    }
+
+    /*
+     * Generic algorithms remain independent of a particular container
+     * implementation or processor architecture.
+     */
+    fn first_or_identity<T>(value: T) -> T {
+        return identity(value);
+    }
+
+    /*
+     * Expression conformance:
+     * precedence, associativity, grouping, comparison, and boolean logic.
+     */
+    fn expression_cases(
+        a: i64,
+        b: i64,
+        c: i64
+    ) -> bool {
+        let arithmetic: i64 = a + b * c;
+        let grouped: i64 = (a + b) * c;
+        let comparison: bool = arithmetic >= grouped;
+        let logical: bool = comparison && (a != b || b != c);
+
+        return logical;
+    }
+
+    /*
+     * A symbolic size is a program value, not a compile-time declaration
+     * of a universal maximum collection size or hardware capacity.
+     */
+    fn sum_values(values: Vec<i64>) -> i64 {
+        let mut total: i64 = 0;
+
+        for value in values {
+            total = total + value;
+        }
+
+        return total;
+    }
+
+    /*
+     * Qualified names and module composition.
+     */
+    module arithmetic {
+        fn square(value: i64) -> i64 {
+            return value * value;
+        }
+
+        fn cube(value: i64) -> i64 {
+            return value * value * value;
+        }
+    }
+
+    /*
+     * Integration entry point for the fixture's classical examples.
+     */
+    fn run_examples() -> i64 {
+        let point: Point = Point {
+            x: 3,
+            y: 4
+        };
+
+        let distance: i64 = squared_distance(point);
+        let total: i64 = sum_range(0, 10);
+        let factorial_value: u64 = factorial(5);
+        let squared: i64 = arithmetic::square(distance);
+
+        let result: i64 = total + squared + factorial_value as i64;
+
+        return result;
+    }
+}
