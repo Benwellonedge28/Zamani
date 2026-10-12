@@ -1,0 +1,35 @@
+
+/*
+ * File: src/frontend/parser/tests/fixtures/hdl.zm
+ *
+ * Purpose:
+ *   HDL parser conformance fixture covering logical module structure,
+ *   ports, signals, combinational behavior, and sequential behavior.
+ *
+ * Portability:
+ *   Describes logical behavior, not a physical FPGA, ASIC, board, or device.
+ *   Contains no fixed machine-capacity assumptions.
+ *
+ * Verification status:
+ *   Proposed fixture based on the repository's HDL grammar productions.
+ *   It is not yet a verified passing fixture.
+ */
+
+module LogicUnit {
+    input clk;
+    input data;
+    input enable;
+    output result;
+
+    signal state;
+    signal intermediate;
+
+    combinational logic {
+        intermediate = state & enable;
+        result = intermediate;
+    }
+
+    sequential state_update @(posedge clk) {
+        state = data;
+    }
+}
