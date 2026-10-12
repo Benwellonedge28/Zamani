@@ -1,0 +1,49 @@
+
+/*
+ * Zamani hybrid-computing conformance fixture.
+ *
+ * Path:
+ *   src/frontend/parser/tests/fixtures/hybrid.zm
+ *
+ * Purpose:
+ *   Exercise the shared classical/quantum syntax boundary, hybrid regions,
+ *   bindings, domain-qualified invocations, conditional control, and
+ *   capability requirements.
+ *
+ * Compatibility:
+ *   Rust 1.97+ applies to the frontend implementation, not this source file.
+ *   The fixture contains no target-specific capacity assumptions.
+ *
+ * Important:
+ *   This fixture must be parsed against the repository's canonical grammar.
+ *   It is not evidence of a passing parser test until the grammar is
+ *   successfully composed and the parser test suite executes it.
+ */
+
+mixed_compute {
+    let input = 7;
+
+    let input_squared = input * input;
+
+    requires capability("quantum.measurement");
+
+    capability("quantum.measurement");
+
+    prefer capability("quantum.compute");
+
+    constraint input_squared >= 0;
+
+    hint capability("classical.compute");
+
+    quantum::prepare(input);
+
+    quantum::evolve(input_squared);
+
+    let measurement = quantum::measure(input);
+
+    when measurement {
+        let result = classical::interpret(measurement);
+
+        classical::report(result);
+    }
+}
