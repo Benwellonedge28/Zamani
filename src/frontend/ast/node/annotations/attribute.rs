@@ -1182,3 +1182,17 @@ mod tests {
         assert!(attribute.validate().is_ok());
     }
 }
+
+
+
+
+
+
+    /// A nested source attribute used as another attribute's value.
+    ///
+    /// The box provides indirection for the recursive representation.
+    /// The nested attribute remains source data; it is never executed here.
+    Nested(Box<Attribute>),
+
+
+            Self::Nested(attribute) => attribute.validate(),
