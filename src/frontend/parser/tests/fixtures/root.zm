@@ -1,0 +1,67 @@
+/*
+ * Zamani root-module conformance fixture.
+ *
+ * Path:
+ *   src/frontend/parser/tests/fixtures/root.zm
+ *
+ * Purpose:
+ *   Exercise root module declarations, nested modules, public visibility,
+ *   and composition across classical, quantum, HDL, hybrid, distributed,
+ *   and data-oriented computing.
+ *
+ * Authority:
+ *   grammar/modules/modules.g4
+ *   grammar/core/source-unit.g4
+ *   grammar/core/qualified-names.g4
+ *
+ * Contract:
+ *   - Use Zamani module syntax, not Rust module syntax.
+ *   - Module bodies compose the canonical source-item grammar.
+ *   - Module names express source-level organization, not hardware identity.
+ *   - Visibility is syntax here; access control is validated downstream.
+ *   - This fixture does not require filesystem or package resolution.
+ *   - No hardware capacity or computational-domain ceiling is implied.
+ *
+ * This is a proposed conformance fixture. It must pass the repository's
+ * assembled canonical grammar and AST integration tests before being
+ * marked verified.
+ */
+
+module root {
+    /*
+     * Shared frontend infrastructure.
+     *
+     * These declarations express logical module organization. They do not
+     * independently define how source files are discovered or loaded.
+     */
+    pub module frontend {
+        pub module lexer;
+
+        pub module parser;
+
+        pub module ast;
+    }
+
+    /*
+     * Shared semantic and compilation boundaries.
+     */
+    pub module semantic;
+
+    pub module classical;
+
+    pub module quantum;
+
+    pub module hdl;
+
+    pub module hybrid;
+
+    /*
+     * Additional computational domains.
+     *
+     * These are peer modules within one language architecture, not separate
+     * competing language or parser implementations.
+     */
+    pub module distributed;
+
+    pub module data;
+}
