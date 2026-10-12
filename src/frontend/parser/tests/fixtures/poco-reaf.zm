@@ -1,0 +1,86 @@
+
+/*
+ * Zamani POCO-REAF portability conformance fixture.
+ *
+ * Path:
+ *   src/frontend/parser/tests/fixtures/poco-reaf.zm
+ *
+ * Purpose:
+ *   Exercise portable resource intent, capability requirements, advisory
+ *   preferences, constraints, hints, and mixed-domain computation.
+ *
+ * Architecture:
+ *   - Syntax is parsed independently of target selection.
+ *   - Resource and capability names remain open-ended.
+ *   - Values are symbolic where target-dependent.
+ *   - Quantum and classical operations use domain-qualified invocations.
+ *   - No physical hardware is selected or allocated by this source.
+ *
+ * Rust 1.97+ and safe-Rust requirements apply to the parser implementation.
+ * This fixture must be validated against the canonical grammar and AST.
+ */
+
+resource compute;
+
+resource memory: memory;
+
+resource accelerator: hardware::accelerator;
+
+resource qpu: quantum::qpu;
+
+resource workload {
+    quantity = required_capacity;
+    latency = latency_budget;
+};
+
+/*
+ * The hybrid marker is contextual in the current grammar.
+ * Semantic validation must verify that its spelling is "hybrid".
+ */
+
+hybrid {
+    /*
+     * Mandatory requirements describe program intent.
+     * The compiler or runtime must evaluate them against actual capabilities.
+     */
+
+    requires capability("quantum.measurement");
+
+    requires capability("classical.compute");
+
+    requires qubits >= required_qubits;
+
+    requires memory >= required_memory;
+
+    requires topology(required_topology);
+
+    /*
+     * Preferences and hints are advisory.
+     * They must not silently change program semantics.
+     */
+
+    prefer capability("accelerator.compute");
+
+    constraint latency < latency_budget;
+
+    hint locality;
+
+    /*
+     * Shared values and operations cross domain boundaries through
+     * ordinary expressions and qualified invocations.
+     */
+
+    let input = workload_input;
+
+    let prepared = classical::prepare(input);
+
+    quantum::prepare(prepared);
+
+    let measurement = quantum::measure(prepared);
+
+    when measurement {
+        let result = classical::interpret(measurement);
+
+        classical::report(result);
+    }
+}
