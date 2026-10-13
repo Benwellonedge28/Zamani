@@ -1,464 +1,608 @@
-
 #![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
-//! End-to-end Zamani lexer and parser benchmark.
+//! Zamani frontend lexing and expression-parsing benchmark.
 //!
-//! Path:
-//!     src/frontend/parser/benches/lex_parse.rs
-//!
-//! Rust:
-//!     1.97 or later
-//! Edition:
-//!     2021
+//! File: src/frontend/parser/benches/lex_parse.rs
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
+//! Safety: Safe Rust only.
 //!
 //! # Purpose
 //!
-//! Measure the existing repository lexer and parser on generated Zamani
-//! source programs of increasing size. Report lexer throughput separately
-//! from the combined lexer-plus-parser pipeline.
+//! Measure three separate workloads:
 //!
-//! # Architecture
+//! 1. Lexing generated Zamani source with the canonical frontend scanner.
+//! 2. Parsing expression statements from a pre-tokenized stream using the
+//!    canonical domain-neutral expression parser.
+//! 3. End-to-end lexing plus expression parsing.
 //!
-//! Generated source
-//!     -> SourceFile
-//!     -> legacy Lexer
-//!     -> legacy Parser
-//!     -> parsed program and diagnostics
+//! This benchmark does not use the legacy parser and does not implement a
+//! replacement parser.
 //!
-//! # Important implementation boundary
+//! # Scope
 //!
-//! This benchmark intentionally uses crate::lexer and crate::parser,
-//! because src/frontend/parser/mod.rs is not yet a functioning parser
-//! implementation. It must be migrated to the canonical frontend API
-//! after that API and its AST integration are implemented and verified.
+//! Until a stable complete-program parser is available, this benchmark
+//! measures expression-statement workloads, not the entire Zamani grammar.
+//! Its generated syntax is intentionally limited to identifiers, addition,
+//! multiplication, and semicolon-terminated statements.
 //!
-//! It does not benchmark ANTLR-generated parser code.
+//! # Environment configuration
 //!
-//! # Resource behavior
+//! ZAMANI_BENCH_STATEMENTS  Number of generated statements.
+//! ZAMANI_BENCH_TERMS       Operands per expression.
+//! ZAMANI_BENCH_ITERATIONS  Number of measured iterations.
+//! ZAMANI_BENCH_NESTING     Expression-parser nesting budget.
 //!
-//! Workload sizes and iteration counts are configurable through environment
-//! variables. There is no fixed source-size or hardware-capacity ceiling
-//! encoded in this benchmark. Real memory, address-space, time and process
-//! limits still apply.
+//! Every value must be a positive integer. These are workload settings,
+//! not language-level limits. Workloads remain bounded by available memory,
+//! address space, execution time, and configured lexer/parser safety budgets.
 //!
-//! # Environment
+//! # Cargo integration
 //!
-//! ZAMANI_BENCH_DECLARATIONS
-//!     Comma-separated positive declaration counts.
-//!     Default: 1,16,256,1024
+//! Add the following benchmark target to Cargo.toml while preserving existing
+//! benchmark targets:
+//
+//! [[bench]]
+//! name = "lex_parse"
+//! path = "src/frontend/parser/benches/lex_parse.rs"
+//! harness = false
 //!
-//! ZAMANI_BENCH_ITERATIONS
-//!     Positive iteration count per workload and benchmark mode.
-//!     Default: 10
+//! Run with:
 //!
-//! ZAMANI_BENCH_WARMUP
-//!     Positive iteration count for warm-up.
-//!     Default: 2
+//! cargo bench --bench lex_parse
 //!
-//! # Safety
+//! Example workload configuration:
 //!
-//! This file forbids unsafe Rust.
+//! ZAMANI_BENCH_STATEMENTS=100000 \
+//! ZAMANI_BENCH_TERMS=32 \
+//! ZAMANI_BENCH_ITERATIONS=10 \
+//! cargo bench --bench lex_parse
 
-use std::env;
+use std::error::Error;
+use std::fmt::Write as FmtWrite;
 use std::hint::black_box;
-use std::process::ExitCode;
-use std::sync::Arc;
+use std::io;
 use std::time::{Duration, Instant};
 
-use zamani_compiler::lexer::{Lexer, TokenType};
-use zamani_compiler::parser::Parser;
-use zamani_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::frontend::lexer::api::TokenSource;
+use zamani_compiler::frontend::lexer::config::LexerConfig;
+use zamani_compiler::frontend::lexer::keyword_registry::KeywordRegistry;
+use zamani_compiler::frontend::lexer::operator_registry::{
+    OperatorDefinition,
+    OperatorRegistry,
+};
+use zamani_compiler::frontend::lexer::scanner::Scanner;
+use zamani_compiler::frontend::lexer::token::Token;
+use zamani_compiler::frontend::lexer::token_kind::TokenKind;
+use zamani_compiler::frontend::parser::grammar::expressions::{
+    parse_expression_prefix,
+    ExpressionParserConfig,
+};
 
-const DEFAULT_DECLARATIONS: &str = "1,16,256,1024";
+type BenchResult<T> = Result<T, Box<dyn Error>>;
+
+const DEFAULT_STATEMENTS: usize = 10_000;
+const DEFAULT_TERMS: usize = 16;
 const DEFAULT_ITERATIONS: usize = 10;
-const DEFAULT_WARMUP: usize = 2;
+const DEFAULT_NESTING_BUDGET: usize = 256;
 
-#[derive(Debug, Clone)]
-struct BenchmarkConfig {
-    declaration_counts: Vec<usize>,
-    iterations: usize,
-    warmup_iterations: usize,
-}
-
-#[derive(Debug)]
-struct Measurement {
-    elapsed: Duration,
-    iterations: usize,
-    source_bytes: usize,
-    token_count: usize,
-    diagnostic_count: usize,
-}
-
-impl Measurement {
-    fn elapsed_per_iteration(&self) -> Duration {
-        self.elapsed / u32::try_from(self.iterations).unwrap_or(u32::MAX).max(1)
-    }
-
-    fn bytes_per_second(&self) -> f64 {
-        let bytes = (self.source_bytes as f64) * (self.iterations as f64);
-        let seconds = self.elapsed.as_secs_f64();
-
-        if seconds > 0.0 {
-            bytes / seconds
-        } else {
-            0.0
-        }
-    }
-
-    fn tokens_per_second(&self) -> f64 {
-        let tokens = (self.token_count as f64) * (self.iterations as f64);
-        let seconds = self.elapsed.as_secs_f64();
-
-        if seconds > 0.0 {
-            tokens / seconds
-        } else {
-            0.0
-        }
-    }
-}
-
-fn read_positive_usize(name: &str, default: usize) -> Result<usize, String> {
-    match env::var(name) {
-        Ok(raw) => {
-            let value = raw
-                .trim()
-                .parse::<usize>()
-                .map_err(|_| format!("{name} must be a positive integer, got {raw:?}"))?;
-
-            if value == 0 {
-                return Err(format!("{name} must be greater than zero"));
-            }
-
-            Ok(value)
-        }
-        Err(env::VarError::NotPresent) => Ok(default),
-        Err(error) => Err(format!("cannot read {name}: {error}")),
-    }
-}
-
-fn read_declaration_counts() -> Result<Vec<usize>, String> {
-    let raw = match env::var("ZAMANI_BENCH_DECLARATIONS") {
-        Ok(value) => value,
-        Err(env::VarError::NotPresent) => DEFAULT_DECLARATIONS.to_owned(),
-        Err(error) => {
-            return Err(format!(
-                "cannot read ZAMANI_BENCH_DECLARATIONS: {error}"
-            ));
-        }
-    };
-
-    let mut counts = Vec::new();
-
-    for component in raw.split(',') {
-        let component = component.trim();
-
-        if component.is_empty() {
-            return Err(
-                "ZAMANI_BENCH_DECLARATIONS contains an empty entry".to_owned(),
-            );
-        }
-
-        let count = component.parse::<usize>().map_err(|_| {
-            format!(
-                "invalid declaration count {component:?}; expected a positive integer"
-            )
-        })?;
-
-        if count == 0 {
-            return Err(
-                "declaration counts must be greater than zero".to_owned(),
-            );
-        }
-
-        counts.push(count);
-    }
-
-    if counts.is_empty() {
-        return Err(
-            "ZAMANI_BENCH_DECLARATIONS must contain at least one count".to_owned(),
-        );
-    }
-
-    // Sort and deduplicate to make output deterministic regardless of
-    // the order supplied by the caller.
-    counts.sort_unstable();
-    counts.dedup();
-
-    Ok(counts)
-}
-
-fn load_config() -> Result<BenchmarkConfig, String> {
-    Ok(BenchmarkConfig {
-        declaration_counts: read_declaration_counts()?,
-        iterations: read_positive_usize(
-            "ZAMANI_BENCH_ITERATIONS",
-            DEFAULT_ITERATIONS,
-        )?,
-        warmup_iterations: read_positive_usize(
-            "ZAMANI_BENCH_WARMUP",
-            DEFAULT_WARMUP,
-        )?,
-    })
-}
-
-/// Generate a repeatable corpus using constructs recognized by the
-/// repository's existing classical parser.
+/// User-configurable workload parameters.
 ///
-/// Keep this generator intentionally conservative. Domain-specific quantum
-/// and HDL workloads belong in their own benchmark corpora once their
-/// supported syntax has been verified against the normative grammar.
-fn generate_source(declaration_count: usize) -> Result<String, String> {
-    let mut source = String::new();
+/// These values control benchmark workload generation only. They do not
+/// impose language or hardware capacity restrictions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BenchmarkConfig {
+    statements: usize,
+    terms: usize,
+    iterations: usize,
+    nesting_budget: usize,
+}
 
-    for index in 0..declaration_count {
-        use std::fmt::Write as _;
+impl BenchmarkConfig {
+    fn from_environment() -> BenchResult<Self> {
+        let config = Self {
+            statements: read_positive_usize(
+                "ZAMANI_BENCH_STATEMENTS",
+                DEFAULT_STATEMENTS,
+            )?,
+            terms: read_positive_usize(
+                "ZAMANI_BENCH_TERMS",
+                DEFAULT_TERMS,
+            )?,
+            iterations: read_positive_usize(
+                "ZAMANI_BENCH_ITERATIONS",
+                DEFAULT_ITERATIONS,
+            )?,
+            nesting_budget: read_positive_usize(
+                "ZAMANI_BENCH_NESTING",
+                DEFAULT_NESTING_BUDGET,
+            )?,
+        };
 
-        // String growth is fallible where the standard library exposes
-        // fallible reservation. Allocation failure may still be fatal
-        // elsewhere in the process or allocator.
-        let declaration = format!(
-            "fn bench_{index}() {{ let value = {index}; }}\n"
-        );
-
-        source
-            .try_reserve(declaration.len())
-            .map_err(|error| {
-                format!(
-                    "unable to reserve source storage for workload \
-                     with {declaration_count} declarations: {error}"
+        // Reject workloads whose basic operand count cannot be represented.
+        // This is arithmetic validation, not a workload ceiling.
+        config
+            .statements
+            .checked_mul(config.terms)
+            .ok_or_else(|| {
+                benchmark_error(
+                    "statement count multiplied by terms per expression \
+                     exceeds the representable workload size",
                 )
             })?;
 
-        source.write_str(&declaration).map_err(|error| {
-            format!("unable to append generated source: {error}")
-        })?;
+        Ok(config)
+    }
+
+    fn expression_parser_config(self) -> ExpressionParserConfig {
+        ExpressionParserConfig {
+            max_nesting: self.nesting_budget,
+        }
+    }
+}
+
+/// Counts for a successfully parsed benchmark workload.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct ParseStats {
+    statements: usize,
+    expressions: usize,
+    consumed_tokens: usize,
+}
+
+impl ParseStats {
+    fn record_expression(&mut self) -> BenchResult<()> {
+        self.expressions = self
+            .expressions
+            .checked_add(1)
+            .ok_or_else(|| benchmark_error("expression counter overflow"))?;
+
+        Ok(())
+    }
+
+    fn record_statement(&mut self) -> BenchResult<()> {
+        self.statements = self
+            .statements
+            .checked_add(1)
+            .ok_or_else(|| benchmark_error("statement counter overflow"))?;
+
+        Ok(())
+    }
+}
+
+fn benchmark_error(message: impl Into<String>) -> Box<dyn Error> {
+    Box::new(io::Error::other(message.into()))
+}
+
+fn read_positive_usize(name: &str, default: usize) -> BenchResult<usize> {
+    let Some(raw) = std::env::var_os(name) else {
+        return Ok(default);
+    };
+
+    let value = raw
+        .into_string()
+        .map_err(|_| benchmark_error(format!("{name} must be valid Unicode")))?;
+
+    let parsed = value.parse::<usize>().map_err(|error| {
+        benchmark_error(format!("invalid {name} value {value:?}: {error}"))
+    })?;
+
+    if parsed == 0 {
+        return Err(benchmark_error(format!(
+            "{name} must be greater than zero"
+        )));
+    }
+
+    Ok(parsed)
+}
+
+/// Create the operator registry required by the generated source.
+///
+/// Operator spelling and tokenization remain the responsibility of the
+/// canonical lexer registry and scanner. Operator precedence remains the
+/// responsibility of the expression parser.
+fn build_operator_registry() -> BenchResult<OperatorRegistry> {
+    let mut registry = OperatorRegistry::new();
+
+    registry.register(OperatorDefinition::new("+", TokenKind::Plus)?)?;
+    registry.register(OperatorDefinition::new("*", TokenKind::Star)?)?;
+    registry.validate()?;
+
+    Ok(registry)
+}
+
+/// Generate independent expression statements.
+///
+/// For example:
+///
+///     value_0_0 + value_0_1 * value_0_2;
+///     value_1_0 + value_1_1 * value_1_2;
+///
+/// The workload exercises identifier scanning, operator scanning, expression
+/// parsing, precedence handling, and statement-boundary recognition.
+///
+/// `terms_per_expression` must be positive.
+fn generate_source(
+    statement_count: usize,
+    terms_per_expression: usize,
+) -> BenchResult<String> {
+    if statement_count == 0 || terms_per_expression == 0 {
+        return Err(benchmark_error(
+            "statement count and terms per expression must be positive",
+        ));
+    }
+
+    let operand_count = statement_count
+        .checked_mul(terms_per_expression)
+        .ok_or_else(|| benchmark_error("operand count overflow"))?;
+
+    // Reserve a conservative estimate. It is only an allocation hint and
+    // does not limit the final source length.
+    let estimated_bytes = operand_count
+        .checked_mul(32)
+        .and_then(|bytes| {
+            statement_count
+                .checked_mul(2)
+                .and_then(|terminators| bytes.checked_add(terminators))
+        })
+        .ok_or_else(|| benchmark_error("source-size estimate overflow"))?;
+
+    let mut source = String::new();
+    source.try_reserve(estimated_bytes)?;
+
+    for statement_index in 0..statement_count {
+        for term_index in 0..terms_per_expression {
+            if term_index > 0 {
+                // Alternate operators so the expression parser exercises
+                // both addition and multiplication precedence.
+                if term_index % 2 == 1 {
+                    source.push_str(" + ");
+                } else {
+                    source.push_str(" * ");
+                }
+            }
+
+            write!(
+                &mut source,
+                "value_{statement_index}_{term_index}"
+            )?;
+        }
+
+        source.push_str(";\n");
     }
 
     Ok(source)
 }
 
-fn make_lexer(source: &str) -> Lexer {
-    let source_file = Arc::new(SourceFile::new(
-        "<lex-parse-benchmark>".to_owned(),
-        source.to_owned(),
-    ));
-
-    Lexer::new(FileId::new(1), source_file)
-}
-
-/// Consume the entire legacy token stream and count tokens, including
-/// the terminal EOF token.
+/// Tokenize source using the canonical frontend scanner.
 ///
-/// Lexical diagnostics are collected by the existing lexer. The benchmark
-/// reports their count rather than silently treating malformed input as
-/// a successful measurement.
-fn lex_all(source: &str) -> (usize, usize) {
-    let mut lexer = make_lexer(source);
-    let mut token_count = 0usize;
+/// The tokens borrow their lexemes from `source`, so the source must remain
+/// alive while the returned tokens are being used.
+///
+/// The function requires the canonical scanner to emit an explicit EOF token.
+/// It does not silently accept a truncated stream.
+fn lex_source<'src>(source: &'src str) -> BenchResult<Vec<Token<'src>>> {
+    let mut scanner = Scanner::new(
+        source,
+        LexerConfig::new(),
+        KeywordRegistry::new(),
+        build_operator_registry()?,
+    )?;
+
+    let mut tokens = Vec::new();
+
+    // This is an estimate, not a token-count ceiling.
+    tokens.try_reserve(source.len() / 2)?;
 
     loop {
-        let token = lexer.next_token();
-        token_count = token_count.saturating_add(1);
+        match scanner.next_token()? {
+            Some(token) => {
+                let is_eof = token.kind() == TokenKind::Eof;
+                tokens.push(token);
 
-        if token.token_type == TokenType::EOF {
+                if is_eof {
+                    return Ok(tokens);
+                }
+            }
+            None => {
+                return Err(benchmark_error(
+                    "canonical lexer ended without emitting an EOF token",
+                ));
+            }
+        }
+    }
+}
+
+/// Parse expression statements from an already-tokenized stream.
+///
+/// The function uses the canonical expression parser and checks every
+/// statement boundary. It fails rather than looping forever if parsing does
+/// not advance, the stream is truncated, or the generated syntax is rejected.
+///
+/// This benchmark intentionally does not perform statement recovery:
+/// recovery performance belongs in recovery.rs.
+fn parse_expression_statements(
+    tokens: &[Token<'_>],
+    parser_config: ExpressionParserConfig,
+    expected_statements: usize,
+) -> BenchResult<ParseStats> {
+    let mut position = 0usize;
+    let mut stats = ParseStats::default();
+
+    loop {
+        let Some(current) = tokens.get(position) else {
+            return Err(benchmark_error(
+                "token stream ended without an explicit EOF token",
+            ));
+        };
+
+        if current.kind() == TokenKind::Eof {
             break;
         }
 
-        black_box(&token);
-    }
+        let previous_position = position;
 
-    let diagnostic_count = lexer.errors.len();
+        let (_expression, next_position) = parse_expression_prefix(
+            black_box(tokens),
+            position,
+            parser_config,
+        )?;
 
-    (token_count, diagnostic_count)
-}
-
-/// Run the existing parser over a fresh lexer.
-///
-/// The parser owns the lexer, so lexer diagnostics are not separately
-/// exposed by this wrapper. Parser diagnostics are counted directly.
-fn parse_all(source: &str) -> (usize, usize) {
-    let lexer = make_lexer(source);
-    let mut parser = Parser::new(lexer);
-
-    let program = parser.parse_program();
-    black_box(&program);
-
-    let diagnostic_count = parser.get_errors().len();
-
-    (0, diagnostic_count)
-}
-
-fn measure_lexer(
-    source: &str,
-    iterations: usize,
-) -> Measurement {
-    let mut elapsed = Duration::ZERO;
-    let mut token_count = 0usize;
-    let mut diagnostic_count = 0usize;
-
-    for _ in 0..iterations {
-        let start = Instant::now();
-        let result = lex_all(black_box(source));
-        elapsed += start.elapsed();
-
-        token_count = result.0;
-        diagnostic_count = result.1;
-
-        black_box(result);
-    }
-
-    Measurement {
-        elapsed,
-        iterations,
-        source_bytes: source.len(),
-        token_count,
-        diagnostic_count,
-    }
-}
-
-fn measure_lex_parse(
-    source: &str,
-    iterations: usize,
-) -> Measurement {
-    let mut elapsed = Duration::ZERO;
-    let mut diagnostic_count = 0usize;
-
-    for _ in 0..iterations {
-        let start = Instant::now();
-        let result = parse_all(black_box(source));
-        elapsed += start.elapsed();
-
-        diagnostic_count = result.1;
-        black_box(result);
-    }
-
-    // Count tokens separately, outside the combined timing interval.
-    // This avoids adding a second lexer pass to the reported pipeline
-    // time.
-    let (token_count, lexer_diagnostics) = lex_all(source);
-
-    Measurement {
-        elapsed,
-        iterations,
-        source_bytes: source.len(),
-        token_count,
-        diagnostic_count: diagnostic_count.saturating_add(lexer_diagnostics),
-    }
-}
-
-fn warm_up(source: &str, iterations: usize) {
-    for _ in 0..iterations {
-        black_box(lex_all(black_box(source)));
-        black_box(parse_all(black_box(source)));
-    }
-}
-
-fn print_measurement(
-    mode: &str,
-    declarations: usize,
-    measurement: &Measurement,
-) {
-    println!(
-        "{mode:12} \
-         declarations={declarations:>8} \
-         bytes={:>10} \
-         tokens={:>10} \
-         iterations={:>6} \
-         total_ms={:>12.3} \
-         ns_per_iteration={:>14.0} \
-         bytes_per_second={:>14.0} \
-         tokens_per_second={:>14.0} \
-         diagnostics={}",
-        measurement.source_bytes,
-        measurement.token_count,
-        measurement.iterations,
-        measurement.elapsed.as_secs_f64() * 1_000.0,
-        measurement.elapsed_per_iteration().as_nanos(),
-        measurement.bytes_per_second(),
-        measurement.tokens_per_second(),
-        measurement.diagnostic_count,
-    );
-}
-
-fn run() -> Result<(), String> {
-    let config = load_config()?;
-
-    println!("Zamani lexer/parser benchmark");
-    println!("Rust package: zamani");
-    println!("Profile: use `cargo bench` for optimized measurements");
-    println!(
-        "Iterations: {}; warm-up: {}",
-        config.iterations, config.warmup_iterations
-    );
-    println!(
-        "Declaration workloads: {:?}",
-        config.declaration_counts
-    );
-    println!();
-
-    println!(
-        "{:12} {:>8} {:>10} {:>10} {:>6} {:>12} {:>14} {:>14} {:>14} {}",
-        "mode",
-        "decls",
-        "bytes",
-        "tokens",
-        "iters",
-        "total_ms",
-        "ns/iter",
-        "bytes/sec",
-        "tokens/sec",
-        "diagnostics"
-    );
-
-    for declaration_count in &config.declaration_counts {
-        let source = generate_source(*declaration_count)?;
-
-        warm_up(&source, config.warmup_iterations);
-
-        let lexer_measurement =
-            measure_lexer(&source, config.iterations);
-
-        print_measurement(
-            "lexer",
-            *declaration_count,
-            &lexer_measurement,
-        );
-
-        let combined_measurement =
-            measure_lex_parse(&source, config.iterations);
-
-        print_measurement(
-            "lex+parse",
-            *declaration_count,
-            &combined_measurement,
-        );
-
-        // Diagnostics mean the workload may not be exercising the intended
-        // valid-input path. Keep the result visible and fail after printing
-        // measurements so CI cannot mistake a malformed corpus for a clean
-        // correctness run.
-        if lexer_measurement.diagnostic_count != 0
-            || combined_measurement.diagnostic_count != 0
-        {
-            return Err(format!(
-                "workload with {declaration_count} declarations produced \
-                 lexer or parser diagnostics; verify the corpus against \
-                 the current implementation and normative grammar"
+        if next_position <= previous_position {
+            return Err(benchmark_error(
+                "expression parser failed to make forward progress",
             ));
         }
 
-        println!();
+        position = next_position;
+
+        let Some(terminator) = tokens.get(position) else {
+            return Err(benchmark_error(
+                "expression ended without a statement terminator",
+            ));
+        };
+
+        if terminator.kind() != TokenKind::Semicolon {
+            return Err(benchmark_error(format!(
+                "expected semicolon at token index {position}, found {:?}",
+                terminator.kind()
+            )));
+        }
+
+        position = position
+            .checked_add(1)
+            .ok_or_else(|| benchmark_error("token position overflow"))?;
+
+        stats.record_expression()?;
+        stats.record_statement()?;
+
+        stats.consumed_tokens = position;
     }
+
+    if stats.statements != expected_statements {
+        return Err(benchmark_error(format!(
+            "statement count mismatch: expected {expected_statements}, \
+             parsed {}",
+            stats.statements
+        )));
+    }
+
+    Ok(stats)
+}
+
+/// Run one parse pass and expose the result to the optimizer barrier.
+///
+/// The result is checked so benchmark measurements cannot accidentally
+/// measure a fast failure while reporting it as successful parsing.
+fn run_parse(
+    tokens: &[Token<'_>],
+    parser_config: ExpressionParserConfig,
+    expected_statements: usize,
+) -> BenchResult<ParseStats> {
+    let stats = parse_expression_statements(
+        black_box(tokens),
+        parser_config,
+        expected_statements,
+    )?;
+
+    black_box(stats);
+    Ok(stats)
+}
+
+/// Measure an operation after one untimed warm-up.
+///
+/// The returned duration covers only the timed iterations. Errors are
+/// propagated immediately instead of being hidden inside benchmark output.
+fn measure<F>(
+    label: &str,
+    iterations: usize,
+    mut operation: F,
+) -> BenchResult<Duration>
+where
+    F: FnMut() -> BenchResult<()>,
+{
+    operation()?;
+
+    let started = Instant::now();
+
+    for _ in 0..iterations {
+        operation()?;
+    }
+
+    let elapsed = started.elapsed();
+
+    println!(
+        "{label}: total={elapsed:?}, iterations={iterations}, \
+         ns/iteration={:.0}",
+        elapsed.as_nanos() as f64 / iterations as f64
+    );
+
+    Ok(elapsed)
+}
+
+fn print_throughput(
+    label: &str,
+    elapsed: Duration,
+    iterations: usize,
+    source_bytes: usize,
+    token_count: usize,
+) {
+    let total_seconds = elapsed.as_secs_f64();
+
+    if total_seconds <= 0.0 {
+        println!("{label}: elapsed time too small for stable throughput");
+        return;
+    }
+
+    let bytes_processed = (source_bytes as f64) * (iterations as f64);
+    let tokens_processed = (token_count as f64) * (iterations as f64);
+
+    println!(
+        "{label}: source_bytes_per_second={:.0}, \
+         tokens_per_second={:.0}",
+        bytes_processed / total_seconds,
+        tokens_processed / total_seconds
+    );
+}
+
+fn run() -> BenchResult<()> {
+    let config = BenchmarkConfig::from_environment()?;
+    let parser_config = config.expression_parser_config();
+
+    println!("Zamani canonical frontend benchmark");
+    println!("Rust baseline: 1.97+");
+    println!("Statements: {}", config.statements);
+    println!("Operands per expression: {}", config.terms);
+    println!("Iterations: {}", config.iterations);
+    println!("Expression nesting budget: {}", config.nesting_budget);
+    println!("Parser scope: expression statements, not complete-program grammar");
+
+    let source = generate_source(config.statements, config.terms)?;
+
+    println!("Generated source bytes: {}", source.len());
+
+    // Perform one canonical lex and parse pass before timing. This catches
+    // incompatible generated syntax and configuration errors up front.
+    let tokens = lex_source(&source)?;
+    let baseline_stats = run_parse(
+        &tokens,
+        parser_config,
+        config.statements,
+    )?;
+
+    if baseline_stats.expressions != config.statements {
+        return Err(benchmark_error(
+            "baseline expression count does not match generated workload",
+        ));
+    }
+
+    println!("Baseline token count: {}", tokens.len());
+    println!("Baseline parsed statements: {}", baseline_stats.statements);
+    println!("Baseline parsed expressions: {}", baseline_stats.expressions);
+
+    // Benchmark lexer throughput independently of parser work.
+    let lex_elapsed = measure(
+        "lex_only",
+        config.iterations,
+        || {
+            let measured_tokens = lex_source(black_box(source.as_str()))?;
+
+            if measured_tokens.last().map(Token::kind) != Some(TokenKind::Eof) {
+                return Err(benchmark_error(
+                    "measured lexer stream has no final EOF token",
+                ));
+            }
+
+            black_box(measured_tokens);
+            Ok(())
+        },
+    )?;
+
+    print_throughput(
+        "lex_only_throughput",
+        lex_elapsed,
+        config.iterations,
+        source.len(),
+        tokens.len(),
+    );
+
+    // Benchmark parser throughput using a single pre-tokenized stream.
+    // Tokenization is intentionally outside this measurement.
+    let parse_elapsed = measure(
+        "parse_only",
+        config.iterations,
+        || {
+            let stats = run_parse(
+                black_box(tokens.as_slice()),
+                parser_config,
+                config.statements,
+            )?;
+
+            if stats != baseline_stats {
+                return Err(benchmark_error(
+                    "parser results changed between identical benchmark runs",
+                ));
+            }
+
+            Ok(())
+        },
+    )?;
+
+    print_throughput(
+        "parse_only_throughput",
+        parse_elapsed,
+        config.iterations,
+        source.len(),
+        tokens.len(),
+    );
+
+    // Benchmark the combined path. Every timed iteration creates a fresh
+    // scanner, token vector, and expression syntax tree.
+    let combined_elapsed = measure(
+        "lex_parse",
+        config.iterations,
+        || {
+            let measured_tokens = lex_source(black_box(source.as_str()))?;
+            let stats = run_parse(
+                black_box(measured_tokens.as_slice()),
+                parser_config,
+                config.statements,
+            )?;
+
+            if stats != baseline_stats {
+                return Err(benchmark_error(
+                    "combined results changed between identical benchmark runs",
+                ));
+            }
+
+            black_box(measured_tokens);
+            Ok(())
+        },
+    )?;
+
+    print_throughput(
+        "lex_parse_throughput",
+        combined_elapsed,
+        config.iterations,
+        source.len(),
+        tokens.len(),
+    );
+
+    println!("Benchmark completed successfully.");
 
     Ok(())
 }
 
-fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("benchmark error: {error}");
-            ExitCode::FAILURE
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("lex_parse benchmark failed: {error}");
+
+        let mut source = error.source();
+        while let Some(cause) = source {
+            eprintln!("  caused by: {cause}");
+            source = cause.source();
         }
+
+        std::process::exit(1);
     }
 }
