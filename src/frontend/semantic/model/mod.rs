@@ -1,366 +1,273 @@
+
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-//! # Zamani Frontend — Canonical Semantic Model
+//! # Zamani Frontend — Semantic Model
 //!
 //! Path: `src/frontend/semantic/model/mod.rs`
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //! Safety: Safe Rust only.
-//! Status: Canonical model aggregation boundary.
+//! Status: Canonical semantic-model aggregation boundary.
 //!
 //! ## PURPOSE
 //!
-//! Establish one public module boundary for the target-independent semantic
-//! model used by Zamani's native frontend.
+//! Provide one explicit public boundary for the target-independent semantic
+//! model produced by Zamani's native frontend.
 //!
-//! This module composes the existing authoritative implementations of:
+//! This module composes the authoritative implementations of:
 //!
-//! - semantic identities and checked identity allocation;
-//! - typed, extensible semantic facts;
-//! - semantic program results, obligations, provenance associations, and
-//!   analysis-completion and validity states.
+//! - `ids.rs`: semantic identities and checked local ID allocation;
+//! - `facts.rs`: validated fact keys and typed semantic-fact envelopes;
+//! - `program.rs`: program-level facts, obligations, validity and lifecycle.
 //!
-//! It does not duplicate these implementations and does not perform semantic
-//! analysis itself.
-//!
-//! ## ARCHITECTURAL POSITION
-//!
-//! ```text
-//! Zamani source
-//!      |
-//!      v
-//! frontend lexer
-//!      |
-//!      v
-//! frontend parser
-//!      |
-//!      v
-//! canonical frontend AST
-//!      |
-//!      v
-//! structural AST validation
-//!      |
-//!      v
-//! semantic analysis
-//!      |
-//!      +-- name resolution
-//!      +-- type analysis
-//!      +-- effect analysis
-//!      +-- capability analysis
-//!      +-- resource constraints
-//!      +-- contracts and obligations
-//!      +-- domain validation
-//!      |
-//!      v
-//! THIS MODULE
-//!      |
-//!      v
-//! canonical semantic program model
-//!      |
-//!      +-- classical IR
-//!      +-- quantum::ir
-//!      +-- HDL and other domain IRs
-//!      |
-//!      v
-//! lowering, optimization, planning and realization
-//! ```
-//!
-//! The diagram describes the intended architecture. The presence of this
-//! module does not imply that every analysis pass or downstream integration
-//! has already been implemented.
+//! It does not perform semantic analysis and does not redefine the types
+//! implemented by these modules.
 //!
 //! ## AUTHORITY
 //!
-//! This module follows the repository's language and semantic contracts,
-//! particularly:
+//! Normative and implementation references:
 //!
-//! - `grammar/specification/grammar-authority.md`;
-//! - `grammar/specification/semantic-model.md`;
-//! - `grammar/specification/scalability-model.md`;
-//! - `grammar/specification/poco-reaf.md`;
-//! - `grammar/Zamani.g4`;
-//! - `src/frontend/ast/node/`;
-//! - `src/frontend/semantic/api.rs`;
-//! - the authoritative implementations in this directory.
+//! - `grammar/DESIGN.md`
+//! - `grammar/specification/grammar-authority.md`
+//! - `grammar/specification/semantic-model.md`
+//! - `grammar/specification/scalability-model.md`
+//! - `grammar/specification/poco-reaf.md`
+//! - `grammar/Zamani.g4`
+//! - `grammar/expressions/provenance.g4`
+//! - `grammar/quantum/provenance.g4`
+//! - `src/frontend/ast/node/`
+//! - `src/frontend/semantic/model/ids.rs`
+//! - `src/frontend/semantic/model/facts.rs`
+//! - `src/frontend/semantic/model/program.rs`
 //!
-//! Normative specifications define language meaning. The AST owns source
-//! structure and AST identity. Semantic analysis establishes meaning.
-//! Downstream representations and target systems determine realization.
+//! Normative specifications govern language meaning. The canonical AST owns
+//! source structure and AST node identities. Semantic analysis establishes
+//! meaning. IR and target-specific subsystems determine realization.
 //!
-//! This aggregation module MUST NOT silently redefine any of those contracts.
+//! If an implementation conflicts with a normative specification, this
+//! facade must not silently redefine the specification.
 //!
 //! ## OWNS
 //!
-//! This module owns:
+//! This module owns only:
 //!
-//! - composition of the semantic-model submodules;
-//! - the stable, explicit public re-export boundary;
-//! - semantic-model module identity and schema-version metadata;
-//! - module-level integration invariants and API-surface tests.
+//! - semantic-model module composition;
+//! - the explicitly supported public re-export boundary;
+//! - this module's identity and schema-version metadata;
+//! - facade-level integration contract tests.
 //!
 //! ## DOES_NOT_OWN
 //!
-//! This module does NOT own:
+//! This module does not own:
 //!
 //! - AST nodes, AST storage, AST identities, or source spans;
-//! - parsing, lexing, or grammar productions;
+//! - lexing, parsing, grammar productions, or AST traversal;
 //! - symbol tables, scopes, imports, or name resolution;
-//! - semantic type definitions, inference, unification, or coercions;
-//! - effect definitions, inference, or authorization;
-//! - capability registries or capability negotiation;
-//! - resource definitions, resource allocation, or feasibility planning;
-//! - contract evaluation or domain-specific validation;
+//! - semantic types, type inference, unification, or coercions;
+//! - effect, capability, resource, contract, or policy semantics;
+//! - provenance-record definitions or evidence verification;
 //! - diagnostic production, rendering, or ordering;
-//! - provenance-record semantics or provenance evidence verification;
-//! - Classical IR, `quantum::ir`, HDL IR, or any other IR;
-//! - target discovery, hardware allocation, placement, routing, scheduling,
-//!   calibration, quantum error correction, runtime, or backend execution.
+//! - classical IR, `quantum::ir`, HDL IR, or another IR;
+//! - target discovery, feasibility, physical allocation, placement, routing,
+//!   scheduling, calibration, error correction, or runtime execution;
+//! - compatibility behavior for the legacy `crate::semantic` implementation.
+//!
+//! These responsibilities remain with their designated modules.
 //!
 //! ## MODULE OWNERSHIP
 //!
-//! `ids.rs` is the sole owner of semantic identity types and their allocators.
+//! `ids.rs` is the sole owner of semantic identity types and allocators.
 //!
-//! `facts.rs` is the sole owner of `FactKey`, `SemanticFact<T>`, and fact-key
-//! validation.
+//! `facts.rs` is the sole owner of `FactKey`, `FactKeyComponent`,
+//! `FactKeyError`, `SemanticFact<T>`, and fact-key validation.
 //!
-//! `program.rs` is the sole owner of `SemanticProgram`, `NodeFact`, semantic
-//! obligations, and the semantic program's completion and validity lifecycle.
+//! `program.rs` is the sole owner of `SemanticProgram`, `NodeFact`,
+//! `Obligation`, `SemanticProgramError`, `AnalysisCompletion`,
+//! `SemanticValidity`, and the program schema version.
 //!
-//! This file MUST NOT redeclare or wrap those types in competing definitions.
+//! This module must not redeclare, wrap, or shadow those definitions.
 //!
-//! New semantic types must first be implemented in their authoritative
-//! subsystem. They may be re-exported here only when they belong to the
-//! stable semantic-model public contract.
+//! New semantic functionality must first be implemented in the subsystem
+//! responsible for its meaning. It may be re-exported here only after its
+//! public contract is stable and its implementation exists.
 //!
 //! ## DEPENDENCY DIRECTION
 //!
 //! ```text
-//! canonical AST
-//!      |
-//!      v
-//! semantic analysis and owning semantic subsystems
-//!      |
-//!      v
-//! semantic/model/{ids,facts,program}.rs
-//!      |
-//!      v
-//! semantic/model/mod.rs
-//!      |
-//!      v
-//! semantic API and downstream consumers
+//! Canonical frontend AST
+//!          |
+//!          v
+//! Semantic analysis passes
+//!          |
+//!          v
+//! model/{ids,facts,program}.rs
+//!          |
+//!          v
+//! model/mod.rs
+//!          |
+//!          v
+//! Semantic API and downstream adapters
 //! ```
 //!
-//! The source AST remains authoritative for source structure and `NodeId`.
-//! Semantic identities remain distinct from AST identities.
+//! The model must not depend on the legacy semantic analyzer, compiler
+//! orchestration, target backends, or IR implementations.
 //!
-//! This module must not depend on `crate::semantic` (the legacy analyzer),
-//! compiler orchestration, target backends, hardware implementations, or IR
-//! implementations.
+//! ## AST AND SEMANTIC IDENTITIES
 //!
-//! ## SEMANTIC VALIDITY AND COMPLETION
+//! AST `NodeId` values identify nodes in the canonical source representation.
+//! Semantic IDs identify entities owned by the semantic layer. They are
+//! distinct types and must never be implicitly interchangeable.
 //!
-//! A semantic result MUST NOT be considered valid merely because it exists or
-//! because some analysis passes completed.
+//! `SemanticProgram` associates facts with canonical AST node identities.
+//! The AST storage and validation layers remain responsible for proving that
+//! a referenced node belongs to the program being analyzed.
 //!
-//! Consumers must preserve the distinction between:
-//!
-//! - complete analysis;
-//! - incomplete analysis;
-//! - aborted analysis;
-//! - failed analysis;
-//! - valid semantic results;
-//! - invalid semantic results;
-//! - unresolved semantic results.
-//!
-//! A partial result may be useful for diagnostics and tooling, but incomplete
-//! analysis must never be treated as proof of semantic validity.
-//!
-//! The model's validity is independent of target feasibility. A semantically
-//! valid program may still require capabilities or resources unavailable on a
-//! particular target.
-//!
-//! The owning semantic pipeline remains responsible for running all required
-//! checks and producing appropriate diagnostics before finalizing validity.
+//! This facade must not allocate AST identities or reinterpret them as
+//! semantic IDs.
 //!
 //! ## FACTS AND EXTENSIBILITY
 //!
-//! Semantic facts use typed payloads and validated, namespaced keys.
+//! Semantic facts must use validated keys and typed payloads from their
+//! owning subsystems. The facade must not require a closed enumeration of
+//! every fact category or computational domain.
 //!
-//! New fact categories must not require a closed enumeration in this module.
-//! Their payload types and correctness rules belong to the subsystem that
-//! owns the corresponding semantics.
+//! Potential fact payloads include resolved declarations, inferred types,
+//! effects, capability obligations, symbolic resource constraints, contract
+//! obligations, and domain-specific validation results. Their examples do
+//! not imply that the corresponding producers are already implemented.
 //!
-//! For example, fact payloads may represent:
+//! A string must not replace a structured semantic value merely to simplify
+//! integration. Unknown or unresolved values must remain distinguishable
+//! from validated values.
 //!
-//! - resolved declaration references;
-//! - inferred or resolved types;
-//! - effect summaries;
-//! - capability obligations;
-//! - symbolic resource requirements;
-//! - contract obligations;
-//! - quantum-operation validation;
-//! - HDL-specific semantic constraints;
-//! - future domain-specific results.
+//! ## PROVENANCE AND GRAMMAR INTEGRATION
 //!
-//! These examples describe integration possibilities, not a claim that all
-//! corresponding semantic producers are already implemented.
+//! `grammar/expressions/provenance.g4` owns expression-level provenance
+//! syntax. `grammar/quantum/provenance.g4` owns the quantum-domain composition
+//! boundary. Neither grammar file defines the implementation of a Rust
+//! semantic provenance model.
 //!
-//! A string must not be used as an unvalidated substitute for a structured
-//! semantic type, symbol, constraint, or domain model.
+//! `SemanticProgram` supports a generic provenance payload parameter.
+//! Consequently, this facade does not invent a concrete provenance type or
+//! declare `mod provenance` unless an authoritative Rust implementation is
+//! added and reviewed separately.
 //!
-//! ## PROVENANCE
+//! Quantum provenance must not introduce a competing quantum IR. The
+//! canonical quantum IR remains `quantum::ir`; downstream quantum metadata
+//! remains owned by its designated implementation.
 //!
-//! `program.rs` stores provenance payloads generically. This aggregation
-//! boundary therefore does not invent a provenance implementation or require
-//! a nonexistent `model/provenance.rs` file.
+//! ## VALIDITY AND COMPLETION
 //!
-//! A future or existing authoritative provenance subsystem may supply the
-//! concrete provenance type through the `P` parameter of `SemanticProgram`.
-//! Provenance schema, evidence, identity, and verification remain owned by
-//! that subsystem.
+//! Analysis completion and semantic validity are independent properties.
+//! A completed analysis may find semantic errors. An incomplete analysis
+//! cannot certify semantic validity.
 //!
-//! ## POCO-REAF AND SCALABILITY
+//! Consumers must preserve the distinction between:
 //!
-//! This module supports the architectural objective:
+//! - complete, incomplete, aborted, or failed analysis;
+//! - valid, invalid, unresolved, or unknown semantic status;
+//! - source-language validity and target feasibility.
+//!
+//! Model construction alone is not proof of validity. The owning pipeline
+//! must run required checks and respect unresolved obligations before
+//! finalizing a valid result.
+//!
+//! A valid semantic result does not guarantee that any particular target can
+//! execute the program.
+//!
+//! ## SCALABILITY AND POCO-REAF
+//!
+//! This module supports the target-independent objective:
 //!
 //! `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever`
 //!
-//! It introduces no universal capacity ceiling for:
-//!
-//! - CPUs, GPUs, FPGAs, ASICs, QPUs, or other devices;
-//! - physical or logical qubits;
-//! - memory, storage, or communication capacity;
-//! - registers, tensor dimensions, or tensor rank;
-//! - modules, declarations, operations, facts, or computational domains.
-//!
-//! It does not define constants such as `MAX_QUBITS`, `MAX_DEVICES`,
-//! `MAX_AST_NODES`, `MAX_TENSOR_RANK`, or `MAX_MACHINE_SIZE`.
+//! It introduces no universal capacity ceiling for processors, accelerators,
+//! devices, qubits, registers, tensor dimensions, memory, operations, facts,
+//! modules, or computational domains.
 //!
 //! No finite implementation can process literally infinite input. Actual
-//! processing is bounded by available resources, representation limits,
-//! compiler implementation capabilities, and explicit operational policies.
+//! processing depends on available resources, representation limits, and
+//! documented compiler operating policies.
 //!
-//! Those limits belong to the owning configuration, session, and analysis
-//! services. Exceeding an operational budget must be reported as incomplete,
-//! aborted, or failed analysis, never as proof that a program is valid.
+//! Operational budgets belong to configuration, session, and analysis
+//! services. Budget exhaustion must be reported as incomplete, aborted, or
+//! failed analysis—not as proof that the program is valid.
 //!
-//! Symbolic resource requirements must remain symbolic until the owning
-//! semantic rule or downstream realization stage is authorized to resolve
-//! them. This module performs no target-capacity checks.
+//! Symbolic resource requirements remain symbolic until a responsible
+//! semantic rule or downstream realization stage is permitted to resolve
+//! them. This facade does not inspect machine capacities or perform target
+//! feasibility checks.
 //!
-//! ## DETERMINISM
+//! ## DETERMINISM AND ERROR HANDLING
 //!
-//! This module:
+//! This facade performs no I/O, hardware discovery, random selection, or
+//! implicit ID allocation. It introduces no global mutable state.
 //!
-//! - introduces no global mutable state;
-//! - performs no I/O or hardware discovery;
-//! - uses no randomness or wall-clock time;
-//! - allocates no AST or semantic identities implicitly;
-//! - does not reorder source constructs;
-//! - does not define fact ordering independently of the owning model.
+//! Deterministic allocation, fact ordering, and lifecycle rules belong to
+//! the authoritative model implementations.
 //!
-//! Deterministic identity allocation, key behavior, fact ordering, and
-//! diagnostic ordering are governed by the owning implementations and their
-//! contracts.
-//!
-//! ## ERROR HANDLING
-//!
-//! This aggregation module adds no alternate error type.
-//!
-//! It exposes the errors belonging to the identity and program-model
-//! implementations. Invalid identifiers, exhausted allocators, invalid
-//! lifecycle transitions, unresolved obligations, and other model failures
-//! must remain explicit errors.
-//!
-//! No malformed source program, invalid semantic fact, incomplete analysis,
-//! or failed integration may silently become a valid semantic result.
+//! Invalid keys, exhausted allocators, invalid lifecycle transitions, and
+//! unresolved obligations must remain explicit errors. A malformed program,
+//! incomplete analysis, or failed integration must never silently become a
+//! certified-valid result.
 //!
 //! ## COMPATIBILITY
 //!
 //! - Rust 2021 edition.
 //! - Rust 1.97 or later.
 //! - Stable Rust; no nightly features required.
-//! - No `unsafe` code.
-//! - No dependency on the legacy AST or legacy semantic implementation.
-//! - No dependency on quantum or hardware backend implementations.
+//! - Safe Rust only.
+//! - No dependency on the legacy AST or legacy semantic analyzer.
+//! - No dependency on target-specific or IR implementations.
 //! - Explicit public re-exports; no wildcard re-exports.
 //!
-//! `SEMANTIC_MODEL_SCHEMA_VERSION` identifies this module's public model
-//! contract. It is not the language version, compiler version, AST schema
-//! version, or serialized artifact version.
-//!
-//! A serialized semantic artifact requires its own serialization contract;
-//! this module does not define one.
+//! The model schema version is distinct from the language version, compiler
+//! version, AST schema version, program schema version, IR version, and any
+//! serialized artifact format. This module does not define serialization.
 //!
 //! ## INTEGRATION CONTRACT
 //!
-//! ### Semantic producers
+//! Semantic producers import the authoritative ID and fact types and
+//! associate facts with canonical AST node identities through
+//! `SemanticProgram`.
 //!
-//! Semantic passes use the authoritative ID types and create typed facts
-//! through `facts.rs`. They associate facts with canonical AST `NodeId`
-//! values through `SemanticProgram`.
-//!
-//! The model does not independently resolve AST node references. The
-//! producer and AST-validation layers must ensure that a referenced node
-//! belongs to the program's canonical AST.
-//!
-//! ### Semantic API and pipeline
-//!
-//! `api.rs` owns the public analysis-service contract.
-//! `pipeline.rs` owns pass ordering and orchestration.
-//! `session.rs` owns per-analysis mutable state and operational accounting.
-//! `context.rs` owns the read-only context and configured services.
-//!
-//! These modules may consume this model, but this file must not import them
-//! to avoid a circular dependency.
-//!
-//! ### Downstream IR boundaries
+//! The future semantic API owns the public analyzer/result contract.
+//! The session owns per-analysis mutable state and operational accounting.
+//! The pipeline owns pass ordering and execution. None of these modules
+//! should be imported here, which prevents a circular dependency.
 //!
 //! Classical, quantum, HDL, and other IR adapters consume finalized semantic
-//! facts through explicit contracts.
+//! facts through explicit downstream contracts. This facade does not import
+//! an IR or commit semantic meaning to a physical target.
 //!
-//! `quantum::ir` remains the canonical quantum IR boundary. This module must
-//! not import it or encode physical quantum mappings, routing, scheduling,
-//! calibration, or error-correction state.
-//!
-//! A semantically valid model describes program meaning; it does not certify
-//! that a target can realize that meaning.
-//!
-//! ### Legacy compatibility
-//!
-//! The existing `src/semantic.rs` and legacy compiler pipeline remain
-//! separate until migration is explicitly implemented and tested.
-//!
-//! This file must not import the legacy analyzer or redefine its AST types.
-//! Compatibility adapters belong at the integration boundary.
+//! The legacy `src/semantic.rs` and its consumers remain separate until a
+//! migration is explicitly implemented and tested.
 //!
 //! ## FREEZE CRITERIA
 //!
-//! This file is ready to freeze when:
+//! This module is ready to freeze when:
 //!
 //! 1. Every declared child module exists and compiles.
-//! 2. Every public re-export resolves to its authoritative declaration.
+//! 2. Every re-export resolves to its authoritative declaration.
 //! 3. AST and semantic identities remain distinct.
-//! 4. Fact payloads remain typed and extensible.
-//! 5. Program validity cannot be inferred from mere model construction.
-//! 6. Incomplete analysis cannot be finalized as valid.
-//! 7. Pending obligations prevent valid finalization.
-//! 8. Provenance remains generic until its owning implementation is selected.
-//! 9. No IR, hardware, or legacy semantic dependency is introduced.
-//! 10. No arbitrary machine-capacity ceiling is introduced.
-//! 11. The module contract tests pass.
-//! 12. `cargo fmt --check` and the relevant Rust tests pass.
-//! 13. The integrated workspace builds on the supported Rust toolchain.
+//! 4. Facts remain typed, validated, and extensible.
+//! 5. Incomplete analysis cannot be finalized as valid.
+//! 6. Unresolved obligations prevent valid finalization.
+//! 7. Provenance ownership is explicit and no nonexistent module is exported.
+//! 8. No IR, hardware, or legacy semantic dependency is introduced.
+//! 9. Parent modules expose this module through the intended frontend API.
+//! 10. Facade and lifecycle tests pass.
+//! 11. Formatting, linting, and relevant workspace checks pass.
 //!
-//! A successful module-level compile alone is not evidence that the complete
-//! semantic pipeline is production-ready.
-//!
-//! =============================================================================
-//! Module declarations
-//! =============================================================================
+//! Compiling this file alone does not establish that the complete semantic
+//! pipeline is production-ready.
 
-/// Typed, extensible semantic facts and their validated keys.
+// =============================================================================
+// Child modules
+// =============================================================================
+
+/// Typed, extensible semantic facts and validated fact keys.
 pub mod facts;
 
 /// Strongly typed semantic identities and checked local allocators.
@@ -373,11 +280,11 @@ pub mod program;
 // Stable public re-exports
 // =============================================================================
 //
-// These re-exports intentionally expose the stable semantic-model vocabulary.
-// Implementation details remain accessible through their owning modules.
+// These are the explicit model-level exports. Add new exports only after
+// their owning module and integration contract are implemented.
 //
-// Wildcard re-exports are prohibited because they can accidentally expand the
-// public API when a child implementation changes.
+// Do not use wildcard re-exports: they can unintentionally expand the
+// public API when a child module changes.
 
 pub use facts::{
     FactKey,
@@ -422,13 +329,11 @@ pub use program::{
 /// Stable architectural identity of this module.
 pub const SEMANTIC_MODEL_MODULE_NAME: &str = "zamani.frontend.semantic.model";
 
-/// Public contract version for this aggregation boundary.
+/// Version of this module's public aggregation contract.
 ///
-/// This version is independent of the language edition, AST schema,
-/// semantic-program schema, compiler release, and serialized artifact format.
-///
-/// Increment this only when the aggregation contract changes in a
-/// compatibility-relevant way.
+/// Increment only when the aggregation contract changes in a
+/// compatibility-relevant way. This is not the language or program schema
+/// version.
 pub const SEMANTIC_MODEL_SCHEMA_VERSION: u16 = 1;
 
 /// Return the stable architectural module name.
@@ -444,7 +349,7 @@ pub const fn schema_version() -> u16 {
 }
 
 // =============================================================================
-// Module contract tests
+// Contract tests
 // =============================================================================
 
 #[cfg(test)]
@@ -465,9 +370,9 @@ mod tests {
     }
 
     #[test]
-    fn semantic_fact_api_is_available_through_the_facade() {
+    fn typed_fact_api_is_available_through_the_facade() {
         let key = FactKey::new("core.types", "inferred-type")
-            .expect("valid semantic fact key");
+            .expect("the test key is valid");
 
         let fact = SemanticFact::new(key.clone(), 42_u64);
 
@@ -476,11 +381,11 @@ mod tests {
     }
 
     #[test]
-    fn semantic_identity_api_is_available_through_the_facade() {
+    fn semantic_identity_types_are_distinct() {
         let symbol = SymbolId::new(1).expect("non-zero symbol identity");
         let ty = TypeId::new(1).expect("non-zero type identity");
 
-        // Equal numeric representations do not make different ID types
+        // Numeric equality does not make different identity types
         // interchangeable.
         assert_eq!(symbol.get(), ty.get());
         assert_ne!(symbol.to_string(), String::new());
@@ -488,7 +393,7 @@ mod tests {
     }
 
     #[test]
-    fn semantic_id_allocation_is_explicit_and_deterministic() {
+    fn identity_allocation_is_explicit_and_deterministic() {
         let mut first = SemanticIdAllocator::<SymbolId>::new();
         let mut second = SemanticIdAllocator::<SymbolId>::new();
 
@@ -504,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn semantic_program_lifecycle_types_are_reachable() {
+    fn lifecycle_types_are_available_through_the_facade() {
         let completion = AnalysisCompletion::Incomplete;
         let validity = SemanticValidity::Unknown;
 
@@ -514,10 +419,10 @@ mod tests {
     }
 
     #[test]
-    fn model_does_not_define_target_capacity() {
-        // Target feasibility is deliberately downstream from semantic meaning.
+    fn model_identity_does_not_encode_a_target_capacity() {
+        // Target feasibility is owned by downstream target-aware analysis.
         assert_eq!(
-            SEMANTIC_MODEL_MODULE_NAME,
+            module_name(),
             "zamani.frontend.semantic.model"
         );
     }
