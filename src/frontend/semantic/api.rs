@@ -1,207 +1,124 @@
 
 #![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 //! Public API for Zamani's native frontend semantic analysis.
 //!
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
 //!
-//! # Purpose
+//! # PURPOSE
 //!
-//! This module defines the stable boundary between callers of semantic
-//! analysis and the implementation that performs it. It accepts the
-//! canonical frontend AST program, delegates analysis to a configured
-//! semantic service, and preserves the distinction between complete,
-//! incomplete, aborted, and failed analysis.
+//! Define the stable boundary between the canonical frontend AST and the
+//! semantic-analysis implementation. The API owns the service contract,
+//! result lifecycle, validity gates, and API-level error reporting.
 //!
-//! # Architectural position
+//! # AUTHORITY
 //!
-//! ```text
-//! Source
-//!   |
-//!   v
-//! Lexer -> Parser -> Canonical frontend AST
-//!                         |
-//!                         v
-//!                    Semantic API
-//!                         |
-//!                         v
-//!                Semantic implementation
-//!                         |
-//!                         v
-//!                  Semantic result
-//!                         |
-//!             +-----------+-----------+
-//!             |           |           |
-//!             v           v           v
-//!        Classical     quantum::ir   HDL / other IR
-//!             |           |           |
-//!             +-----------+-----------+
-//!                         |
-//!                         v
-//!             Target-specific compilation
-//! ```
+//! Normative references:
+//! - grammar/DESIGN.md
+//! - grammar/Zamani.g4
+//! - grammar/specification/semantic-model.md
+//! - grammar/specification/semantic-boundaries.md
+//! - grammar/specification/poco-reaf.md
 //!
-//! The diagram describes the intended architecture. This API does not itself
-//! implement the semantic engine or claim that all downstream paths are
-//! already connected.
+//! The canonical AST owns source structure. Semantic analysis establishes
+//! program meaning. Canonical IR and target-specific systems determine
+//! realization.
 //!
-//! # Ownership
+//! # OWNERSHIP
 //!
 //! This module owns:
-//! - the public semantic-service contract;
-//! - the public analysis entry point;
-//! - semantic result and completion-status contracts;
-//! - the diagnostic interface required by result consumers;
-//! - API-level validation of the canonical program root;
-//! - API-level error reporting.
+//! - SemanticService and its public invocation contract;
+//! - SemanticResult and SemanticStatus;
+//! - validity gates for completed results;
+//! - SemanticDiagnostic and SemanticModelState contracts;
+//! - SemanticApiError.
 //!
-//! This module does not own:
-//! - AST node definitions or AST storage;
-//! - lexical analysis or parsing;
-//! - symbol tables or name resolution;
-//! - type inference, unification, or type checking;
-//! - effect inference or authorization;
-//! - capability and resource requirement evaluation;
-//! - contract checking;
-//! - domain-specific semantic rules;
-//! - semantic configuration policy;
-//! - per-invocation mutable analysis state;
-//! - IR generation, target feasibility, placement, scheduling, routing,
-//!   quantum error correction, or runtime execution.
+//! It does not own parsing, AST storage, name resolution, type inference,
+//! effect checking, capability checking, resource planning, domain rules,
+//! diagnostics production, IR construction, scheduling, routing, or runtime.
 //!
-//! # Integration contract
+//! # POCO-REAF
 //!
-//! - `crate::frontend::ast::node::program::Program` is the canonical program
-//!   root. This module does not define another program or AST type.
-//! - The AST storage/provider is owned by the AST subsystem or by the
-//!   concrete semantic context. Since `Program` refers to children through
-//!   canonical node identities, a concrete service must resolve those
-//!   identities using the repository's authoritative AST storage contract.
-//! - `config.rs` owns concrete semantic configuration and operational budgets.
-//!   The API deliberately treats configuration as an associated type so it
-//!   does not duplicate or prematurely freeze that implementation.
-//! - `context.rs` owns the concrete read-only semantic context and extension
-//!   snapshots.
-//! - `session.rs` owns per-analysis mutable state, diagnostics accumulation,
-//!   work accounting, cancellation/abort state, and incomplete-analysis state.
-//! - `pipeline.rs` owns pass ordering and orchestration.
-//! - `model/program.rs` owns the finalized semantic program model.
-//! - `diagnostics/` owns concrete diagnostic records, codes, spans, labels,
-//!   and ordering policy.
-//! - Domain validators consume the shared semantic interfaces; they do not
-//!   replace this API or create competing ASTs.
-//! - Legacy `crate::semantic` remains available until a separate, tested
-//!   migration changes the compiler entry points.
+//! No hardware capacity or closed computational-domain list is encoded here.
+//! Operational budgets are owned by semantic configuration and enforced by
+//! the implementation. Exhausted budgets must produce an incomplete result.
 //!
-//! # Completion and validity
+//! No finite implementation can process literally infinite input. The API
+//! introduces no arbitrary language-level limit; actual work is bounded by
+//! available resources, representation limits, and explicit operational
+//! policies.
 //!
-//! A completed analysis is not necessarily a valid program: it may have
-//! completed successfully while finding semantic errors. Callers must inspect
-//! `SemanticResult::is_valid()` or the structured diagnostics rather than
-//! equating `Complete` with validity.
+//! # INTEGRATION
 //!
-//! An incomplete, aborted, or failed analysis must never be represented as a
-//! valid result. Partial semantic facts may be retained for diagnostics or
-//! tooling, but they are not a certificate of validity.
+//! - `crate::frontend::ast::node::program::Program` is the canonical AST root.
+//! - `config.rs` owns concrete semantic options and operational budgets.
+//! - `context.rs` owns immutable services and extension snapshots.
+//! - `session.rs` owns per-invocation mutable state and work accounting.
+//! - `pipeline.rs` owns pass ordering and analysis orchestration.
+//! - `model/program.rs` owns the concrete semantic program model.
+//! - `diagnostics/` owns structured diagnostic records and ordering.
+//! - `domains/` owns extensible domain-specific validation.
+//! - `crate::semantic` remains the legacy analyzer until migration is tested.
 //!
-//! # Portability and scalability
-//!
-//! This API does not encode machine-capacity limits, a closed list of
-//! computational domains, or a fixed maximum number of AST nodes, declarations,
-//! operations, qubits, devices, tensor dimensions, or resources.
-//!
-//! Practical analysis budgets belong to the supplied configuration and
-//! per-analysis session. When a budget is exhausted, the implementation must
-//! report an incomplete or aborted result rather than silently truncating work
-//! or reporting success.
-//!
-//! No finite implementation can guarantee analysis of literally infinite
-//! input. The architectural requirement is that the API imposes no arbitrary
-//! language-level ceiling; practical work is bounded by representational
-//! limits, configured policies, and available resources.
-//!
-//! # Determinism
-//!
-//! For the same AST, language version, options, AST storage, extension
-//! definitions, and semantic policy snapshot, a conforming implementation
-//! must produce equivalent semantic facts and deterministically ordered
-//! diagnostics.
-//!
-//! The API itself introduces no time-, randomness-, hardware-, or
-//! environment-dependent behavior.
-//!
-//! # Freeze criteria
-//!
-//! This module is ready to freeze when:
-//! - the native frontend exposes the canonical `Program` type at the import
-//!   path used below;
-//! - the concrete `SemanticService` implementation is connected to the
-//!   canonical AST storage, context, session, and pipeline;
-//! - concrete diagnostics implement `SemanticDiagnostic`;
-//! - incomplete and aborted work cannot be mistaken for a valid program;
-//! - API contract tests and the full workspace build pass;
-//! - legacy compiler entry points remain compatible until migration is
-//!   separately approved.
+//! This module intentionally does not construct a semantic model or claim
+//! that the implementation of every analysis pass already exists.
 
 use core::fmt;
 use std::error::Error;
 
-use crate::frontend::ast::node::program::Program;
+use crate::frontend::ast::node::program::{
+    Program,
+    ProgramValidationError,
+};
 
 /// Version of this public semantic API contract.
 ///
-/// This is independent of the Zamani language version, AST schema version,
-/// semantic-model schema version, and serialized artifact version.
+/// Independent of language, AST, semantic-model, and artifact versions.
 pub const SEMANTIC_API_VERSION: u16 = 1;
 
-/// Overall outcome of a single semantic-analysis invocation.
+/// Overall outcome of a semantic-analysis invocation.
 ///
-/// This status describes analysis completion, not target feasibility and not
-/// whether the source program is free of semantic errors.
+/// Completion is distinct from semantic validity and target feasibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SemanticStatus {
-    /// The configured analysis pipeline finished its requested work.
+    /// All requested analysis passes completed.
     ///
-    /// Diagnostics may still contain errors. Use `SemanticResult::is_valid`
-    /// to determine whether the result is valid.
+    /// The program may still have semantic errors.
     Complete,
 
-    /// Analysis stopped before all required checks could be completed.
+    /// Analysis stopped before all required checks completed.
     ///
-    /// Examples include a configured work budget being exhausted or an
-    /// explicitly unsupported analysis stage being encountered.
+    /// Examples include exhausted operational budgets or unavailable
+    /// analysis capabilities.
     Incomplete,
 
-    /// Analysis was deliberately stopped by cancellation, policy, or an
-    /// explicit abort decision.
+    /// Analysis was deliberately cancelled or aborted.
     Aborted,
 
-    /// The analysis implementation could not produce a reliable result
-    /// because of an internal or integration failure.
+    /// An internal or integration failure prevented reliable analysis.
     Failed,
 }
 
 impl SemanticStatus {
-    /// Whether the analysis pipeline completed its requested work.
+    /// Whether all requested analysis work completed.
     #[must_use]
     pub const fn is_complete(self) -> bool {
         matches!(self, Self::Complete)
     }
 
-    /// Whether the result cannot establish full semantic validity because
-    /// analysis did not finish.
+    /// Whether analysis did not complete successfully.
     #[must_use]
     pub const fn is_non_complete(self) -> bool {
-        !matches!(self, Self::Complete)
+        !self.is_complete()
     }
 }
 
 impl fmt::Display for SemanticStatus {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
             Self::Complete => "complete",
             Self::Incomplete => "incomplete",
             Self::Aborted => "aborted",
@@ -210,68 +127,108 @@ impl fmt::Display for SemanticStatus {
     }
 }
 
-/// Minimal diagnostic contract needed by the public result API.
+/// Minimal diagnostic contract required by the public result API.
 ///
-/// Concrete diagnostics remain owned by `diagnostics/`. This trait prevents
-/// the API from defining a competing diagnostic structure while allowing
-/// callers to determine whether a diagnostic represents an error.
-///
-/// Implementations must return `true` for every severity that makes the
-/// semantic result invalid. Warnings and informational diagnostics should
-/// return `false`.
+/// Implement this for the canonical structured diagnostic type in
+/// `diagnostics/diagnostic.rs`. Error severity must never be classified as
+/// a warning or informational diagnostic.
 pub trait SemanticDiagnostic {
-    /// Whether this diagnostic represents a semantic error.
+    /// Whether this diagnostic makes the analyzed program invalid.
     fn is_error(&self) -> bool;
+}
+
+/// Validity contract for semantic models returned by an implementation.
+///
+/// This interface prevents the API from assuming that the existence of a
+/// model proves that the model is finalized or semantically valid.
+///
+/// Implement this for the canonical semantic program model. The implementation
+/// must return `true` only when its own checked lifecycle and validity
+/// invariants establish that the model is complete and valid.
+pub trait SemanticModelState {
+    /// Whether the model itself establishes completed semantic analysis.
+    fn establishes_completion(&self) -> bool;
+
+    /// Whether the model itself establishes semantic validity.
+    ///
+    /// Must be false for invalid, unresolved, unfinalized, or partial models.
+    fn establishes_validity(&self) -> bool;
 }
 
 /// Result of one semantic-analysis invocation.
 ///
-/// `model` may contain a finalized semantic model when analysis completed, or
-/// partial facts when analysis did not complete. Partial facts must not be
-/// used as a validity certificate.
+/// A result may contain a partial model for editor tooling when analysis
+/// stops early. Such a model is never a validity certificate.
 ///
-/// Fields are private to preserve the invariants enforced by the constructors.
+/// `diagnostics_complete` records whether the returned diagnostic collection
+/// is known to contain all diagnostics required by the configured analysis.
+/// It must be false if diagnostic limits or recovery policies may have omitted
+/// diagnostics that affect correctness.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticResult<M, D> {
     status: SemanticStatus,
     model: Option<M>,
     diagnostics: Vec<D>,
+    diagnostics_complete: bool,
 }
 
 impl<M, D> SemanticResult<M, D> {
-    /// Construct a result from an explicit status, optional model, and
-    /// diagnostics.
+    /// Construct a result from an explicit status, model, and diagnostics.
     ///
-    /// This constructor is intentionally explicit: concrete session/pipeline
-    /// code is responsible for selecting the correct status. Consumers must
-    /// still use `is_valid()` instead of interpreting `Complete` alone.
+    /// This compatibility constructor means that the supplied diagnostic
+    /// collection is complete. Use `from_parts_with_diagnostic_completeness`
+    /// if truncation or omission is possible.
+    ///
+    /// The constructor does not certify model validity.
     #[must_use]
     pub fn from_parts(
         status: SemanticStatus,
         model: Option<M>,
         diagnostics: Vec<D>,
     ) -> Self {
+        Self::from_parts_with_diagnostic_completeness(
+            status,
+            model,
+            diagnostics,
+            true,
+        )
+    }
+
+    /// Construct a result while explicitly declaring diagnostic completeness.
+    ///
+    /// A caller must set `diagnostics_complete` to false whenever the
+    /// diagnostic collection may omit correctness-relevant diagnostics.
+    #[must_use]
+    pub fn from_parts_with_diagnostic_completeness(
+        status: SemanticStatus,
+        model: Option<M>,
+        diagnostics: Vec<D>,
+        diagnostics_complete: bool,
+    ) -> Self {
         Self {
             status,
             model,
             diagnostics,
+            diagnostics_complete,
         }
     }
 
-    /// Construct a result after the pipeline completed all requested work.
+    /// Construct a result after all requested passes completed.
+    ///
+    /// The model must still independently establish completion and validity
+    /// before `is_valid()` can return true.
     #[must_use]
     pub fn complete(model: M, diagnostics: Vec<D>) -> Self {
         Self::from_parts(SemanticStatus::Complete, Some(model), diagnostics)
     }
 
-    /// Construct a result where analysis did not finish but partial facts are
-    /// available for tooling or diagnostic reporting.
+    /// Construct a result with partial analysis facts.
     #[must_use]
     pub fn incomplete(model: Option<M>, diagnostics: Vec<D>) -> Self {
         Self::from_parts(SemanticStatus::Incomplete, model, diagnostics)
     }
 
-    /// Construct a result after analysis was explicitly aborted.
+    /// Construct a result after deliberate cancellation or abortion.
     #[must_use]
     pub fn aborted(model: Option<M>, diagnostics: Vec<D>) -> Self {
         Self::from_parts(SemanticStatus::Aborted, model, diagnostics)
@@ -283,24 +240,21 @@ impl<M, D> SemanticResult<M, D> {
         Self::from_parts(SemanticStatus::Failed, model, diagnostics)
     }
 
-    /// Return the analysis completion status.
+    /// Return the analysis status.
     #[must_use]
     pub const fn status(&self) -> SemanticStatus {
         self.status
     }
 
-    /// Whether the configured analysis pipeline completed.
-    ///
-    /// This does not imply that the program is semantically valid.
+    /// Whether the requested analysis pipeline completed.
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.status.is_complete()
     }
 
-    /// Borrow the semantic model, if one was produced.
+    /// Borrow the semantic model, if present.
     ///
-    /// A model from an incomplete, aborted, or failed result is partial and
-    /// must not be treated as fully validated.
+    /// A model in an incomplete, aborted, or failed result is partial.
     #[must_use]
     pub fn model(&self) -> Option<&M> {
         self.model.as_ref()
@@ -312,8 +266,10 @@ impl<M, D> SemanticResult<M, D> {
         self.model
     }
 
-    /// Borrow the retained diagnostics in their implementation-defined,
-    /// deterministic reporting order.
+    /// Borrow diagnostics in the order supplied by the implementation.
+    ///
+    /// A conforming service must apply the canonical diagnostic ordering
+    /// policy before returning its result.
     #[must_use]
     pub fn diagnostics(&self) -> &[D] {
         &self.diagnostics
@@ -325,7 +281,7 @@ impl<M, D> SemanticResult<M, D> {
         self.diagnostics
     }
 
-    /// Whether the result contains a model.
+    /// Whether a model is present.
     #[must_use]
     pub const fn has_model(&self) -> bool {
         self.model.is_some()
@@ -337,7 +293,13 @@ impl<M, D> SemanticResult<M, D> {
         self.diagnostics.len()
     }
 
-    /// Whether any retained diagnostic is an error.
+    /// Whether the returned diagnostics are known to be complete.
+    #[must_use]
+    pub const fn diagnostics_complete(&self) -> bool {
+        self.diagnostics_complete
+    }
+
+    /// Whether any retained diagnostic represents a semantic error.
     #[must_use]
     pub fn has_errors(&self) -> bool
     where
@@ -346,74 +308,82 @@ impl<M, D> SemanticResult<M, D> {
         self.diagnostics.iter().any(SemanticDiagnostic::is_error)
     }
 
-    /// Whether this result establishes semantic validity.
+    /// Whether this result proves semantic validity.
     ///
-    /// A result is valid only if:
-    /// - the pipeline completed;
-    /// - a semantic model exists; and
+    /// Validity requires every gate below:
+    ///
+    /// - the analysis status is complete;
+    /// - a semantic model exists;
+    /// - the model independently establishes completion;
+    /// - the model independently establishes validity;
+    /// - the diagnostic collection is complete;
     /// - no retained diagnostic represents an error.
     ///
-    /// The concrete pipeline must therefore ensure that errors are retained
-    /// according to its configured diagnostic policy and that diagnostic
-    /// truncation cannot silently certify an invalid program.
+    /// Target feasibility is not established by this method.
     #[must_use]
     pub fn is_valid(&self) -> bool
     where
+        M: SemanticModelState,
         D: SemanticDiagnostic,
     {
-        self.status == SemanticStatus::Complete
-            && self.model.is_some()
-            && !self.has_errors()
+        if self.status != SemanticStatus::Complete
+            || !self.diagnostics_complete
+            || self.has_errors()
+        {
+            return false;
+        }
+
+        self.model.as_ref().is_some_and(|model| {
+            model.establishes_completion() && model.establishes_validity()
+        })
     }
 }
 
-/// Implementation-independent interface for a semantic-analysis service.
+/// Implementation-independent semantic-analysis service.
 ///
-/// The concrete implementation owns or receives the canonical AST storage,
-/// immutable context, extension registry snapshot, session, and analysis
-/// pipeline. These details are associated with the implementation rather than
-/// being duplicated in the public API.
+/// The implementation owns or receives canonical AST storage, immutable
+/// context, extension snapshots, per-invocation sessions, and the pipeline.
+/// Mutable analysis state must not be shared across independent invocations
+/// unless the implementation explicitly provides safe isolation.
 ///
-/// A service should be shareable across independent analyses when its concrete
-/// type permits it. Per-invocation mutable state must live in a session, not
-/// in shared service state.
-///
-/// # Required behavior
-///
-/// Implementations must:
-/// - analyze the canonical frontend AST rather than inventing another AST;
-/// - validate source declarations and expressions according to the normative
-///   semantic specification and active language version;
-/// - distinguish source-language validity from target feasibility;
-/// - preserve symbolic resource and type constraints where resolution is not
-///   yet justified;
-/// - produce structured diagnostics with canonical source locations;
-/// - keep diagnostic ordering deterministic;
-/// - enforce configured operational budgets;
-/// - return `Incomplete`, `Aborted`, or `Failed` when appropriate;
-/// - never convert an unknown or unresolved fact into a valid fact silently;
-/// - avoid panics for ordinary invalid source programs;
-/// - keep physical placement, scheduling, routing, and runtime allocation
-///   outside semantic analysis.
+/// Implementations must preserve target-independent program meaning, symbolic
+/// requirements, explicit error states, deterministic diagnostics, and
+/// configured operational budgets.
 pub trait SemanticService {
-    /// Concrete semantic configuration type owned by `config.rs`.
+    /// Concrete configuration type owned by `config.rs`.
     type Options;
 
-    /// Finalized or partial semantic model type owned by `model/`.
-    type Model;
+    /// Concrete semantic model type owned by `model/`.
+    type Model: SemanticModelState;
 
     /// Structured diagnostic type owned by `diagnostics/`.
     type Diagnostic: SemanticDiagnostic;
 
-    /// Concrete implementation/integration error.
+    /// Error returned when the service cannot execute reliably.
     type Error: fmt::Display;
+
+    /// Validate configuration before starting expensive analysis.
+    ///
+    /// Implementations should validate supported language versions, extension
+    /// policy, budget consistency, and other cross-field invariants here.
+    /// The default is suitable only when the options type has no additional
+    /// validation requirements.
+    fn validate_options(
+        &self,
+        _options: &Self::Options,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
 
     /// Analyze a canonical source-level program.
     ///
-    /// Implementations must use the authoritative AST storage/provider to
-    /// resolve child node identities. A service that lacks the storage needed
-    /// to inspect a program must return an error or an explicitly incomplete
-    /// result; it must not pretend that the root alone is sufficient.
+    /// The implementation must resolve child `NodeId`s using the authoritative
+    /// AST storage/provider. A root-only analysis is not a complete analysis
+    /// of the program.
+    ///
+    /// Source-level errors belong in structured diagnostics. The returned
+    /// status must be incomplete, aborted, or failed when the corresponding
+    /// condition occurs.
     fn analyze_program(
         &self,
         program: &Program,
@@ -423,18 +393,17 @@ pub trait SemanticService {
 
 /// Public entry point for semantic analysis.
 ///
-/// This function validates the canonical program root before invoking the
-/// configured semantic service. Root validation is a defensive API boundary;
-/// it does not replace complete AST structural validation or semantic checks.
-///
-/// The caller supplies the service and options explicitly. This avoids hidden
-/// global state and allows separate compiler instances to use different
-/// language editions, extension snapshots, analysis policies, and budgets.
+/// Validates the canonical program root and service options before delegating
+/// to the configured service. Root validation is not a substitute for
+/// validating all reachable AST nodes through the authoritative AST storage.
 pub fn analyze<S>(
     service: &S,
     program: &Program,
     options: &S::Options,
-) -> Result<SemanticResult<S::Model, S::Diagnostic>, SemanticApiError<S::Error>>
+) -> Result<
+    SemanticResult<S::Model, S::Diagnostic>,
+    SemanticApiError<S::Error>,
+>
 where
     S: SemanticService + ?Sized,
 {
@@ -443,36 +412,36 @@ where
         .map_err(SemanticApiError::InvalidProgram)?;
 
     service
+        .validate_options(options)
+        .map_err(SemanticApiError::Service)?;
+
+    service
         .analyze_program(program, options)
         .map_err(SemanticApiError::Service)
 }
 
-/// Errors returned by the public semantic API before a semantic result can be
-/// returned.
+/// Error returned before the API can provide a reliable semantic result.
+///
+/// Ordinary source-language errors should be represented as diagnostics
+/// inside `SemanticResult`, not as API errors.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum SemanticApiError<E> {
-    /// The canonical program root failed its own validation contract.
-    ///
-    /// This usually indicates malformed or incorrectly constructed AST input.
-    InvalidProgram(crate::frontend::ast::node::program::ProgramValidationError),
+    /// The canonical program root failed structural validation.
+    InvalidProgram(ProgramValidationError),
 
-    /// The semantic service could not execute its configured analysis.
-    ///
-    /// Source-level semantic errors should normally be returned as structured
-    /// diagnostics inside `SemanticResult`, not as this variant. This variant
-    /// is for service, configuration, context, storage, or integration
-    /// failures that prevent the service from returning a reliable result.
+    /// Configuration, AST storage, context, or the analysis service failed.
     Service(E),
 }
 
 impl<E: fmt::Display> fmt::Display for SemanticApiError<E> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidProgram(error) => {
-                write!(formatter, "invalid canonical AST program: {error}")
+                write!(f, "invalid canonical AST program: {error}")
             }
             Self::Service(error) => {
-                write!(formatter, "semantic analysis service failed: {error}")
+                write!(f, "semantic analysis service failed: {error}")
             }
         }
     }
@@ -505,21 +474,48 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct TestModel {
+        complete: bool,
+        valid: bool,
+    }
+
+    impl SemanticModelState for TestModel {
+        fn establishes_completion(&self) -> bool {
+            self.complete
+        }
+
+        fn establishes_validity(&self) -> bool {
+            self.valid
+        }
+    }
+
+    fn valid_model() -> TestModel {
+        TestModel {
+            complete: true,
+            valid: true,
+        }
+    }
+
     #[test]
-    fn complete_result_without_errors_is_valid() {
-        let result = SemanticResult::complete((), Vec::<TestDiagnostic>::new());
+    fn complete_valid_model_without_errors_is_valid() {
+        let result = SemanticResult::complete(
+            valid_model(),
+            Vec::<TestDiagnostic>::new(),
+        );
 
         assert_eq!(result.status(), SemanticStatus::Complete);
         assert!(result.is_complete());
         assert!(result.has_model());
+        assert!(result.diagnostics_complete());
         assert!(!result.has_errors());
         assert!(result.is_valid());
     }
 
     #[test]
-    fn completed_result_with_errors_is_not_valid() {
+    fn diagnostic_error_prevents_validity() {
         let result = SemanticResult::complete(
-            (),
+            valid_model(),
             vec![TestDiagnostic { error: true }],
         );
 
@@ -529,9 +525,46 @@ mod tests {
     }
 
     #[test]
-    fn warnings_do_not_invalidate_completed_result() {
+    fn incomplete_diagnostic_collection_prevents_validity() {
+        let result = SemanticResult::from_parts_with_diagnostic_completeness(
+            SemanticStatus::Complete,
+            Some(valid_model()),
+            Vec::<TestDiagnostic>::new(),
+            false,
+        );
+
+        assert!(!result.diagnostics_complete());
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn incomplete_model_cannot_establish_validity() {
+        let model = TestModel {
+            complete: false,
+            valid: true,
+        };
+        let result =
+            SemanticResult::complete(model, Vec::<TestDiagnostic>::new());
+
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn invalid_model_cannot_establish_validity() {
+        let model = TestModel {
+            complete: true,
+            valid: false,
+        };
+        let result =
+            SemanticResult::complete(model, Vec::<TestDiagnostic>::new());
+
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn warnings_do_not_invalidate_a_valid_model() {
         let result = SemanticResult::complete(
-            (),
+            valid_model(),
             vec![TestDiagnostic { error: false }],
         );
 
@@ -540,9 +573,9 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_result_never_establishes_validity() {
+    fn incomplete_analysis_never_establishes_validity() {
         let result = SemanticResult::incomplete(
-            Some(()),
+            Some(valid_model()),
             Vec::<TestDiagnostic>::new(),
         );
 
@@ -552,9 +585,9 @@ mod tests {
     }
 
     #[test]
-    fn aborted_result_never_establishes_validity() {
+    fn aborted_analysis_never_establishes_validity() {
         let result = SemanticResult::aborted(
-            Some(()),
+            Some(valid_model()),
             Vec::<TestDiagnostic>::new(),
         );
 
@@ -563,10 +596,10 @@ mod tests {
     }
 
     #[test]
-    fn failed_result_never_establishes_validity() {
-        let result = SemanticResult::failed(
-            None::<()>,
-            Vec::<TestDiagnostic>::new(),
+    fn failed_analysis_never_establishes_validity() {
+        let result = SemanticResult::<TestModel, TestDiagnostic>::failed(
+            None,
+            Vec::new(),
         );
 
         assert_eq!(result.status(), SemanticStatus::Failed);
@@ -575,8 +608,8 @@ mod tests {
     }
 
     #[test]
-    fn empty_complete_result_is_not_valid_without_a_model() {
-        let result = SemanticResult::<(), TestDiagnostic>::from_parts(
+    fn complete_status_without_model_is_not_valid() {
+        let result = SemanticResult::<TestModel, TestDiagnostic>::from_parts(
             SemanticStatus::Complete,
             None,
             Vec::new(),
