@@ -1,26 +1,4 @@
-I inspected the repository’s existing `src/zuir/schema/types.rs`, `src/zuir/schema/attributes.rs`, `src/zuir/ZUIR-SPEC.md`, `src/zuir/ids.rs`, `src/zuir/version.rs`, `Cargo.toml`, and the relevant grammar and semantic-model specifications.
 
-One important finding: `src/zuir/schema/metadata.rs` does not currently exist on the repository’s default branch. The implementation below is therefore a proposed new file, designed to integrate with the existing schema vocabulary rather than replace it.
-
-The design follows these boundaries:
-
-* Reuse `AttributeKey`, `AttributeValue`, `SchemaType`, and `QualifiedName` instead of defining competing schema primitives.
-
-* Separate metadata that affects program meaning from descriptive, provenance, and tooling information.
-
-* Make fingerprint participation and transformation behavior explicit so optimization or metadata copying cannot silently discard meaningful information.
-
-* Preserve deterministic ordering, validate values after deserialization, and use no `unsafe` code.
-
-* Keep metadata declarative. It does not introduce source syntax, execute extension code, or define hardware-specific behavior.
-
-The grammar remains the authority for source syntax; the semantic model defines source meaning; ZUIR metadata records explicitly classified information needed by the representation and its consumers.
-
-### Proposed `src/zuir/schema/metadata.rs`
-
-The file contract is deliberately self-contained. Its only sibling dependencies are the existing `attributes.rs` and `types.rs`; it does not depend on the IR, builders, verifier, dialect registry, or serialization pipeline.
-
-```rust
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -29,14 +7,12 @@ The file contract is deliberately self-contained. Its only sibling dependencies 
 //! Path: `src/zuir/schema/metadata.rs`
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
-//! Safety: safe Rust only.
 //!
 //! ## PURPOSE
 //!
-//! Defines deterministic, validated metadata for ZUIR schemas and related
-//! representation entities. Metadata records explicitly classified facts
-//! without making this module responsible for program semantics, source
-//! parsing, dialect registration, execution, or backend-specific behavior.
+//! Defines typed, extensible, deterministic metadata for ZUIR schema
+//! entities. Metadata may describe semantic requirements, verification
+//! requirements, provenance, documentation, or tooling information.
 //!
 //! ## AUTHORITY
 //!
@@ -47,67 +23,51 @@ The file contract is deliberately self-contained. Its only sibling dependencies 
 //! - `grammar/Zamani.g4`
 //! - `grammar/specification/semantic-model.md`
 //!
-//! The grammar defines syntax. Semantic analysis defines source meaning.
-//! ZUIR metadata describes explicitly classified representation information.
+//! The grammar owns source syntax. Semantic analysis owns source meaning.
+//! ZUIR owns the representation of established computational meaning.
+//! This module defines metadata policy, not source-language semantics.
 //!
 //! ## OWNS
 //!
-//! - Metadata classification and metadata-entry invariants.
-//! - Metadata definitions and their validation policies.
+//! - Metadata classification and policy declarations.
+//! - Metadata definitions and schema validation.
 //! - Deterministic metadata storage and lookup.
-//! - Explicit fingerprint and transformation participation policies.
-//! - Metadata validation against declared schema definitions.
-//! - Local metadata errors.
+//! - Explicit transformation and fingerprint policies.
+//! - Validation after deserialization.
 //!
 //! ## DOES NOT OWN
 //!
-//! - Source-language syntax or source attribute parsing.
-//! - Semantic type inference or name resolution.
-//! - IR entities, operations, regions, or builders.
-//! - Dialect registration or authorization of namespaces.
-//! - Cryptographic fingerprint algorithms.
-//! - Serialization of complete programs or schema migration.
-//! - Execution, target selection, physical layout, or hardware allocation.
-//!
-//! ## DEPENDENCIES
-//!
-//! Reuses `AttributeKey`, `AttributeValue`, `AttributeError`, `SchemaType`,
-//! `SchemaTypeError`, and `QualifiedName` from sibling schema modules.
-//! It does not depend on future metadata consumers.
+//! - AST nodes, semantic analysis, IR nodes, or builders.
+//! - Dialect registration, namespace authorization, or extension execution.
+//! - Cryptographic hashing or canonical serialization.
+//! - Source-map construction, diagnostics rendering, or runtime behavior.
+//! - Physical resource allocation or target-specific layout.
 //!
 //! ## SCALABILITY
 //!
-//! Collections are dynamically sized and use checked accounting where
-//! applicable. No hardware capacities, operation counts, metadata counts,
-//! tensor ranks, or domain-specific maximums are imposed here.
-//!
-//! Finite processes still have finite resources. Deserializers handling
-//! untrusted input must enforce configured byte, nesting, collection, and
-//! allocation budgets before constructing arbitrarily large metadata trees.
+//! No universal hardware or metadata-count ceiling is imposed. Collections
+//! are dynamically sized. Processing untrusted input requires resource
+//! budgets at the decoding and integration boundaries. Finite hardware
+//! cannot provide infinite memory, address space, or execution time.
 //!
 //! ## DETERMINISM
 //!
-//! Metadata keys are stored in a `BTreeMap`. Iteration is deterministic by
-//! key order. Array order is retained because it may be meaningful.
-//! This module does not implement a cryptographic hash or claim that an
-//! arbitrary serializer produces canonical bytes.
+//! Metadata is stored in `BTreeMap`, giving deterministic key iteration.
+//! Array ordering in attribute values is preserved. This module does not
+//! claim that arbitrary serializer output is canonical.
 //!
 //! ## TRUST BOUNDARY
 //!
-//! Serde deserialization does not prove that invariants hold. Call `validate`
-//! or `validate_against` after decoding and before accepting metadata into
-//! verified IR. Namespace authorization and extension trust are checked by
-//! the owning registry or verifier.
+//! Serde deserialization can construct values without calling validating
+//! constructors. Call `validate` or `validate_against` before accepting
+//! decoded metadata into a verified representation. Extension authorization
+//! remains the responsibility of the dialect or extension registry.
 //!
-//! ## FREEZE CRITERIA
+//! ## DEPENDENCY DIRECTION
 //!
-//! - Metadata values reuse the canonical schema attribute vocabulary.
-//! - Semantic and descriptive metadata are distinguished explicitly.
-//! - Fingerprint and transformation participation are declared.
-//! - Semantic metadata cannot be configured for silent removal.
-//! - Deserialized data can be revalidated.
-//! - Unknown metadata is rejected or retained according to explicit policy.
-//! - Unit, integration, compatibility, and resource-budget tests pass.
+//! This module depends only on `schema::attributes` and `schema::types`.
+//! It does not depend on IR nodes, builders, verification implementations,
+//! serialization pipelines, or backend code.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -116,493 +76,455 @@ use std::fmt;
 use super::attributes::{
     AttributeError, AttributeKey, AttributeValue,
 };
-use super::types::{SchemaType, SchemaTypeError};
+use super::types::SchemaType;
 
 // =============================================================================
-// Shared schema vocabulary
+// Policies
 // =============================================================================
 
-/// Canonical key type for metadata.
+/// The role of a metadata entry.
 ///
-/// Metadata keys use the same validated, namespaced representation as
-/// attributes. Namespace authorization is not performed by this alias;
-/// the owning dialect or extension registry must authorize each namespace.
-pub type MetadataKey = AttributeKey;
-
-/// Canonical value type for metadata.
-///
-/// Metadata values reuse the existing inert, validated attribute-value
-/// representation. Metadata does not introduce a second value system.
-pub type MetadataValue = AttributeValue;
-
-// =============================================================================
-// Metadata classification and policies
-// =============================================================================
-
-/// Semantic role of a metadata entry.
-///
-/// The classification describes how consumers should interpret the entry.
-/// It does not grant permission to execute code or authorize an extension.
+/// Classification alone does not determine trust. In particular, metadata
+/// that claims to be descriptive must not be allowed to override semantic
+/// rules owned by another subsystem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[non_exhaustive]
 pub enum MetadataClass {
-    /// Information that can affect the meaning, legality, or interpretation
-    /// of the represented program.
-    ///
-    /// Examples include explicitly specified semantic modes, numerical
-    /// interpretation contracts, and other normative representation facts.
+    /// Changes or constrains the meaning of the represented entity.
     Semantic,
 
-    /// Human-readable or organizational information that does not, by
-    /// itself, change computational meaning.
-    ///
-    /// Examples include descriptions, display labels, and documentation.
-    Descriptive,
+    /// Participates in validity checks but is not itself program behavior.
+    Verification,
 
-    /// Information recording origin, evidence, transformation history, or
-    /// other audit and provenance facts.
+    /// Records origins, transformations, or other audit information.
     Provenance,
 
-    /// Information intended for editors, debuggers, visualizers, or other
-    /// development tools.
+    /// Human-readable descriptions and documentation.
+    Descriptive,
+
+    /// Editor, debugger, visualization, or other tooling information.
     Tooling,
 }
 
-impl MetadataClass {
-    /// Whether the class is intrinsically semantic.
-    #[must_use]
-    pub const fn is_semantic(self) -> bool {
-        matches!(self, Self::Semantic)
-    }
-
-    /// Whether metadata of this class is excluded from semantic fingerprints
-    /// by the default policy.
-    ///
-    /// A schema may explicitly include non-semantic metadata in a cache or
-    /// artifact fingerprint when that metadata affects the relevant output.
-    #[must_use]
-    pub const fn excluded_from_fingerprint_by_default(self) -> bool {
-        !matches!(self, Self::Semantic)
-    }
-}
-
-/// Whether a metadata entry participates in a fingerprint computed by a
-/// consumer, such as an IR cache or reproducible artifact pipeline.
+/// Whether an entry contributes to a semantic fingerprint.
 ///
-/// The fingerprint algorithm itself belongs to the fingerprinting module.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// The actual fingerprint algorithm and canonical byte encoding belong to
+/// the fingerprinting subsystem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FingerprintParticipation {
-    /// Include this metadata value in the relevant fingerprint input.
+pub enum FingerprintPolicy {
+    /// Include the entry in the semantic fingerprint input.
     Include,
 
-    /// Exclude this metadata value from the relevant fingerprint input.
+    /// Exclude the entry from the semantic fingerprint input.
     Exclude,
 }
 
-impl FingerprintParticipation {
-    /// Return the default for a metadata class.
-    #[must_use]
-    pub const fn for_class(class: MetadataClass) -> Self {
-        match class {
-            MetadataClass::Semantic => Self::Include,
-            MetadataClass::Descriptive
-            | MetadataClass::Provenance
-            | MetadataClass::Tooling => Self::Exclude,
-        }
-    }
-}
-
-/// Behavior requested when metadata passes through a transformation.
-///
-/// The transformation implementation must still preserve any information
-/// required by the ZUIR specification or a downstream contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// How a semantics-preserving transformation must treat an entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MetadataTransformPolicy {
-    /// Preserve the metadata entry and its value.
+pub enum TransformPolicy {
+    /// The transformation must retain the value unchanged.
     Preserve,
 
-    /// Permit a transformation to omit this entry only when the entry is
-    /// non-semantic and the transformation's contract allows the omission.
-    ///
-    /// This is an explicit opt-in to potential metadata loss, not a command
-    /// that every transformation must discard the entry.
-    DropNonSemantic,
+    /// The transformation may update the value under its own documented
+    /// correctness contract. The consumer must not assume it is unchanged.
+    MayUpdate,
+
+    /// The transformation must recalculate the value before the output is
+    /// accepted. A stale value is not valid output.
+    Recompute,
+
+    /// The transformation may discard the value because it is non-semantic
+    /// and the transformation contract permits its removal.
+    Discard,
 }
 
-/// Policy for metadata keys that have no definition in a metadata schema.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Whether a metadata entry is required in persisted representations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PersistencePolicy {
+    /// Persist this entry when serializing the containing metadata set.
+    Persist,
+
+    /// The entry is transient and may be omitted from persisted output.
+    Ephemeral,
+}
+
+/// How validation treats keys that have no local definition.
+///
+/// Preserving an unknown entry does not authorize interpreting or executing
+/// it. Extension registration and trust checks remain external.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UnknownMetadataPolicy {
-    /// Reject metadata keys that are not declared.
+    /// Reject keys that are not declared by the schema.
     Reject,
 
-    /// Preserve unknown metadata as inert data.
-    ///
-    /// Preservation does not authorize the namespace, confer executable
-    /// meaning, or prove that the extension is trusted.
+    /// Preserve structurally valid unknown keys for forward compatibility.
     Preserve,
+}
+
+// =============================================================================
+// Metadata definitions
+// =============================================================================
+
+/// A declaration describing one metadata key.
+///
+/// Definitions are schema contracts, not metadata values. They can be
+/// assembled by core schema code or by a registered extension. A definition
+/// must be validated before it is trusted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MetadataDefinition {
+    key: AttributeKey,
+    value_type: SchemaType,
+    class: MetadataClass,
+    fingerprint: FingerprintPolicy,
+    transform: TransformPolicy,
+    persistence: PersistencePolicy,
+    required: bool,
+}
+
+impl MetadataDefinition {
+    /// Create a metadata definition.
+    ///
+    /// Inconsistent policies are rejected. Semantic metadata cannot be
+    /// excluded from fingerprints, made ephemeral, or silently discarded.
+    pub fn new(
+        key: AttributeKey,
+        value_type: SchemaType,
+        class: MetadataClass,
+        fingerprint: FingerprintPolicy,
+        transform: TransformPolicy,
+        persistence: PersistencePolicy,
+        required: bool,
+    ) -> Result<Self, MetadataError> {
+        let definition = Self {
+            key,
+            value_type,
+            class,
+            fingerprint,
+            transform,
+            persistence,
+            required,
+        };
+
+        definition.validate()?;
+        Ok(definition)
+    }
+
+    /// The qualified metadata key.
+    #[must_use]
+    pub fn key(&self) -> &AttributeKey {
+        &self.key
+    }
+
+    /// The required value schema.
+    #[must_use]
+    pub fn value_type(&self) -> &SchemaType {
+        &self.value_type
+    }
+
+    /// The metadata classification.
+    #[must_use]
+    pub fn class(&self) -> MetadataClass {
+        self.class
+    }
+
+    /// The fingerprint participation policy.
+    #[must_use]
+    pub fn fingerprint_policy(&self) -> FingerprintPolicy {
+        self.fingerprint
+    }
+
+    /// The transformation policy.
+    #[must_use]
+    pub fn transform_policy(&self) -> TransformPolicy {
+        self.transform
+    }
+
+    /// The persistence policy.
+    #[must_use]
+    pub fn persistence_policy(&self) -> PersistencePolicy {
+        self.persistence
+    }
+
+    /// Whether this key must be present.
+    #[must_use]
+    pub fn is_required(&self) -> bool {
+        self.required
+    }
+
+    /// Revalidate all invariants, including after deserialization.
+    pub fn validate(&self) -> Result<(), MetadataError> {
+        self.key.validate()?;
+        self.value_type
+            .validate()
+            .map_err(MetadataError::InvalidSchemaType)?;
+
+        if self.class == MetadataClass::Semantic {
+            if self.fingerprint != FingerprintPolicy::Include {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata must participate in semantic fingerprints",
+                });
+            }
+
+            if self.persistence != PersistencePolicy::Persist {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata must be persisted",
+                });
+            }
+
+            if self.transform == TransformPolicy::Discard {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata cannot use the discard policy",
+                });
+            }
+        }
+
+        if self.class == MetadataClass::Verification
+            && self.transform == TransformPolicy::Discard
+        {
+            return Err(MetadataError::InvalidPolicy {
+                key: self.key.clone(),
+                reason: "verification metadata cannot be silently discarded",
+            });
+        }
+
+        Ok(())
+    }
 }
 
 // =============================================================================
 // Metadata entries
 // =============================================================================
 
-/// One metadata value and its declared role.
+/// One validated metadata value and its declared policies.
 ///
-/// A key maps to one entry. When a domain needs multiple values under one
-/// conceptual key, use an `AttributeValue::Array` so the collection's
-/// multiplicity and ordering remain explicit.
+/// Policy fields are carried with the value so that transformation consumers
+/// do not have to guess how an entry should be treated. A schema should still
+/// validate entries against its registered definitions at trust boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetadataEntry {
+    key: AttributeKey,
+    value: AttributeValue,
     class: MetadataClass,
-    value: MetadataValue,
+    fingerprint: FingerprintPolicy,
+    transform: TransformPolicy,
+    persistence: PersistencePolicy,
 }
 
 impl MetadataEntry {
-    /// Construct a metadata entry and validate its value.
-    pub fn new(
-        class: MetadataClass,
-        value: MetadataValue,
+    /// Construct an entry using the policies of a validated definition.
+    pub fn from_definition(
+        definition: &MetadataDefinition,
+        value: AttributeValue,
     ) -> Result<Self, MetadataError> {
-        value
-            .validate()
-            .map_err(MetadataError::InvalidValue)?;
+        definition.validate()?;
+        value.validate()?;
 
-        Ok(Self { class, value })
+        let conforms = value
+            .conforms_to(definition.value_type())
+            .map_err(MetadataError::InvalidAttribute)?;
+
+        if !conforms {
+            return Err(MetadataError::ValueTypeMismatch {
+                key: definition.key().clone(),
+            });
+        }
+
+        Ok(Self {
+            key: definition.key.clone(),
+            value,
+            class: definition.class,
+            fingerprint: definition.fingerprint,
+            transform: definition.transform,
+            persistence: definition.persistence,
+        })
     }
 
-    /// Return the declared metadata class.
+    /// Return the qualified key.
     #[must_use]
-    pub const fn class(&self) -> MetadataClass {
-        self.class
+    pub fn key(&self) -> &AttributeKey {
+        &self.key
     }
 
     /// Return the metadata value.
     #[must_use]
-    pub fn value(&self) -> &MetadataValue {
+    pub fn value(&self) -> &AttributeValue {
         &self.value
     }
 
-    /// Revalidate this entry, including after deserialization.
-    pub fn validate(&self) -> Result<(), MetadataError> {
-        self.value
-            .validate()
-            .map_err(MetadataError::InvalidValue)
-    }
-
-    /// Default fingerprint participation when no metadata schema definition
-    /// overrides the class's default.
+    /// Return the classification.
     #[must_use]
-    pub const fn default_fingerprint_participation(
-        &self,
-    ) -> FingerprintParticipation {
-        FingerprintParticipation::for_class(self.class)
-    }
-
-    /// Validate that the entry's class and value agree with a definition.
-    pub fn validate_against(
-        &self,
-        definition: &MetadataDefinition,
-    ) -> Result<(), MetadataError> {
-        self.validate()?;
-
-        if self.class != definition.class {
-            return Err(MetadataError::ClassMismatch {
-                expected: definition.class,
-                actual: self.class,
-            });
-        }
-
-        let conforms = self
-            .value
-            .conforms_to(&definition.value_type)
-            .map_err(MetadataError::InvalidAttribute)?;
-
-        if !conforms {
-            return Err(MetadataError::ValueTypeMismatch);
-        }
-
-        Ok(())
-    }
-}
-
-// =============================================================================
-// Metadata definitions and schemas
-// =============================================================================
-
-/// Definition of a permitted metadata key.
-///
-/// The definition is declarative. It does not execute callbacks, resolve
-/// external references, or authorize the key's namespace.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MetadataDefinition {
-    key: MetadataKey,
-    value_type: SchemaType,
-    class: MetadataClass,
-    required: bool,
-    fingerprint: FingerprintParticipation,
-    transform: MetadataTransformPolicy,
-    description: Option<String>,
-}
-
-impl MetadataDefinition {
-    /// Construct a metadata definition using class-based default policies.
-    pub fn new(
-        key: MetadataKey,
-        value_type: SchemaType,
-        class: MetadataClass,
-        required: bool,
-    ) -> Result<Self, MetadataError> {
-        key.validate().map_err(MetadataError::InvalidAttribute)?;
-
-        value_type
-            .validate()
-            .map_err(MetadataError::InvalidSchemaType)?;
-
-        Ok(Self {
-            key,
-            value_type,
-            class,
-            required,
-            fingerprint: FingerprintParticipation::for_class(class),
-            transform: MetadataTransformPolicy::Preserve,
-            description: None,
-        })
-    }
-
-    /// Explicitly choose fingerprint participation.
-    ///
-    /// Semantic metadata cannot be excluded from a semantic fingerprint.
-    /// A consumer may define a different fingerprint purpose, but that
-    /// policy must be represented outside this semantic schema.
-    pub fn with_fingerprint_participation(
-        mut self,
-        participation: FingerprintParticipation,
-    ) -> Result<Self, MetadataError> {
-        if self.class.is_semantic()
-            && participation == FingerprintParticipation::Exclude
-        {
-            return Err(MetadataError::SemanticMetadataExcludedFromFingerprint);
-        }
-
-        self.fingerprint = participation;
-        Ok(self)
-    }
-
-    /// Choose the permitted transformation behavior.
-    ///
-    /// Semantic metadata cannot be marked as droppable.
-    pub fn with_transform_policy(
-        mut self,
-        policy: MetadataTransformPolicy,
-    ) -> Result<Self, MetadataError> {
-        if self.class.is_semantic()
-            && policy == MetadataTransformPolicy::DropNonSemantic
-        {
-            return Err(MetadataError::SemanticMetadataMayNotBeDropped);
-        }
-
-        self.transform = policy;
-        Ok(self)
-    }
-
-    /// Attach an optional human-readable description.
-    #[must_use]
-    pub fn with_description(
-        mut self,
-        description: impl Into<String>,
-    ) -> Self {
-        self.description = Some(description.into());
-        self
-    }
-
-    /// Return the key.
-    #[must_use]
-    pub fn key(&self) -> &MetadataKey {
-        &self.key
-    }
-
-    /// Return the declared value schema.
-    #[must_use]
-    pub fn value_type(&self) -> &SchemaType {
-        &self.value_type
-    }
-
-    /// Return the declared class.
-    #[must_use]
-    pub const fn class(&self) -> MetadataClass {
+    pub fn class(&self) -> MetadataClass {
         self.class
     }
 
-    /// Whether the key must be present.
+    /// Return the fingerprint policy.
     #[must_use]
-    pub const fn required(&self) -> bool {
-        self.required
-    }
-
-    /// Return the fingerprint participation policy.
-    #[must_use]
-    pub const fn fingerprint_participation(
-        &self,
-    ) -> FingerprintParticipation {
+    pub fn fingerprint_policy(&self) -> FingerprintPolicy {
         self.fingerprint
     }
 
     /// Return the transformation policy.
     #[must_use]
-    pub const fn transform_policy(&self) -> MetadataTransformPolicy {
+    pub fn transform_policy(&self) -> TransformPolicy {
         self.transform
     }
 
-    /// Return the optional description.
+    /// Return the persistence policy.
     #[must_use]
-    pub fn description(&self) -> Option<&str> {
-        self.description.as_deref()
+    pub fn persistence_policy(&self) -> PersistencePolicy {
+        self.persistence
     }
 
-    /// Validate the definition's invariants, including after deserialization.
+    /// Validate entry-local invariants.
+    ///
+    /// The definition-backed schema check is performed by
+    /// `MetadataSet::validate_against`.
     pub fn validate(&self) -> Result<(), MetadataError> {
-        self.key.validate().map_err(MetadataError::InvalidAttribute)?;
+        self.key.validate()?;
+        self.value.validate()?;
 
-        self.value_type
-            .validate()
-            .map_err(MetadataError::InvalidSchemaType)?;
-
-        if self.class.is_semantic()
-            && self.fingerprint == FingerprintParticipation::Exclude
-        {
-            return Err(MetadataError::SemanticMetadataExcludedFromFingerprint);
+        if self.class == MetadataClass::Semantic {
+            if self.fingerprint != FingerprintPolicy::Include {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata must participate in semantic fingerprints",
+                });
+            }
+            if self.persistence != PersistencePolicy::Persist {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata must be persisted",
+                });
+            }
+            if self.transform == TransformPolicy::Discard {
+                return Err(MetadataError::InvalidPolicy {
+                    key: self.key.clone(),
+                    reason: "semantic metadata cannot use the discard policy",
+                });
+            }
         }
 
-        if self.class.is_semantic()
-            && self.transform == MetadataTransformPolicy::DropNonSemantic
+        if self.class == MetadataClass::Verification
+            && self.transform == TransformPolicy::Discard
         {
-            return Err(MetadataError::SemanticMetadataMayNotBeDropped);
+            return Err(MetadataError::InvalidPolicy {
+                key: self.key.clone(),
+                reason: "verification metadata cannot be silently discarded",
+            });
         }
 
         Ok(())
     }
 }
 
-/// Deterministic set of metadata definitions.
+// =============================================================================
+// Schema
+// =============================================================================
+
+/// The metadata schema for one class of representation entity.
 ///
-/// The schema owns validation policy. It does not own namespace registration,
-/// dialect trust, or complete-program serialization.
+/// This schema is intentionally independent of IR nodes. The owning IR or
+/// dialect layer decides which schema applies to a program, module, function,
+/// operation, type, region, or other entity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetadataSchema {
-    definitions: BTreeMap<MetadataKey, MetadataDefinition>,
-    unknown_policy: UnknownMetadataPolicy,
+    definitions: BTreeMap<AttributeKey, MetadataDefinition>,
+    unknown: UnknownMetadataPolicy,
 }
 
 impl MetadataSchema {
     /// Create an empty schema with an explicit unknown-key policy.
     #[must_use]
-    pub fn new(unknown_policy: UnknownMetadataPolicy) -> Self {
+    pub fn new(unknown: UnknownMetadataPolicy) -> Self {
         Self {
             definitions: BTreeMap::new(),
-            unknown_policy,
+            unknown,
         }
     }
 
-    /// Add a definition, rejecting duplicate keys.
+    /// The schema's unknown-key policy.
+    #[must_use]
+    pub fn unknown_policy(&self) -> UnknownMetadataPolicy {
+        self.unknown
+    }
+
+    /// Insert a definition.
+    ///
+    /// Duplicate definitions are rejected rather than silently overwritten.
     pub fn insert(
         &mut self,
         definition: MetadataDefinition,
     ) -> Result<(), MetadataError> {
         definition.validate()?;
-        let key = definition.key.clone();
 
-        if self.definitions.contains_key(&key) {
-            return Err(MetadataError::DuplicateDefinition(key));
+        if self.definitions.contains_key(definition.key()) {
+            return Err(MetadataError::DuplicateDefinition(
+                definition.key().clone(),
+            ));
         }
 
-        self.definitions.insert(key, definition);
+        self.definitions
+            .insert(definition.key().clone(), definition);
         Ok(())
     }
 
-    /// Look up a definition by key.
+    /// Look up a definition.
     #[must_use]
-    pub fn get(
-        &self,
-        key: &MetadataKey,
-    ) -> Option<&MetadataDefinition> {
+    pub fn get(&self, key: &AttributeKey) -> Option<&MetadataDefinition> {
         self.definitions.get(key)
     }
 
     /// Iterate definitions in deterministic key order.
     pub fn iter(
         &self,
-    ) -> impl Iterator<Item = (&MetadataKey, &MetadataDefinition)> {
+    ) -> impl Iterator<Item = (&AttributeKey, &MetadataDefinition)> {
         self.definitions.iter()
     }
 
-    /// Return the unknown-key policy.
+    /// Number of definitions.
     #[must_use]
-    pub const fn unknown_policy(&self) -> UnknownMetadataPolicy {
-        self.unknown_policy
+    pub fn len(&self) -> usize {
+        self.definitions.len()
     }
 
-    /// Validate schema invariants, including after deserialization.
+    /// Whether this schema has no definitions.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.definitions.is_empty()
+    }
+
+    /// Validate the schema after construction or deserialization.
     pub fn validate(&self) -> Result<(), MetadataError> {
         for (key, definition) in &self.definitions {
-            key.validate().map_err(MetadataError::InvalidAttribute)?;
             definition.validate()?;
-
             if key != definition.key() {
                 return Err(MetadataError::DefinitionKeyMismatch);
             }
         }
-
-        Ok(())
-    }
-
-    /// Validate a metadata set against this schema.
-    pub fn validate_values(
-        &self,
-        values: &MetadataSet,
-    ) -> Result<(), MetadataError> {
-        self.validate()?;
-        values.validate()?;
-
-        for (key, entry) in values.iter() {
-            match self.definitions.get(key) {
-                Some(definition) => entry.validate_against(definition)?,
-                None => match self.unknown_policy {
-                    UnknownMetadataPolicy::Reject => {
-                        return Err(MetadataError::UnknownKey(key.clone()));
-                    }
-                    UnknownMetadataPolicy::Preserve => {
-                        // Unknown entries remain inert and preserved.
-                        // Registry-level namespace authorization is separate.
-                    }
-                },
-            }
-        }
-
-        for (key, definition) in &self.definitions {
-            if definition.required() && !values.contains_key(key) {
-                return Err(MetadataError::MissingRequiredKey(key.clone()));
-            }
-        }
-
         Ok(())
     }
 }
 
 // =============================================================================
-// Metadata storage
+// Metadata set
 // =============================================================================
 
-/// Deterministic collection of metadata entries.
+/// A deterministic collection of metadata entries.
 ///
-/// A single key stores a single entry. Repeated data belongs in an array value.
-/// This prevents duplicate-key behavior from depending on insertion order.
+/// One entry is permitted per qualified key. If a metadata concept needs
+/// multiple values, encode its value as an array or define a richer schema
+/// contract instead of relying on accidental duplicate-key behavior.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct MetadataSet {
-    entries: BTreeMap<MetadataKey, MetadataEntry>,
+    entries: BTreeMap<AttributeKey, MetadataEntry>,
 }
 
 impl MetadataSet {
@@ -612,50 +534,48 @@ impl MetadataSet {
         Self::default()
     }
 
-    /// Insert an entry, rejecting a duplicate key.
-    ///
-    /// Validation happens before mutation. On failure, the set is unchanged.
-    pub fn insert(
-        &mut self,
-        key: MetadataKey,
-        entry: MetadataEntry,
-    ) -> Result<(), MetadataError> {
-        key.validate().map_err(MetadataError::InvalidAttribute)?;
+    /// Insert an entry, rejecting duplicate keys.
+    pub fn insert(&mut self, entry: MetadataEntry) -> Result<(), MetadataError> {
         entry.validate()?;
 
-        if self.entries.contains_key(&key) {
-            return Err(MetadataError::DuplicateKey(key));
+        if self.entries.contains_key(entry.key()) {
+            return Err(MetadataError::DuplicateEntry(entry.key().clone()));
         }
 
-        self.entries.insert(key, entry);
+        self.entries.insert(entry.key().clone(), entry);
         Ok(())
     }
 
-    /// Replace an existing entry or insert a new one.
+    /// Replace an existing entry explicitly.
     ///
-    /// Validation happens before mutation. The previous entry is returned
-    /// only when replacement succeeds.
+    /// This operation is intentionally distinct from `insert` so that
+    /// overwrites cannot happen accidentally.
     pub fn replace(
         &mut self,
-        key: MetadataKey,
         entry: MetadataEntry,
     ) -> Result<Option<MetadataEntry>, MetadataError> {
-        key.validate().map_err(MetadataError::InvalidAttribute)?;
         entry.validate()?;
-
-        Ok(self.entries.insert(key, entry))
+        Ok(self.entries.insert(entry.key().clone(), entry))
     }
 
-    /// Get an entry by key.
+    /// Get an entry by qualified key.
     #[must_use]
-    pub fn get(&self, key: &MetadataKey) -> Option<&MetadataEntry> {
+    pub fn get(&self, key: &AttributeKey) -> Option<&MetadataEntry> {
         self.entries.get(key)
     }
 
-    /// Whether the set contains a key.
-    #[must_use]
-    pub fn contains_key(&self, key: &MetadataKey) -> bool {
-        self.entries.contains_key(key)
+    /// Remove an entry explicitly.
+    ///
+    /// Callers that perform transformations must first consult its
+    /// transformation policy. This low-level collection operation does not
+    /// authorize semantic changes.
+    pub fn remove(&mut self, key: &AttributeKey) -> Option<MetadataEntry> {
+        self.entries.remove(key)
+    }
+
+    /// Iterate entries in deterministic key order.
+    pub fn iter(&self) -> impl Iterator<Item = (&AttributeKey, &MetadataEntry)> {
+        self.entries.iter()
     }
 
     /// Number of entries.
@@ -664,69 +584,166 @@ impl MetadataSet {
         self.entries.len()
     }
 
-    /// Whether the set is empty.
+    /// Whether the collection is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
-    /// Iterate in deterministic key order.
-    pub fn iter(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (&MetadataKey, &MetadataEntry)> {
-        self.entries.iter()
-    }
-
-    /// Validate all local invariants, including after deserialization.
+    /// Validate each entry's local invariants.
     pub fn validate(&self) -> Result<(), MetadataError> {
         for (key, entry) in &self.entries {
-            key.validate().map_err(MetadataError::InvalidAttribute)?;
             entry.validate()?;
+            if key != entry.key() {
+                return Err(MetadataError::EntryKeyMismatch);
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate all entries against a metadata schema.
+    ///
+    /// Required definitions must be present. Unknown entries follow the
+    /// schema's explicit policy. Unknown entries are never executed here.
+    pub fn validate_against(
+        &self,
+        schema: &MetadataSchema,
+    ) -> Result<(), MetadataError> {
+        self.validate()?;
+        schema.validate()?;
+
+        for (key, entry) in &self.entries {
+            match schema.get(key) {
+                Some(definition) => {
+                    if entry.class != definition.class
+                        || entry.fingerprint != definition.fingerprint
+                        || entry.transform != definition.transform
+                        || entry.persistence != definition.persistence
+                    {
+                        return Err(MetadataError::PolicyMismatch {
+                            key: key.clone(),
+                        });
+                    }
+
+                    let conforms = entry
+                        .value
+                        .conforms_to(definition.value_type())
+                        .map_err(MetadataError::InvalidAttribute)?;
+
+                    if !conforms {
+                        return Err(MetadataError::ValueTypeMismatch {
+                            key: key.clone(),
+                        });
+                    }
+                }
+                None => {
+                    if schema.unknown == UnknownMetadataPolicy::Reject {
+                        return Err(MetadataError::UnknownMetadata(key.clone()));
+                    }
+                }
+            }
+        }
+
+        for (key, definition) in schema.iter() {
+            if definition.is_required() && !self.entries.contains_key(key) {
+                return Err(MetadataError::MissingRequiredMetadata(key.clone()));
+            }
         }
 
         Ok(())
     }
 
-    /// Iterate metadata that participates in a semantic or artifact
-    /// fingerprint according to the supplied schema.
+    /// Check whether a semantics-preserving transformation may remove an
+    /// entry.
     ///
-    /// Declared entries follow their schema's explicit policy. Unknown
-    /// preserved entries are included conservatively so adding unknown
-    /// metadata cannot silently reuse a cache key computed without it.
+    /// `Discard` is allowed only for entries whose declared policy permits
+    /// it. Semantic and verification entries cannot be discarded because
+    /// their local validation rejects that policy.
+    pub fn ensure_removal_allowed(
+        &self,
+        key: &AttributeKey,
+    ) -> Result<(), MetadataError> {
+        let Some(entry) = self.entries.get(key) else {
+            return Ok(());
+        };
+
+        match entry.transform {
+            TransformPolicy::Discard => Ok(()),
+            TransformPolicy::Preserve => Err(MetadataError::RemovalForbidden {
+                key: key.clone(),
+                reason: "the entry must be preserved",
+            }),
+            TransformPolicy::MayUpdate => Err(MetadataError::RemovalForbidden {
+                key: key.clone(),
+                reason: "the entry may be updated but not silently removed",
+            }),
+            TransformPolicy::Recompute => Err(MetadataError::RemovalForbidden {
+                key: key.clone(),
+                reason: "the entry must be recomputed before output is accepted",
+            }),
+        }
+    }
+
+    /// Return entries that participate in the semantic fingerprint.
     ///
-    /// This method selects entries only; the fingerprint module remains
-    /// responsible for canonical encoding and hashing.
-    pub fn iter_for_fingerprint<'a>(
-        &'a self,
-        schema: &'a MetadataSchema,
-    ) -> impl Iterator<Item = (&'a MetadataKey, &'a MetadataEntry)> + 'a {
-        self.entries.iter().filter(move |(key, _)| {
-            match schema.get(key) {
-                Some(definition) => {
-                    definition.fingerprint_participation()
-                        == FingerprintParticipation::Include
-                }
-                None => true,
-            }
+    /// The caller must feed these entries into the canonical fingerprint
+    /// implementation. This method does not hash or serialize values.
+    pub fn fingerprint_entries(
+        &self,
+    ) -> impl Iterator<Item = (&AttributeKey, &MetadataEntry)> {
+        self.entries.iter().filter(|(_, entry)| {
+            entry.fingerprint_policy() == FingerprintPolicy::Include
         })
     }
 
-    /// Return entries that transformations must preserve under the supplied
-    /// schema. Unknown entries are preserved conservatively.
-    pub fn iter_to_preserve<'a>(
-        &'a self,
-        schema: &'a MetadataSchema,
-    ) -> impl Iterator<Item = (&'a MetadataKey, &'a MetadataEntry)> + 'a {
-        self.entries.iter().filter(move |(key, entry)| {
-            match schema.get(key) {
-                Some(definition) => {
-                    entry.class().is_semantic()
-                        || definition.transform_policy()
-                            == MetadataTransformPolicy::Preserve
-                }
-                None => true,
-            }
+    /// Return entries that must be persisted.
+    pub fn persisted_entries(
+        &self,
+    ) -> impl Iterator<Item = (&AttributeKey, &MetadataEntry)> {
+        self.entries.iter().filter(|(_, entry)| {
+            entry.persistence_policy() == PersistencePolicy::Persist
         })
+    }
+
+    /// Validate transformation output against the declared metadata schema.
+    ///
+    /// Entries marked `Recompute` must be supplied in the output; this
+    /// function does not itself calculate their values. The owning
+    /// transformation pipeline must perform the recalculation.
+    pub fn validate_transformation_output(
+        &self,
+        output: &Self,
+        schema: &MetadataSchema,
+    ) -> Result<(), MetadataError> {
+        self.validate_against(schema)?;
+        output.validate_against(schema)?;
+
+        for (key, source) in &self.entries {
+            let target = output.entries.get(key);
+
+            match source.transform {
+                TransformPolicy::Preserve => match target {
+                    Some(target) if target == source => {}
+                    _ => {
+                        return Err(MetadataError::TransformationViolation {
+                            key: key.clone(),
+                            reason: "entry declared Preserve but output differs or omits it",
+                        });
+                    }
+                },
+                TransformPolicy::Recompute => {
+                    if target.is_none() {
+                        return Err(MetadataError::TransformationViolation {
+                            key: key.clone(),
+                            reason: "entry declared Recompute but output omits it",
+                        });
+                    }
+                }
+                TransformPolicy::MayUpdate | TransformPolicy::Discard => {}
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -734,98 +751,116 @@ impl MetadataSet {
 // Errors
 // =============================================================================
 
-/// Errors produced by metadata construction and validation.
+/// Errors raised by metadata construction, validation, or policy checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MetadataError {
-    /// An attribute-key invariant failed.
-    InvalidAttribute(String),
+    /// Invalid qualified metadata key or metadata value.
+    InvalidAttribute(AttributeError),
 
-    /// A metadata value is malformed.
-    InvalidValue(String),
+    /// A schema type failed its own validation.
+    InvalidSchemaType(super::types::SchemaTypeError),
 
-    /// A schema type is malformed.
-    InvalidSchemaType(String),
+    /// A key was defined more than once.
+    DuplicateDefinition(AttributeKey),
 
-    /// A metadata key is defined more than once.
-    DuplicateKey(MetadataKey),
+    /// An entry was inserted more than once.
+    DuplicateEntry(AttributeKey),
 
-    /// A schema declares the same key more than once.
-    DuplicateDefinition(MetadataKey),
-
-    /// The map key differs from the key stored in its definition.
+    /// A deserialized schema's map key disagrees with its definition.
     DefinitionKeyMismatch,
 
-    /// A required metadata key is missing.
-    MissingRequiredKey(MetadataKey),
+    /// A deserialized set's map key disagrees with its entry.
+    EntryKeyMismatch,
 
-    /// A key is not declared and unknown metadata is forbidden.
-    UnknownKey(MetadataKey),
-
-    /// An entry's declared class differs from its schema.
-    ClassMismatch {
-        expected: MetadataClass,
-        actual: MetadataClass,
+    /// The value does not match the declared schema type.
+    ValueTypeMismatch {
+        key: AttributeKey,
     },
 
-    /// An entry's value does not conform to the declared schema type.
-    ValueTypeMismatch,
+    /// A key is not known to the selected schema.
+    UnknownMetadata(AttributeKey),
 
-    /// Semantic metadata was configured to be excluded from a semantic
-    /// fingerprint.
-    SemanticMetadataExcludedFromFingerprint,
+    /// A required metadata key is absent.
+    MissingRequiredMetadata(AttributeKey),
 
-    /// Semantic metadata was configured to be droppable.
-    SemanticMetadataMayNotBeDropped,
+    /// Entry policy differs from its authoritative definition.
+    PolicyMismatch {
+        key: AttributeKey,
+    },
+
+    /// A combination of policies is not valid.
+    InvalidPolicy {
+        key: AttributeKey,
+        reason: &'static str,
+    },
+
+    /// An operation would violate a transformation policy.
+    RemovalForbidden {
+        key: AttributeKey,
+        reason: &'static str,
+    },
+
+    /// Transformation output violates a metadata contract.
+    TransformationViolation {
+        key: AttributeKey,
+        reason: &'static str,
+    },
 }
 
 impl fmt::Display for MetadataError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidAttribute(error) => {
-                write!(f, "invalid metadata key or attribute: {error}")
-            }
-            Self::InvalidValue(error) => {
-                write!(f, "invalid metadata value: {error}")
+                write!(f, "invalid metadata attribute: {error}")
             }
             Self::InvalidSchemaType(error) => {
                 write!(f, "invalid metadata schema type: {error}")
             }
-            Self::DuplicateKey(key) => {
-                write!(f, "duplicate metadata key: {key}")
-            }
             Self::DuplicateDefinition(key) => {
                 write!(f, "duplicate metadata definition: {key}")
             }
-            Self::DefinitionKeyMismatch => {
-                f.write_str("metadata schema map key does not match its definition")
+            Self::DuplicateEntry(key) => {
+                write!(f, "duplicate metadata entry: {key}")
             }
-            Self::MissingRequiredKey(key) => {
+            Self::DefinitionKeyMismatch => {
+                f.write_str("metadata schema map key differs from its definition key")
+            }
+            Self::EntryKeyMismatch => {
+                f.write_str("metadata set map key differs from its entry key")
+            }
+            Self::ValueTypeMismatch { key } => {
+                write!(f, "metadata value does not match its declared type: {key}")
+            }
+            Self::UnknownMetadata(key) => {
+                write!(f, "unknown metadata key: {key}")
+            }
+            Self::MissingRequiredMetadata(key) => {
                 write!(f, "required metadata key is missing: {key}")
             }
-            Self::UnknownKey(key) => {
-                write!(f, "metadata key is not declared by the schema: {key}")
+            Self::PolicyMismatch { key } => {
+                write!(f, "metadata policies disagree with the schema: {key}")
             }
-            Self::ClassMismatch { expected, actual } => {
-                write!(
-                    f,
-                    "metadata class mismatch: expected {expected:?}, found {actual:?}"
-                )
+            Self::InvalidPolicy { key, reason } => {
+                write!(f, "invalid policy for metadata {key}: {reason}")
             }
-            Self::ValueTypeMismatch => {
-                f.write_str("metadata value does not conform to its declared schema type")
+            Self::RemovalForbidden { key, reason } => {
+                write!(f, "cannot remove metadata {key}: {reason}")
             }
-            Self::SemanticMetadataExcludedFromFingerprint => {
-                f.write_str("semantic metadata cannot be excluded from a semantic fingerprint")
-            }
-            Self::SemanticMetadataMayNotBeDropped => {
-                f.write_str("semantic metadata cannot be configured for removal")
+            Self::TransformationViolation { key, reason } => {
+                write!(f, "metadata transformation violation for {key}: {reason}")
             }
         }
     }
 }
 
 impl std::error::Error for MetadataError {}
+
+impl From<AttributeError> for MetadataError {
+    fn from(error: AttributeError) -> Self {
+        Self::InvalidAttribute(error)
+    }
+}
 
 // =============================================================================
 // Tests
@@ -834,347 +869,264 @@ impl std::error::Error for MetadataError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::attributes::AttributeName;
-    use super::super::types::QualifiedName;
 
-    fn key(namespace: &str, local: &str) -> MetadataKey {
-        let namespace =
-            QualifiedName::parse(namespace).expect("valid namespace");
-        let local =
-            AttributeName::new(local).expect("valid local name");
-
-        MetadataKey::new(namespace, local).expect("valid metadata key")
+    fn key(name: &str) -> AttributeKey {
+        AttributeKey::parse(name).expect("test key must be valid")
     }
 
-    fn string_entry(
+    fn definition(
+        name: &str,
         class: MetadataClass,
-        value: &str,
-    ) -> MetadataEntry {
-        MetadataEntry::new(
+        fingerprint: FingerprintPolicy,
+        transform: TransformPolicy,
+        persistence: PersistencePolicy,
+        required: bool,
+    ) -> MetadataDefinition {
+        MetadataDefinition::new(
+            key(name),
+            SchemaType::String,
             class,
-            MetadataValue::String(value.to_owned()),
+            fingerprint,
+            transform,
+            persistence,
+            required,
         )
-        .expect("valid metadata entry")
+        .expect("test definition must be valid")
+    }
+
+    fn entry(definition: &MetadataDefinition, value: &str) -> MetadataEntry {
+        MetadataEntry::from_definition(
+            definition,
+            AttributeValue::String(value.to_owned()),
+        )
+        .expect("test entry must be valid")
     }
 
     #[test]
-    fn stores_entries_in_deterministic_key_order() {
-        let mut set = MetadataSet::new();
-        set.insert(
-            key("tooling", "zeta"),
-            string_entry(MetadataClass::Tooling, "last"),
+    fn semantic_metadata_requires_fingerprint_and_persistence() {
+        assert!(MetadataDefinition::new(
+            key("core::meaning"),
+            SchemaType::String,
+            MetadataClass::Semantic,
+            FingerprintPolicy::Exclude,
+            TransformPolicy::Preserve,
+            PersistencePolicy::Persist,
+            true,
         )
-        .expect("insert zeta");
-        set.insert(
-            key("core", "alpha"),
-            string_entry(MetadataClass::Semantic, "first"),
-        )
-        .expect("insert alpha");
+        .is_err());
 
-        let names: Vec<String> = set
-            .iter()
+        assert!(MetadataDefinition::new(
+            key("core::meaning"),
+            SchemaType::String,
+            MetadataClass::Semantic,
+            FingerprintPolicy::Include,
+            TransformPolicy::Preserve,
+            PersistencePolicy::Ephemeral,
+            true,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn semantic_metadata_cannot_be_discarded() {
+        assert!(MetadataDefinition::new(
+            key("core::meaning"),
+            SchemaType::String,
+            MetadataClass::Semantic,
+            FingerprintPolicy::Include,
+            TransformPolicy::Discard,
+            PersistencePolicy::Persist,
+            true,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn duplicate_definitions_are_rejected() {
+        let definition = definition(
+            "core::label",
+            MetadataClass::Descriptive,
+            FingerprintPolicy::Exclude,
+            TransformPolicy::Discard,
+            PersistencePolicy::Persist,
+            false,
+        );
+
+        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
+        schema.insert(definition.clone()).expect("first definition");
+
+        assert!(matches!(
+            schema.insert(definition),
+            Err(MetadataError::DuplicateDefinition(_))
+        ));
+    }
+
+    #[test]
+    fn schema_checks_required_keys_and_types() {
+        let required = definition(
+            "core::label",
+            MetadataClass::Descriptive,
+            FingerprintPolicy::Exclude,
+            TransformPolicy::Discard,
+            PersistencePolicy::Persist,
+            true,
+        );
+
+        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
+        schema.insert(required).expect("definition");
+
+        assert!(matches!(
+            MetadataSet::new().validate_against(&schema),
+            Err(MetadataError::MissingRequiredMetadata(_))
+        ));
+
+        let wrong_type = AttributeValue::Boolean(true);
+        let required = schema.get(&key("core::label")).expect("definition");
+        assert!(matches!(
+            MetadataEntry::from_definition(required, wrong_type),
+            Err(MetadataError::ValueTypeMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn unknown_metadata_policy_is_explicit() {
+        let extension = MetadataDefinition::new(
+            key("example::flag"),
+            SchemaType::Boolean,
+            MetadataClass::Tooling,
+            FingerprintPolicy::Exclude,
+            TransformPolicy::Discard,
+            PersistencePolicy::Ephemeral,
+            false,
+        )
+        .expect("definition");
+
+        let value = entry(
+            &MetadataDefinition::new(
+                key("example::flag"),
+                SchemaType::String,
+                MetadataClass::Tooling,
+                FingerprintPolicy::Exclude,
+                TransformPolicy::Discard,
+                PersistencePolicy::Ephemeral,
+                false,
+            )
+            .expect("string definition"),
+            "retained",
+        );
+
+        let mut set = MetadataSet::new();
+        set.insert(value).expect("entry");
+
+        let rejecting = MetadataSchema::new(UnknownMetadataPolicy::Reject);
+        assert!(matches!(
+            set.validate_against(&rejecting),
+            Err(MetadataError::UnknownMetadata(_))
+        ));
+
+        let preserving = MetadataSchema::new(UnknownMetadataPolicy::Preserve);
+        assert!(set.validate_against(&preserving).is_ok());
+
+        // Keep the variable used to make it explicit that a future extension
+        // may define the same namespaced key under its own schema.
+        assert_eq!(extension.key(), &key("example::flag"));
+    }
+
+    #[test]
+    fn fingerprint_iteration_is_deterministic_and_policy_aware() {
+        let included = definition(
+            "core::semantic_id",
+            MetadataClass::Semantic,
+            FingerprintPolicy::Include,
+            TransformPolicy::Preserve,
+            PersistencePolicy::Persist,
+            false,
+        );
+        let excluded = definition(
+            "core::description",
+            MetadataClass::Descriptive,
+            FingerprintPolicy::Exclude,
+            TransformPolicy::Discard,
+            PersistencePolicy::Persist,
+            false,
+        );
+
+        let mut set = MetadataSet::new();
+        set.insert(entry(&excluded, "documentation"))
+            .expect("descriptive entry");
+        set.insert(entry(&included, "meaning"))
+            .expect("semantic entry");
+
+        let keys: Vec<String> = set
+            .fingerprint_entries()
             .map(|(key, _)| key.to_string())
             .collect();
 
-        assert_eq!(names, vec!["core::alpha", "tooling::zeta"]);
+        assert_eq!(keys, vec!["core::semantic_id"]);
     }
 
     #[test]
-    fn rejects_duplicate_keys_without_replacing_existing_entries() {
-        let mut set = MetadataSet::new();
-        let metadata_key = key("core", "mode");
-
-        set.insert(
-            metadata_key.clone(),
-            string_entry(MetadataClass::Semantic, "strict"),
-        )
-        .expect("initial insert");
-
-        let result = set.insert(
-            metadata_key.clone(),
-            string_entry(MetadataClass::Semantic, "relaxed"),
-        );
-
-        assert!(matches!(result, Err(MetadataError::DuplicateKey(_))));
-        assert_eq!(
-            set.get(&metadata_key).expect("entry").value(),
-            &MetadataValue::String("strict".to_owned())
-        );
-    }
-
-    #[test]
-    fn validates_schema_type_and_metadata_class() {
-        let metadata_key = key("core", "mode");
-        let definition = MetadataDefinition::new(
-            metadata_key.clone(),
-            SchemaType::String,
+    fn preserved_metadata_must_not_change_during_transformation() {
+        let preserved = definition(
+            "core::semantic_id",
             MetadataClass::Semantic,
+            FingerprintPolicy::Include,
+            TransformPolicy::Preserve,
+            PersistencePolicy::Persist,
             true,
-        )
-        .expect("valid definition");
-
-        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
-        schema.insert(definition).expect("add definition");
-
-        let mut values = MetadataSet::new();
-        values
-            .insert(
-                metadata_key,
-                string_entry(MetadataClass::Semantic, "strict"),
-            )
-            .expect("add value");
-
-        assert!(schema.validate_values(&values).is_ok());
-    }
-
-    #[test]
-    fn rejects_missing_required_metadata() {
-        let definition = MetadataDefinition::new(
-            key("core", "mode"),
-            SchemaType::String,
-            MetadataClass::Semantic,
-            true,
-        )
-        .expect("valid definition");
-
-        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
-        schema.insert(definition).expect("add definition");
-
-        assert!(matches!(
-            schema.validate_values(&MetadataSet::new()),
-            Err(MetadataError::MissingRequiredKey(_))
-        ));
-    }
-
-    #[test]
-    fn rejects_wrong_value_type() {
-        let metadata_key = key("core", "enabled");
-        let definition = MetadataDefinition::new(
-            metadata_key.clone(),
-            SchemaType::Boolean,
-            MetadataClass::Semantic,
-            false,
-        )
-        .expect("valid definition");
-
-        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
-        schema.insert(definition).expect("add definition");
-
-        let mut values = MetadataSet::new();
-        values
-            .insert(
-                metadata_key,
-                string_entry(MetadataClass::Semantic, "yes"),
-            )
-            .expect("add value");
-
-        assert!(matches!(
-            schema.validate_values(&values),
-            Err(MetadataError::ValueTypeMismatch)
-        ));
-    }
-
-    #[test]
-    fn semantic_metadata_cannot_be_excluded_or_dropped() {
-        let definition = MetadataDefinition::new(
-            key("core", "contract"),
-            SchemaType::String,
-            MetadataClass::Semantic,
-            false,
-        )
-        .expect("valid definition");
-
-        assert!(matches!(
-            definition.clone().with_fingerprint_participation(
-                FingerprintParticipation::Exclude
-            ),
-            Err(MetadataError::SemanticMetadataExcludedFromFingerprint)
-        ));
-
-        assert!(matches!(
-            definition.with_transform_policy(
-                MetadataTransformPolicy::DropNonSemantic
-            ),
-            Err(MetadataError::SemanticMetadataMayNotBeDropped)
-        ));
-    }
-
-    #[test]
-    fn descriptive_metadata_is_excluded_from_fingerprint_by_default() {
-        let definition = MetadataDefinition::new(
-            key("tooling", "display_name"),
-            SchemaType::String,
-            MetadataClass::Descriptive,
-            false,
-        )
-        .expect("valid definition");
-
-        assert_eq!(
-            definition.fingerprint_participation(),
-            FingerprintParticipation::Exclude
         );
-    }
 
-    #[test]
-    fn unknown_metadata_is_preserved_or_rejected_explicitly() {
-        let unknown_key = key("future_domain", "annotation");
-        let mut values = MetadataSet::new();
+        let schema = {
+            let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
+            schema.insert(preserved.clone()).expect("definition");
+            schema
+        };
 
-        values
-            .insert(
-                unknown_key.clone(),
-                string_entry(MetadataClass::Descriptive, "future value"),
-            )
-            .expect("insert unknown entry");
+        let mut input = MetadataSet::new();
+        input
+            .insert(entry(&preserved, "before"))
+            .expect("input entry");
 
-        let preserve = MetadataSchema::new(UnknownMetadataPolicy::Preserve);
-        assert!(preserve.validate_values(&values).is_ok());
+        let mut output = MetadataSet::new();
+        output
+            .insert(entry(&preserved, "after"))
+            .expect("output entry");
 
-        let reject = MetadataSchema::new(UnknownMetadataPolicy::Reject);
         assert!(matches!(
-            reject.validate_values(&values),
-            Err(MetadataError::UnknownKey(_))
+            input.validate_transformation_output(&output, &schema),
+            Err(MetadataError::TransformationViolation { .. })
         ));
     }
 
     #[test]
-    fn malformed_deserialized_values_are_rejected_by_validation() {
-        // A public deserialization path can bypass constructors. The
-        // explicit validation boundary must therefore remain mandatory.
-        let malformed = MetadataEntry {
+    fn malformed_deserialized_policy_combinations_are_rejected() {
+        // Public constructors prevent this combination, but deserialization
+        // can create values without invoking those constructors.
+        let invalid = MetadataDefinition {
+            key: key("core::meaning"),
+            value_type: SchemaType::String,
             class: MetadataClass::Semantic,
-            value: MetadataValue::Integer("01".to_owned()),
+            fingerprint: FingerprintPolicy::Exclude,
+            transform: TransformPolicy::Preserve,
+            persistence: PersistencePolicy::Persist,
+            required: false,
         };
 
         assert!(matches!(
-            malformed.validate(),
-            Err(MetadataError::InvalidValue(_))
+            invalid.validate(),
+            Err(MetadataError::InvalidPolicy { .. })
         ));
     }
 
     #[test]
-    fn semantic_fingerprint_selection_is_schema_driven() {
-        let semantic_key = key("core", "mode");
-        let descriptive_key = key("tooling", "label");
+    fn empty_schema_and_set_are_valid() {
+        let schema = MetadataSchema::new(UnknownMetadataPolicy::Reject);
+        let set = MetadataSet::new();
 
-        let mut schema = MetadataSchema::new(UnknownMetadataPolicy::Preserve);
-        schema
-            .insert(
-                MetadataDefinition::new(
-                    semantic_key.clone(),
-                    SchemaType::String,
-                    MetadataClass::Semantic,
-                    false,
-                )
-                .expect("semantic definition"),
-            )
-            .expect("insert semantic definition");
-
-        schema
-            .insert(
-                MetadataDefinition::new(
-                    descriptive_key.clone(),
-                    SchemaType::String,
-                    MetadataClass::Descriptive,
-                    false,
-                )
-                .expect("descriptive definition"),
-            )
-            .expect("insert descriptive definition");
-
-        let mut values = MetadataSet::new();
-        values
-            .insert(
-                semantic_key,
-                string_entry(MetadataClass::Semantic, "strict"),
-            )
-            .expect("semantic entry");
-        values
-            .insert(
-                descriptive_key,
-                string_entry(MetadataClass::Descriptive, "Strict Mode"),
-            )
-            .expect("descriptive entry");
-
-        let fingerprint_keys: Vec<String> = values
-            .iter_for_fingerprint(&schema)
-            .map(|(key, _)| key.to_string())
-            .collect();
-
-        assert_eq!(fingerprint_keys, vec!["core::mode"]);
+        assert!(schema.validate().is_ok());
+        assert!(set.validate().is_ok());
+        assert!(set.validate_against(&schema).is_ok());
+        assert!(set.is_empty());
+        assert_eq!(schema.len(), 0);
     }
 }
-```
-
-Worked for 1m 43s
-
-### Required correction before compiling
-
-There is one Rust type mismatch in the implementation above: the error enum stores error messages as `String`, while the existing schema APIs return structured `AttributeError` and `SchemaTypeError` values. Preserve those structured errors instead of converting them to strings.
-
-Replace the three affected variants in `MetadataError` with:
-
-```rust
-InvalidAttribute(AttributeError),
-InvalidValue(AttributeError),
-InvalidSchemaType(SchemaTypeError),
-```
-
-Then replace the corresponding arms in `fmt::Display` with:
-
-```rust
-Self::InvalidAttribute(error) => {
-    write!(f, "invalid metadata key or attribute: {error}")
-}
-Self::InvalidValue(error) => {
-    write!(f, "invalid metadata value: {error}")
-}
-Self::InvalidSchemaType(error) => {
-    write!(f, "invalid metadata schema type: {error}")
-}
-```
-
-This keeps the original structured errors available to callers and makes the existing `map_err(MetadataError::InvalidAttribute)`, `map_err(MetadataError::InvalidValue)`, and `map_err(MetadataError::InvalidSchemaType)` conversions type-compatible.
-
-### Integration requirements
-
-The repository inspection also revealed that `src/zuir/schema/mod.rs` and `src/zuir/schema/extensions.rs` are currently absent from the default branch. The parent `src/zuir/mod.rs` content returned by the repository fetch is also not a normal Rust module declaration. Those are integration issues, not reasons to make `metadata.rs` depend on future modules.
-
-Create or repair the schema module boundary so it declares the three sibling modules:
-
-```rust
-pub mod attributes;
-pub mod metadata;
-pub mod types;
-```
-
-Re-export metadata types only where the repository's public API policy calls for them. Do not create duplicate attribute, schema-type, or metadata definitions.
-
-The grammar files I inspected reinforce the separation: `grammar/Zamani.g4` is a root composition grammar, while `grammar/specification/semantic-model.md` governs semantic meaning. Neither should depend on the metadata implementation.
-
-### Freeze and verification gate
-
-Do not yet mark this file production-ready merely because the implementation and unit tests are written. Run the following from the repository root after applying the correction and wiring the module:
-
-```bash
-cargo fmt --all -- --check
-cargo check --all-targets
-cargo test
-cargo clippy --all-targets --all-features -- -D warnings
-```
-
-Add or verify tests for:
-
-* Serde round trips and malformed metadata deserialization.
-
-* Duplicate keys, required fields, class mismatches, and invalid schema values.
-
-* Deterministic metadata ordering and fingerprint selection.
-
-* Unknown metadata preservation and explicit rejection.
-
-* Semantic metadata preservation through transformations.
-
-* Resource-budget enforcement at the decoding boundary.
-
-Important limitation: I inspected the live files and wrote the proposed implementation, but I have not run these commands against your repository. The file should be considered ready for integration review, not certified as compiling or production-ready, until the correction, module wiring, and repository checks pass.
