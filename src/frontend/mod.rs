@@ -7,271 +7,281 @@
 //! File: `src/frontend/mod.rs`
 //! Edition: Rust 2021
 //! Minimum supported Rust version: 1.97
-//! Safety: Unsafe Rust is forbidden.
+//! Safety: Safe Rust only.
 //!
 //! ## PURPOSE
 //!
-//! This module is the composition root for Zamani's native frontend.
+//! This module is the composition root for the native Zamani frontend.
 //!
-//! It connects the canonical AST, lexer, parser, and semantic-analysis
-//! subsystem without duplicating their implementations or introducing
-//! competing representations of source-language meaning.
+//! It exposes the canonical AST, lexer, parser, and semantic-analysis
+//! subsystems through one public module boundary. Each subsystem retains
+//! ownership of its implementation, internal module graph, diagnostics,
+//! configuration, and lifecycle.
 //!
-//! The frontend establishes a clear progression:
-//!
-//! ```text
-//! Source text
-//!     |
-//!     v
-//! Canonical lexer
-//!     |
-//!     v
-//! Canonical parser
-//!     |
-//!     v
-//! Canonical frontend AST
-//!     |
-//!     v
-//! Semantic analysis
-//!     |
-//!     v
-//! Validated semantic result
-//!     |
-//!     v
-//! Canonical intermediate representations
-//!     |
-//!     v
-//! Target-specific lowering and execution
-//! ```
-//!
-//! This module composes the existing frontend subsystems. It does not
-//! implement a second lexer, parser, AST, semantic analyzer, or IR.
+//! This file coordinates module composition. It does not implement a
+//! competing lexer, parser, AST, semantic analyzer, or intermediate
+//! representation.
 //!
 //! ## ARCHITECTURAL AUTHORITY
 //!
-//! The frontend conforms to the repository's language and architecture
-//! contracts, particularly:
+//! The frontend MUST conform to the repository's language and architecture
+//! specifications, including:
 //!
-//! - `grammar/DESIGN.md`
-//! - `grammar/Zamani.g4`
-//! - `grammar/specification/grammar-authority.md`
-//! - `grammar/specification/semantic-model.md`
-//! - `grammar/specification/semantics.md`
-//! - `grammar/specification/scalability-model.md`
-//! - `grammar/specification/poco-reaf.md`
+//! - grammar/DESIGN.md
+//! - grammar/Zamani.g4
+//! - grammar/antlr/ZamaniParser.g4
+//! - grammar/specification/grammar-authority.md
+//! - grammar/specification/semantic-model.md
+//! - grammar/specification/semantics.md
+//! - grammar/specification/poco-reaf.md
+//! - grammar/specification/scalability-model.md
 //!
-//! `grammar/Zamani.g4` is the canonical grammar composition root.
-//! Normative specifications define the language rules and meaning.
-//! The canonical AST represents source structure and identity.
-//! The semantic subsystem determines source-level meaning.
-//! Downstream IR and backend components determine realization.
+//! These authorities have distinct responsibilities:
 //!
-//! This module must not override those authorities.
+//! - Normative specifications define the language's required meaning.
+//! - The canonical grammar defines the executable syntax composition.
+//! - The AST represents source structure and identity.
+//! - The lexer produces canonical tokens and source spans.
+//! - The parser recognizes syntax and constructs the canonical AST.
+//! - Semantic analysis establishes source-level meaning and validity.
+//! - Canonical IR implementations represent computations for subsequent
+//!   compilation stages.
+//! - Backends and runtimes determine how validated computations are realized.
+//!
+//! Implementation comments and planned features MUST NOT override normative
+//! language specifications.
 //!
 //! ## OWNS
 //!
 //! This module owns:
 //!
-//! - Frontend subsystem composition.
-//! - The canonical public path for frontend AST, lexer, parser, and semantics.
-//! - Frontend-level convenience exports.
-//! - The architectural boundary between source analysis and downstream
-//!   compiler stages.
-//! - Frontend-wide safety, portability, and integration invariants.
+//! - Composition of the native frontend's top-level subsystems.
+//! - The canonical Rust module path for the native frontend.
+//! - A small, explicit set of frontend convenience re-exports.
+//! - Frontend-level architectural and safety invariants.
+//! - Module-surface integration tests.
 //!
 //! ## DOES_NOT_OWN
 //!
 //! This module does not own:
 //!
 //! - Lexical rules, token definitions, or token scanning.
-//! - Grammar productions, parsing algorithms, or parser recovery.
-//! - AST node definitions, AST identity allocation, or AST construction.
-//! - Symbol tables, name resolution, or type inference.
-//! - Effect, capability, resource, or contract evaluation.
-//! - Domain-specific semantic validation.
-//! - Semantic diagnostics production or analysis-pass implementation.
-//! - Classical, quantum, HDL, or other intermediate representations.
-//! - Target discovery, resource allocation, scheduling, or routing.
+//! - Grammar productions, precedence, parsing, or recovery.
+//! - AST node definitions, source identity, or AST construction.
+//! - Symbol tables, name resolution, type inference, or type checking.
+//! - Effect, capability, resource, or contract analysis.
+//! - Domain-specific semantic rules.
+//! - Diagnostic production or diagnostic ordering algorithms.
+//! - Classical, quantum, HDL, or other canonical IR implementations.
+//! - Target discovery, resource allocation, placement, routing, or scheduling.
 //! - Quantum physical mapping, pulse generation, or error correction.
-//! - Backend code generation or runtime execution.
-//! - The legacy implementation in `crate::semantic`.
+//! - Backend code generation, deployment, or runtime execution.
+//! - The legacy compiler pipeline or its legacy semantic implementation.
 //!
-//! Each responsibility remains with its existing authoritative subsystem.
+//! Every responsibility MUST have one authoritative implementation.
 //!
-//! ## CANONICAL AST INTEGRATION
+//! ## CANONICAL AST
 //!
-//! The repository's canonical node implementation is located at:
+//! The existing native AST implementation resides under:
 //!
-//! `src/frontend/ast/node/mod.rs`
+//! `src/frontend/ast/node/`
 //!
-//! The `ast` facade below exposes that implementation at:
+//! The `ast` facade exposes that existing implementation through:
 //!
 //! `crate::frontend::ast::node`
 //!
-//! The explicit path avoids requiring a second AST implementation or
-//! relocating existing node definitions. AST child modules continue to
-//! resolve relative to their canonical source files.
+//! The path attribute below is intentional: it references the existing AST
+//! module without copying its implementation or introducing a competing
+//! AST representation.
 //!
-//! Do not define a second `Program`, `Node`, `NodeId`, `Span`, expression,
-//! statement, declaration, or type representation in this module.
+//! AST declarations, expressions, statements, types, node identities,
+//! metadata, and source locations remain owned by their canonical modules.
 //!
-//! ## LEXER INTEGRATION
+//! ## LEXER
 //!
-//! `crate::frontend::lexer` owns canonical tokenization, token kinds,
-//! token metadata, lexical source spans, lexical diagnostics, dialect
-//! policies, and scanning.
+//! `crate::frontend::lexer` owns canonical lexical analysis.
 //!
-//! Parser and semantic consumers must use the canonical frontend contracts.
-//! Legacy lexer integration must occur through explicit compatibility
-//! adapters owned by the appropriate subsystem.
+//! Its public contracts define token production, token kinds, token metadata,
+//! source spans, lexical diagnostics, dialect behavior, and scanner policy.
 //!
-//! ## PARSER INTEGRATION
+//! The parser MUST consume the canonical frontend token representation.
+//! Legacy token types MUST NOT be mixed with native token types without an
+//! explicit compatibility adapter.
 //!
-//! `crate::frontend::parser` owns grammar recognition, parser sessions,
-//! parsing configuration, recovery, parser diagnostics, and AST adaptation.
+//! ## PARSER
 //!
-//! The parser consumes canonical lexer tokens and constructs the canonical
-//! AST. It must not implement a second lexer or a competing AST.
+//! `crate::frontend::parser` owns grammar recognition, parser configuration,
+//! parser sessions, AST adaptation, recovery, and parse-result reporting.
 //!
-//! Successful parsing does not establish semantic validity.
+//! Successful parsing does not imply semantic validity.
 //!
-//! ## SEMANTIC INTEGRATION
+//! The parser MUST preserve relevant source information, distinguish complete
+//! parsing from incomplete or recovered parsing, and report operational
+//! failures explicitly.
 //!
-//! `crate::frontend::semantic` is the authoritative semantic-analysis
-//! subsystem for the native frontend AST.
+//! This composition root MUST NOT redeclare parser-owned child modules.
 //!
-//! Its own `mod.rs` owns the declarations and exports for:
+//! ## SEMANTIC ANALYSIS
 //!
-//! - Public semantic API and analysis lifecycle.
-//! - Configuration, context, sessions, and pipeline.
-//! - Canonical semantic model.
-//! - Symbols and name resolution.
-//! - Types, inference, generics, and ownership rules.
-//! - Effects, capabilities, resources, and contracts.
-//! - Classical, quantum, HDL, hybrid, AI/data, concurrency, and
-//!   distributed domain validation.
-//! - Shared validation, diagnostics, traversal, and incremental analysis.
-//! - Semantic conformance, compatibility, determinism, fuzz, and stress tests.
+//! `crate::frontend::semantic` is the semantic-analysis boundary for the
+//! native frontend AST.
 //!
-//! This file must declare `semantic` exactly once and must not redeclare
-//! any of those child modules.
+//! It owns the semantic API, configuration, context, sessions, pipeline,
+//! semantic model, symbol resolution, types, effects, capabilities, resources,
+//! contracts, domain validation, diagnostics, traversal, and incremental
+//! analysis.
+//!
+//! The frontend exposes the semantic service and result contracts without
+//! reimplementing them.
+//!
+//! Incomplete, aborted, or failed analysis MUST NOT be reported as a
+//! completed, valid semantic result.
+//!
+//! ## COMPUTATIONAL DOMAINS
+//!
+//! Zamani is one language with shared semantic foundations.
+//!
+//! The frontend must support the integration of classical, quantum, HDL,
+//! hybrid, AI/ML, tensor, concurrent, distributed, networking, and future
+//! computational domains through the owning AST, parser, and semantic
+//! extension contracts.
+//!
+//! This module MUST NOT introduce an exhaustive central list of every
+//! operation, device, backend, or computational domain.
+//!
+//! Domain-specific behavior belongs to the relevant subsystem.
 //!
 //! ## POCO-REAF AND SCALABILITY
 //!
-//! The frontend supports the architectural objective:
+//! The architectural objective is:
 //!
-//! `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever`
+//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
 //!
-//! The frontend must describe source meaning without imposing arbitrary
-//! universal limits on hardware capacities or computational domains.
+//! The frontend describes source meaning independently of unnecessary
+//! assumptions about the physical machine that will execute the program.
 //!
-//! In particular, it must not introduce fixed language-level ceilings for:
+//! This module MUST NOT introduce language-level ceilings for:
 //!
-//! - Qubits or quantum operations.
-//! - CPUs, GPUs, FPGAs, ASICs, or other accelerators.
+//! - Qubits, quantum operations, or quantum resources.
+//! - CPUs, cores, threads, GPUs, FPGAs, ASICs, or other accelerators.
 //! - Memory, storage, registers, or machine widths.
-//! - Tensor dimensions, declarations, or generic parameters.
-//! - Threads, processes, nodes, devices, or topology size.
-//! - The number of supported or registered computational domains.
+//! - Tensor dimensions, declarations, generic parameters, or functions.
+//! - Processes, distributed nodes, devices, or topology size.
+//! - The number of computational domains or registered extensions.
 //!
-//! Symbolic requirements and constraints must remain representable until
+//! Symbolic requirements and constraints MUST remain representable until
 //! the owning semantic or downstream stage is authorized to evaluate them.
 //!
-//! Compiler operational budgets may be configured in their owning modules.
-//! Exhausting such a budget must result in an explicit incomplete, aborted,
-//! or failed outcome; it must never silently certify incomplete analysis.
+//! Operational budgets, where needed, belong to the lexer, parser, semantic
+//! analyzer, or other stage that owns the relevant work. Such budgets are
+//! explicit implementation policies, not universal language constraints.
+//!
+//! Budget exhaustion MUST be reported through the owning subsystem's
+//! established error or incomplete-result contract. It MUST NOT silently
+//! truncate input or certify incomplete analysis as valid.
 //!
 //! No finite implementation can process literally infinite input. The
-//! architectural goal is to avoid arbitrary universal hardware ceilings and
-//! scale with available resources, representable values, implementation
-//! capabilities, and explicitly configured operational policies.
+//! scalability objective is to avoid arbitrary universal hardware ceilings
+//! and to scale with available resources, representable values, supported
+//! semantics, and explicit operational policies.
 //!
-//! ## SEMANTIC AND IR BOUNDARIES
+//! ## IR AND REALIZATION BOUNDARIES
 //!
-//! The semantic subsystem determines program meaning independently of
-//! the target selected for execution.
+//! Semantic analysis determines source-level meaning without committing to
+//! a particular physical target.
 //!
-//! Quantum semantics must preserve `quantum::ir` as the canonical quantum
-//! IR boundary. Classical and HDL representations remain owned by their
-//! respective canonical IR subsystems.
+//! The canonical quantum IR remains `quantum::ir`. Classical, HDL, and other
+//! domain representations remain owned by their respective IR subsystems.
 //!
-//! This frontend must not select physical qubits, allocate device memory,
-//! place hardware resources, route operations, schedule execution, or
-//! introduce a competing IR.
+//! This frontend MUST NOT allocate physical qubits, choose devices, assign
+//! hardware addresses, schedule execution, route operations, generate
+//! pulses, or create a competing intermediate representation.
 //!
 //! ## LEGACY COMPATIBILITY
 //!
-//! The existing `crate::semantic` module is retained during migration.
+//! The existing `crate::semantic`, `crate::parser`, and `crate::lexer`
+//! modules belong to the legacy compiler architecture.
 //!
-//! Adding this frontend must not redirect the legacy compiler pipeline,
-//! remove its public interfaces, or silently substitute the native AST.
+//! Their public interfaces MUST NOT be silently replaced by this frontend.
+//! Compatibility adapters and compiler-entry-point migration must be
+//! implemented and tested in the relevant owning modules.
 //!
-//! Migration requires verified consumers, compatibility tests, and an
-//! explicit integration change in the relevant compiler entry points.
+//! The native frontend and legacy pipeline may coexist during migration,
+//! but must not become competing permanent authorities for the same
+//! source-language semantics.
 //!
-//! ## PUBLIC API
+//! ## DEPENDENCY DIRECTION
 //!
-//! Subsystem implementations remain accessible through their canonical
-//! module paths. The re-exports below provide a small convenience surface
-//! without duplicating the underlying types or implementation.
+//! The intended dependency direction is:
+//!
+//! source text
+//!     -> frontend::lexer
+//!     -> frontend::parser
+//!     -> frontend::ast::node
+//!     -> frontend::semantic
+//!     -> canonical domain IRs
+//!     -> lowering and target realization
+//!
+//! The arrows describe conceptual processing and ownership boundaries;
+//! they do not require the AST to depend on the parser or lexer.
+//!
+//! Lower-level source and AST infrastructure MUST NOT depend on semantic
+//! analysis, IR implementations, backends, or runtime execution.
 //!
 //! ## FREEZE CRITERIA
 //!
 //! This file may be frozen when:
 //!
-//! 1. The crate root declares `frontend` exactly once.
-//! 2. All declared frontend modules resolve to their canonical files.
-//! 3. The AST facade resolves to the existing `ast/node` implementation.
-//! 4. The lexer and parser compile against the same canonical AST contracts.
-//! 5. Semantic exports resolve to the existing semantic API.
-//! 6. The legacy analyzer remains intact during migration.
-//! 7. The module graph contains no duplicate semantic or AST authority.
-//! 8. No unsafe code or arbitrary hardware-capacity ceiling is introduced.
-//! 9. Formatting, compilation, tests, and lint checks pass.
+//! 1. The crate root exposes `frontend` exactly once.
+//! 2. The AST facade resolves to the existing canonical AST.
+//! 3. The lexer and parser share the canonical token and source contracts.
+//! 4. Every declared subsystem and its public API compiles.
+//! 5. The semantic facade exports the documented API.
+//! 6. No child module is declared twice.
+//! 7. The legacy pipeline remains compatible until migration is verified.
+//! 8. The dependency direction and IR boundaries are preserved.
+//! 9. No unsafe code or artificial hardware-capacity ceiling is introduced.
+//! 10. Formatting, compilation, tests, and applicable lint checks pass.
 //!
-//! This module's successful compilation is an integration gate, not proof
-//! that every semantic feature or downstream backend is production-ready.
+//! Compilation of this file alone does not establish production readiness
+//! for every frontend feature or computational domain.
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Canonical AST facade
-// -----------------------------------------------------------------------------
+// =============================================================================
 //
-// The repository has its canonical AST under ast/node/. Expose that existing
-// module tree under frontend::ast::node without copying or redefining it.
+// Reuse the existing AST implementation. Do not define a second Program,
+// Node, NodeId, Span, expression, statement, declaration, or type model.
 
 pub mod ast {
     #[path = "ast/node/mod.rs"]
     pub mod node;
 }
 
-// -----------------------------------------------------------------------------
-// Frontend subsystems
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Native frontend subsystems
+// =============================================================================
 //
-// Each subsystem owns its own internal module declarations, implementation,
-// and API. The frontend composition root declares each subsystem exactly once.
+// Each subsystem owns its internal module tree, public API, and implementation.
+// Declare each top-level subsystem exactly once.
 
-/// Canonical lexical analysis and token contracts.
+/// Canonical lexical analysis, tokens, spans, and lexical diagnostics.
 pub mod lexer;
 
-/// Canonical parsing, grammar integration, and AST adaptation.
+/// Canonical parsing, grammar integration, recovery, and AST adaptation.
 pub mod parser;
 
 /// Canonical target-independent semantic analysis.
-///
-/// This module's own `mod.rs` orchestrates its symbols, types, effects,
-/// capabilities, resources, contracts, domains, validation, diagnostics,
-/// traversal, incremental analysis, and tests.
 pub mod semantic;
 
-// -----------------------------------------------------------------------------
-// Canonical public convenience exports
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Convenience exports
+// =============================================================================
 //
-// These are re-exports of existing definitions. They do not introduce new
-// implementations or change ownership of the underlying types.
+// Re-export canonical definitions instead of introducing wrapper types.
+// Subsystem-specific APIs remain available through their owning modules.
 
-/// Canonical source-level program root.
+/// Canonical source-level program type.
 pub use ast::node::program::Program;
 
 /// Public semantic-analysis entry point and lifecycle contracts.
@@ -285,3 +295,61 @@ pub use semantic::{
     SemanticStatus,
     SEMANTIC_API_VERSION,
 };
+
+// =============================================================================
+// Frontend identity
+// =============================================================================
+
+/// Stable architectural identifier for the native frontend.
+pub const FRONTEND_MODULE_NAME: &str = "zamani.frontend";
+
+/// Version of the frontend module-composition contract.
+///
+/// This is independent of the Zamani language edition, lexer version, parser
+/// version, AST schema, semantic API, and compiler package version.
+pub const FRONTEND_MODULE_SCHEMA_VERSION: u16 = 1;
+
+/// Return the stable frontend module identifier.
+#[must_use]
+pub const fn module_name() -> &'static str {
+    FRONTEND_MODULE_NAME
+}
+
+/// Return the frontend module-composition contract version.
+#[must_use]
+pub const fn schema_version() -> u16 {
+    FRONTEND_MODULE_SCHEMA_VERSION
+}
+
+// =============================================================================
+// Integration tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frontend_module_identity_is_stable() {
+        assert_eq!(module_name(), "zamani.frontend");
+        assert_eq!(schema_version(), 1);
+    }
+
+    #[test]
+    fn canonical_program_type_is_exported() {
+        // Compile-time API check: the public Program alias must resolve to
+        // the existing canonical AST type.
+        fn accepts_program(_: core::marker::PhantomData<Program>) {}
+
+        accepts_program(core::marker::PhantomData);
+    }
+
+    #[test]
+    fn semantic_api_is_reachable_through_frontend() {
+        // Compile-time API check: the public service contract remains
+        // available from the frontend composition root.
+        fn accepts_service<T: SemanticService + ?Sized>() {}
+
+        accepts_service::<dyn SemanticService>();
+    }
+}
