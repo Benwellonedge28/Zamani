@@ -4,48 +4,50 @@
 
 //! # ZUIR Basic Block
 //!
-//! Canonical path: `src/zuir/ir/block.rs`
+//! Path: `src/zuir/ir/block.rs`
 //! Edition: Rust 2021
-//! Minimum intended Rust version: 1.97
-//! Safety: unsafe Rust is forbidden.
+//! Minimum Rust version: 1.97.1
+//! Safety: `unsafe` is forbidden.
 //!
 //! PURPOSE
 //!
-//! Represents a target-independent basic block. A block owns its arguments,
-//! ordered operation references, and terminator, but does not own operation
-//! payloads or neighboring blocks.
+//! Represent a target-independent basic block containing typed block
+//! arguments, ordered operation references, and an explicit terminator.
 //!
-//! AUTHORITY
+//! OWNERSHIP
 //!
-//! - src/zuir/ZUIR-SPEC.md
-//! - src/zuir/ids.rs
-//! - src/zuir/schema/types.rs
-//! - src/zuir/schema/attributes.rs
-//! - src/zuir/ir/region.rs
-//! - src/zuir/ir/operation.rs
-//! - grammar/Zamani.g4
-//! - grammar/grammar.md
+//! This module owns BlockArgument, SwitchCase, BlockTerminator, ZuirBlock,
+//! block-local errors, and block-local validation.
+//!
+//! It does not own operation payloads, successor-edge storage, region
+//! contents, ID allocation, type definitions, or whole-program verification.
 //!
 //! INTEGRATION
 //!
-//! `Region` owns ordered `BlockId` membership. The operation/program storage
-//! layer owns operation payloads. The full verifier resolves cross-entity
-//! references and verifies CFG, SSA, types, effects, ownership, and dialect
-//! rules. The grammar and semantic analysis own source interpretation.
+//! - `ids.rs` owns all canonical identifiers.
+//! - `successor.rs` owns `Successor`; this module re-exports that type for
+//!   compatibility but does not define a duplicate.
+//! - `operation.rs` owns operation payloads. Blocks store `OperationId`s.
+//! - `region.rs` owns ordered block membership and region ownership.
+//! - `schema/attributes.rs` owns attribute values.
+//! - `schema/types.rs` owns qualified names.
+//! - The full verifier owns reference resolution, SSA, CFG, type, effect,
+//!   ownership, and dialect-specific verification.
+//! - The grammar and semantic model own source syntax and source meaning.
 //!
 //! SCALABILITY
 //!
-//! Collections are dynamically sized. No universal operation count,
-//! argument count, successor count, hardware capacity, qubit count, register
-//! width, or tensor-rank limit is imposed. Fallible collection growth reports
-//! allocation reservation failure where Rust exposes that failure.
+//! Collections grow dynamically. There is no universal maximum block,
+//! argument, operation, successor, qubit, register, thread, device, or
+//! tensor-rank count. Fallible reservation methods report capacity-reservation
+//! failures where the standard library exposes them. Actual processing is
+//! bounded by available resources; literal infinity is not promised.
 //!
-//! VALIDITY BOUNDARY
+//! TRUST BOUNDARY
 //!
-//! Local validation checks only invariants representable within this block.
-//! A successfully deserialized block is locally valid, not necessarily valid
-//! as part of a complete program. Run the full-program verifier before
-//! trusted optimization, serialization, or lowering.
+//! Local validation does not prove whole-program validity. A decoded block
+//! must pass local validation and then the authoritative full-IR verifier
+//! before trusted optimization, lowering, or execution.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -55,45 +57,52 @@ use crate::zuir::ids::{BlockId, OperationId, RegionId, TypeId, ValueId};
 use crate::zuir::schema::attributes::AttributeValue;
 use crate::zuir::schema::types::QualifiedName;
 
-/// Result type for block-local operations.
+/// Canonical successor edge implementation from its owning module.
+///
+/// Re-exported so callers using the historical `block::Successor` path do
+/// not need to define or maintain a second successor type.
+pub use crate::zuir::ir::successor::Successor;
+
+/// Result type for block-local construction, mutation, and validation.
 pub type BlockResult<T> = Result<T, BlockError>;
 
-/// Errors raised by block construction, mutation, or local validation.
+/// Errors detectable from a block and its locally owned data.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BlockError {
-    /// An operation identity already occurs in this block.
+    /// An operation identity occurs more than once in the block.
     DuplicateOperation(OperationId),
 
-    /// A block argument value identity already occurs in this block.
+    /// A block argument value identity occurs more than once.
     DuplicateArgument(ValueId),
 
-    /// An insertion position exceeds the number of operations.
+    /// An insertion index exceeds the current operation count.
     InvalidOperationPosition {
         position: usize,
         operation_count: usize,
     },
 
-    /// An operation cannot be appended after the terminator.
+    /// A mutation attempted to append or insert after a closed terminator.
     BlockAlreadyTerminated,
 
-    /// The requested terminator or argument metadata is invalid.
+    /// A terminator is invalid for the requested operation.
     InvalidTerminator(String),
 
-    /// An extension-qualified name is invalid.
+    /// A qualified extension name is malformed.
     InvalidExtensionName(String),
 
-    /// A finalized block must identify its parent region.
+    /// A complete block has no parent region.
     MissingParentRegion,
 
-    /// A switch contains repeated case values.
+    /// A switch contains semantically equal case values.
     DuplicateSwitchCase,
 
-    /// A collection could not reserve capacity for a mutation.
+    /// Dynamic collection capacity could not be reserved.
     AllocationFailure {
         collection: &'static str,
     },
 
-    /// A local block invariant is not satisfied.
+    /// A local block invariant is invalid.
     InvalidBlock(String),
 }
 
@@ -101,18 +110,18 @@ impl fmt::Display for BlockError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DuplicateOperation(id) => {
-                write!(f, "operation {id} is already present in this block")
+                write!(f, "operation {id} occurs more than once in the block")
             }
             Self::DuplicateArgument(id) => {
-                write!(f, "block argument value {id} is already declared")
+                write!(f, "block argument value {id} occurs more than once")
             }
             Self::InvalidOperationPosition {
                 position,
                 operation_count,
             } => write!(
                 f,
-                "operation insertion position {position} exceeds operation count \
-                 {operation_count}"
+                "operation insertion position {position} exceeds \
+                 operation count {operation_count}"
             ),
             Self::BlockAlreadyTerminated => {
                 f.write_str("cannot append or insert an operation after termination")
@@ -121,7 +130,7 @@ impl fmt::Display for BlockError {
                 write!(f, "invalid block terminator: {reason}")
             }
             Self::InvalidExtensionName(reason) => {
-                write!(f, "invalid extension name: {reason}")
+                write!(f, "invalid terminator extension name: {reason}")
             }
             Self::MissingParentRegion => {
                 f.write_str("a complete block must identify its parent region")
@@ -139,11 +148,15 @@ impl fmt::Display for BlockError {
 
 impl std::error::Error for BlockError {}
 
-/// A typed value entering a block.
+// =============================================================================
+// Block arguments
+// =============================================================================
+
+/// A typed SSA value entering a block.
 ///
-/// `value` is the canonical value identity. `ty` references the semantic type
-/// table. An optional qualified `role` may describe a dialect-specific
-/// argument role, but never replaces the argument's semantic type.
+/// `value` is the canonical value identity and `ty` references the semantic
+/// type table. An optional role provides extensible metadata; its meaning is
+/// determined by the applicable dialect or verifier contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BlockArgument {
     value: ValueId,
@@ -153,8 +166,11 @@ pub struct BlockArgument {
 
 impl BlockArgument {
     /// Create an argument from resolved value and type identities.
+    ///
+    /// This constructor does not resolve the IDs or prove their global
+    /// uniqueness. The enclosing IR verifier owns those checks.
     #[must_use]
-    pub fn new(value: ValueId, ty: TypeId) -> Self {
+    pub const fn new(value: ValueId, ty: TypeId) -> Self {
         Self {
             value,
             ty,
@@ -162,7 +178,7 @@ impl BlockArgument {
         }
     }
 
-    /// Create an argument with an extension-qualified role.
+    /// Create an argument with a validated, qualified role.
     pub fn with_role(
         value: ValueId,
         ty: TypeId,
@@ -191,17 +207,38 @@ impl BlockArgument {
         self.ty
     }
 
-    /// Return the optional extension-qualified role.
+    /// Return the optional qualified role.
     #[must_use]
     pub fn role(&self) -> Option<&QualifiedName> {
         self.role.as_ref()
     }
 
-    /// Validate local metadata, including metadata loaded from serialized IR.
+    /// Replace the optional role after validating the candidate.
+    ///
+    /// If validation fails, the current role remains unchanged.
+    pub fn set_role(
+        &mut self,
+        role: Option<QualifiedName>,
+    ) -> BlockResult<()> {
+        if let Some(candidate) = &role {
+            candidate.validate().map_err(|error| {
+                BlockError::InvalidBlock(format!(
+                    "invalid argument role: {error}"
+                ))
+            })?;
+        }
+
+        self.role = role;
+        Ok(())
+    }
+
+    /// Validate metadata owned by this argument.
     pub fn validate(&self) -> BlockResult<()> {
         if let Some(role) = &self.role {
             role.validate().map_err(|error| {
-                BlockError::InvalidBlock(format!("invalid argument role: {error}"))
+                BlockError::InvalidBlock(format!(
+                    "invalid argument role: {error}"
+                ))
             })?;
         }
 
@@ -209,53 +246,14 @@ impl BlockArgument {
     }
 }
 
-/// An explicit control-flow edge.
+// =============================================================================
+// Switch cases and terminators
+// =============================================================================
+
+/// A switch case value and the edge selected by that value.
 ///
-/// The target is a block identity. Arguments are values supplied to the
-/// target's block arguments, in order. The full verifier must check target
-/// existence, argument arity, type compatibility, and value visibility.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Successor {
-    target: BlockId,
-    arguments: Vec<ValueId>,
-}
-
-impl Successor {
-    /// Construct an edge without block arguments.
-    #[must_use]
-    pub fn new(target: BlockId) -> Self {
-        Self {
-            target,
-            arguments: Vec::new(),
-        }
-    }
-
-    /// Construct an edge with ordered block arguments.
-    #[must_use]
-    pub fn with_arguments(target: BlockId, arguments: Vec<ValueId>) -> Self {
-        Self { target, arguments }
-    }
-
-    /// Return the target block identity.
-    #[must_use]
-    pub const fn target(&self) -> BlockId {
-        self.target
-    }
-
-    /// Return ordered arguments supplied to the target block.
-    #[must_use]
-    pub fn arguments(&self) -> &[ValueId] {
-        &self.arguments
-    }
-
-    /// Return the number of arguments supplied to the target.
-    #[must_use]
-    pub fn argument_count(&self) -> usize {
-        self.arguments.len()
-    }
-}
-
-/// A switch case value and its associated successor.
+/// Attribute values are reused from the schema layer; this module does not
+/// introduce a second constant or literal representation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SwitchCase {
     value: AttributeValue,
@@ -263,30 +261,41 @@ pub struct SwitchCase {
 }
 
 impl SwitchCase {
-    /// Construct a case.
+    /// Construct a switch case.
+    ///
+    /// Call `validate()` before trusting externally supplied values.
     #[must_use]
     pub fn new(value: AttributeValue, successor: Successor) -> Self {
         Self { value, successor }
     }
 
-    /// Return the declarative case value.
+    /// Return the case value.
     #[must_use]
     pub fn value(&self) -> &AttributeValue {
         &self.value
     }
 
-    /// Return the successor for this case.
+    /// Return the selected successor.
     #[must_use]
     pub fn successor(&self) -> &Successor {
         &self.successor
     }
+
+    /// Validate the case value's local schema invariants.
+    pub fn validate(&self) -> BlockResult<()> {
+        self.value.validate().map_err(|error| {
+            BlockError::InvalidTerminator(format!(
+                "invalid switch case value: {error}"
+            ))
+        })
+    }
 }
 
-/// The explicit control-flow contract for a block.
+/// The explicit control-flow termination contract for a block.
 ///
-/// `Open` is a construction state, not a finalized terminator. An extension
-/// terminator must be declared and interpreted by its registered dialect.
-/// An unknown extension must never be assigned implicit executable meaning.
+/// `Open` is a construction state and is not a finalized terminator.
+/// Extension terminators require a qualified name and must be interpreted
+/// only by a registered, trusted extension contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum BlockTerminator {
@@ -295,44 +304,44 @@ pub enum BlockTerminator {
 
     /// Return from the enclosing callable computation.
     Return {
-        /// Ordered returned values.
+        /// Values returned in declared order.
         values: Vec<ValueId>,
     },
 
     /// Unconditional transfer to another block.
     Branch {
-        /// Target and ordered edge arguments.
+        /// Destination and ordered edge arguments.
         successor: Successor,
     },
 
-    /// Conditional transfer to one of two blocks.
+    /// Conditional transfer to one of two destinations.
     ConditionalBranch {
         /// Value used as the condition.
         condition: ValueId,
-        /// Edge taken when the condition is true.
+        /// Destination selected when the condition is true.
         then_successor: Successor,
-        /// Edge taken when the condition is false.
+        /// Destination selected when the condition is false.
         else_successor: Successor,
     },
 
-    /// Multiway transfer.
+    /// Multiway transfer selected by a value.
     Switch {
         /// Value used to select a case.
         selector: ValueId,
-        /// Edge used if no case matches.
+        /// Destination selected when no case matches.
         default_successor: Successor,
-        /// Cases in declared order.
+        /// Case values and their destinations, in declared order.
         cases: Vec<SwitchCase>,
     },
 
-    /// Terminate the current path without a normal return.
+    /// Terminate the current path without returning normally.
     Unreachable,
 
-    /// A terminator whose semantics belong to a registered dialect.
+    /// A terminator defined by a registered extension.
     Extension {
-        /// Qualified dialect operation name.
+        /// Qualified extension operation name.
         name: QualifiedName,
-        /// Explicit outgoing edges, if any.
+        /// Explicit outgoing edges, in declared order.
         successors: Vec<Successor>,
     },
 }
@@ -344,7 +353,7 @@ impl Default for BlockTerminator {
 }
 
 impl BlockTerminator {
-    /// Whether this terminator is still in its construction state.
+    /// Whether this terminator is still open for construction.
     #[must_use]
     pub const fn is_open(&self) -> bool {
         matches!(self, Self::Open)
@@ -356,7 +365,10 @@ impl BlockTerminator {
         !self.is_open()
     }
 
-    /// Return the number of explicitly represented outgoing edges.
+    /// Count explicitly represented outgoing edges.
+    ///
+    /// This is structural information only. An extension's actual control
+    /// flow must be checked against its registered contract.
     #[must_use]
     pub fn successor_count(&self) -> usize {
         match self {
@@ -368,10 +380,11 @@ impl BlockTerminator {
         }
     }
 
-    /// Visit successors in declared order without allocating a temporary list.
+    /// Visit explicit successors in declared order without allocating.
     pub fn for_each_successor(&self, mut visit: impl FnMut(&Successor)) {
         match self {
             Self::Branch { successor } => visit(successor),
+
             Self::ConditionalBranch {
                 then_successor,
                 else_successor,
@@ -380,44 +393,53 @@ impl BlockTerminator {
                 visit(then_successor);
                 visit(else_successor);
             }
+
             Self::Switch {
                 default_successor,
                 cases,
                 ..
             } => {
                 visit(default_successor);
+
                 for case in cases {
                     visit(case.successor());
                 }
             }
+
             Self::Extension { successors, .. } => {
                 for successor in successors {
                     visit(successor);
                 }
             }
+
             Self::Open | Self::Return { .. } | Self::Unreachable => {}
         }
     }
 
-    /// Validate terminator invariants that can be checked locally.
+    /// Validate terminator-local invariants.
     ///
-    /// This does not resolve values, block identities, types, or dialect
-    /// registration. Those checks belong to the full verifier.
+    /// This does not resolve referenced blocks or values, check dominance,
+    /// compare edge arguments to destination arguments, or authorize an
+    /// extension. Those checks belong to the full-IR verifier.
     pub fn validate(&self) -> BlockResult<()> {
         match self {
-            Self::Open | Self::Return { .. } | Self::Branch { .. } => Ok(()),
-
-            Self::ConditionalBranch { .. } => Ok(()),
+            Self::Open
+            | Self::Return { .. }
+            | Self::Branch { .. }
+            | Self::ConditionalBranch { .. }
+            | Self::Unreachable => Ok(()),
 
             Self::Switch { cases, .. } => {
-                // AttributeValue is not required to implement Ord or Hash.
-                // Compare by equality to preserve its canonical semantics.
-                // A future schema-level canonical key can make this check
-                // sub-quadratic without changing the switch representation.
                 for (index, case) in cases.iter().enumerate() {
+                    case.validate()?;
+
+                    // AttributeValue has semantic equality but is not required
+                    // to implement Ord or Hash. Preserve that contract here.
+                    // A schema-owned canonical-key facility can optimize this
+                    // if large switches make pairwise comparison expensive.
                     if cases[..index]
                         .iter()
-                        .any(|prior| prior.value() == case.value())
+                        .any(|previous| previous.value() == case.value())
                     {
                         return Err(BlockError::DuplicateSwitchCase);
                     }
@@ -426,17 +448,20 @@ impl BlockTerminator {
                 Ok(())
             }
 
-            Self::Unreachable => Ok(()),
-
-            Self::Extension { name, .. } => name
-                .validate()
-                .map_err(|error| BlockError::InvalidExtensionName(error.to_string())),
+            Self::Extension { name, .. } => {
+                name.validate().map_err(|error| {
+                    BlockError::InvalidExtensionName(error.to_string())
+                })
+            }
         }
     }
 }
 
-/// Wire representation used to reject locally invalid blocks during
-/// deserialization rather than trusting serialized state.
+// =============================================================================
+// Canonical block and validated deserialization
+// =============================================================================
+
+/// Private wire representation used to validate decoded block-local state.
 #[derive(Deserialize)]
 struct ZuirBlockWire {
     id: BlockId,
@@ -449,10 +474,7 @@ struct ZuirBlockWire {
 /// Canonical target-independent basic block.
 ///
 /// The block owns its ordered argument and operation-reference lists. The
-/// actual operation definitions live in the owning program/module storage.
-///
-/// A missing parent region is permitted during construction. A finalized
-/// block must have a parent region and a closed terminator.
+/// actual operation definitions are owned by the enclosing IR storage.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ZuirBlock {
     id: BlockId,
@@ -495,7 +517,7 @@ impl ZuirBlock {
         }
     }
 
-    /// Create an empty block associated with its parent region.
+    /// Create an empty block associated with a parent region.
     #[must_use]
     pub fn in_region(id: BlockId, parent_region: RegionId) -> Self {
         Self {
@@ -507,7 +529,7 @@ impl ZuirBlock {
         }
     }
 
-    /// Return this block's identity.
+    /// Return the block identity.
     #[must_use]
     pub const fn id(&self) -> BlockId {
         self.id
@@ -519,15 +541,23 @@ impl ZuirBlock {
         self.parent_region
     }
 
-    /// Assign the parent region during construction or transformation.
+    /// Assign the parent region.
     ///
-    /// The full verifier must check that the parent region also lists this
-    /// block and that ownership is reciprocal.
+    /// The full verifier must check that this region also lists the block
+    /// and that the region/block relationship is reciprocal.
     pub fn set_parent_region(&mut self, region: RegionId) {
         self.parent_region = Some(region);
     }
 
-    /// Return block arguments in declared order.
+    /// Clear the parent-region association.
+    ///
+    /// This is useful during detached construction or a structural rewrite.
+    /// A complete block must have a parent region before final verification.
+    pub fn clear_parent_region(&mut self) -> Option<RegionId> {
+        self.parent_region.take()
+    }
+
+    /// Borrow block arguments in declared order.
     #[must_use]
     pub fn arguments(&self) -> &[BlockArgument] {
         &self.arguments
@@ -539,7 +569,7 @@ impl ZuirBlock {
         self.arguments.len()
     }
 
-    /// Return operation identities in semantic order.
+    /// Borrow operation identities in semantic order.
     #[must_use]
     pub fn operations(&self) -> &[OperationId] {
         &self.operations
@@ -551,7 +581,7 @@ impl ZuirBlock {
         self.operations.len()
     }
 
-    /// Return the current terminator.
+    /// Borrow the current terminator.
     #[must_use]
     pub fn terminator(&self) -> &BlockTerminator {
         &self.terminator
@@ -563,7 +593,25 @@ impl ZuirBlock {
         self.terminator.is_closed()
     }
 
-    /// Add a block argument, rejecting duplicate value identities.
+    /// Reserve capacity for additional block arguments.
+    pub fn try_reserve_arguments(&mut self, additional: usize) -> BlockResult<()> {
+        self.arguments
+            .try_reserve(additional)
+            .map_err(|_| BlockError::AllocationFailure {
+                collection: "arguments",
+            })
+    }
+
+    /// Reserve capacity for additional operation references.
+    pub fn try_reserve_operations(&mut self, additional: usize) -> BlockResult<()> {
+        self.operations
+            .try_reserve(additional)
+            .map_err(|_| BlockError::AllocationFailure {
+                collection: "operations",
+            })
+    }
+
+    /// Add a block argument, rejecting duplicate local value identities.
     pub fn add_argument(&mut self, argument: BlockArgument) -> BlockResult<()> {
         argument.validate()?;
 
@@ -575,20 +623,36 @@ impl ZuirBlock {
             return Err(BlockError::DuplicateArgument(argument.value()));
         }
 
-        self.arguments
-            .try_reserve(1)
-            .map_err(|_| BlockError::AllocationFailure {
-                collection: "arguments",
-            })?;
-
+        self.try_reserve_arguments(1)?;
         self.arguments.push(argument);
+        Ok(())
+    }
+
+    /// Replace all arguments after validating them and checking uniqueness.
+    ///
+    /// If validation fails, the current argument list remains unchanged.
+    pub fn set_arguments(
+        &mut self,
+        arguments: Vec<BlockArgument>,
+    ) -> BlockResult<()> {
+        let mut seen = BTreeSet::new();
+
+        for argument in &arguments {
+            argument.validate()?;
+
+            if !seen.insert(argument.value()) {
+                return Err(BlockError::DuplicateArgument(argument.value()));
+            }
+        }
+
+        self.arguments = arguments;
         Ok(())
     }
 
     /// Append an operation reference.
     ///
-    /// The operation must exist in the owning IR and must not belong to
-    /// another block; those are whole-program verification responsibilities.
+    /// The referenced operation must exist in the owning IR. The full
+    /// verifier must also ensure that it is owned by exactly one block.
     pub fn append_operation(&mut self, operation: OperationId) -> BlockResult<()> {
         if self.is_terminated() {
             return Err(BlockError::BlockAlreadyTerminated);
@@ -598,20 +662,15 @@ impl ZuirBlock {
             return Err(BlockError::DuplicateOperation(operation));
         }
 
-        self.operations
-            .try_reserve(1)
-            .map_err(|_| BlockError::AllocationFailure {
-                collection: "operations",
-            })?;
-
+        self.try_reserve_operations(1)?;
         self.operations.push(operation);
         Ok(())
     }
 
     /// Insert an operation at an exact position.
     ///
-    /// `position == operation_count()` appends. An out-of-range position is
-    /// rejected rather than clamped.
+    /// `position == operation_count()` appends. Positions greater than the
+    /// operation count are rejected rather than clamped.
     pub fn insert_operation(
         &mut self,
         position: usize,
@@ -632,20 +691,41 @@ impl ZuirBlock {
             return Err(BlockError::DuplicateOperation(operation));
         }
 
-        self.operations
-            .try_reserve(1)
-            .map_err(|_| BlockError::AllocationFailure {
-                collection: "operations",
-            })?;
-
+        self.try_reserve_operations(1)?;
         self.operations.insert(position, operation);
+        Ok(())
+    }
+
+    /// Replace the ordered operation references after local validation.
+    ///
+    /// This is intended for builders and transformations. The block's
+    /// current list is unchanged if the replacement contains duplicates.
+    /// Operation existence and cross-block ownership are checked globally.
+    pub fn set_operations(
+        &mut self,
+        operations: Vec<OperationId>,
+    ) -> BlockResult<()> {
+        if self.is_terminated() && !operations.is_empty() {
+            return Err(BlockError::BlockAlreadyTerminated);
+        }
+
+        let mut seen = BTreeSet::new();
+
+        for operation in &operations {
+            if !seen.insert(*operation) {
+                return Err(BlockError::DuplicateOperation(*operation));
+            }
+        }
+
+        self.operations = operations;
         Ok(())
     }
 
     /// Remove an operation reference without deleting its stored payload.
     ///
-    /// Returns `true` if the reference was found and removed. Removing a
-    /// reference is a structural edit; the enclosing IR must be reverified.
+    /// Returns `true` if the reference was found. Removing an operation
+    /// requires whole-IR re-verification because uses and control flow may
+    /// have become invalid.
     pub fn remove_operation(&mut self, operation: OperationId) -> bool {
         if let Some(index) = self
             .operations
@@ -659,7 +739,7 @@ impl ZuirBlock {
         }
     }
 
-    /// Set a terminator on a block that is not yet terminated.
+    /// Set the block terminator if the block is not already terminated.
     pub fn set_terminator(
         &mut self,
         terminator: BlockTerminator,
@@ -680,10 +760,10 @@ impl ZuirBlock {
         Ok(())
     }
 
-    /// Replace a terminator as part of an explicit IR transformation.
+    /// Replace the terminator during an explicit control-flow transformation.
     ///
-    /// This deliberately permits replacing a closed terminator. The caller
-    /// must rerun whole-program verification after rewriting control flow.
+    /// This method allows replacing an already-closed terminator but never
+    /// installs `Open`. The enclosing IR must be reverified after replacement.
     pub fn replace_terminator(
         &mut self,
         terminator: BlockTerminator,
@@ -700,10 +780,20 @@ impl ZuirBlock {
         Ok(())
     }
 
-    /// Validate local invariants while allowing construction to be incomplete.
+    /// Reopen a block for a deliberate transformation.
     ///
-    /// This checks duplicate identities, argument metadata, and terminator
-    /// shape. It does not prove that referenced entities exist elsewhere.
+    /// This discards the old terminator. It must only be used while the
+    /// enclosing IR is in a mutable construction/transformation phase.
+    pub fn clear_terminator(&mut self) -> BlockTerminator {
+        std::mem::replace(&mut self.terminator, BlockTerminator::Open)
+    }
+
+    /// Validate block-local invariants while allowing construction to remain
+    /// incomplete.
+    ///
+    /// This checks argument uniqueness, operation-reference uniqueness,
+    /// argument metadata, and terminator-local shape. It does not resolve
+    /// IDs or prove global SSA/CFG correctness.
     pub fn validate(&self) -> BlockResult<()> {
         let mut argument_ids = BTreeSet::new();
 
@@ -726,11 +816,11 @@ impl ZuirBlock {
         self.terminator.validate()
     }
 
-    /// Validate a block intended for inclusion in complete IR.
+    /// Validate the block's locally complete state.
     ///
     /// A complete block requires a parent region and a closed terminator.
-    /// The full verifier must still resolve all references and verify CFG,
-    /// SSA, type, effect, ownership, and dialect-specific invariants.
+    /// The full verifier must still resolve references and verify CFG, SSA,
+    /// types, effects, ownership, and dialect-specific invariants.
     pub fn validate_complete(&self) -> BlockResult<()> {
         self.validate()?;
 
@@ -753,24 +843,24 @@ mod tests {
     use super::*;
     use crate::zuir::ids::{BlockId, OperationId, RegionId, TypeId, ValueId};
 
-    fn block_id(value: u128) -> BlockId {
-        BlockId::new(value).expect("valid block ID")
+    fn block_id(raw: u128) -> BlockId {
+        BlockId::new(raw).expect("test block ID must be nonzero")
     }
 
-    fn region_id(value: u128) -> RegionId {
-        RegionId::new(value).expect("valid region ID")
+    fn region_id(raw: u128) -> RegionId {
+        RegionId::new(raw).expect("test region ID must be nonzero")
     }
 
-    fn operation_id(value: u128) -> OperationId {
-        OperationId::new(value).expect("valid operation ID")
+    fn operation_id(raw: u128) -> OperationId {
+        OperationId::new(raw).expect("test operation ID must be nonzero")
     }
 
-    fn value_id(value: u128) -> ValueId {
-        ValueId::new(value).expect("valid value ID")
+    fn value_id(raw: u128) -> ValueId {
+        ValueId::new(raw).expect("test value ID must be nonzero")
     }
 
-    fn type_id(value: u128) -> TypeId {
-        TypeId::new(value).expect("valid type ID")
+    fn type_id(raw: u128) -> TypeId {
+        TypeId::new(raw).expect("test type ID must be nonzero")
     }
 
     #[test]
@@ -819,6 +909,23 @@ mod tests {
     }
 
     #[test]
+    fn replacing_arguments_is_atomic_on_error() {
+        let mut block = ZuirBlock::new(block_id(1));
+        block
+            .add_argument(BlockArgument::new(value_id(1), type_id(11)))
+            .unwrap();
+
+        let replacement = vec![
+            BlockArgument::new(value_id(2), type_id(11)),
+            BlockArgument::new(value_id(2), type_id(12)),
+        ];
+
+        assert!(block.set_arguments(replacement).is_err());
+        assert_eq!(block.argument_count(), 1);
+        assert_eq!(block.arguments()[0].value(), value_id(1));
+    }
+
+    #[test]
     fn operation_order_is_preserved() {
         let mut block = ZuirBlock::new(block_id(1));
 
@@ -852,11 +959,7 @@ mod tests {
 
         assert_eq!(
             block.operations(),
-            &[
-                operation_id(1),
-                operation_id(2),
-                operation_id(3)
-            ]
+            &[operation_id(1), operation_id(2), operation_id(3)]
         );
     }
 
@@ -898,7 +1001,7 @@ mod tests {
     }
 
     #[test]
-    fn open_terminator_cannot_be_set_as_a_final_terminator() {
+    fn open_terminator_cannot_be_set_as_final() {
         let mut block = ZuirBlock::new(block_id(1));
 
         assert!(matches!(
@@ -914,7 +1017,6 @@ mod tests {
         block
             .set_terminator(BlockTerminator::Return { values: Vec::new() })
             .unwrap();
-
         block
             .replace_terminator(BlockTerminator::Unreachable)
             .unwrap();
@@ -983,13 +1085,30 @@ mod tests {
     }
 
     #[test]
-    fn local_validation_detects_duplicate_operation_ids() {
-        let mut block = ZuirBlock::new(block_id(1));
+    fn serialization_round_trip_preserves_block() {
+        let mut block = ZuirBlock::in_region(block_id(1), region_id(7));
+        block.append_operation(operation_id(3)).unwrap();
+        block
+            .set_terminator(BlockTerminator::Return {
+                values: vec![value_id(10)],
+            })
+            .unwrap();
 
+        let encoded = serde_json::to_string(&block).unwrap();
+        let decoded: ZuirBlock = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(decoded, block);
+        assert!(decoded.validate().is_ok());
+    }
+
+    #[test]
+    fn fallible_reservation_does_not_change_contents() {
+        let mut block = ZuirBlock::new(block_id(1));
         block.append_operation(operation_id(1)).unwrap();
 
-        // Simulate malformed in-memory data only through a serialized or
-        // internal construction path in tests if the representation changes.
-        assert!(block.validate().is_ok());
+        let before = block.operations().to_vec();
+        block.try_reserve_operations(32).unwrap();
+
+        assert_eq!(block.operations(), before.as_slice());
     }
 }
