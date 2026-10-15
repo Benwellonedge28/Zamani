@@ -1,4 +1,3 @@
-
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -8,125 +7,143 @@
 //! Edition: Rust 2021
 //! Minimum supported Rust version: Rust 1.97 or later.
 //!
-//! ## PURPOSE
+//! STATUS
 //!
-//! Provide the stable public entry point for ZUIR configuration and
-//! fallible operations. This module validates configuration at operation
-//! boundaries and preserves structured ZUIR errors.
+//! Proposed replacement. Freeze only after parent-module integration,
+//! repository compilation, and the required tests have passed.
 //!
-//! ## AUTHORITY
+//! PURPOSE
 //!
-//! This module conforms to:
+//! Provide the public entry point for ZUIR configuration and invocation
+//! boundaries. Validate configuration and request labels before running
+//! caller-supplied work, preserve structured errors, and expose approved
+//! configuration and error contracts.
+//!
+//! AUTHORITY
+//!
 //! - `src/zuir/ZUIR-SPEC.md`
 //! - `src/zuir/config.rs`
 //! - `src/zuir/errors.rs`
 //! - `src/zuir/version.rs`
 //! - `src/zuir/diagnostics.rs`
 //! - `src/zuir/source_map.rs`
+//! - `src/zuir/ir/`
+//! - `src/zuir/builder/`
+//! - `src/zuir/verify/`
+//! - `src/zuir/serialization/`
+//! - `src/zuir/lowering/`
 //! - `grammar/DESIGN.md`
 //! - `grammar/Zamani.g4`
+//! - `grammar/antlr/ZamaniLexer.g4`
 //! - `grammar/antlr/ZamaniParser.g4`
-//! - `grammar/grammar.md`
+//! - `grammar/lexer/tokens.g4`
 //! - `grammar/specification/semantic-model.md`
 //! - `grammar/specification/scalability-model.md`
 //! - `grammar/specification/poco-reaf.md`
 //!
-//! ## OWNS
+//! OWNS
 //!
 //! - The public ZUIR API facade.
-//! - Public re-exports of approved configuration and error contracts.
-//! - Configuration validation at the API boundary.
-//! - A generic operation boundary that preserves structured errors.
+//! - Deliberate re-exports of configuration and error contracts.
+//! - Validation at this facade's invocation boundary.
+//! - Contextual annotation of errors returned by delegated operations.
 //!
-//! ## DOES NOT OWN
+//! DOES NOT OWN
 //!
-//! - AST construction, parsing, or grammar rules.
-//! - Semantic analysis, name resolution, or type inference.
-//! - IR nodes, identifiers, types, values, or operation semantics.
-//! - Dialect registration or operation-schema definitions.
-//! - Verification algorithms, transformations, or optimization passes.
-//! - Serialization formats, fingerprints, or migration implementations.
-//! - Physical resource discovery, target selection, lowering, or execution.
+//! - Source parsing, AST construction, or semantic analysis.
+//! - IR entities, identifiers, types, effects, or operation semantics.
+//! - Dialect registration or extension execution.
+//! - Verification, transformation, optimization, or lowering algorithms.
+//! - Serialization, migration, fingerprints, or incremental cache algorithms.
+//! - Target discovery, physical allocation, scheduling, or runtime execution.
 //!
-//! ## ARCHITECTURAL CONTRACT
+//! ARCHITECTURAL CONTRACT
 //!
-//! ZUIR is the target-independent representation boundary for computational
-//! meaning. This API must not become a second AST, semantic model, quantum IR,
-//! or hardware-specific representation.
+//! ZUIR represents established computational meaning independently of a
+//! particular target. This facade is not a second AST, semantic model,
+//! quantum IR, hardware IR, verifier, serializer, or backend.
 //!
-//! Public operations must delegate to their authoritative implementation
-//! modules. Unsupported functionality must fail explicitly; it must not
-//! pretend to verify, serialize, transform, or lower an artifact.
+//! Every substantive operation must be delegated to its authoritative
+//! subsystem. A missing or unsupported operation must fail explicitly;
+//! this facade must never report success without doing the requested work.
 //!
-//! ## SCALABILITY AND POCO-REAF
+//! SCALABILITY AND POCO-REAF
 //!
-//! This module introduces no fixed limits on program size, operations,
-//! qubits, processors, devices, memory, register width, tensor rank,
-//! topology, or other hardware dimensions.
+//! This module introduces no universal limit on program size, operation count,
+//! qubits, processors, devices, memory, register width, tensor rank, topology,
+//! or domain count.
 //!
-//! Configuration budgets are explicit operational policies. An absent
-//! budget does not impose a policy limit, but cannot guarantee infinite
-//! memory, time, address space, or physical resources.
+//! Explicit work budgets are operational policies enforced by the subsystem
+//! performing the work. An absent budget does not promise infinite resources.
+//! Resource exhaustion must not be misreported as semantic invalidity.
 //!
-//! Determinism is a correctness requirement and cannot be disabled through
-//! this API.
+//! Determinism is a correctness requirement and cannot be disabled here.
 //!
-//! ## ERROR CONTRACT
+//! ERROR CONTRACT
 //!
-//! Configuration failures and operation failures use the canonical
-//! `ZuirError` and `ZuirResult` types. Existing error categories and phases
-//! are preserved. The API adds contextual notes instead of replacing the
-//! original error category or message.
+//! Expected failures use `ZuirError` and `ZuirResult`. Contextual notes may
+//! be added without replacing the original error kind or message. An existing
+//! error phase must be preserved; a fallback phase is added only when the
+//! delegated operation did not provide one.
 //!
-//! ## DEPENDENCY DIRECTION
+//! DEPENDENCY DIRECTION
 //!
-//! This module may depend on foundational configuration and error contracts.
-//! Those foundational modules must not depend on this API facade.
+//! This facade may depend on foundational configuration and error contracts.
+//! Those modules must not depend on this facade. Implementation modules must
+//! use their owning module paths rather than depending on facade re-exports.
 //!
-//! ## INTEGRATION CONTRACT
+//! FREEZE CRITERIA
 //!
-//! - `mod.rs` declares `pub mod api;` and re-exports the intended public API.
-//! - Builders own validated construction of concrete IR nodes.
-//! - The verifier owns structural and semantic invariant checks.
-//! - The dialect registry owns extension resolution and operation definitions.
-//! - Pass management owns transformation execution and invalidation.
-//! - Serialization owns encoding, decoding, and schema compatibility.
-//! - Lowering owns target feasibility and semantic-preservation checks.
-//! - Frontend and grammar modules remain authoritative for source syntax.
-//!
-//! This facade intentionally does not invent methods that depend on IR types
-//! or subsystems that are not yet present in the module graph.
-//!
-//! ## FREEZE CRITERIA
-//!
-//! Freeze only after this module compiles against the real `mod.rs`, the
-//! repository's public error/configuration contracts are stable, tests pass,
-//! and the eventual builder/verifier/serialization/lowering APIs are added
-//! through their own authoritative modules rather than duplicated here.
+//! - The parent `src/zuir/mod.rs` declares this module correctly.
+//! - Every re-export matches an existing public definition.
+//! - Configuration and request-boundary validation are tested.
+//! - Error kinds, messages, and existing phases are preserved.
+//! - Public API integration tests exercise actual owning subsystems.
+//! - Formatting, compilation, tests, and Clippy pass on the supported toolchain.
 
 use crate::zuir::config::ZuirConfig;
-use crate::zuir::errors::{ErrorPhase, ZuirError, ZuirErrorKind, ZuirResult};
 
-// Re-export stable contracts so callers can use the public API without
-// depending on internal module paths.
+// ---------------------------------------------------------------------------
+// Public configuration and error contracts
+// ---------------------------------------------------------------------------
+
 pub use crate::zuir::config::{
-    BudgetKind, CompatibilityPolicy, DiagnosticLimitPolicy, ExtensionPolicy,
-    VerificationPolicy, WorkBudget,
+    BudgetKind,
+    CompatibilityPolicy,
+    DiagnosticLimitPolicy,
+    ExtensionPolicy,
+    VerificationPolicy,
+    WorkBudget,
+    ZuirConfig,
 };
-pub use crate::zuir::errors::{ErrorSubject, ZuirErrorCode};
 
-/// The canonical public API facade for ZUIR.
+pub use crate::zuir::errors::{
+    ErrorPhase,
+    ErrorSubject,
+    ZuirError,
+    ZuirErrorCode,
+    ZuirErrorKind,
+    ZuirResult,
+};
+
+// ---------------------------------------------------------------------------
+// API facade
+// ---------------------------------------------------------------------------
+
+/// The public invocation facade for ZUIR.
 ///
-/// `ZuirApi` is an immutable, invocation-safe holder for configuration.
-/// It owns neither an IR artifact nor mutable global state. Concrete IR
-/// construction and processing remain the responsibility of their modules.
+/// `ZuirApi` owns an immutable configuration snapshot. It does not own an IR
+/// artifact, mutable global registry, cache, compiler session, or target.
+///
+/// Cloning this value clones the configuration; it does not clone or share
+/// any mutable compilation state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ZuirApi {
     config: ZuirConfig,
 }
 
 impl Default for ZuirApi {
-    /// Create an API facade with the default ZUIR configuration.
+    /// Create an API facade using the default configuration.
     ///
     /// The default configuration is valid by construction.
     fn default() -> Self {
@@ -137,66 +154,71 @@ impl Default for ZuirApi {
 }
 
 impl ZuirApi {
-    /// Create an API facade with the default configuration.
+    /// Create a facade using the default configuration.
     #[must_use]
     pub fn new_default() -> Self {
         Self::default()
     }
 
-    /// Create an API facade using a caller-provided configuration.
+    /// Create a facade from a caller-provided configuration.
     ///
-    /// Configuration is validated before the facade is returned. Invalid
-    /// configuration is rejected before any compilation operation begins.
+    /// Configuration is validated before the facade is returned. No
+    /// compilation or IR-processing work is started by this constructor.
     pub fn with_config(config: ZuirConfig) -> ZuirResult<Self> {
         config.validate()?;
         Ok(Self { config })
     }
 
-    /// Borrow the immutable configuration used by this facade.
+    /// Borrow the immutable configuration associated with this facade.
     #[must_use]
     pub const fn config(&self) -> &ZuirConfig {
         &self.config
     }
 
-    /// Revalidate the configuration at an explicit trust boundary.
+    /// Validate the configuration at an explicit trust boundary.
     ///
-    /// This is useful when an API entry point is invoked after configuration
-    /// has been loaded or assembled by another subsystem. Configuration
-    /// remains immutable after it has been placed in this facade.
+    /// This method is useful when a caller wants to validate its configuration
+    /// immediately before handing it to another subsystem.
     pub fn validate_config(&self) -> ZuirResult<()> {
         self.config.validate()
     }
 
-    /// Run a fallible operation under this facade's validated configuration.
+    /// Execute caller-supplied work under the validated configuration.
     ///
-    /// The operation closure receives a shared reference to the configuration
-    /// and returns the canonical ZUIR result type. The closure is invoked only
-    /// after configuration validation succeeds.
+    /// The closure receives a shared reference to the configuration and must
+    /// delegate substantive work to the appropriate owning subsystem.
     ///
-    /// This method does not claim to verify or transform an IR artifact.
-    /// Callers must pass the operation to its owning subsystem.
+    /// `operation` is a human-readable context label, not an operation
+    /// definition, dialect identifier, permission, or executable command.
     ///
-    /// If the operation fails, its original error kind and phase are retained;
-    /// an explanatory note identifies the API operation that failed.
-    pub fn run<T, F>(&self, operation: &str, action: F) -> ZuirResult<T>
+    /// The label must not be empty or consist only of whitespace. It is not
+    /// silently trimmed or rewritten.
+    ///
+    /// If the closure returns an error, its kind, message, and existing
+    /// context are retained; an API-operation note is added.
+    pub fn run<T, F>(
+        &self,
+        operation: &str,
+        action: F,
+    ) -> ZuirResult<T>
     where
         F: FnOnce(&ZuirConfig) -> ZuirResult<T>,
     {
-        self.validate_config()?;
+        self.validate_request(operation)?;
 
         action(&self.config).map_err(|error| {
             error.with_note(format!("ZUIR API operation: {operation}"))
         })
     }
 
-    /// Run a closure with an explicit phase label for errors created by that
-    /// closure.
+    /// Execute work with a fallback error phase.
     ///
-    /// The phase is applied only to errors returned by the closure. Existing
-    /// error kinds and messages remain intact. Use this method when an
-    /// operation implementation has not yet assigned its own phase.
+    /// The requested phase is applied only when the returned error has no
+    /// phase already. A more precise phase assigned by the owning subsystem
+    /// is preserved.
     ///
-    /// Prefer `run` when the owning subsystem already assigns precise phases.
+    /// Prefer [`Self::run`] when the delegated subsystem already reports
+    /// precise error phases.
     pub fn run_in_phase<T, F>(
         &self,
         phase: ErrorPhase,
@@ -206,44 +228,83 @@ impl ZuirApi {
     where
         F: FnOnce(&ZuirConfig) -> ZuirResult<T>,
     {
-        self.validate_config()?;
+        self.validate_request(operation)?;
 
         action(&self.config).map_err(|error| {
-            error
-                .with_phase(phase)
-                .with_note(format!("ZUIR API operation: {operation}"))
+            let error = if error.context().phase().is_none() {
+                error.with_phase(phase)
+            } else {
+                error
+            };
+
+            error.with_note(format!("ZUIR API operation: {operation}"))
+        })
+    }
+
+    /// Validate the configuration and request label before invoking work.
+    ///
+    /// This method is public so adapters can apply the same boundary checks
+    /// before performing setup that precedes a call to [`Self::run`].
+    pub fn validate_request(&self, operation: &str) -> ZuirResult<()> {
+        validate_operation_label(operation)?;
+
+        self.config.validate().map_err(|error| {
+            error.with_note(format!(
+                "Configuration validation failed before ZUIR API operation: {operation}"
+            ))
         })
     }
 }
 
 impl From<ZuirConfig> for ZuirApi {
-    /// Construct the API facade from a configuration.
+    /// Construct the facade from a configuration.
     ///
-    /// Unlike `with_config`, `From` cannot return a validation error. The
-    /// configuration type currently protects its invariants through private
-    /// fields and validated builder methods, so this conversion is safe.
+    /// `ZuirConfig` protects its invariants through its private fields and
+    /// validated public construction methods. This infallible conversion is
+    /// retained for compatibility with existing callers.
+    ///
+    /// APIs that need an explicit fallible boundary should use
+    /// [`Self::with_config`] instead.
     fn from(config: ZuirConfig) -> Self {
         Self { config }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standalone validation
+// ---------------------------------------------------------------------------
+
 /// Validate a configuration without retaining an API facade.
-///
-/// This convenience function is useful for applications that keep
-/// configuration in their own invocation context.
 pub fn validate_config(config: &ZuirConfig) -> ZuirResult<()> {
     config.validate()
 }
 
-/// Construct a structured configuration error for API-boundary failures.
+/// Validate a human-readable API operation label.
 ///
-/// Prefer the canonical configuration validation in `config.rs`; this
-/// helper exists for API-level argument checks only.
+/// The label is diagnostic context only. It does not select a backend,
+/// authorize an extension, or grant permission to execute an operation.
+pub fn validate_operation_label(operation: &str) -> ZuirResult<()> {
+    if operation.trim().is_empty() {
+        return Err(api_input_error(
+            "The ZUIR API operation label must not be empty.",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Construct a structured error for invalid API-boundary input.
+///
+/// Configuration invariants should instead be validated by `config.rs`.
 pub(crate) fn api_input_error(message: impl Into<String>) -> ZuirError {
     ZuirError::new(ZuirErrorKind::InvalidInput, message)
         .with_phase(ErrorPhase::Configuration)
         .with_note("The request was rejected at the ZUIR public API boundary.")
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -255,6 +316,7 @@ mod tests {
 
         assert!(api.config().deterministic());
         assert!(api.validate_config().is_ok());
+        assert!(api.validate_request("test.operation").is_ok());
     }
 
     #[test]
@@ -287,6 +349,24 @@ mod tests {
     }
 
     #[test]
+    fn run_rejects_an_empty_operation_label_before_calling_the_closure() {
+        let api = ZuirApi::default();
+        let mut called = false;
+
+        let result = api.run("  ", |_config| {
+            called = true;
+            Ok(())
+        });
+
+        assert!(result.is_err());
+        assert!(!called);
+        assert_eq!(
+            result.expect_err("empty label must fail").kind(),
+            ZuirErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
     fn run_preserves_error_kind_and_adds_operation_context() {
         let api = ZuirApi::default();
 
@@ -304,10 +384,19 @@ mod tests {
             error.to_string().contains("operation is unsupported"),
             "the original error message should remain available"
         );
+        assert!(
+            error.to_string().contains("test.failure")
+                || error
+                    .context()
+                    .notes()
+                    .iter()
+                    .any(|note| note.contains("test.failure")),
+            "the operation label should be available as error context"
+        );
     }
 
     #[test]
-    fn run_in_phase_assigns_the_requested_phase() {
+    fn run_in_phase_adds_a_phase_when_the_error_has_none() {
         let api = ZuirApi::default();
 
         let result: ZuirResult<()> = api.run_in_phase(
@@ -322,24 +411,52 @@ mod tests {
         );
 
         let error = result.expect_err("verification should fail");
+
         assert_eq!(error.kind(), ZuirErrorKind::VerificationFailed);
-        assert_eq!(error.context().phase(), Some(ErrorPhase::Verification));
+        assert_eq!(
+            error.context().phase(),
+            Some(ErrorPhase::Verification)
+        );
     }
 
     #[test]
-    fn operation_is_not_called_if_configuration_validation_fails() {
-        // Public configuration builders validate custom budget keys, so
-        // invalid configuration must be rejected before a facade can exist.
-        let invalid = ZuirConfig::default().with_budget(
+    fn run_in_phase_preserves_an_existing_precise_phase() {
+        let api = ZuirApi::default();
+
+        let result: ZuirResult<()> = api.run_in_phase(
+            ErrorPhase::Verification,
+            "test.serialization",
+            |_config| {
+                Err(
+                    ZuirError::new(
+                        ZuirErrorKind::UnsupportedVersion,
+                        "unsupported serialized version",
+                    )
+                    .with_phase(ErrorPhase::Deserialization),
+                )
+            },
+        );
+
+        let error = result.expect_err("the unsupported version must fail");
+
+        assert_eq!(
+            error.context().phase(),
+            Some(ErrorPhase::Deserialization)
+        );
+    }
+
+    #[test]
+    fn invalid_custom_budget_is_rejected_by_configuration_validation() {
+        let result = ZuirConfig::default().with_budget(
             BudgetKind::Custom("not namespaced".to_owned()),
             WorkBudget::bounded(1),
         );
 
-        assert!(invalid.is_err());
+        assert!(result.is_err());
     }
 
     #[test]
-    fn unlimited_budgets_do_not_encode_hardware_capacities() {
+    fn absent_budgets_do_not_impose_hardware_capacity_limits() {
         let api = ZuirApi::default();
 
         assert!(
@@ -353,5 +470,11 @@ mod tests {
                 .is_unlimited()
         );
     }
+
+    #[test]
+    fn operation_label_validation_does_not_rewrite_valid_labels() {
+        let label = "verify.program";
+        assert!(validate_operation_label(label).is_ok());
+        assert_eq!(label, "verify.program");
+    }
 }
- 
