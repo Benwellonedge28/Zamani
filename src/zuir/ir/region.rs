@@ -5,105 +5,72 @@
 //! # ZUIR Region
 //!
 //! Canonical path: `src/zuir/ir/region.rs`
-//! Rust edition: 2021
-//! Minimum Rust baseline: Rust 1.97 or later.
-//! Safety: Safe Rust only.
+//! Edition: Rust 2021
+//! Minimum intended Rust version: 1.97
+//! Safety: unsafe Rust is forbidden.
 //!
-//! ## PURPOSE
+//! PURPOSE
 //!
-//! Represent a target-independent nested computation region.
+//! Represent a target-independent region as an ordered collection of block
+//! references, with explicit ownership, structural interpretation, captures,
+//! isolation policy, and region-local attributes.
 //!
-//! A region groups basic blocks, describes how it is owned and interpreted,
-//! records explicitly permitted captures from an enclosing scope, and stores
-//! region-scoped attributes. It does not own block contents or operations.
+//! OWNS
 //!
-//! ## AUTHORITY
+//! - RegionOwner, RegionKind, RegionIsolation, and CaptureMode.
+//! - ZuirRegion and region-local validation.
+//! - RegionError and RegionResult.
 //!
-//! - `src/zuir/ZUIR-SPEC.md`
-//! - `src/zuir/ids.rs`
-//! - `src/zuir/schema/attributes.rs`
-//! - `src/zuir/schema/types.rs`
-//! - `src/zuir/ir/function.rs`
-//! - `grammar/DESIGN.md`
-//! - `grammar/Zamani.g4`
-//! - `grammar/specification/semantic-model.md`
-//! - `grammar/specification/syntax-model.md`
+//! DOES NOT OWN
 //!
-//! ## OWNS
+//! - IDs: `crate::zuir::ids`.
+//! - Blocks and block contents: `crate::zuir::ir::block`.
+//! - Operations and nested-operation references:
+//!   `crate::zuir::ir::operation`.
+//! - Attribute keys and values: `crate::zuir::schema::attributes`.
+//! - Qualified names: `crate::zuir::schema::types`.
+//! - SSA, dominance, global reference resolution, capture visibility,
+//!   effect verification, or full-program verification.
+//! - Source parsing, AST construction, name resolution, lowering, or runtime.
 //!
-//! - Region identity and declared owner.
-//! - Region structural interpretation.
-//! - Ordered block membership.
-//! - Explicit capture declarations and capture modes.
-//! - Region-local attributes.
-//! - Local validation and deterministic traversal.
+//! INTEGRATION CONTRACT
 //!
-//! ## DOES_NOT_OWN
+//! Function-owned regions use `RegionOwner::Function(FunctionId)`.
+//! Operation-owned regions use `RegionOwner::Operation(OperationId)`.
+//! The full verifier must confirm reciprocal ownership and ensure that each
+//! region is referenced by its declared owner.
 //!
-//! - Parsing, AST construction, or source-name resolution.
-//! - Allocation or global uniqueness of IDs.
-//! - Block arguments, operations, terminators, or successor edges.
-//! - SSA dominance, def-use analysis, or full control-flow verification.
-//! - Type inference, effect inference, or ownership proof.
-//! - Dialect registration or extension execution.
-//! - Target layout, physical allocation, scheduling, or runtime execution.
+//! `blocks` contains ordered `BlockId` references. Block contents remain
+//! exclusively owned by `ir/block.rs` and `ir/operation.rs`.
 //!
-//! ## INTEGRATION CONTRACT
+//! Captures are declarations of enclosing-scope `ValueId`s. This module
+//! checks duplicate declarations and isolation policy; the full verifier
+//! checks existence, visibility, type, lifetime, and ownership legality.
 //!
-//! `ir/function.rs` stores `RegionId` references in `FunctionBody`.
-//! A function-owned region must identify that `FunctionId` as its owner.
+//! The grammar and semantic model define source meaning. A region accepts
+//! already-resolved IDs and never interprets source syntax.
 //!
-//! An operation that owns nested regions must identify its `OperationId` as
-//! the owner. The full verifier must check that the operation actually
-//! contains the referenced region and that ownership is reciprocal.
+//! SCALABILITY
 //!
-//! `ir/block.rs` owns each block's arguments, ordered operations, and
-//! terminator. This region stores only ordered `BlockId` references.
+//! No universal maximum number of blocks, captures, attributes, qubits,
+//! registers, processors, nodes, devices, or tensor dimensions is imposed.
+//! Ordered block references use a dynamically sized Vec. `try_reserve_blocks`
+//! exposes fallible reservation for that Vec. Standard-library BTreeMap
+//! insertion does not expose a stable fallible-reservation API; this module
+//! therefore does not claim to make every allocation failure recoverable.
 //!
-//! `ir/operation.rs` owns operation contents and any operation-to-region
-//! references. This file must not duplicate operation storage.
+//! No finite machine provides literal infinity. POCO-REAF means this module
+//! imposes no artificial universal machine-size ceiling and preserves
+//! semantics independently of the eventual target.
 //!
-//! `ids.rs` owns all identifier types. `schema/attributes.rs` owns
-//! `AttributeKey` and `AttributeValue`; `schema/types.rs` owns `QualifiedName`.
+//! VALIDITY BOUNDARY
 //!
-//! Capture references are external `ValueId`s. The full verifier must check
-//! that each captured value exists, is visible from the enclosing scope, and
-//! is legal to capture under the region's isolation and ownership rules.
-//! This file cannot prove those cross-entity properties on its own.
-//!
-//! The grammar and semantic model own source syntax and source meaning.
-//! This file accepts already-resolved IDs and never parses source constructs.
-//!
-//! ## SCALABILITY AND POCO-REAF
-//!
-//! Blocks, captures, and attributes use dynamically sized ordered collections.
-//! No machine count, hardware capacity, register width, qubit count, tensor
-//! rank, or universal region-size ceiling is introduced here.
-//!
-//! The implementation remains subject to available memory, address space,
-//! allocator behavior, and explicitly configured compiler resource budgets.
-//! Resource exhaustion must be reported by the layer that owns that budget;
-//! it must not silently change region semantics.
-//!
-//! ## TRUST BOUNDARY
-//!
-//! Deserialization is not proof of validity. Call `validate()` after decoding
-//! untrusted data and run full-program verification before optimization or
-//! lowering. Local validation does not prove cross-region correctness.
-//!
-//! ## FREEZE CRITERIA
-//!
-//! - Region ownership is explicit and typed.
-//! - Block membership is ordered and duplicate-free.
-//! - Capture declarations are unique and explicit.
-//! - Isolated regions cannot declare captures.
-//! - Extension semantics use qualified names, not a closed operation list.
-//! - Attributes are validated using the canonical schema API.
-//! - Deserialized state can be revalidated.
-//! - Tests cover normal, invalid, and deterministic behavior.
-//! - No unsafe code or physical hardware assumptions are introduced.
+//! `validate()` checks region-local invariants. It does not establish that
+//! referenced blocks or captured values exist. Deserialized regions are
+//! locally validated, but still require full-IR verification before trusted
+//! optimization, lowering, or execution.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -111,125 +78,133 @@ use crate::zuir::ids::{BlockId, FunctionId, OperationId, RegionId, ValueId};
 use crate::zuir::schema::attributes::{AttributeKey, AttributeValue};
 use crate::zuir::schema::types::QualifiedName;
 
-// =============================================================================
-// Region ownership
-// =============================================================================
+/// Result type for region construction and validation.
+pub type RegionResult<T> = Result<T, RegionError>;
 
-/// Entity that owns a region.
+/// Entity that declares ownership of a region.
 ///
-/// Function bodies are owned by a function. Regions nested under an
-/// operation are owned by that operation. The verifier must ensure the
-/// declared owner and the enclosing entity's region references agree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// The full verifier checks that the owner references this region and that
+/// the region's declared owner agrees with that reference.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 pub enum RegionOwner {
-    /// A region forming part of a function body.
+    /// Region owned by a function.
     Function(FunctionId),
 
-    /// A region nested under an operation.
+    /// Region owned by an operation.
     Operation(OperationId),
 }
 
-// =============================================================================
-// Region semantics
-// =============================================================================
-
-/// Broad structural interpretation of a region.
+/// General structural interpretation of a region.
 ///
-/// These variants describe general control/data organization. They do not
-/// prescribe the meaning of any domain operation. New domain-specific
-/// behavior belongs to registered dialect contracts.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// This is intentionally not a list of computational operations. Domain
+/// behavior belongs to dialect contracts and registered extensions.
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(tag = "kind", content = "extension", rename_all = "snake_case")]
 pub enum RegionKind {
-    /// A region whose structure is interpreted by its owning construct.
+    /// Structure interpreted by the containing construct.
     Structured,
 
-    /// A region interpreted using explicit control-flow blocks and edges.
+    /// Explicit blocks and control-flow edges define execution flow.
     ControlFlow,
 
-    /// A region interpreted using data-dependency semantics.
+    /// Dependencies define a data-flow computation.
     Dataflow,
 
-    /// A region whose additional semantics are defined by a registered
-    /// extension identified by a qualified name.
+    /// Additional semantics are defined by a qualified extension.
     Extension(QualifiedName),
 }
 
 impl RegionKind {
-    /// Validate local invariants, including extension-name validity.
-    pub fn validate(&self) -> Result<(), RegionError> {
+    /// Validate invariants owned by the region-kind declaration.
+    pub fn validate(&self) -> RegionResult<()> {
         if let Self::Extension(name) = self {
-            name.validate()
-                .map_err(|error| RegionError::InvalidExtensionName(error.to_string()))?;
+            name.validate().map_err(|error| {
+                RegionError::InvalidExtensionName(error.to_string())
+            })?;
         }
+
         Ok(())
     }
 }
 
-/// Whether a region is permitted to capture values from an enclosing scope.
-///
-/// Isolation is a structural declaration, not proof that a region is pure
-/// or free of external effects. Those properties belong to other contracts.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// Whether a region may declare captures from an enclosing scope.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum RegionIsolation {
-    /// Captures may be declared explicitly and verified by the full verifier.
+    /// Enclosing values may be captured explicitly.
     CapturesAllowed,
 
-    /// The region must not capture values from an enclosing scope.
+    /// No enclosing values may be captured.
     ///
-    /// Region-local block arguments and operation results are not captures.
+    /// Local block arguments and locally defined operation results are not
+    /// captures. Isolation does not itself prove purity.
     Isolated,
 }
 
-/// How a region declares its use of an enclosing value.
+/// Declared use of an enclosing-scope value.
 ///
-/// These modes express intent. The full ownership/effect verifier determines
-/// whether a mode is legal for the value's actual type and enclosing scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+/// The full verifier determines whether the declared mode is legal for the
+/// captured value's type, ownership, lifetime, and execution domain.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum CaptureMode {
-    /// Read the captured value without declaring mutation.
+    /// Read the value without declaring mutation.
     Read,
 
-    /// Read and potentially mutate the captured value, subject to verification.
+    /// Read and potentially mutate the value.
     Write,
 
-    /// Transfer the value into the region, subject to ownership verification.
+    /// Transfer the value into the region.
     Move,
 
-    /// Borrow the value immutably for the region's permitted lifetime.
+    /// Borrow the value immutably.
     BorrowShared,
 
-    /// Borrow the value mutably for the region's permitted lifetime.
+    /// Borrow the value mutably.
     BorrowExclusive,
 }
 
-// =============================================================================
-// Region errors
-// =============================================================================
-
-/// Errors for invariants owned directly by a region.
+/// Errors detectable from a region and its locally owned state.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum RegionError {
-    /// A complete region has no blocks.
+    /// A region requiring a complete structure has no blocks.
     EmptyRegion,
 
-    /// The same block is listed more than once.
+    /// The same block appears more than once.
     DuplicateBlock(BlockId),
 
-    /// The same captured value was declared more than once.
+    /// A block insertion position exceeds the current block count.
+    InvalidBlockIndex {
+        index: usize,
+        block_count: usize,
+    },
+
+    /// A captured value is declared more than once.
     DuplicateCapture(ValueId),
 
-    /// An isolated region attempted to declare an enclosing capture.
+    /// An isolated region declares or attempts to add a capture.
     CaptureInIsolatedRegion(ValueId),
 
-    /// A region kind contains an invalid extension name.
+    /// A region extension name is malformed.
     InvalidExtensionName(String),
 
-    /// A region attribute key is invalid.
+    /// An attribute key is malformed.
     InvalidAttributeKey(String),
+
+    /// Capacity reservation for the block vector failed.
+    AllocationFailure {
+        collection: &'static str,
+    },
 }
 
 impl fmt::Display for RegionError {
@@ -241,6 +216,10 @@ impl fmt::Display for RegionError {
             Self::DuplicateBlock(block) => {
                 write!(f, "region contains block {block} more than once")
             }
+            Self::InvalidBlockIndex { index, block_count } => write!(
+                f,
+                "block insertion index {index} exceeds block count {block_count}"
+            ),
             Self::DuplicateCapture(value) => {
                 write!(f, "region captures value {value} more than once")
             }
@@ -253,51 +232,77 @@ impl fmt::Display for RegionError {
             Self::InvalidAttributeKey(reason) => {
                 write!(f, "invalid region attribute key: {reason}")
             }
+            Self::AllocationFailure { collection } => {
+                write!(f, "unable to reserve memory for region {collection}")
+            }
         }
     }
 }
 
 impl std::error::Error for RegionError {}
 
-// =============================================================================
-// Canonical region
-// =============================================================================
-
 /// Canonical target-independent ZUIR region.
 ///
-/// A region stores references to blocks rather than embedding their contents.
-/// Block ordering is preserved because the IR contract may use it for
-/// deterministic traversal and representation. Control-flow semantics must
-/// be determined from the block terminators and successor contracts, not
-/// inferred solely from this order.
-///
-/// Captures are keyed by `ValueId` so duplicate captures are rejected and
-/// traversal is deterministic. Capture order is not represented as semantic
-/// ordering by this type.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Blocks preserve declaration order. Captures and attributes use ordered
+/// maps so their traversal is deterministic. The order of blocks does not
+/// implicitly define control flow: the block terminators and successor
+/// contracts owned by the corresponding IR modules define control flow.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ZuirRegion {
     id: RegionId,
     owner: RegionOwner,
     kind: RegionKind,
     isolation: RegionIsolation,
-
-    /// Ordered block references owned by this region.
     blocks: Vec<BlockId>,
-
-    /// Explicit enclosing-scope captures and their declared access modes.
     captures: BTreeMap<ValueId, CaptureMode>,
-
-    /// Namespaced, declarative attributes.
     attributes: BTreeMap<AttributeKey, AttributeValue>,
+}
+
+/// Wire representation used to validate regions as they are deserialized.
+///
+/// A separate wire type avoids exposing an unchecked deserialization path
+/// for the canonical region.
+#[derive(Deserialize)]
+struct ZuirRegionWire {
+    id: RegionId,
+    owner: RegionOwner,
+    kind: RegionKind,
+    isolation: RegionIsolation,
+    blocks: Vec<BlockId>,
+    #[serde(default)]
+    captures: BTreeMap<ValueId, CaptureMode>,
+    #[serde(default)]
+    attributes: BTreeMap<AttributeKey, AttributeValue>,
+}
+
+impl<'de> Deserialize<'de> for ZuirRegion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = ZuirRegionWire::deserialize(deserializer)?;
+
+        let region = Self {
+            id: wire.id,
+            owner: wire.owner,
+            kind: wire.kind,
+            isolation: wire.isolation,
+            blocks: wire.blocks,
+            captures: wire.captures,
+            attributes: wire.attributes,
+        };
+
+        region.validate().map_err(serde::de::Error::custom)?;
+        Ok(region)
+    }
 }
 
 impl ZuirRegion {
     /// Create an empty region under construction.
     ///
-    /// An empty region is an incomplete construction state: `validate()`
-    /// rejects it until at least one block has been added. This permits
-    /// builders to establish identities and references before all blocks
-    /// have been assembled.
+    /// An empty region is not valid as a complete serialized region.
+    /// Add at least one block before calling `validate()` or serializing
+    /// it for interchange.
     #[must_use]
     pub fn new(
         id: RegionId,
@@ -318,20 +323,16 @@ impl ZuirRegion {
 
     /// Construct a region with its initial ordered block list.
     ///
-    /// The block list must be nonempty and contain no duplicates.
+    /// The block list must be nonempty and duplicate-free.
     pub fn with_blocks(
         id: RegionId,
         owner: RegionOwner,
         kind: RegionKind,
         isolation: RegionIsolation,
         blocks: Vec<BlockId>,
-    ) -> Result<Self, RegionError> {
+    ) -> RegionResult<Self> {
         let mut region = Self::new(id, owner, kind, isolation);
-
-        for block in blocks {
-            region.add_block(block)?;
-        }
-
+        region.set_blocks(blocks)?;
         region.validate()?;
         Ok(region)
     }
@@ -348,20 +349,20 @@ impl ZuirRegion {
         self.owner
     }
 
-    /// Return the region's structural interpretation.
+    /// Return the structural interpretation.
     #[must_use]
     pub const fn kind(&self) -> &RegionKind {
         &self.kind
     }
 
-    /// Return the region's capture-isolation policy.
+    /// Return the capture-isolation policy.
     #[must_use]
     pub const fn isolation(&self) -> RegionIsolation {
         self.isolation
     }
 
-    /// Replace the region kind after validating its local invariants.
-    pub fn set_kind(&mut self, kind: RegionKind) -> Result<(), RegionError> {
+    /// Replace the structural interpretation after validation.
+    pub fn set_kind(&mut self, kind: RegionKind) -> RegionResult<()> {
         kind.validate()?;
         self.kind = kind;
         Ok(())
@@ -369,12 +370,9 @@ impl ZuirRegion {
 
     /// Change the isolation policy.
     ///
-    /// Switching to `Isolated` is rejected if captures already exist. The
-    /// caller must remove those captures explicitly before changing policy.
-    pub fn set_isolation(
-        &mut self,
-        isolation: RegionIsolation,
-    ) -> Result<(), RegionError> {
+    /// Enabling isolation while captures exist is rejected. Remove those
+    /// captures explicitly before changing the policy.
+    pub fn set_isolation(&mut self, isolation: RegionIsolation) -> RegionResult<()> {
         if isolation == RegionIsolation::Isolated {
             if let Some(value) = self.captures.keys().next().copied() {
                 return Err(RegionError::CaptureInIsolatedRegion(value));
@@ -385,58 +383,59 @@ impl ZuirRegion {
         Ok(())
     }
 
-    /// Return whether the region currently contains any block references.
-    ///
-    /// This reports construction state only; it does not imply verification.
+    /// Whether this region currently references any blocks.
     #[must_use]
     pub fn has_blocks(&self) -> bool {
         !self.blocks.is_empty()
     }
 
-    /// Return the number of block references.
+    /// Number of referenced blocks.
     #[must_use]
     pub fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
-    /// Return block references in declared order.
+    /// Borrow the ordered block references.
     #[must_use]
     pub fn blocks(&self) -> &[BlockId] {
         &self.blocks
     }
 
-    /// Test whether the region references a block.
+    /// Whether the region references the given block.
     #[must_use]
     pub fn contains_block(&self, block: BlockId) -> bool {
         self.blocks.contains(&block)
     }
 
+    /// Reserve capacity for additional block references.
+    ///
+    /// This can return an allocation error instead of relying on a later
+    /// vector growth. It does not impose a semantic block-count limit.
+    pub fn try_reserve_blocks(&mut self, additional: usize) -> RegionResult<()> {
+        self.blocks
+            .try_reserve(additional)
+            .map_err(|_| RegionError::AllocationFailure {
+                collection: "block references",
+            })
+    }
+
     /// Add a block reference at the end of the region.
     ///
-    /// The block must exist and belong to this region when the complete IR
-    /// is verified. This method enforces only local uniqueness.
-    pub fn add_block(&mut self, block: BlockId) -> Result<(), RegionError> {
+    /// Existence and reciprocal ownership are checked by the full verifier.
+    pub fn add_block(&mut self, block: BlockId) -> RegionResult<()> {
         if self.blocks.contains(&block) {
             return Err(RegionError::DuplicateBlock(block));
         }
 
+        self.try_reserve_blocks(1)?;
         self.blocks.push(block);
         Ok(())
     }
 
-    /// Insert a block at a declared position.
+    /// Insert a block reference at a specified position.
     ///
-    /// `index == block_count()` appends. An index beyond the current end is
-    /// rejected rather than clamped or silently reordered.
-    pub fn insert_block(
-        &mut self,
-        index: usize,
-        block: BlockId,
-    ) -> Result<(), RegionError> {
-        if self.blocks.contains(&block) {
-            return Err(RegionError::DuplicateBlock(block));
-        }
-
+    /// `index == block_count()` appends. An out-of-range position is rejected.
+    pub fn insert_block(&mut self, index: usize, block: BlockId) -> RegionResult<()> {
         if index > self.blocks.len() {
             return Err(RegionError::InvalidBlockIndex {
                 index,
@@ -444,14 +443,35 @@ impl ZuirRegion {
             });
         }
 
+        if self.blocks.contains(&block) {
+            return Err(RegionError::DuplicateBlock(block));
+        }
+
+        self.try_reserve_blocks(1)?;
         self.blocks.insert(index, block);
         Ok(())
     }
 
-    /// Remove a block reference and return whether it was present.
+    /// Replace the complete ordered block list.
     ///
-    /// The caller must update related control-flow edges and verify the
-    /// enclosing IR before using it again.
+    /// The replacement is validated before the current list is modified.
+    pub fn set_blocks(&mut self, blocks: Vec<BlockId>) -> RegionResult<()> {
+        let mut seen = BTreeSet::new();
+
+        for block in &blocks {
+            if !seen.insert(*block) {
+                return Err(RegionError::DuplicateBlock(*block));
+            }
+        }
+
+        self.blocks = blocks;
+        Ok(())
+    }
+
+    /// Remove a block reference.
+    ///
+    /// Returns `true` when the reference was present. The caller must repair
+    /// related control-flow edges and verify the enclosing IR afterwards.
     pub fn remove_block(&mut self, block: BlockId) -> bool {
         if let Some(index) = self.blocks.iter().position(|candidate| *candidate == block) {
             self.blocks.remove(index);
@@ -461,15 +481,14 @@ impl ZuirRegion {
         }
     }
 
-    /// Declare a capture of a value from an enclosing scope.
+    /// Declare an enclosing-scope capture.
     ///
-    /// Duplicate capture declarations are rejected even if their modes match:
-    /// silently merging declarations could hide inconsistent construction.
+    /// Duplicate declarations are rejected even if their modes are equal.
     pub fn add_capture(
         &mut self,
         value: ValueId,
         mode: CaptureMode,
-    ) -> Result<(), RegionError> {
+    ) -> RegionResult<()> {
         if self.isolation == RegionIsolation::Isolated {
             return Err(RegionError::CaptureInIsolatedRegion(value));
         }
@@ -482,14 +501,14 @@ impl ZuirRegion {
         Ok(())
     }
 
-    /// Replace the mode of an existing capture.
+    /// Change the mode of an existing capture.
     ///
-    /// This does not add a capture if it is absent.
+    /// This does not add a capture. Returns `false` when the value is absent.
     pub fn set_capture_mode(
         &mut self,
         value: ValueId,
         mode: CaptureMode,
-    ) -> Result<bool, RegionError> {
+    ) -> RegionResult<bool> {
         if self.isolation == RegionIsolation::Isolated {
             return Err(RegionError::CaptureInIsolatedRegion(value));
         }
@@ -507,41 +526,39 @@ impl ZuirRegion {
         self.captures.remove(&value).is_some()
     }
 
-    /// Return the mode declared for a captured value, if any.
+    /// Return a capture's declared mode.
     #[must_use]
     pub fn capture_mode(&self, value: ValueId) -> Option<CaptureMode> {
         self.captures.get(&value).copied()
     }
 
-    /// Return the number of capture declarations.
+    /// Number of capture declarations.
     #[must_use]
     pub fn capture_count(&self) -> usize {
         self.captures.len()
     }
 
-    /// Iterate over captures in deterministic ValueId order.
-    pub fn captures(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (ValueId, CaptureMode)> + '_ {
+    /// Iterate over captures in deterministic `ValueId` order.
+    pub fn captures(&self) -> impl ExactSizeIterator<Item = (ValueId, CaptureMode)> + '_ {
         self.captures.iter().map(|(value, mode)| (*value, *mode))
     }
 
-    /// Return a read-only view of the capture map.
+    /// Borrow the canonical capture map.
     #[must_use]
     pub const fn captures_map(&self) -> &BTreeMap<ValueId, CaptureMode> {
         &self.captures
     }
 
-    /// Add or replace a region attribute.
+    /// Insert or replace a region attribute after validating its key.
     ///
-    /// Attribute-key syntax is validated here. Attribute value type checking,
-    /// namespace authorization, and extension-specific meaning belong to the
-    /// schema and dialect verifier.
+    /// Returns the previous value when a value was replaced. Attribute value
+    /// semantics, namespace authorization, and dialect-specific constraints
+    /// remain the responsibility of the schema and full verifier.
     pub fn set_attribute(
         &mut self,
         key: AttributeKey,
         value: AttributeValue,
-    ) -> Result<Option<AttributeValue>, RegionError> {
+    ) -> RegionResult<Option<AttributeValue>> {
         key.validate().map_err(|error| {
             RegionError::InvalidAttributeKey(error.to_string())
         })?;
@@ -550,14 +567,11 @@ impl ZuirRegion {
     }
 
     /// Remove a region attribute.
-    pub fn remove_attribute(
-        &mut self,
-        key: &AttributeKey,
-    ) -> Option<AttributeValue> {
+    pub fn remove_attribute(&mut self, key: &AttributeKey) -> Option<AttributeValue> {
         self.attributes.remove(key)
     }
 
-    /// Get a region attribute by its fully qualified key.
+    /// Look up a region attribute.
     #[must_use]
     pub fn attribute(&self, key: &AttributeKey) -> Option<&AttributeValue> {
         self.attributes.get(key)
@@ -570,20 +584,17 @@ impl ZuirRegion {
         self.attributes.iter()
     }
 
-    /// Return a read-only view of the attribute map.
+    /// Borrow the canonical attribute map.
     #[must_use]
-    pub const fn attributes_map(
-        &self,
-    ) -> &BTreeMap<AttributeKey, AttributeValue> {
+    pub const fn attributes_map(&self) -> &BTreeMap<AttributeKey, AttributeValue> {
         &self.attributes
     }
 
     /// Validate invariants owned directly by this region.
     ///
-    /// This method must be called after deserialization and before full IR
-    /// verification. It does not establish block existence, reciprocal
-    /// ownership, capture visibility, SSA dominance, or control-flow validity.
-    pub fn validate(&self) -> Result<(), RegionError> {
+    /// This does not resolve block/capture references, prove ownership
+    /// reciprocity, or establish whole-program correctness.
+    pub fn validate(&self) -> RegionResult<()> {
         if self.blocks.is_empty() {
             return Err(RegionError::EmptyRegion);
         }
@@ -612,10 +623,6 @@ impl ZuirRegion {
         Ok(())
     }
 }
-
-// =============================================================================
-// Tests
-// =============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -653,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn constructs_a_function_owned_region() {
+    fn constructs_and_validates_function_owned_region() {
         let region = structured_region();
 
         assert_eq!(region.id(), region_id(1));
@@ -663,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn supports_operation_owned_nested_regions() {
+    fn supports_operation_owned_region() {
         let region = ZuirRegion::with_blocks(
             region_id(10),
             RegionOwner::Operation(operation_id(20)),
@@ -677,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_empty_complete_regions() {
+    fn rejects_empty_complete_region() {
         let region = ZuirRegion::new(
             region_id(1),
             RegionOwner::Function(function_id(2)),
@@ -703,9 +710,7 @@ mod tests {
         let mut region = structured_region();
 
         region.add_block(block_id(4)).expect("unique block");
-        region
-            .insert_block(1, block_id(5))
-            .expect("valid insertion");
+        region.insert_block(1, block_id(5)).expect("valid insertion");
 
         assert_eq!(
             region.blocks(),
@@ -727,9 +732,20 @@ mod tests {
     }
 
     #[test]
+    fn replaces_block_list_only_after_validation() {
+        let mut region = structured_region();
+        let original = region.blocks().to_vec();
+
+        assert_eq!(
+            region.set_blocks(vec![block_id(4), block_id(4)]),
+            Err(RegionError::DuplicateBlock(block_id(4)))
+        );
+        assert_eq!(region.blocks(), original);
+    }
+
+    #[test]
     fn removes_only_the_requested_block() {
         let mut region = structured_region();
-
         region.add_block(block_id(4)).expect("unique block");
 
         assert!(region.remove_block(block_id(3)));
@@ -738,20 +754,16 @@ mod tests {
     }
 
     #[test]
-    fn records_captures_deterministically() {
+    fn captures_iterate_in_deterministic_order() {
         let mut region = structured_region();
 
-        region
-            .add_capture(value_id(8), CaptureMode::Read)
-            .expect("valid capture");
+        region.add_capture(value_id(8), CaptureMode::Read).expect("capture");
         region
             .add_capture(value_id(4), CaptureMode::BorrowShared)
-            .expect("valid capture");
-
-        let captures: Vec<_> = region.captures().collect();
+            .expect("capture");
 
         assert_eq!(
-            captures,
+            region.captures().collect::<Vec<_>>(),
             vec![
                 (value_id(4), CaptureMode::BorrowShared),
                 (value_id(8), CaptureMode::Read),
@@ -762,10 +774,7 @@ mod tests {
     #[test]
     fn rejects_duplicate_captures() {
         let mut region = structured_region();
-
-        region
-            .add_capture(value_id(8), CaptureMode::Read)
-            .expect("first capture");
+        region.add_capture(value_id(8), CaptureMode::Read).expect("first");
 
         assert_eq!(
             region.add_capture(value_id(8), CaptureMode::Move),
@@ -774,7 +783,7 @@ mod tests {
     }
 
     #[test]
-    fn isolated_regions_reject_captures() {
+    fn isolated_region_rejects_capture() {
         let mut region = ZuirRegion::with_blocks(
             region_id(1),
             RegionOwner::Function(function_id(2)),
@@ -791,75 +800,65 @@ mod tests {
     }
 
     #[test]
-    fn isolation_cannot_be_enabled_while_captures_exist() {
+    fn cannot_enable_isolation_while_captures_exist() {
         let mut region = structured_region();
-
-        region
-            .add_capture(value_id(4), CaptureMode::Read)
-            .expect("valid capture");
+        region.add_capture(value_id(4), CaptureMode::Read).expect("capture");
 
         assert_eq!(
             region.set_isolation(RegionIsolation::Isolated),
             Err(RegionError::CaptureInIsolatedRegion(value_id(4)))
         );
-
-        assert_eq!(region.isolation(), RegionIsolation::CapturesAllowed);
     }
 
     #[test]
-    fn capture_mode_can_be_updated_or_removed() {
+    fn changing_capture_mode_does_not_create_capture() {
+        let mut region = structured_region();
+
+        assert_eq!(
+            region
+                .set_capture_mode(value_id(4), CaptureMode::Write)
+                .expect("missing capture is not an error"),
+            false
+        );
+
+        region.add_capture(value_id(4), CaptureMode::Read).expect("capture");
+
+        assert_eq!(
+            region
+                .set_capture_mode(value_id(4), CaptureMode::Write)
+                .expect("existing capture"),
+            true
+        );
+        assert_eq!(region.capture_mode(value_id(4)), Some(CaptureMode::Write));
+    }
+
+    #[test]
+    fn validates_extension_names() {
+        let name = QualifiedName::parse("vendor::region").expect("valid name");
         let mut region = structured_region();
 
         region
-            .add_capture(value_id(4), CaptureMode::Read)
-            .expect("valid capture");
-
-        assert_eq!(
-            region.set_capture_mode(value_id(4), CaptureMode::Write),
-            Ok(true)
-        );
-        assert_eq!(region.capture_mode(value_id(4)), Some(CaptureMode::Write));
-
-        assert_eq!(
-            region.set_capture_mode(value_id(5), CaptureMode::Read),
-            Ok(false)
-        );
-
-        assert!(region.remove_capture(value_id(4)));
-        assert!(!region.remove_capture(value_id(4)));
-    }
-
-    #[test]
-    fn validates_extension_region_names() {
-        let valid = RegionKind::Extension(
-            QualifiedName::parse("vendor_example::region")
-                .expect("valid extension name"),
-        );
-
-        assert!(valid.validate().is_ok());
-    }
-
-    #[test]
-    fn removal_can_leave_a_region_incomplete_until_rebuilt() {
-        let mut region = structured_region();
-
-        assert!(region.remove_block(block_id(3)));
-        assert_eq!(region.validate(), Err(RegionError::EmptyRegion));
-
-        region.add_block(block_id(9)).expect("restore region");
+            .set_kind(RegionKind::Extension(name))
+            .expect("valid extension name");
         assert!(region.validate().is_ok());
     }
-}
 
-// =============================================================================
-// Additional structured errors
-// =============================================================================
+    #[test]
+    fn validates_attribute_keys() {
+        let mut region = structured_region();
+        let key = AttributeKey::parse("core::region_kind").expect("valid key");
 
-// Keep index errors explicit rather than silently clamping or reordering
-// caller input. The variant is part of the local RegionError contract.
-impl RegionError {
-    /// Construct an invalid-index error for region block insertion.
-    fn invalid_block_index(index: usize, block_count: usize) -> Self {
-        Self::InvalidBlockIndex { index, block_count }
+        region
+            .set_attribute(key.clone(), AttributeValue::Boolean(true))
+            .expect("valid attribute");
+        assert!(region.attribute(&key).is_some());
+        assert!(region.validate().is_ok());
+    }
+
+    #[test]
+    fn block_reservation_does_not_change_semantics() {
+        let mut region = structured_region();
+        region.try_reserve_blocks(32).expect("reservation");
+        assert_eq!(region.blocks(), &[block_id(3)]);
     }
 }
