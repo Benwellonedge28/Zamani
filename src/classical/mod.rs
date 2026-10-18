@@ -1,159 +1,217 @@
 
 #![forbid(unsafe_code)]
 
-//! Zamani Classical Computing subsystem.
+//! # Zamani Classical Computing
 //!
-//! Path: `src/classical/mod.rs`
+//! Canonical path: `src/classical/mod.rs`
 //! Edition: Rust 2021
-//! Minimum intended Rust version: 1.97 or later.
+//! Minimum supported Rust version: 1.97
 //! Safety: Unsafe Rust is forbidden throughout this module tree.
 //!
-//! # Purpose
+//! ## Purpose
 //!
-//! Provide the canonical Rust module boundary for classical computation in
-//! Zamani. This file registers existing implementations and establishes
-//! stable paths for classical APIs, values, types, collections, algorithms,
-//! memory, expressions, control flow, concurrency, validation, optimization,
-//! lowering, interoperability, and execution planning.
+//! This module is the composition root for Zamani's classical-computing
+//! subsystem. It registers the existing classical modules and provides
+//! stable public paths for classical APIs, algorithms, types, values,
+//! memory, collections, expressions, control flow, concurrency,
+//! optimization, lowering, validation, interoperability, execution
+//! planning, and the ZCIR integration boundary.
 //!
-//! This module is a composition root. It is not an implementation of a
-//! compiler, interpreter, semantic analyzer, intermediate representation,
-//! scheduler, runtime, or hardware abstraction layer.
+//! This file registers modules; it does not implement a compiler,
+//! interpreter, semantic analyzer, IR, scheduler, or runtime.
 //!
-//! # Architectural authority
+//! ## Architectural authority
 //!
-//! Source syntax and grammar composition are owned by the grammar subsystem,
-//! including `grammar/Zamani.g4` and the canonical ANTLR grammar boundaries.
+//! The architecture must remain consistent with:
 //!
-//! Language meaning and portability are governed by the applicable language
-//! specifications, including:
-//!
+//! - `DESIGN.md`
+//! - `grammar/DESIGN.md`
+//! - `grammar/Zamani.g4`
+//! - `grammar/lexer/tokens.g4`
+//! - `grammar/antlr/ZamaniLexer.g4`
 //! - `grammar/specification/semantic-model.md`
 //! - `grammar/specification/scalability-model.md`
 //! - `grammar/specification/poco-reaf.md`
 //! - `grammar/validation/semantic-boundaries.md`
+//! - `src/zuir/ZUIR-SPEC.md`
 //!
-//! These specifications distinguish source semantics from target realization.
-//! Grammar defines syntax; it does not define runtime implementation details.
+//! The grammar owns source syntax. The frontend and semantic subsystem
+//! establish source-language meaning. The canonical IR represents
+//! validated computational meaning. Lowering, backends, and runtimes
+//! realize supported computations on actual targets.
 //!
-//! # Canonical ownership
+//! Grammar files do not determine Rust module registration, and registering
+//! a Rust module does not establish that the corresponding language feature
+//! is implemented.
 //!
-//! This module does not introduce a competing AST, semantic type system,
-//! source-map implementation, identity allocator, or intermediate
-//! representation.
+//! ## Canonical ownership
 //!
-//! Existing repository boundaries remain authoritative:
+//! This module does not define competing implementations of:
 //!
-//! - The frontend owns source AST and semantic analysis.
-//! - `crate::source_map` owns canonical source locations and source files.
-//! - `crate::zuir` owns the universal computation IR and its shared contracts,
-//!   where that subsystem is available and integrated.
-//! - `crate::quantum::ir` retains its existing canonical quantum IR.
-//! - `crate::quantum::ir::classical` retains its existing classical
-//!   computation representations used by that IR.
-//! - Compiler, optimizer, backend, and runtime subsystems own their respective
+//! - The source AST or semantic type system.
+//! - Source files, source spans, or source maps.
+//! - Canonical IR entities or their identity allocators.
+//! - Quantum IR entities or quantum/classical interoperability.
+//! - Backend selection, physical allocation, scheduling, or execution.
+//!
+//! The existing ownership boundaries are:
+//!
+//! - `crate::source_map`: legacy frontend source-location infrastructure.
+//! - `crate::quantum::ir`: canonical quantum intermediate representation.
+//! - `crate::quantum::ir::classical`: classical representations owned by
+//!   the quantum IR.
+//! - `crate::zuir`: canonical universal IR and shared IR contracts,
+//!   once its module tree is correctly registered and compilable.
+//! - `crate::classical::zcir`: classical-facing integration with ZUIR.
+//! - Compiler, optimizer, backend, and runtime modules: their respective
 //!   compilation and execution responsibilities.
 //!
-//! Classical modules may provide adapters, analysis, policies, algorithms,
-//! validation, and target-independent planning. They must not silently
-//! replace canonical types or redefine source-language semantics.
+//! ZCIR must not introduce a second IR graph, duplicate entity IDs,
+//! independent canonical serialization, or a competing semantic authority.
 //!
-//! # POCO-REAF and scalability
+//! ## POCO-REAF and scalability
 //!
-//! The classical subsystem must support programs across different machine
-//! sizes and supported computational targets without imposing arbitrary,
-//! universal semantic ceilings.
+//! The classical subsystem must support portable program meaning across
+//! supported targets and computational scales.
 //!
-//! This module defines no maximum for processor counts, thread counts,
-//! accelerator counts, memory capacity, collection length, tensor rank,
-//! operation counts, or distributed-node counts.
+//! This module imposes no universal maximum on processor counts, thread
+//! counts, accelerator counts, memory capacity, collection lengths,
+//! operation counts, register widths, tensor ranks, or node counts.
 //!
-//! Finite operational budgets and actual target limits remain valid when
-//! explicit, configurable where appropriate, and reported as operational or
-//! feasibility constraints rather than language-semantic restrictions.
+//! Actual compilation and execution remain subject to available resources,
+//! representational limits, target capabilities, implementation support,
+//! explicit operational budgets, and program requirements.
 //!
-//! No implementation can guarantee literally infinite execution: successful
-//! realization depends on available resources, target capabilities, program
-//! requirements, and the semantics that must be preserved.
+//! Configured work budgets are operational policies, not implicit changes
+//! to language semantics. Unsupported requirements must be reported
+//! explicitly rather than silently weakened.
 //!
-//! # Dependency direction
+//! POCO-REAF does not mean unlimited physical resources or guarantee that
+//! every target supports every computation.
+//!
+//! ## Dependency direction
 //!
 //! The intended architecture is:
 //!
-//! source -> frontend AST -> semantic model -> canonical IR -> optimization
-//! -> lowering and target planning -> backend/runtime execution
+//! ```text
+//! Zamani source and grammar
+//!           |
+//!           v
+//! Frontend AST and semantic model
+//!           |
+//!           v
+//! Canonical computational IR (ZUIR)
+//!           |
+//!           v
+//! Classical integration (ZCIR)
+//!           |
+//!           v
+//! Verification, analysis, legal transformations
+//!           |
+//!           v
+//! Lowering and target feasibility
+//!           |
+//!           v
+//! Backend and runtime
+//! ```
 //!
-//! Module registration here must not reverse that dependency direction.
-//! In particular, validation and planning modules must not become substitutes
-//! for the canonical frontend semantic model or canonical IR.
+//! This is an ownership and responsibility diagram, not a claim that every
+//! stage or target is already implemented.
 //!
-//! # Module contracts
+//! Classical adapters may depend on canonical IR contracts. The canonical
+//! IR must not depend on ZCIR merely to implement its shared infrastructure.
+//! Avoid dependency cycles between classical, quantum, and universal IR.
 //!
-//! Each registered module owns its documented responsibilities. This root
-//! owns module registration and the `crate::classical::*` namespace only.
+//! ## Module registration policy
 //!
-//! New child modules must be added only after their file exists, its ownership
-//! contract is documented, and its dependency direction has been reviewed.
-//! Do not register placeholder files as implementations.
+//! Every declared child module must have a corresponding Rust source file
+//! or explicitly configured module path. New modules must be registered
+//! only after their ownership, public API, dependencies, error behavior,
+//! scalability properties, and integration tests have been reviewed.
 //!
-//! # Integration
+//! This root owns registration and namespace composition only.
 //!
-//! The crate root must declare `pub mod classical;` for downstream code to
-//! access this subsystem through `crate::classical`.
+//! ## Integration requirements
 //!
-//! The `span` module currently uses the existing `span.r` path because that
-//! is the filename in the repository. Rename that file to `span.rs` in a
-//! separate, reviewed change if the repository is ready to correct the path.
+//! 1. `src/lib.rs` must declare `pub mod classical;` exactly once.
+//! 2. `src/lib.rs` must declare `pub mod zuir;` exactly once when the
+//!    ZUIR module tree and all of its dependencies compile.
+//! 3. Every module declared by `src/zuir/mod.rs` must exist and compile.
+//! 4. ZCIR must reuse canonical ZUIR entities, IDs, verification,
+//!    serialization, and pass contracts where those APIs apply.
+//! 5. `src/quantum/ir/classical/` must retain its established ownership.
+//! 6. The legacy frontend and legacy IR must not be silently treated as
+//!    equivalent to the newer semantic model or ZUIR representation.
+//! 7. No module may be registered merely to conceal a missing implementation.
+//! 8. Public API changes must be checked against existing repository callers.
 //!
-//! # Verification status
+//! The grammar and semantic specifications define language-level contracts;
+//! this module only connects existing Rust implementations to those contracts.
 //!
-//! This module root registers the existing Rust module boundaries. Its
-//! registration alone does not establish that every child module compiles or
-//! that the subsystem is production-ready. The complete workspace must pass
-//! the required build, test, formatting, lint, and integration checks.
+//! ## Freeze criteria
+//!
+//! This file is ready to freeze when:
+//!
+//! - Every registered production module resolves.
+//! - ZCIR and ZUIR compile together through the actual crate root.
+//! - Existing classical and quantum integration paths remain compatible.
+//! - The module tree introduces no duplicate canonical types or IDs.
+//! - Rust 1.97 compatibility and the no-unsafe policy are maintained.
+//! - Formatting, compilation, tests, lint, and relevant integration checks pass.
+//!
+//! A successful module registration alone does not establish production
+//! readiness or full POCO-REAF support.
 
-/// Stable public API for classical subsystem configuration and
-/// compatibility operations.
+// ---------------------------------------------------------------------------
+// Classical public API and foundational contracts
+// ---------------------------------------------------------------------------
+
+/// Stable classical-facing API.
 pub mod api;
-
-/// Generic classical algorithms.
-pub mod algorithms;
-
-/// Classical collections and collection adapters.
-pub mod collections;
 
 /// Artifact and consumer compatibility contracts.
 pub mod compatibility;
 
-/// Classical concurrency contracts and primitives.
-pub mod concurrency;
-
-/// Target-independent classical configuration and operational budgets.
+/// Target-independent configuration and operational budgets.
 pub mod config;
 
-/// Classical control-flow planning.
-pub mod control_flow;
-
-/// Structured classical diagnostics and diagnostic adapters.
+/// Structured classical diagnostics.
 pub mod diagnostics;
 
 /// Classical error taxonomy and result types.
 pub mod error;
+
+/// Canonical identity facade for classical consumers.
+pub mod ids;
+
+/// Compilation provenance and lineage contracts.
+pub mod provenance;
+
+/// Source-span integration using the existing `span.r` file.
+#[path = "span.r"]
+pub mod span;
+
+// ---------------------------------------------------------------------------
+// Classical computational facilities
+// ---------------------------------------------------------------------------
+
+/// Generic classical algorithms.
+pub mod algorithms;
+
+/// Classical collection implementations and adapters.
+pub mod collections;
+
+/// Classical concurrency contracts and primitives.
+pub mod concurrency;
+
+/// Classical control-flow planning.
+pub mod control_flow;
 
 /// Classical execution planning and capability/resource requirements.
 pub mod execution;
 
 /// Classical expression analysis and transformation adapters.
 pub mod expressions;
-
-/// Canonical identity facade for classical consumers.
-pub mod ids;
-
-/// Classical interoperability contracts and adapters.
-pub mod interoperability;
-
-/// Target-independent classical lowering adapters.
-pub mod lowering;
 
 /// Classical memory contracts and memory-related adapters.
 pub mod memory;
@@ -164,25 +222,39 @@ pub mod numeric;
 /// Classical optimization planning and legality contracts.
 pub mod optimization;
 
-/// Compilation provenance and lineage contracts.
-pub mod provenance;
-
 /// Classical type adapters and type-related contracts.
 pub mod types;
 
 /// Classical value operations and canonical value adapters.
 pub mod values;
 
+// ---------------------------------------------------------------------------
+// Integration boundaries
+// ---------------------------------------------------------------------------
+
+/// Classical interoperability contracts and adapters.
+pub mod interoperability;
+
+/// Target-independent classical lowering adapters.
+pub mod lowering;
+
 /// Classical validation aggregation boundary.
 pub mod validation;
 
-/// Source-span integration using the existing repository filename.
+/// Zamani Classical Intermediate Representation integration.
 ///
-/// `span.r` currently contains Rust source but does not have the conventional
-/// `.rs` extension. This explicit path keeps the module discoverable without
-/// inventing a second source-span implementation.
-#[path = "span.r"]
-pub mod span;
+/// ZCIR is the classical-facing boundary over canonical ZUIR. It must not
+/// introduce an independent IR graph, type authority, identity allocator,
+/// or canonical serialization implementation.
+///
+/// The ZCIR module tree depends on the actual ZUIR APIs and must not be
+/// considered integrated until the crate root and all upstream modules
+/// compile successfully.
+pub mod zcir;
+
+// ---------------------------------------------------------------------------
+// Internal tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests;
