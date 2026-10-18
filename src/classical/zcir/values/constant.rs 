@@ -1,0 +1,398 @@
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_debug_implementations)]
+
+//! # ZCIR Classical Constant Integration
+//!
+//! Path: `src/classical/zcir/values/constant.rs`
+//! Edition: Rust 2021
+//! Minimum supported Rust version: 1.97
+//! Safety: unsafe Rust is forbidden.
+//!
+//! ## Purpose
+//!
+//! Expose the canonical ZUIR constant representation through the ZCIR
+//! classical-value API without defining a competing constant model.
+//!
+//! Classical computation requires portable representations of booleans,
+//! integers, floating-point bit patterns, exact decimals, strings, bytes,
+//! aggregates, symbolic values, and extension-defined values. The canonical
+//! implementation of these representations already belongs to ZUIR.
+//!
+//! This module therefore provides:
+//!
+//! - Stable ZCIR import paths for canonical constant types.
+//! - Explicit validation entry points for constants and constant values.
+//! - Access to configurable validation budgets.
+//! - A clear boundary between representation validation and semantic checks.
+//!
+//! ## Authority
+//!
+//! The following components retain their existing ownership:
+//!
+//! - `crate::zuir::values::constants` owns constant representations and
+//!   local representation validation.
+//! - `crate::zuir::types::type_def` owns canonical semantic type references.
+//! - The frontend AST owns source literal syntax and source locations.
+//! - The semantic model owns source-language meaning and type compatibility.
+//! - The expression subsystem owns symbolic expressions and evaluation.
+//! - ZUIR owns canonical IR-level value integration.
+//! - Verification owns whole-program invariants.
+//! - Lowering owns target-specific representations and feasibility checks.
+//!
+//! The relevant language contracts include:
+//!
+//! - `grammar/Zamani.g4`
+//! - `grammar/specification/semantic-model.md`
+//! - `grammar/specification/scalability-model.md`
+//! - `grammar/specification/poco-reaf.md`
+//! - `grammar/lexer/numeric-literals.g4`
+//! - `src/zuir/ZUIR-SPEC.md`
+//!
+//! ## Ownership
+//!
+//! This file owns only the ZCIR-facing integration boundary.
+//!
+//! It does not define another `Constant`, `ConstantValue`, numeric wrapper,
+//! aggregate representation, validation-error hierarchy, or budget type.
+//!
+//! It does not parse numeric source spellings, resolve names, infer types,
+//! evaluate constants, allocate memory on behalf of a target, or lower
+//! constants into machine-specific representations.
+//!
+//! ## POCO-REAF and scalability
+//!
+//! No universal limit on integer width, decimal precision, aggregate length,
+//! string length, byte length, or number of constants is introduced here.
+//!
+//! Arbitrary-width values retain their canonical representations. No
+//! conversion through native Rust numeric types is performed implicitly.
+//!
+//! The canonical validation API accepts explicit operational budgets.
+//! An absent configured budget does not promise infinite memory, execution
+//! time, address space, or physical resources.
+//!
+//! Exhausted budgets must be reported by the canonical validator rather
+//! than interpreted as semantic invalidity or silently ignored.
+//!
+//! ## Validation boundary
+//!
+//! Successful local validation establishes only that the constant's
+//! representation satisfies the canonical representation invariants.
+//!
+//! It does not establish:
+//!
+//! - That the declared type reference resolves.
+//! - That the value is compatible with its declared type.
+//! - That a symbolic expression can be evaluated.
+//! - That an extension is registered or trusted.
+//! - That an execution target supports the value.
+//! - That a target has sufficient resources to realize it.
+//!
+//! Those checks belong to their respective authoritative subsystems.
+//!
+//! ## Integration contract
+//!
+//! `src/classical/zcir/values/mod.rs` declares this module and may re-export
+//! the public items below.
+//!
+//! The ZCIR module root must register the completed values module only after
+//! the corresponding source files and exports exist.
+//!
+//! `values/integer.rs`, `values/float.rs`, `values/aggregate.rs`, and
+//! `values/symbolic.rs` must reuse these canonical types. They must not
+//! introduce competing value enums or incompatible validation rules.
+//!
+//! Frontend semantic analysis supplies the canonical type reference.
+//! ZCIR construction preserves the supplied type and value. The canonical
+//! type verifier subsequently checks their semantic compatibility.
+//!
+//! ## Freeze criteria
+//!
+//! - Canonical value types are reused without duplication.
+//! - Validation delegates to the authoritative ZUIR implementation.
+//! - Explicit budgets are passed through unchanged.
+//! - No host-width conversion or implicit numeric normalization occurs.
+//! - No target-specific dependency or hardware assumption is introduced.
+//! - The module compiles after its parent module is integrated.
+//! - Unit and cross-module tests pass on the declared Rust baseline.
+
+use crate::zuir::values::constants::{
+    ArbitraryInteger,
+    Constant,
+    ConstantValidationBudget,
+    ConstantValidationError,
+    ConstantValue,
+    ExactDecimal,
+    ExtensionConstant,
+    FloatBits,
+};
+
+// =============================================================================
+// Canonical public types
+// =============================================================================
+
+/// Canonical typed constant.
+///
+/// The declared type is a canonical ZUIR `TypeRef`. Local constant
+/// validation does not prove semantic type compatibility.
+pub use crate::zuir::values::constants::Constant as ZcirConstant;
+
+/// Canonical constant-value representation.
+///
+/// This is a re-export of the ZUIR value enum, not a separate ZCIR enum.
+pub use crate::zuir::values::constants::ConstantValue as ZcirConstantValue;
+
+/// Canonical arbitrary-width integer representation.
+pub use crate::zuir::values::constants::ArbitraryInteger as ZcirInteger;
+
+/// Canonical floating-point format and bit-pattern representation.
+pub use crate::zuir::values::constants::FloatBits as ZcirFloatBits;
+
+/// Canonical exact-decimal representation.
+pub use crate::zuir::values::constants::ExactDecimal as ZcirExactDecimal;
+
+/// Canonical extension-defined constant representation.
+pub use crate::zuir::values::constants::ExtensionConstant as ZcirExtensionConstant;
+
+/// Canonical operational validation budget.
+pub use crate::zuir::values::constants::ConstantValidationBudget
+    as ZcirConstantValidationBudget;
+
+/// Canonical representation-validation error.
+pub use crate::zuir::values::constants::ConstantValidationError
+    as ZcirConstantValidationError;
+
+// =============================================================================
+// Validation entry points
+// =============================================================================
+
+/// Validate a typed constant's canonical value representation.
+///
+/// This function delegates to ZUIR and introduces no additional validation
+/// budget. It does not resolve or verify the constant's semantic type.
+///
+/// # Errors
+///
+/// Returns the canonical ZUIR validation error if the value representation
+/// is malformed or the validator encounters an implementation failure
+/// represented by its error contract.
+pub fn validate_constant(
+    constant: &Constant,
+) -> Result<(), ConstantValidationError> {
+    constant.validate()
+}
+
+/// Validate a typed constant under an explicit operational budget.
+///
+/// The supplied budget is passed to the canonical implementation unchanged.
+/// An exhausted budget is reported using the canonical error variant.
+///
+/// # Errors
+///
+/// Returns a canonical representation-validation or budget-exhaustion
+/// error.
+pub fn validate_constant_with(
+    constant: &Constant,
+    budget: &ConstantValidationBudget,
+) -> Result<(), ConstantValidationError> {
+    constant.validate_with(budget)
+}
+
+/// Validate a constant value without imposing an additional configured
+/// node-count or text-byte budget.
+///
+/// This validates the local representation only. It does not evaluate
+/// symbolic values or verify compatibility with a semantic type.
+///
+/// # Errors
+///
+/// Returns a canonical representation-validation error.
+pub fn validate_value(
+    value: &ConstantValue,
+) -> Result<(), ConstantValidationError> {
+    value.validate()
+}
+
+/// Validate a constant value using an explicit operational budget.
+///
+/// The canonical validator determines how nodes and encoded text contribute
+/// to the budget. This adapter neither modifies nor overrides that policy.
+///
+/// # Errors
+///
+/// Returns a canonical representation-validation or budget-exhaustion
+/// error.
+pub fn validate_value_with(
+    value: &ConstantValue,
+    budget: &ConstantValidationBudget,
+) -> Result<(), ConstantValidationError> {
+    value.validate_with(budget)
+}
+
+// =============================================================================
+// Public API contract tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zcir_constant_value_is_the_canonical_z uir_value_type() {
+        // This test deliberately uses the canonical representation.
+        // ZCIR must not introduce a second value enum.
+        let canonical = ConstantValue::Boolean(true);
+        let zcir: ZcirConstantValue = canonical.clone();
+
+        assert_eq!(zcir, canonical);
+        assert!(validate_value(&zcir).is_ok());
+    }
+
+    #[test]
+    fn accepts_arbitrary_width_integer_representation() {
+        // No conversion to u64, u128, usize, or a native register width.
+        let digits = "9".repeat(1_000);
+        let integer = ArbitraryInteger::new(digits.clone())
+            .expect("a canonical positive decimal integer should be valid");
+
+        assert_eq!(integer.as_str(), digits);
+        assert!(integer.validate().is_ok());
+    }
+
+    #[test]
+    fn validates_boolean_constant_value() {
+        assert!(validate_value(&ConstantValue::Boolean(true)).is_ok());
+        assert!(validate_value(&ConstantValue::Boolean(false)).is_ok());
+    }
+
+    #[test]
+    fn validates_empty_sequence() {
+        let value = ConstantValue::Sequence(Vec::new());
+
+        assert!(validate_value(&value).is_ok());
+    }
+
+    #[test]
+    fn preserves_ordered_sequence_elements() {
+        let value = ConstantValue::Sequence(vec![
+            ConstantValue::Boolean(true),
+            ConstantValue::Boolean(false),
+            ConstantValue::Boolean(true),
+        ]);
+
+        assert!(validate_value(&value).is_ok());
+
+        match value {
+            ConstantValue::Sequence(values) => {
+                assert_eq!(values.len(), 3);
+                assert_eq!(values[0], ConstantValue::Boolean(true));
+                assert_eq!(values[1], ConstantValue::Boolean(false));
+                assert_eq!(values[2], ConstantValue::Boolean(true));
+            }
+            _ => panic!("the canonical sequence representation was not preserved"),
+        }
+    }
+
+    #[test]
+    fn accepts_explicit_unlimited_validation_budget() {
+        let budget = ConstantValidationBudget::unlimited();
+        let value = ConstantValue::Boolean(true);
+
+        assert!(validate_value_with(&value, &budget).is_ok());
+    }
+
+    #[test]
+    fn reports_explicit_budget_exhaustion() {
+        let budget = ConstantValidationBudget::new(Some(0), None);
+        let value = ConstantValue::Boolean(true);
+
+        assert_eq!(
+            validate_value_with(&value, &budget),
+            Err(ConstantValidationError::NodeBudgetExceeded),
+        );
+    }
+
+    #[test]
+    fn explicit_text_budget_is_enforced_by_canonical_validator() {
+        let budget = ConstantValidationBudget::new(None, Some(0));
+        let value = ConstantValue::String("x".to_owned());
+
+        assert_eq!(
+            validate_value_with(&value, &budget),
+            Err(ConstantValidationError::TextBudgetExceeded),
+        );
+    }
+
+    #[test]
+    fn canonical_integer_constructor_rejects_noncanonical_encoding() {
+        // The adapter must preserve canonical validation rather than
+        // normalizing malformed input or accepting it silently.
+        assert_eq!(
+            ArbitraryInteger::new("01"),
+            Err(ConstantValidationError::InvalidInteger),
+        );
+
+        assert_eq!(
+            ArbitraryInteger::new("-0"),
+            Err(ConstantValidationError::InvalidInteger),
+        );
+    }
+
+    #[test]
+    fn preserves_float_format_and_bit_pattern() {
+        let value = FloatBits::new("core::binary_format", "3ff")
+            .expect("a nonempty format and valid hexadecimal bits");
+
+        assert_eq!(value.format, "core::binary_format");
+        assert_eq!(value.bits_hex, "3ff");
+        assert!(value.validate().is_ok());
+    }
+
+    #[test]
+    fn validates_exact_decimal_without_native_float_conversion() {
+        let coefficient = ArbitraryInteger::new("125")
+            .expect("canonical coefficient");
+        let exponent = ArbitraryInteger::new("-2")
+            .expect("canonical exponent");
+
+        let decimal = ExactDecimal::new(coefficient, exponent)
+            .expect("valid exact decimal representation");
+
+        assert_eq!(decimal.coefficient.as_str(), "125");
+        assert_eq!(decimal.exponent.as_str(), "-2");
+        assert!(decimal.validate().is_ok());
+    }
+
+    #[test]
+    fn validates_extension_value_without_executing_it() {
+        let extension = ExtensionConstant::new(
+            "org.example.numeric",
+            "extended_value",
+            "1",
+            "00ff",
+        )
+        .expect("valid opaque extension representation");
+
+        assert_eq!(extension.namespace, "org.example.numeric");
+        assert_eq!(extension.name, "extended_value");
+        assert_eq!(extension.version, "1");
+        assert_eq!(extension.payload_hex, "00ff");
+    }
+
+    #[test]
+    fn repeated_validation_is_deterministic() {
+        let value = ConstantValue::Sequence(vec![
+            ConstantValue::Integer(
+                ArbitraryInteger::new("123456789012345678901234567890")
+                    .expect("valid arbitrary-width integer"),
+            ),
+            ConstantValue::String("portable".to_owned()),
+        ]);
+
+        assert_eq!(validate_value(&value), Ok(()));
+        assert_eq!(validate_value(&value), Ok(()));
+    }
+}
