@@ -1,0 +1,442 @@
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+//! # ZCIR scalar type adapter
+//!
+//! Path: `src/classical/zcir/types/scalar.rs`
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
+//! Safety: unsafe Rust is forbidden.
+//!
+//! ## Purpose
+//!
+//! Provide a validated, classical-facing view of scalar semantic types
+//! without introducing a competing ZCIR or classical type system.
+//!
+//! The canonical type representation is `crate::zuir::types::TypeKind`.
+//! This module wraps that representation and checks invariants that can be
+//! validated locally. It does not infer types, resolve names, evaluate
+//! symbolic expressions, or determine whether a target supports a type.
+//!
+//! ## Authority
+//!
+//! - `crate::zuir::types::TypeKind` owns canonical semantic type variants.
+//! - `crate::zuir::types::IntegerSignedness` owns integer signedness.
+//! - `crate::zuir::types::IntegerWidth` owns integer width semantics.
+//! - `crate::zuir::types::SymbolicExpression` owns the canonical symbolic
+//!   expression representation.
+//! - The language semantic model owns the meaning of source types.
+//! - The target-specific lowering layer owns physical representation,
+//!   ABI, and target feasibility.
+//!
+//! ## Owns
+//!
+//! - `ScalarTypeDescriptor`, a validated adapter over a canonical type.
+//! - Scalar classification and local scalar invariants.
+//! - Structured errors for local scalar validation.
+//!
+//! ## Does not own
+//!
+//! - A duplicate semantic type enum or type identity system.
+//! - Source type syntax, AST nodes, or semantic analysis.
+//! - Type inference, unification, generic substitution, or name resolution.
+//! - Numeric values, arithmetic, or floating-point execution semantics.
+//! - Aggregate layout, physical widths, registers, or memory allocation.
+//! - Target capability discovery, lowering, or runtime execution.
+//! - Global registries, mutable global state, or resource budgets.
+//!
+//! ## Scalability and POCO-REAF
+//!
+//! This module imposes no arbitrary maximum scalar width or type count.
+//! Integer widths remain represented by the canonical `IntegerWidth`,
+//! including symbolic and unbounded widths.
+//!
+//! A fixed width of zero is rejected as invalid. This is a semantic
+//! invariant, not a hardware capacity limit.
+//!
+//! The canonical width representation uses `u128` for fixed widths. This
+//! is a finite representation of an explicit width, not a universal maximum
+//! on the number of bits a language-level symbolic integer may describe.
+//! Widths outside that representation must remain symbolic or be handled
+//! by a separately specified canonical representation; they must not be
+//! silently truncated.
+//!
+//! Validation here does not establish that a physical target can realize
+//! a scalar type. Unsupported representations must be reported by the
+//! responsible downstream verifier or lowering stage.
+//!
+//! ## Integration
+//!
+//! - `src/classical/zcir/types/mod.rs` declares `pub mod scalar;`.
+//! - ZCIR consumers import `ScalarTypeDescriptor` from this module.
+//! - The descriptor contains the canonical `TypeKind`; it does not create
+//!   a new semantic identity or serialized type format.
+//! - Frontend semantic analysis remains responsible for constructing the
+//!   correct canonical type from resolved source semantics.
+//! - The canonical type subsystem remains authoritative for type meaning.
+//! - `src/classical/types/scalar.rs` remains a separate existing API.
+//!   Conversion between the two descriptor APIs must be explicit and must
+//!   preserve all information; this file does not guess a conversion.
+//! - Layout, capability checks, and lowering remain downstream.
+//!
+//! ## Freeze criteria
+//!
+//! - All imports resolve to the existing canonical ZUIR type API.
+//! - Only canonical type definitions are stored.
+//! - Invalid fixed widths and empty symbolic expressions are rejected.
+//! - Non-scalar variants are rejected by this descriptor.
+//! - Tests cover valid, invalid, symbolic, unbounded, and extensible cases.
+//! - The complete repository passes formatting, compilation, tests, and
+//!   linting before this file is declared integration-verified.
+
+use core::fmt;
+
+use crate::zuir::types::{
+    IntegerSignedness, IntegerWidth, SymbolicExpression, TypeKind,
+};
+
+/// A validated view of a canonical scalar semantic type.
+///
+/// This is an adapter, not a new semantic type system. The wrapped
+/// `TypeKind` remains the canonical representation and retains its
+/// complete semantic information.
+///
+/// Construction validates only the invariants documented by this module.
+/// It does not establish that named types exist, that the complete program
+/// is well typed, or that a target supports the type.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScalarTypeDescriptor {
+    kind: TypeKind,
+}
+
+impl ScalarTypeDescriptor {
+    /// Construct a descriptor after checking scalar-specific invariants.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ScalarTypeError::NotScalar` for aggregate, function,
+    /// reference, dialect, quantum, hardware, or other non-scalar kinds.
+    ///
+    /// Returns a validation error for a zero-width fixed integer or an
+    /// empty symbolic integer-width expression.
+    ///
+    /// Returns `ScalarTypeError::InvalidFormatName` when a float or decimal
+    /// format name fails canonical qualified-name validation.
+    pub fn new(kind: TypeKind) -> Result<Self, ScalarTypeError> {
+        validate_scalar_kind(&kind)?;
+        Ok(Self { kind })
+    }
+
+    /// Return the canonical semantic type.
+    ///
+    /// The returned reference points to the canonical `TypeKind` stored by
+    /// this adapter. No conversion or information loss occurs.
+    #[must_use]
+    pub const fn canonical_kind(&self) -> &TypeKind {
+        &self.kind
+    }
+
+    /// Consume the descriptor and return its canonical semantic type.
+    #[must_use]
+    pub fn into_canonical_kind(self) -> TypeKind {
+        self.kind
+    }
+
+    /// Return whether the scalar is an integer type.
+    #[must_use]
+    pub const fn is_integer(&self) -> bool {
+        matches!(self.kind, TypeKind::Integer { .. })
+    }
+
+    /// Return whether the scalar is a Boolean type.
+    #[must_use]
+    pub const fn is_boolean(&self) -> bool {
+        matches!(self.kind, TypeKind::Boolean)
+    }
+
+    /// Return whether the scalar is a floating-point type.
+    #[must_use]
+    pub const fn is_float(&self) -> bool {
+        matches!(self.kind, TypeKind::Float { .. })
+    }
+
+    /// Return whether the scalar is a decimal type.
+    #[must_use]
+    pub const fn is_decimal(&self) -> bool {
+        matches!(self.kind, TypeKind::Decimal { .. })
+    }
+
+    /// Return integer signedness when this descriptor represents an integer.
+    #[must_use]
+    pub const fn integer_signedness(&self) -> Option<IntegerSignedness> {
+        match &self.kind {
+            TypeKind::Integer { signedness, .. } => Some(*signedness),
+            _ => None,
+        }
+    }
+
+    /// Return the canonical integer width when this descriptor represents
+    /// an integer.
+    ///
+    /// The result may be fixed, symbolic, or unbounded. This method never
+    /// substitutes the host architecture's width.
+    #[must_use]
+    pub const fn integer_width(&self) -> Option<&IntegerWidth> {
+        match &self.kind {
+            TypeKind::Integer { width, .. } => Some(width),
+            _ => None,
+        }
+    }
+
+    /// Return the canonical floating-point format name, if applicable.
+    #[must_use]
+    pub fn float_format(&self) -> Option<&crate::zuir::schema::types::QualifiedName> {
+        match &self.kind {
+            TypeKind::Float { format } => Some(format),
+            _ => None,
+        }
+    }
+
+    /// Return the canonical decimal format name, if applicable.
+    #[must_use]
+    pub fn decimal_format(&self) -> Option<&crate::zuir::schema::types::QualifiedName> {
+        match &self.kind {
+            TypeKind::Decimal { format } => Some(format),
+            _ => None,
+        }
+    }
+
+    /// Revalidate the descriptor.
+    ///
+    /// This is useful at trust boundaries after data has been deserialized
+    /// or assembled by code that bypasses this constructor.
+    pub fn validate(&self) -> Result<(), ScalarTypeError> {
+        validate_scalar_kind(&self.kind)
+    }
+}
+
+/// Validate the scalar-specific invariants of a canonical semantic type.
+///
+/// This function deliberately accepts the canonical `TypeKind` directly,
+/// allowing callers to validate before creating a descriptor.
+pub fn validate_scalar_kind(kind: &TypeKind) -> Result<(), ScalarTypeError> {
+    match kind {
+        TypeKind::Never
+        | TypeKind::Unit
+        | TypeKind::Boolean
+        | TypeKind::String
+        | TypeKind::Bytes => Ok(()),
+
+        TypeKind::Integer { width, .. } => validate_integer_width(width),
+
+        TypeKind::Float { format } | TypeKind::Decimal { format } => {
+            format
+                .validate()
+                .map_err(|_| ScalarTypeError::InvalidFormatName)
+        }
+
+        // TypeKind is intentionally extensible. A type added by a later
+        // version is not presumed to be scalar without an explicit rule.
+        _ => Err(ScalarTypeError::NotScalar),
+    }
+}
+
+fn validate_integer_width(width: &IntegerWidth) -> Result<(), ScalarTypeError> {
+    match width {
+        IntegerWidth::Unbounded => Ok(()),
+
+        IntegerWidth::Fixed(0) => Err(ScalarTypeError::ZeroIntegerWidth),
+
+        IntegerWidth::Fixed(_) => Ok(()),
+
+        IntegerWidth::Symbolic(expression) => validate_symbolic_expression(expression),
+    }
+}
+
+fn validate_symbolic_expression(
+    expression: &SymbolicExpression,
+) -> Result<(), ScalarTypeError> {
+    if expression.expression.trim().is_empty() {
+        return Err(ScalarTypeError::EmptySymbolicWidth);
+    }
+
+    Ok(())
+}
+
+/// Errors raised by local scalar descriptor validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScalarTypeError {
+    /// The canonical type is not one of the scalar kinds supported here.
+    NotScalar,
+
+    /// A fixed integer width of zero was supplied.
+    ZeroIntegerWidth,
+
+    /// A symbolic integer width has no expression.
+    EmptySymbolicWidth,
+
+    /// A floating-point or decimal format name is invalid.
+    InvalidFormatName,
+}
+
+impl fmt::Display for ScalarTypeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotScalar => {
+                f.write_str("canonical type is not a supported scalar type")
+            }
+            Self::ZeroIntegerWidth => {
+                f.write_str("fixed integer width must be greater than zero")
+            }
+            Self::EmptySymbolicWidth => {
+                f.write_str("symbolic integer width expression must not be empty")
+            }
+            Self::InvalidFormatName => {
+                f.write_str("scalar format name is invalid")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ScalarTypeError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::zuir::schema::types::QualifiedName;
+
+    fn name(value: &str) -> QualifiedName {
+        QualifiedName::parse(value).expect("test qualified name should be valid")
+    }
+
+    #[test]
+    fn accepts_boolean_and_unit_types() {
+        assert!(ScalarTypeDescriptor::new(TypeKind::Boolean).is_ok());
+        assert!(ScalarTypeDescriptor::new(TypeKind::Unit).is_ok());
+    }
+
+    #[test]
+    fn accepts_valid_fixed_integer_width() {
+        let descriptor = ScalarTypeDescriptor::new(TypeKind::Integer {
+            signedness: IntegerSignedness::Signed,
+            width: IntegerWidth::Fixed(127),
+        })
+        .expect("positive fixed width should be valid");
+
+        assert!(descriptor.is_integer());
+        assert_eq!(
+            descriptor.integer_signedness(),
+            Some(IntegerSignedness::Signed)
+        );
+        assert_eq!(
+            descriptor.integer_width(),
+            Some(&IntegerWidth::Fixed(127))
+        );
+    }
+
+    #[test]
+    fn rejects_zero_integer_width() {
+        let result = ScalarTypeDescriptor::new(TypeKind::Integer {
+            signedness: IntegerSignedness::Unsigned,
+            width: IntegerWidth::Fixed(0),
+        });
+
+        assert_eq!(result, Err(ScalarTypeError::ZeroIntegerWidth));
+    }
+
+    #[test]
+    fn accepts_unbounded_integer_width() {
+        let descriptor = ScalarTypeDescriptor::new(TypeKind::Integer {
+            signedness: IntegerSignedness::Signless,
+            width: IntegerWidth::Unbounded,
+        })
+        .expect("unbounded integer semantics should be preserved");
+
+        assert_eq!(
+            descriptor.integer_width(),
+            Some(&IntegerWidth::Unbounded)
+        );
+    }
+
+    #[test]
+    fn accepts_symbolic_integer_width_without_evaluating_it() {
+        let expression = SymbolicExpression {
+            expression: "N + 1".to_owned(),
+        };
+
+        let descriptor = ScalarTypeDescriptor::new(TypeKind::Integer {
+            signedness: IntegerSignedness::Unsigned,
+            width: IntegerWidth::Symbolic(expression.clone()),
+        })
+        .expect("non-empty symbolic width should be preserved");
+
+        assert_eq!(
+            descriptor.integer_width(),
+            Some(&IntegerWidth::Symbolic(expression))
+        );
+    }
+
+    #[test]
+    fn rejects_empty_symbolic_integer_width() {
+        let result = ScalarTypeDescriptor::new(TypeKind::Integer {
+            signedness: IntegerSignedness::Unsigned,
+            width: IntegerWidth::Symbolic(SymbolicExpression {
+                expression: "   ".to_owned(),
+            }),
+        });
+
+        assert_eq!(result, Err(ScalarTypeError::EmptySymbolicWidth));
+    }
+
+    #[test]
+    fn accepts_valid_float_and_decimal_formats() {
+        let float = ScalarTypeDescriptor::new(TypeKind::Float {
+            format: name("core::binary_float"),
+        })
+        .expect("valid float format should be accepted");
+
+        let decimal = ScalarTypeDescriptor::new(TypeKind::Decimal {
+            format: name("core::decimal"),
+        })
+        .expect("valid decimal format should be accepted");
+
+        assert!(float.is_float());
+        assert!(decimal.is_decimal());
+    }
+
+    #[test]
+    fn rejects_aggregate_types() {
+        let result = ScalarTypeDescriptor::new(TypeKind::Tuple {
+            elements: Vec::new(),
+        });
+
+        assert_eq!(result, Err(ScalarTypeError::NotScalar));
+    }
+
+    #[test]
+    fn preserves_the_canonical_type_without_reencoding() {
+        let original = TypeKind::Integer {
+            signedness: IntegerSignedness::Unsigned,
+            width: IntegerWidth::Symbolic(SymbolicExpression {
+                expression: "width_parameter".to_owned(),
+            }),
+        };
+
+        let descriptor = ScalarTypeDescriptor::new(original.clone())
+            .expect("valid scalar descriptor");
+
+        assert_eq!(descriptor.canonical_kind(), &original);
+        assert_eq!(descriptor.into_canonical_kind(), original);
+    }
+
+    #[test]
+    fn validation_is_repeatable() {
+        let descriptor = ScalarTypeDescriptor::new(TypeKind::Bytes)
+            .expect("bytes should be accepted as a scalar value type");
+
+        assert_eq!(descriptor.validate(), Ok(()));
+        assert_eq!(descriptor.validate(), Ok(()));
+    }
+}
