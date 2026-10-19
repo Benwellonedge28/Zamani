@@ -12,11 +12,9 @@
 //!
 //! ## Purpose
 //!
-//! Define the engine-independent contract for starting, advancing, observing,
-//! and controlling HDL simulations.
-//!
-//! This module is an interface and orchestration boundary. It is not an event
-//! kernel, a hardware model, a parser, a semantic analyzer, or an IR.
+//! Define the engine-independent lifecycle and execution contract for HDL
+//! simulations: engine startup, session advancement, observation, cancellation,
+//! operational budgets, and structured run outcomes.
 //!
 //! ## Authority
 //!
@@ -24,82 +22,67 @@
 //! - `grammar/spec/hdl.md`
 //! - `grammar/hdl/hdl.g4`
 //! - `grammar/hdl/simulation.g4`
+//! - `grammar/execution/simulation.g4`
 //! - `src/frontend/parser/domains/hdl.rs`
 //! - `src/frontend/semantic/domains/hdl.rs`
 //!
-//! The grammar defines source syntax and simulation intent. The canonical AST
-//! owns source structure. The semantic layer owns source-level correctness.
-//! A simulation engine owns execution semantics and its internal event model.
+//! The grammar owns source syntax. The canonical AST owns source structure.
+//! The semantic layer owns source-level validation. An engine owns its
+//! execution model and the meaning of its simulation events.
 //!
-//! ## Ownership
+//! ## Owns
 //!
-//! This module owns:
-//!
-//! - The engine/session integration traits.
-//! - Simulation execution configuration.
+//! - Engine and session integration traits.
 //! - Cooperative cancellation.
 //! - Explicit execution budgets.
-//! - Structured run outcomes and counters.
+//! - Per-run counters and terminal statuses.
 //! - A generic driver for advancing a simulation session.
 //!
-//! This module does not own:
+//! ## Does not own
 //!
 //! - The canonical AST or semantic model.
 //! - HDLIR or any other intermediate representation.
-//! - Event-queue implementation or event ordering rules.
-//! - Logic evaluation, signal storage, or memory models.
-//! - Clock generation, numerical solvers, or waveform storage.
-//! - Formal verification or assertion evaluation.
-//! - Target discovery, synthesis, placement, or routing.
-//! - Physical resource allocation or vendor-specific APIs.
+//! - Event-queue storage or HDL event-region semantics.
+//! - Logic evaluation, signal storage, memories, clocks, or resets.
+//! - Assertions, formal verification, or proof results.
+//! - Target selection, synthesis, placement, routing, or hardware allocation.
+//! - Waveform storage or a universal snapshot representation.
 //!
-//! ## Scalability and correctness
+//! ## Scalability
 //!
-//! No universal design-size, signal-count, clock-count, or event-count ceiling
-//! is imposed. Optional execution budgets are operational policies, not HDL
-//! language restrictions.
+//! This interface imposes no universal maximum on design size, signal count,
+//! clock count, or event count. Counters and budgets use `u128` and checked
+//! arithmetic. `None` means that this interface has no explicit budget for
+//! that category; it does not promise infinite memory, time, or execution.
 //!
-//! No finite implementation can execute literally infinite work. This API
-//! allows simulations to scale subject to available resources, representable
-//! values, engine capabilities, and explicitly configured budgets.
+//! Operational budgets are not language-semantic limits. If a budget is
+//! exceeded, the driver reports a stopped run rather than claiming completion.
 //!
-//! A budget-exhausted or cancelled run is never reported as completed.
-//! A quiescent simulation is not automatically proof of correctness.
-//! Simulation results must not be presented as formal verification results.
+//! ## Integration
 //!
-//! ## Integration contract
+//! A concrete engine implements [`SimulationEngine`]. Its associated session
+//! implements [`SimulationSession`]. An adapter must prepare a design using
+//! the repository's existing frontend and semantic contracts before handing
+//! it to an engine when source-level validation is required.
 //!
-//! A concrete engine implements [`SimulationEngine`] and its session implements
-//! [`SimulationSession`]. The engine accepts a design representation owned by
-//! its integration adapter. This interface deliberately does not assume the
-//! existence or shape of an AST, semantic-model, or HDLIR constructor.
-//!
-//! The AST/semantic adapter validates and resolves the source design before
-//! passing an appropriate engine-owned representation to `start`.
-//! The session implements the simulation language's actual event semantics.
-//! The driver in this file controls lifecycle, cancellation, and budgets.
-//!
-//! The parent `simulation/mod.rs` should declare this module only after this
-//! file and its sibling modules have been reviewed. No existing repository
-//! module is assumed to expose an unverified API.
+//! This module deliberately does not assume an AST constructor, semantic-model
+//! constructor, or HDLIR API.
 //!
 //! ## Determinism
 //!
-//! This interface does not impose a universal event ordering. The engine must
-//! document and implement the ordering required by the selected HDL semantics.
-//! Given equivalent designs, configuration, inputs, and engine versions, an
-//! engine should provide reproducible results wherever its contract promises
-//! determinism.
+//! Event ordering and simulation-time semantics remain engine-defined.
+//! Engines must document their determinism guarantees. This driver preserves
+//! the order of calls and counters it observes; it cannot make a nondeterministic
+//! engine deterministic.
 //!
 //! ## Freeze criteria
 //!
-//! - The public API compiles on the repository's supported Rust baseline.
-//! - Engine failures remain distinct from normal termination.
-//! - Cancellation and budget exhaustion remain distinguishable.
+//! - Existing public type names and engine/session contracts remain available.
+//! - Cancellation and budget exhaustion are not reported as completion.
 //! - Counter overflow cannot silently wrap.
-//! - No incomplete run is classified as completed.
-//! - Tests cover lifecycle, cancellation, budgets, and failure propagation.
-//! - The interface remains independent of HDLIR and target realization.
+//! - Engine failures remain errors, not successful terminal statuses.
+//! - Tests cover completion, quiescence, cancellation, budgets and failures.
+//! - No HDLIR implementation is introduced here.
 
 use std::error::Error;
 use std::fmt;
@@ -112,19 +95,16 @@ use std::sync::Arc;
 
 /// A clonable, thread-safe cooperative cancellation token.
 ///
-/// Any clone can request cancellation. A session should check the token during
-/// long-running operations, particularly when one call to [`SimulationSession::step`]
-/// may perform substantial work.
-///
-/// Cancellation is cooperative: this token cannot forcibly interrupt a
-/// blocking or non-cooperative engine implementation.
+/// Cancelling any clone requests cancellation for every clone. Cancellation
+/// is cooperative: it cannot forcibly interrupt an engine that is blocked
+/// or does not check the token.
 #[derive(Clone, Debug, Default)]
 pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
 }
 
 impl CancellationToken {
-    /// Create a fresh token that has not been cancelled.
+    /// Create a new token that has not been cancelled.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -132,8 +112,7 @@ impl CancellationToken {
 
     /// Request cancellation.
     ///
-    /// Repeated calls are safe. Once requested, cancellation remains requested
-    /// for every clone of this token.
+    /// Repeated calls are safe. Cancellation remains requested for all clones.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::Release);
     }
@@ -149,49 +128,62 @@ impl CancellationToken {
 // Configuration and operational budgets
 // =============================================================================
 
-/// Optional operational budgets for one simulation run.
+/// Operational limits for one simulation run.
 ///
-/// `None` means that this interface imposes no limit for that budget. It does
-/// not promise unlimited memory, unlimited execution time, or unlimited engine
-/// capacity.
-///
-/// A service embedding this API may apply its own explicit operational policy.
-/// Such policy must not change the source program's meaning silently.
+/// These are execution budgets, not restrictions on the HDL language or
+/// declared hardware capacity. `None` imposes no limit through this budget.
+/// Actual execution remains subject to available system resources and engine
+/// capabilities.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SimulationBudget {
-    /// Maximum number of successful session advancement calls.
+    /// Maximum successful session advancement calls.
     ///
-    /// This counts calls returning a normal advancement outcome, including a
-    /// call that reports quiescence or termination. Engine errors do not count
-    /// as successful advancement calls.
+    /// A call returning `Progress`, `Quiescent`, or `Finished` counts as one
+    /// successful advancement call. An engine error does not count.
     pub max_steps: Option<u128>,
 
-    /// Maximum number of events the engine reports as processed.
+    /// Maximum number of events reported as processed.
     ///
-    /// The session reports events processed by each advancement call. If an
-    /// advancement crosses this budget, those events have already occurred;
-    /// the driver reports budget exhaustion and never claims normal completion.
+    /// An engine may process several events in one advancement call. Since
+    /// the driver cannot interrupt an already-running call, the reported
+    /// event count can exceed this budget by the amount processed in that
+    /// call. Such a run is reported as stopped, not completed.
     pub max_events: Option<u128>,
 }
 
 /// Configuration for one simulation invocation.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+///
+/// Equality is intentionally not derived: the cancellation token is shared,
+/// mutable execution state, and value equality for a live token would need
+/// additional semantics that this interface does not promise.
+#[derive(Clone, Debug)]
 pub struct SimulationConfig {
-    /// Explicit operational budgets for the run.
+    /// Operational budgets for this invocation.
     pub budget: SimulationBudget,
 
-    /// Cooperative cancellation token shared with the caller and session.
+    /// Cooperative cancellation token shared with the caller and engine.
     pub cancellation: CancellationToken,
 }
 
+impl Default for SimulationConfig {
+    fn default() -> Self {
+        Self {
+            budget: SimulationBudget::default(),
+            cancellation: CancellationToken::new(),
+        }
+    }
+}
+
 impl SimulationConfig {
-    /// Create a configuration with no explicit step or event budget.
+    /// Create a configuration without explicit step or event budgets.
+    ///
+    /// This does not promise unbounded physical resources.
     #[must_use]
     pub fn unbounded() -> Self {
         Self::default()
     }
 
-    /// Create a configuration with the supplied operational budget.
+    /// Create a configuration with the supplied budgets and a fresh token.
     #[must_use]
     pub fn with_budget(budget: SimulationBudget) -> Self {
         Self {
@@ -200,7 +192,7 @@ impl SimulationConfig {
         }
     }
 
-    /// Return a clone of this run's cancellation token.
+    /// Return a clone of the cancellation token for external cancellation.
     #[must_use]
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation.clone()
@@ -213,13 +205,13 @@ impl SimulationConfig {
 
 /// Outcome of one session advancement operation.
 ///
-/// A session's `step` method must implement the event semantics documented by
-/// its engine. In particular, it must not report `Quiescent` merely because
-/// its implementation chose not to process pending work.
+/// The session implementation defines what constitutes progress under its
+/// documented simulation semantics. It must not report quiescence merely
+/// because it chose not to process work.
 ///
-/// `events_processed` counts events actually processed during this advancement.
-/// A zero-event advancement is valid when the engine's documented semantics
-/// require progress that does not process an event.
+/// `events_processed` is the number of events actually processed during this
+/// advancement. Zero-event progress is valid when the engine's semantics
+/// permit progress without processing an event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StepOutcome {
     /// The engine performed an advancement operation.
@@ -230,31 +222,27 @@ pub enum StepOutcome {
 
     /// No further event can currently advance this session.
     ///
-    /// This is not a correctness proof. The engine must define how pending
-    /// inputs, external stimuli, and future events affect quiescence.
+    /// Quiescence is not a correctness proof. The engine must define how
+    /// external inputs, future events and pending work affect this status.
     Quiescent,
 
-    /// The engine reached its own normal termination condition.
+    /// The engine reached its normal terminal condition.
     Finished,
 }
 
 /// A running HDL simulation session.
 ///
-/// Implementations must preserve their engine's documented simulation
-/// semantics. `Time` is engine-defined so this interface does not force all
-/// time representations into a host integer, floating-point number, or fixed
-/// universal timescale.
-///
-/// `Observation` is likewise engine-defined. An engine may expose snapshots,
-/// selected signal values, traces, or another documented observation type.
+/// The engine defines its time and observation representations. This interface
+/// does not force all simulation times into a host integer or floating-point
+/// value, nor does it require every observation to copy the full design state.
 pub trait SimulationSession {
-    /// The engine's simulation-time representation.
+    /// Engine-defined logical simulation-time representation.
     type Time: Clone + fmt::Debug;
 
-    /// The representation returned by an observation request.
+    /// Engine-defined representation returned by an observation request.
     type Observation;
 
-    /// The error type produced by the engine.
+    /// Error type produced by this session.
     type Error: Error + Send + Sync + 'static;
 
     /// Return the current logical simulation time.
@@ -262,9 +250,9 @@ pub trait SimulationSession {
 
     /// Advance according to the engine's documented event semantics.
     ///
-    /// The implementation should periodically inspect `cancellation` if the
-    /// operation can run for a substantial period. It must return an error
-    /// for engine failures instead of disguising them as quiescence.
+    /// Implementations should check `cancellation` during lengthy operations.
+    /// Engine failures must be returned as errors rather than disguised as
+    /// quiescence or normal completion.
     fn step(
         &mut self,
         cancellation: &CancellationToken,
@@ -272,32 +260,31 @@ pub trait SimulationSession {
 
     /// Observe the current simulation state.
     ///
-    /// The meaning, consistency guarantees, and cost of an observation are
-    /// engine-defined. Implementations should avoid copying the entire design
-    /// or all signal histories when a selective observation is sufficient.
+    /// The consistency guarantees and cost of an observation are engine-defined.
+    /// Implementations should support selective observations when practical,
+    /// instead of requiring callers to copy all signals or histories.
     fn observe(&self) -> Result<Self::Observation, Self::Error>;
 }
 
 /// An engine capable of starting a simulation for its own design type.
 ///
-/// `Design` is deliberately associated with the engine. This allows adapters
-/// to integrate existing Zamani frontend or semantic representations without
-/// this module guessing their constructors or imposing a second AST or IR.
+/// `Design` is associated with the engine so adapters can use existing
+/// repository-owned representations without introducing another AST or IR.
 pub trait SimulationEngine {
-    /// The design representation accepted by this engine.
+    /// Design representation accepted by this engine.
     type Design;
 
-    /// The session created by this engine.
+    /// Session created by this engine.
     type Session: SimulationSession<Error = Self::Error>;
 
-    /// The engine's startup and execution error type.
+    /// Startup and execution error type.
     type Error: Error + Send + Sync + 'static;
 
-    /// Start a session for a previously validated or explicitly prepared
-    /// engine-compatible design.
+    /// Start a session for an engine-compatible design.
     ///
-    /// This method must not claim that source-level semantic validation has
-    /// occurred unless its caller or the engine can establish that fact.
+    /// The caller is responsible for ensuring source-level validation has
+    /// occurred when required. This method does not independently certify
+    /// that the source program was parsed or semantically validated.
     fn start(
         &self,
         design: &Self::Design,
@@ -309,7 +296,7 @@ pub trait SimulationEngine {
 // Run outcomes
 // =============================================================================
 
-/// Reason an otherwise active run stopped before normal completion.
+/// Reason an active run stopped before normal completion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StopReason {
     /// Cancellation was requested.
@@ -318,11 +305,11 @@ pub enum StopReason {
     /// The configured number of advancement calls was exhausted.
     StepBudgetExhausted,
 
-    /// The configured event-processing budget was exhausted.
+    /// The configured event-processing budget was exceeded.
     EventBudgetExhausted,
 }
 
-/// Normal termination status of a simulation run.
+/// Execution status returned by the generic driver.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunStatus {
     /// The engine reached its normal terminal condition.
@@ -335,10 +322,10 @@ pub enum RunStatus {
     Stopped(StopReason),
 }
 
-/// Counters collected by the driver.
+/// Work counters collected by the driver.
 ///
-/// Counters describe work reported by the engine and the driver. They are not
-/// physical hardware resource measurements.
+/// These describe execution work reported by the session, not physical
+/// resource measurements or proof of hardware feasibility.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RunCounters {
     /// Successful advancement calls.
@@ -350,9 +337,9 @@ pub struct RunCounters {
 
 /// Summary of a simulation run.
 ///
-/// `Completed` and `Quiescent` describe execution status only. Neither status
-/// implies that assertions passed, a specification was proved, or the design
-/// is feasible for physical realization.
+/// `Completed` and `Quiescent` describe execution only. Neither status implies
+/// that assertions passed, a behavioral contract was proved, or the design is
+/// feasible for physical realization.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunReport<Time> {
     /// Final execution status.
@@ -361,20 +348,20 @@ pub struct RunReport<Time> {
     /// Last observed simulation time.
     pub final_time: Time,
 
-    /// Work counters collected during this run.
+    /// Work counters collected during the run.
     pub counters: RunCounters,
 }
 
-/// Failures of the generic run driver.
+/// Failure of the generic session driver.
 #[derive(Debug)]
 pub enum RunError<E> {
-    /// The underlying engine failed to advance or observe.
+    /// The underlying engine failed during advancement.
     Engine(E),
 
-    /// A run counter exceeded its representable range.
+    /// A counter exceeded its representable range.
     ///
-    /// The driver fails closed rather than wrapping and returning misleading
-    /// counters or falsely reporting completion.
+    /// The driver fails closed instead of wrapping counters and returning a
+    /// misleading report.
     CounterOverflow {
         /// Counter that could not be incremented safely.
         counter: &'static str,
@@ -384,7 +371,9 @@ pub enum RunError<E> {
 impl<E: fmt::Display> fmt::Display for RunError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Engine(error) => write!(f, "HDL simulation engine failed: {error}"),
+            Self::Engine(error) => {
+                write!(f, "HDL simulation engine failed: {error}")
+            }
             Self::CounterOverflow { counter } => {
                 write!(f, "HDL simulation {counter} counter overflowed")
             }
@@ -406,21 +395,18 @@ impl<E: Error + 'static> Error for RunError<E> {
 // =============================================================================
 
 /// Drive a session until it completes, becomes quiescent, is cancelled, or
-/// exhausts a configured operational budget.
+/// exhausts an operational budget.
 ///
-/// This function deliberately does not evaluate assertions, verify behavioral
-/// contracts, or infer physical feasibility. Those are separate concerns.
+/// The driver does not evaluate assertions, verify contracts, infer physical
+/// feasibility, or define HDL event ordering.
 ///
-/// A successful report means the driver completed according to the returned
-/// status. It does not mean the design is correct.
+/// The step budget is checked before starting an advancement call. The event
+/// budget is checked after the engine reports the work it performed. Therefore
+/// a single advancement may exceed the event budget; the report will indicate
+/// that the run stopped.
 ///
-/// If an engine returns an error, the error is propagated. If a counter would
-/// overflow, the driver returns `CounterOverflow` rather than wrapping.
-///
-/// The step budget is checked before the next advancement call. The event
-/// budget is checked after an advancement reports its actual event count;
-/// consequently, the last advancement may exceed the configured event budget.
-/// Such a run is reported as stopped, not completed.
+/// Engine errors and counter overflow are returned as errors, never converted
+/// into successful completion statuses.
 pub fn run_session<S: SimulationSession>(
     session: &mut S,
     config: &SimulationConfig,
@@ -589,9 +575,8 @@ mod tests {
     #[test]
     fn normal_completion_is_reported() {
         let mut simulation = session(3, 2);
-        let config = SimulationConfig::unbounded();
-
-        let report = run_session(&mut simulation, &config).expect("run");
+        let report =
+            run_session(&mut simulation, &SimulationConfig::unbounded()).expect("run");
 
         assert_eq!(report.status, RunStatus::Completed);
         assert_eq!(report.final_time, 3);
@@ -614,10 +599,11 @@ mod tests {
             RunStatus::Stopped(StopReason::StepBudgetExhausted)
         );
         assert_eq!(report.counters.steps, 2);
+        assert_eq!(report.final_time, 2);
     }
 
     #[test]
-    fn event_budget_stops_when_reported_work_exceeds_limit() {
+    fn event_budget_reports_excess_work_without_claiming_completion() {
         let mut simulation = session(10, 3);
         let config = SimulationConfig::with_budget(SimulationBudget {
             max_steps: None,
@@ -667,7 +653,6 @@ mod tests {
     #[test]
     fn observation_is_engine_defined() {
         let simulation = session(0, 0);
-
         assert_eq!(simulation.observe(), Ok(0));
     }
 
@@ -703,14 +688,13 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_token_is_usable_across_thread_boundaries() {
+    fn cancellation_token_is_send_and_sync() {
         fn assert_send_sync<T: Send + Sync>() {}
-
         assert_send_sync::<CancellationToken>();
     }
 
     #[test]
-    fn generic_engine_contract_does_not_require_an_ir_type() {
+    fn engine_contract_does_not_require_an_ir_type() {
         struct ExampleEngine;
 
         impl SimulationEngine for ExampleEngine {
@@ -730,15 +714,12 @@ mod tests {
         let engine = ExampleEngine;
         let design = String::from("engine-owned design");
 
-        let result = engine.start(&design, &SimulationConfig::default());
-
-        assert!(result.is_ok());
+        assert!(engine.start(&design, &SimulationConfig::default()).is_ok());
     }
 
     #[test]
     fn infallible_is_available_for_adapters_without_startup_failure() {
         fn accepts_error<E: Error>() {}
-
         accepts_error::<Infallible>();
     }
 }
