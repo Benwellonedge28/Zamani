@@ -1,32 +1,28 @@
- 
+
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-//! # Zamani HDL — Hardware Description and Hardware/Software Co-Design
+//! # Zamani HDL Computing Domain
 //!
 //! Path: `src/hdl/mod.rs`
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
+//! Edition: Rust 2021.
+//! Minimum supported Rust version: Rust 1.97.
 //! Safety: Safe Rust only.
 //!
 //! ## Purpose
 //!
-//! This module is the composition root for Zamani's HDL computing domain.
+//! This module is the composition root for Zamani's hardware-description
+//! language (HDL) domain and hardware/software co-design facilities.
 //!
-//! It establishes the public architectural boundary through which the HDL
-//! domain's structural descriptions, behavioral semantics, verification,
-//! simulation, interoperability, target-feasibility analysis, and eventual
-//! realization interfaces will be integrated as their implementations are
-//! introduced.
-//!
-//! This file coordinates module ownership. It does not implement a parser,
-//! AST, semantic analyzer, hardware execution engine, or intermediate
+//! It registers the existing HDL subsystems and establishes their ownership
+//! boundaries. It does not implement parsing, source-level semantic analysis,
+//! a competing AST, a second semantic model, or a duplicate intermediate
 //! representation.
 //!
 //! ## Normative authority
 //!
-//! HDL implementation and integration MUST conform to the repository's
-//! actual language authorities, including:
+//! HDL implementation and integration must conform to the applicable
+//! repository authorities:
 //!
 //! - `grammar/DESIGN.md`
 //! - `grammar/spec/hdl.md`
@@ -34,299 +30,309 @@
 //! - `grammar/hdl/hdl.g4`
 //! - `grammar/antlr/ZamaniLexer.g4`
 //! - `grammar/lexer/tokens.g4`
-//! - The applicable delegate grammars under `grammar/hdl/`
-//! - The canonical frontend AST and semantic contracts.
+//! - The applicable feature grammars under `grammar/hdl/`
+//! - `grammar/specification/semantic-model.md`
+//! - `grammar/validation/semantic-boundaries.md`
+//! - `src/hdl/hdlir/HDLIR-SPEC.md`
+//! - `src/zuir/ZUIR-SPEC.md`, where present and authoritative
 //!
-//! The repository's normative specifications define required semantics.
-//! The canonical grammar defines syntax and language composition.
-//! Existing frontend modules own parsing and source-level semantic analysis.
-//! This composition root MUST NOT override those authorities.
+//! The grammar owns syntax. The canonical frontend owns parsing, AST
+//! construction, source locations, and source-level semantic analysis.
+//! ZUIR owns the universal computational representation. HDLIR owns the
+//! hardware-domain intermediate representation.
 //!
-//! ## Ownership
+//! An implementation must not silently override these authorities.
 //!
-//! This module owns:
+//! ## Architectural ownership
 //!
-//! - The top-level Rust module boundary for HDL computing.
-//! - Registration of implemented HDL child modules.
-//! - The architectural dependency and integration rules documented here.
-//! - The separation between portable HDL intent and physical realization.
-//! - The HDL subsystem's safe-Rust invariant.
+//! This composition root registers existing HDL modules. Their child
+//! implementations retain ownership of their respective algorithms, types,
+//! invariants, errors, and tests.
 //!
-//! It does NOT own:
+//! - `api` exposes the existing canonical HDL parser and semantic API.
+//! - `ids` provides HDL-specific identity integration.
+//! - `design` owns logical design declarations and hierarchy.
+//! - `types` and `values` provide HDL-specific type and value facilities.
+//! - `logic` owns logical and behavioral HDL constructs.
+//! - `memory` owns logical memory contracts.
+//! - `timing` owns logical timing and clock-domain contracts.
+//! - `analysis` owns target-independent HDL analyses.
+//! - `verification` owns HDL verification contracts.
+//! - `targets` owns target descriptions, capabilities, and feasibility
+//!   assessment.
+//! - `realization` owns realization plans and provider-facing contracts.
+//! - `simulation` owns simulation request and execution interfaces.
+//! - `interoperability` owns HDL import/export integration.
+//! - `libraries` owns HDL library manifests and registry integration.
+//! - `testing` owns shared HDL test fixtures and conformance facilities.
+//! - `hdlir` owns all hardware-domain IR implementation.
 //!
-//! - Lexer rules, token definitions, or token scanning.
-//! - Grammar productions, parsing, or parser recovery.
-//! - AST nodes, source spans, or source-file identity.
-//! - General name resolution, type inference, or semantic-model ownership.
-//! - Hardware-specific semantic facts already owned by the frontend.
-//! - Physical hardware allocation or target discovery.
-//! - Placement, routing, synthesis, or timing closure.
-//! - A competing universal or domain-specific intermediate representation.
-//! - Backend execution, deployment, or runtime device handles.
+//! The root-level support modules provide HDL configuration, diagnostics,
+//! errors, expressions, requirements, resource integration, provenance,
+//! and width-resolution facilities.
 //!
-//! Each responsibility MUST have one authoritative implementation.
+//! ## Canonical frontend integration
 //!
-//! ## Existing repository integration
+//! The existing canonical frontend remains authoritative for parsing and
+//! source-level semantic validation. HDL modules must consume its actual
+//! public APIs and must not recreate those facilities.
 //!
-//! The existing HDL parser is:
+//! The intended integration boundary includes:
 //!
-//! `crate::frontend::parser::domains::hdl`
+//! - `crate::frontend::parser::domains::hdl`
+//! - `crate::frontend::semantic::domains::hdl`
+//! - `crate::frontend::ast::node`
+//! - `crate::frontend::semantic::model`
 //!
-//! It owns HDL construct parsing and its parser-specific configuration,
-//! loss-preserving syntax representation, and parse errors.
+//! These paths must exist and be publicly reachable from the crate root
+//! before the corresponding HDL integration can be considered compiled.
+//! This file deliberately does not fabricate missing frontend modules or
+//! substitute guessed APIs.
 //!
-//! The existing HDL semantic validator is:
+//! ## IR ownership and dependency direction
 //!
-//! `crate::frontend::semantic::domains::hdl`
-//!
-//! It owns the existing HDL-specific semantic validation boundary, including
-//! its symbolic-width and semantic-input contracts.
-//!
-//! These modules MUST be reused through their actual public APIs. This
-//! composition root MUST NOT copy their implementations or invent adapters
-//! whose constructors, types, or invariants have not been verified.
-//!
-//! The canonical AST remains owned by:
-//!
-//! `crate::frontend::ast::node`
-//!
-//! The shared semantic model remains owned by:
-//!
-//! `crate::frontend::semantic::model`
-//!
-//! Source locations MUST use the canonical frontend span contract where
-//! spans are needed. HDL MUST NOT introduce a competing source-span system.
-//!
-//! The legacy compiler modules remain separate until an explicitly tested
-//! migration changes their integration.
-//!
-//! ## Intermediate representation boundary
-//!
-//! All HDL intermediate-representation implementation belongs under:
-//!
-//! `src/hdl/hdlir/`
-//!
-//! This includes, when implemented, HDLIR data structures, builders,
-//! verification, transformations, serialization, and lowering owned by
-//! that representation.
-//!
-//! HDLIR implementation is explicitly outside the scope of this composition
-//! root's present implementation milestone.
-//!
-//! The `hdlir` child module is registered only to preserve its existing
-//! module boundary. Its implementation MUST NOT be moved into this file or
-//! duplicated in another HDL child module.
-//!
-//! The HDL subsystem MUST NOT silently create a second IR elsewhere under
-//! `src/hdl/`.
-//!
-//! ## Intended dependency direction
-//!
-//! The architectural dependency direction is:
+//! The intended compilation architecture is:
 //!
 //! ```text
-//! grammar and language specifications
+//! Zamani grammar and specifications
 //!                 |
 //!                 v
 //! canonical lexer and parser
 //!                 |
 //!                 v
-//! canonical domain-neutral AST
+//! canonical AST and semantic model
 //!                 |
 //!                 v
-//! shared semantic model and HDL validation
+//!              ZUIR
 //!                 |
 //!                 v
-//!       src/hdl/ domain integration
+//!       src/hdl/hdlir/
 //!                 |
 //!                 v
-//!        src/hdl/hdlir/ (deferred)
+//! hardware-domain verification and optimization
 //!                 |
 //!                 v
-//! optimization and implementation planning
+//! downstream lowering and realization
 //!                 |
 //!                 v
-//! target realization and deployment
+//! target-specific hardware or simulation
 //! ```
 //!
-//! This diagram describes responsibility and intended data flow. It does
-//! not claim that every stage is already implemented or operational.
+//! This diagram specifies architectural ownership and intended data flow;
+//! it does not claim that every stage is implemented or operational.
 //!
-//! Lower-level parsing and semantic validation MUST NOT depend on target
-//! realization, physical allocation, placement, or routing.
+//! All HDLIR-owned structures, operations, builders, verification,
+//! analyses, transformations, serialization, and lowering must remain
+//! within `src/hdl/hdlir/`. No second HDL IR may be introduced elsewhere
+//! under `src/hdl/`.
 //!
-//! The HDL composition root MUST NOT force the existing frontend to depend
-//! on this module merely to parse or semantically validate HDL.
+//! HDLIR must not replace ZUIR's universal representation or the canonical
+//! frontend semantic model. Conversion between representations must preserve
+//! supported semantics and report unsupported or lossy mappings explicitly.
 //!
-//! ## POCO-REAF and portability
+//! ## POCO-REAF and scalability
 //!
-//! The architectural objective is:
+//! Zamani's objective is:
 //!
 //! `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever`
 //!
-//! HDL source describes hardware computation, behavior, requirements,
-//! constraints, and contracts independently of unnecessary physical-target
-//! assumptions.
+//! HDL source must express portable hardware intent independently of
+//! unnecessary physical-target assumptions.
 //!
-//! Target-specific realization is permitted when explicitly requested or
-//! required by the implementation contract. Such specificity MUST remain
-//! distinguishable from portable HDL semantics.
+//! This module introduces no universal hardware-capacity ceilings. It must
+//! not impose fixed maxima on widths, ports, signals, modules, instances,
+//! memories, clock domains, pipeline stages, devices, or other hardware
+//! resources.
 //!
-//! The architecture MUST NOT introduce universal language-level ceilings
-//! for signal widths, ports, modules, instances, memories, clock domains,
-//! pipeline stages, devices, or hardware resource quantities.
+//! Symbolic quantities remain symbolic until the appropriate owning stage
+//! can resolve them. Concrete arithmetic and conversions must be checked.
+//! Operational budgets must be explicit and must not redefine language
+//! semantics or universal hardware capacity.
 //!
-//! Symbolic quantities MUST remain representable until their owning stage
-//! is authorized to resolve or evaluate them.
+//! Exhausted budgets, unsupported capabilities, incomplete analyses, and
+//! target infeasibility must remain distinguishable from successful
+//! validation. A target that cannot realize a valid design must not cause
+//! silent semantic degradation.
 //!
-//! A target that cannot meet a requirement MUST produce an explicit
-//! infeasibility or unsupported-capability result. It MUST NOT silently
-//! weaken requirements or change program meaning.
+//! No finite implementation can process literally infinite input. The
+//! scalability objective is to avoid arbitrary language-level ceilings and
+//! scale with available resources, representable quantities, supported
+//! semantics, and explicitly configured operational budgets.
 //!
-//! No finite implementation can process literally infinite input. Scaling
-//! therefore means avoiding arbitrary universal hardware ceilings and
-//! scaling with available resources, representable values, supported
-//! semantics, and explicit operational budgets.
+//! ## Safety and untrusted input
 //!
-//! Operational budgets are not language-semantic capacity limits. Where
-//! required, the owning subsystem MUST report exhaustion or incomplete
-//! analysis explicitly rather than silently truncating work or claiming
-//! that an incomplete result is valid.
+//! Unsafe Rust is forbidden throughout this module and its descendants.
+//!
+//! External HDL, serialized IR, imported designs, target descriptions, and
+//! extension metadata must be treated as potentially malformed. The owning
+//! subsystem must validate inputs, check arithmetic, apply relevant
+//! operational budgets, and return structured failures.
 //!
 //! ## Module registration policy
 //!
-//! Each HDL child module MUST be registered here only after:
+//! A child module may be registered here only when its source and required
+//! module tree exist and its integration dependencies have been reviewed.
+//! A directory's existence alone does not prove that its implementation
+//! compiles or is production-ready.
 //!
-//! 1. Its ownership and authority have been established.
-//! 2. Its public types and API contracts have been agreed.
-//! 3. Its dependencies on existing repository APIs have been verified.
-//! 4. Its error and incomplete-result behavior have been defined.
-//! 5. Its tests and integration requirements have been specified.
-//! 6. Its source file and any required child module files exist.
+//! Child modules must not depend on this composition root for foundational
+//! types when doing so would create a dependency cycle. Shared contracts
+//! belong in their designated owning modules.
 //!
-//! A directory proposed in an architecture plan is not evidence that an
-//! implementation exists. This file MUST NOT declare speculative modules
-//! just to make the intended architecture appear complete.
+//! Public APIs must be deliberate. This root avoids wildcard re-exports so
+//! that ownership remains explicit and conflicting names are not concealed.
 //!
-//! New responsibilities SHOULD be placed in separate child modules when
-//! that separation establishes a genuine ownership boundary. Empty,
-//! speculative directories and duplicate implementations SHOULD NOT be
-//! introduced.
+//! ## Compatibility and determinism
 //!
-//! Child modules MUST NOT depend on this composition root for foundational
-//! data types if doing so would introduce a dependency cycle. Shared
-//! contracts belong in their designated owning modules.
+//! API evolution must be based on verified consumers, explicit contracts,
+//! and tests. Persistent HDLIR artifacts must follow the HDLIR format and
+//! compatibility policies owned by `hdlir`.
 //!
-//! ## Error and diagnostic boundaries
+//! Deterministic operations must not depend on unspecified iteration order,
+//! filesystem traversal order, hardware discovery order, or incidental
+//! memory addresses.
 //!
-//! Parser errors, semantic diagnostics, HDL-domain analysis failures,
-//! target infeasibility, unsupported features, and operational-budget
-//! exhaustion are distinct outcomes.
+//! ## Production qualification
 //!
-//! This composition root MUST NOT collapse them into a new string-only
-//! error interface or introduce a competing diagnostic representation.
+//! Registration does not imply implementation completeness or production
+//! readiness. The integrated repository must be checked using its supported
+//! Rust toolchain and applicable feature configurations.
 //!
-//! New HDL modules MUST integrate with the actual canonical error and
-//! diagnostic APIs available to them. Any adapter MUST preserve the
-//! distinction between invalid source semantics and a valid program that
-//! cannot be realized on a requested target.
-//!
-//! Incomplete analysis MUST NOT be reported as successful validation.
-//!
-//! ## Determinism and compatibility
-//!
-//! Public HDL contracts SHOULD specify deterministic behavior for equivalent
-//! inputs, configuration, and provider information wherever determinism is
-//! required.
-//!
-//! Module registration MUST NOT depend on filesystem traversal order,
-//! hardware discovery order, or unspecified iteration order.
-//!
-//! New public APIs MUST be documented and deliberately exported. Broad
-//! wildcard re-exports SHOULD NOT be used to conceal ownership boundaries
-//! or create name collisions.
-//!
-//! Compatibility changes MUST be driven by verified consumers, tests,
-//! and explicit API or specification changes rather than speculative
-//! future requirements.
-//!
-//! ## Safety
-//!
-//! Unsafe Rust is forbidden throughout this HDL module and its descendants.
-//!
-//! External HDL input, imported designs, target descriptions, and provider
-//! results MUST be treated as potentially malformed. Individual modules
-//! are responsible for validating their inputs, checking arithmetic,
-//! handling resource exhaustion, and returning structured failures.
-//!
-//! ## Production-readiness boundary
-//!
-//! This file is the production-oriented composition boundary, not proof that
-//! the HDL computing domain is complete.
-//!
-//! The subsystem MUST NOT be declared production-ready until its implemented
-//! modules, frontend integration, semantic contracts, verification coverage,
-//! interoperability behavior, target-feasibility reporting, and supported
-//! toolchain checks have been independently validated.
-//!
-//! Required repository checks include:
+//! Required baseline checks:
 //!
 //! - `cargo fmt --all -- --check`
 //! - `cargo check --all-targets`
 //! - `cargo test --all-targets`
 //! - `cargo clippy --all-targets -- -D warnings`
 //!
-//! These checks must be run against the actual repository checkout. This
-//! source file does not claim that they have passed.
-//!
-//! ## Freeze criteria
-//!
-//! This composition root can be frozen for its current milestone when:
-//!
-//! 1. It registers only existing child modules.
-//! 2. HDLIR remains under `src/hdl/hdlir/` and its implementation remains
-//!    deferred in this milestone.
-//! 3. Existing parser, AST, and semantic ownership is preserved.
-//! 4. No duplicate IR, AST, semantic model, or source-span type is added.
-//! 5. Future module registration follows the documented integration policy.
-//! 6. The module and its existing child modules compile under the supported
-//!    Rust toolchain.
-//! 7. The repository's applicable formatting, tests, and lint checks pass.
-//!
-//! A frozen composition contract does not prohibit a justified correction
-//! for a verified defect or a deliberate, reviewed API evolution.
+//! These checks must be executed against the actual checkout. This file
+//! makes no claim that they have passed.
 
-// -----------------------------------------------------------------------------
-// Existing HDL intermediate-representation boundary
-// -----------------------------------------------------------------------------
-//
-// This declaration preserves the existing module path. No HDLIR types,
-// builders, verifiers, passes, serialization, or lowering are implemented
-// or re-exported here.
-//
-// Keep the implementation of every HDLIR feature inside `hdlir/`.
+/// Stable identifier for the Zamani HDL computing domain.
+pub const HDL_DOMAIN_NAME: &str = "zamani.hdl";
 
-/// HDL intermediate-representation boundary.
+/// Version of this composition-root API contract.
 ///
-/// The implementation of this subsystem is intentionally deferred.
-/// All future HDLIR-owned functionality belongs under `src/hdl/hdlir/`.
+/// This is independent of the Zamani language, grammar, frontend semantic
+/// model, crate, and HDLIR artifact versions.
+pub const HDL_DOMAIN_API_VERSION: u16 = 1;
+
+// -----------------------------------------------------------------------------
+// Core HDL API and shared contracts
+// -----------------------------------------------------------------------------
+
+/// Canonical HDL parser and semantic-validation facade.
+///
+/// This module re-exports the existing frontend contracts; it does not
+/// implement another parser or semantic analyzer.
+pub mod api;
+
+/// HDL-facing capability integration.
+pub mod capabilities;
+
+/// Explicit HDL analysis configuration and operational budgets.
+pub mod config;
+
+/// HDL behavioral-contract representation.
+pub mod contract;
+
+/// HDL-specific diagnostic vocabulary and helpers.
+pub mod diagnostics;
+
+/// Shared typed HDL subsystem errors.
+pub mod error;
+
+/// HDL expression integration facilities.
+pub mod expressions;
+
+/// HDL-specific identity integration.
+pub mod ids;
+
+/// HDL provenance conventions and adapters.
+pub mod provenance;
+
+/// HDL requirements, constraints, preferences, and hints.
+pub mod requirements;
+
+/// HDL resource-model integration.
+pub mod resources;
+
+/// Checked HDL width-resolution facilities.
+pub mod widths;
+
+// -----------------------------------------------------------------------------
+// Logical hardware model and domain services
+// -----------------------------------------------------------------------------
+
+/// Target-independent logical design declarations and hierarchy.
+pub mod design;
+
+/// HDL logical and behavioral operations.
+pub mod logic;
+
+/// Logical memory declarations and access semantics.
+pub mod memory;
+
+/// HDL logical types and type-layout facilities.
+pub mod types;
+
+/// HDL values, constants, and symbolic values.
+pub mod values;
+
+/// Logical clocks, timing constraints, and clock-domain analysis.
+pub mod timing;
+
+/// Target-independent HDL analyses.
+pub mod analysis;
+
+/// HDL verification contracts and verification result models.
+pub mod verification;
+
+// -----------------------------------------------------------------------------
+// Target integration and execution boundaries
+// -----------------------------------------------------------------------------
+
+/// HDL target descriptions, capabilities, constraints, and feasibility.
+pub mod targets;
+
+/// Hardware realization plans and provider-facing contracts.
+pub mod realization;
+
+/// HDL simulation interfaces and execution contracts.
+pub mod simulation;
+
+/// HDL library manifests and registry integration.
+pub mod libraries;
+
+/// HDL format import/export and interoperability.
+pub mod interoperability;
+
+/// HDL test fixtures and conformance facilities.
+pub mod testing;
+
+// -----------------------------------------------------------------------------
+// Canonical HDL intermediate representation
+// -----------------------------------------------------------------------------
+
+/// Hardware-domain intermediate representation.
+///
+/// All HDLIR-owned types, builders, verification, analysis, transformations,
+/// dialects, serialization, interchange, and lowering must be implemented
+/// within `src/hdl/hdlir/`. This parent module only registers the boundary.
 pub mod hdlir;
 
 #[cfg(test)]
 mod tests {
-    //! Composition-root contract tests.
-    //!
-    //! These tests intentionally avoid assuming that future HDL modules or
-    //! APIs already exist. Integration tests for the parser, semantic
-    //! validator, target feasibility, and HDLIR must live with their owning
-    //! implementations when those components are ready.
+    use super::{HDL_DOMAIN_API_VERSION, HDL_DOMAIN_NAME};
 
     #[test]
-    fn hdlir_module_boundary_is_registered() {
-        // A compile-time module-path check. The HDLIR implementation itself
-        // remains outside this milestone.
-        let _: fn() = || {
-            let _ = core::any::type_name::<super::hdlir::Placeholder>();
-        };
+    fn domain_identity_is_stable_and_nonempty() {
+        assert!(!HDL_DOMAIN_NAME.is_empty());
+        assert_eq!(HDL_DOMAIN_NAME, "zamani.hdl");
+    }
+
+    #[test]
+    fn composition_api_version_is_nonzero() {
+        assert_ne!(HDL_DOMAIN_API_VERSION, 0);
     }
 }
