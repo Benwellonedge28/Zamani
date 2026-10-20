@@ -7,95 +7,110 @@
 //!
 //! Path: `src/hdl/api.rs`
 //! Edition: Rust 2021
-//! Minimum supported Rust version: 1.97.
+//! Minimum supported Rust version: Rust 1.97.
 //! Safety: Safe Rust only.
 //!
 //! ## Purpose
 //!
-//! Expose the existing HDL parser and semantic validator through one
-//! deliberate public API without duplicating their implementations.
+//! Provide a stable public entry point to the existing HDL parser and
+//! semantic validator without creating competing implementations.
 //!
 //! ## Authority
 //!
 //! - `grammar/DESIGN.md`
-//! - `grammar/spec/hdl.md`
 //! - `grammar/Zamani.g4`
-//! - `grammar/hdl/hdl.g4` and its delegate grammars
+//! - `grammar/hdl/hdl.g4` and applicable delegate grammars
+//! - `grammar/spec/hdl.md`
 //! - `grammar/specification/semantic-model.md`
 //! - `grammar/validation/semantic-boundaries.md`
 //! - `src/frontend/parser/domains/hdl.rs`
 //! - `src/frontend/semantic/domains/hdl.rs`
-//! - The canonical frontend AST and semantic model.
+//! - `src/zuir/ZUIR-SPEC.md`
 //!
-//! The grammar owns syntax. The frontend owns tokens, spans, AST adaptation,
-//! and semantic validation. This API coordinates access to those services.
+//! The grammar owns syntax. The canonical frontend owns tokenization,
+//! parsing, AST construction, source locations, and semantic analysis.
+//! ZUIR owns the universal computational representation. HDLIR owns the
+//! hardware-domain intermediate representation.
 //!
-//! ## Owns
+//! ## Ownership
 //!
-//! - The stable HDL API identifier and API schema version.
-//! - Deliberate public re-exports of existing HDL contracts.
+//! This module owns:
+//!
+//! - The public HDL API identity and contract version.
+//! - Deliberate re-exports of canonical HDL contracts.
 //! - A stateless facade for parser-session creation and validation.
 //!
-//! ## Does not own
+//! This module does not own:
 //!
-//! - Lexing, parsing algorithms, AST nodes, or source spans.
-//! - A second semantic model, width system, or diagnostic system.
-//! - HDLIR, IR construction, verification, transformations, or lowering.
-//! - Elaboration, synthesis, scheduling, placement, routing, or allocation.
-//! - Target discovery, target feasibility, or physical device handles.
+//! - Lexing, parsing algorithms, or AST construction.
+//! - Source-level name resolution or a competing semantic model.
+//! - HDLIR construction, verification, transformation, or serialization.
+//! - ZUIR implementation or representation conversion.
+//! - Elaboration, synthesis, scheduling, placement, or routing.
+//! - Target discovery, physical allocation, or device handles.
 //!
-//! All HDLIR implementation remains under `src/hdl/hdlir/`.
+//! All HDLIR implementation must remain under `src/hdl/hdlir/`.
 //!
-//! ## Scalability and portability
+//! ## Scalability
 //!
-//! This API introduces no universal hardware-capacity limits. Parser safety
-//! budgets are supplied to the canonical parser and remain operational
-//! safeguards, not language-semantic restrictions.
+//! This facade imposes no universal hardware-capacity limits. Parser
+//! safety budgets remain configurable operational policies and do not
+//! redefine source-language semantics.
 //!
-//! Finite software cannot process literally infinite input. Actual processing
-//! is bounded by available resources, representable values, supported
-//! semantics, and explicit operational budgets. Incomplete work must never
-//! be reported as completed validation.
+//! Finite compiler processes remain subject to available resources,
+//! representational limits, supported semantics, and explicit budgets.
+//! Incomplete work must never be reported as completed validation.
 //!
-//! The canonical semantic validator represents concrete widths with `u128`.
-//! This facade preserves that contract instead of introducing a competing
-//! width representation. Arbitrary-precision concrete widths would require
-//! a coordinated evolution of the canonical semantic contract and consumers.
+//! The canonical validator currently represents concrete HDL widths
+//! with `u128`. This API preserves that existing contract; it does not
+//! claim arbitrary-precision concrete-width support.
 //!
-//! ## Validation semantics
+//! ## Parsing contract
 //!
-//! `validate_hdl` checks only the rules implemented by the existing HDL
-//! semantic validator. A valid result does not certify all frontend
-//! semantics, elaboration, target feasibility, synthesis, or physical timing
+//! `parse_session` borrows an existing canonical token stream. It does
+//! not tokenize source text, own the source, or construct the canonical
+//! AST. The shared frontend remains responsible for parser orchestration,
+//! AST adaptation, and whole-program parse-result reporting.
+//!
+//! A successful `parse_next` operation on the returned parser means
+//! that one construct was recognized by that domain parser. It does
+//! not establish that the entire source file parsed successfully.
+//!
+//! ## Validation contract
+//!
+//! `validate` forwards the existing semantic validator's result without
+//! upgrading its status or discarding its diagnostics.
+//!
+//! A `Valid` result means only that the checks implemented by the
+//! canonical HDL validator succeeded. It does not certify all language
+//! semantics, elaboration, target feasibility, synthesis, or timing
 //! closure.
-//!
-//! The parser session consumes canonical frontend tokens. It does not
-//! tokenize source text or promise to construct the canonical AST.
-//! Shared-parser orchestration and AST adaptation remain frontend concerns.
 //!
 //! ## Freeze criteria
 //!
-//! - Canonical parser and semantic contracts remain authoritative.
-//! - Public exports compile through the registered HDL module.
-//! - Parser errors and semantic diagnostics remain distinct.
-//! - Incomplete validation is never reclassified as success.
+//! - The canonical parser and semantic validator remain authoritative.
+//! - Public re-exports compile through the registered module tree.
+//! - Parsing and validation errors remain distinct.
+//! - Incomplete validation is never treated as success.
 //! - No HDLIR or target-realization implementation is introduced here.
-//! - Public API and integration tests pass on the supported Rust toolchain.
+//! - Public API tests and repository integration checks pass.
 
-/// Stable identifier for the Zamani HDL API.
+/// Stable identifier for the Zamani HDL public API.
 pub const HDL_API_NAME: &str = "zamani.hdl.api";
 
 /// Version of this public API contract.
 ///
-/// This is independent of the language, grammar, semantic-model, HDLIR,
-/// and package versions.
+/// This version is independent of the language, grammar, frontend
+/// semantic model, crate, HDLIR artifact, and target versions.
 pub const HDL_API_SCHEMA_VERSION: u16 = 1;
 
 // -----------------------------------------------------------------------------
 // Canonical parser contracts
 // -----------------------------------------------------------------------------
 
-/// Existing HDL parser contracts, re-exported without replacement types.
+/// Canonical HDL parser contracts.
+///
+/// These types are re-exported without replacement implementations.
 pub use crate::frontend::parser::domains::hdl::{
     HdlConstruct,
     HdlConstructKind,
@@ -110,7 +125,10 @@ pub use crate::frontend::parser::domains::hdl::{
 // Canonical semantic contracts
 // -----------------------------------------------------------------------------
 
-/// Existing HDL semantic contracts, re-exported without replacement types.
+/// Canonical HDL semantic-validation contracts.
+///
+/// The public facade forwards these types and functions without defining
+/// a second semantic representation or diagnostic system.
 pub use crate::frontend::semantic::domains::hdl::{
     validate_hdl,
     HdlAssignment,
@@ -140,13 +158,16 @@ pub use crate::frontend::semantic::domains::hdl::{
 // Stateless public facade
 // -----------------------------------------------------------------------------
 
-/// Stateless entry point to the canonical HDL parser and semantic validator.
+/// Stateless entry point to the canonical HDL parser and validator.
 ///
-/// `HdlApi` owns no design, token stream, parser cursor, global mutable state,
-/// target handle, or cached semantic result. Parser sessions own their
-/// individual cursors; validation borrows caller-owned semantic input.
+/// `HdlApi` owns no design, token stream, parser cursor, global mutable
+/// state, target handle, or cached semantic result.
 ///
-/// The facade is safe to share because it contains no mutable state.
+/// Each parser session owns its own cursor and borrows its token stream.
+/// Validation borrows caller-owned semantic input.
+///
+/// Because the facade contains no mutable state, callers may construct
+/// independent instances wherever needed.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct HdlApi;
 
@@ -163,7 +184,7 @@ impl HdlApi {
         HDL_API_NAME
     }
 
-    /// Return this API contract's schema version.
+    /// Return the version of this API contract.
     #[must_use]
     pub const fn schema_version(&self) -> u16 {
         HDL_API_SCHEMA_VERSION
@@ -171,18 +192,20 @@ impl HdlApi {
 
     /// Create an HDL parser session over canonical frontend tokens.
     ///
-    /// The returned parser borrows `tokens`. The token stream is not
-    /// re-tokenized, modified, or removed from its owner. `limits` configures
-    /// parser-safety budgets, not language-level hardware capacities.
+    /// The returned parser borrows `tokens`. The original token stream
+    /// remains owned by its caller and is not re-tokenized or removed.
     ///
-    /// The caller remains responsible for invoking the parser and adapting
-    /// its loss-preserving syntax into the canonical AST through the
-    /// appropriate frontend integration.
+    /// `limits` configures parser safety budgets. These budgets are
+    /// operational safeguards, not language-level hardware ceilings.
+    ///
+    /// The caller remains responsible for invoking the parser and
+    /// integrating its loss-preserving syntax with the canonical AST
+    /// through the appropriate frontend parser adapter.
     ///
     /// # Errors
     ///
-    /// Returns the canonical parser's structured error when the parser
-    /// configuration is invalid.
+    /// Returns a structured parser error if the parser configuration is
+    /// invalid.
     pub fn parse_session<'tokens, 'src>(
         &self,
         tokens: &'tokens [
@@ -193,23 +216,29 @@ impl HdlApi {
         HdlDomainParser::new(tokens, limits)
     }
 
-    /// Validate normalized HDL semantic input using the canonical validator.
+    /// Validate normalized HDL semantic input.
     ///
+    /// This method forwards the canonical validator's result unchanged.
     /// The program remains owned by the caller and is not modified.
     ///
-    /// The returned result is forwarded unchanged from `validate_hdl`.
-    /// Its status describes only the checks implemented by that validator;
-    /// it does not establish target feasibility or implementation success.
+    /// The result describes only the checks implemented by
+    /// `validate_hdl`. It does not establish whole-program semantic
+    /// validity, target feasibility, synthesis success, or timing closure.
     #[must_use]
     pub fn validate(&self, program: &HdlProgram) -> HdlValidationResult {
         validate_hdl(program)
     }
 }
 
-/// Validate normalized HDL semantic input using the canonical validator.
+// -----------------------------------------------------------------------------
+// Convenience functions
+// -----------------------------------------------------------------------------
+
+/// Validate normalized HDL semantic input.
 ///
-/// This convenience function is equivalent to
-/// `HdlApi::new().validate(program)`.
+/// This function is equivalent to `HdlApi::new().validate(program)`.
+/// It forwards the canonical result without altering its status or
+/// diagnostics.
 #[must_use]
 pub fn validate(program: &HdlProgram) -> HdlValidationResult {
     validate_hdl(program)
@@ -228,7 +257,7 @@ pub const fn api_schema_version() -> u16 {
 }
 
 // -----------------------------------------------------------------------------
-// Public contract tests
+// Public API contract tests
 // -----------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -239,8 +268,8 @@ mod tests {
     fn api_identity_is_stable() {
         let api = HdlApi::new();
 
-        assert_eq!(api.name(), "zamani.hdl.api");
-        assert_eq!(api.schema_version(), 1);
+        assert_eq!(api.name(), HDL_API_NAME);
+        assert_eq!(api.schema_version(), HDL_API_SCHEMA_VERSION);
         assert_eq!(api_name(), api.name());
         assert_eq!(api_schema_version(), api.schema_version());
     }
@@ -249,6 +278,56 @@ mod tests {
     fn api_is_stateless_and_default_constructible() {
         assert_eq!(HdlApi::new(), HdlApi::default());
         assert_eq!(HdlApi::new(), HdlApi);
+    }
+
+    #[test]
+    fn default_parser_limits_are_accepted() {
+        let api = HdlApi::new();
+        let tokens = [];
+
+        let parser = api.parse_session(&tokens, HdlParserLimits::default());
+
+        assert!(parser.is_ok());
+    }
+
+    #[test]
+    fn zero_nesting_budget_is_rejected() {
+        let api = HdlApi::new();
+        let tokens = [];
+        let limits = HdlParserLimits {
+            max_nesting_depth: 0,
+            ..HdlParserLimits::default()
+        };
+
+        let result = api.parse_session(&tokens, limits);
+
+        assert!(matches!(
+            result,
+            Err(HdlParseError {
+                kind: HdlParseErrorKind::InvalidConfiguration,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn zero_construct_token_budget_is_rejected() {
+        let api = HdlApi::new();
+        let tokens = [];
+        let limits = HdlParserLimits {
+            max_tokens_per_construct: 0,
+            ..HdlParserLimits::default()
+        };
+
+        let result = api.parse_session(&tokens, limits);
+
+        assert!(matches!(
+            result,
+            Err(HdlParseError {
+                kind: HdlParseErrorKind::InvalidConfiguration,
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -269,16 +348,50 @@ mod tests {
     }
 
     #[test]
-    fn api_preserves_incomplete_validation_status() {
-        // The facade must not reinterpret or upgrade a canonical result.
-        // The empty input's actual status is determined by the validator.
+    fn validation_status_and_diagnostics_are_forwarded_unchanged() {
         let program = HdlProgram::default();
+
+        let actual = HdlApi::new().validate(&program);
+        let expected = validate_hdl(&program);
+
+        assert_eq!(actual.status, expected.status);
+        assert_eq!(actual.complete, expected.complete);
+        assert_eq!(actual.diagnostics, expected.diagnostics);
+    }
+
+    #[test]
+    fn validation_preserves_invalid_input_results() {
+        let id = HdlId::new("signal_a")
+            .expect("a non-empty HDL identity should be accepted");
+
+        let program = HdlProgram {
+            signals: vec![
+                HdlSignal {
+                    id: id.clone(),
+                    name: "a".to_owned(),
+                    direction: HdlDirection::Internal,
+                    value_type: HdlValueType::Bit,
+                    location: None,
+                },
+                HdlSignal {
+                    id,
+                    name: "b".to_owned(),
+                    direction: HdlDirection::Internal,
+                    value_type: HdlValueType::Bit,
+                    location: None,
+                },
+            ],
+            ..HdlProgram::default()
+        };
+
         let actual = HdlApi::new().validate(&program);
         let expected = validate_hdl(&program);
 
         assert_eq!(actual, expected);
-        assert_eq!(actual.complete, expected.complete);
-        assert_eq!(actual.status, expected.status);
-        assert_eq!(actual.diagnostics, expected.diagnostics);
+        assert_eq!(actual.status, HdlValidationStatus::Invalid);
+        assert!(actual.complete);
+        assert!(actual.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == HdlDiagnosticCode::DuplicateIdentity
+        }));
     }
 }
