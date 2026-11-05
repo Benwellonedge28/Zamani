@@ -1,15 +1,22 @@
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_docs)]
 
-// src/ai/optimization/cost_model.rs
-
-//! # AI Cost Model
+//! # Zamani AI Optimization — Cost Model
 //!
-//! Target-independent, extensible, multidimensional cost estimation
-//! for Zamani AI computations.
+//! Path: `src/ai/optimization/cost_model.rs`
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
+//!
+//! ## Purpose
+//!
+//! Provides target-independent, extensible, multidimensional cost
+//! estimation for Zamani AI computations.
 //!
 //! ## Architectural ownership
 //!
-//! This module describes and estimates computational costs.
-//! It does not:
+//! This module describes and estimates computational costs. It does not:
 //!
 //! - Select physical execution devices.
 //! - Allocate resources.
@@ -19,27 +26,48 @@
 //! - Execute AI operations.
 //! - Define AI semantic correctness.
 //!
-//! Target-specific cost coefficients must be supplied by the appropriate
-//! downstream target or execution analysis.
+//! Target-specific coefficients are supplied by downstream target,
+//! runtime, or execution-analysis components.
 //!
 //! ## POCO-REAF
 //!
-//! The implementation has no fixed workload, tensor-rank, model-size,
-//! parameter-count, accelerator-count, or worker-count ceilings.
+//! There are no fixed workload, tensor-rank, model-size, parameter-count,
+//! accelerator-count, or worker-count ceilings.
 //!
-//! Cost dimensions are extensible through MetricId.
-//! Operational limits belong to separately supplied execution policies.
+//! Cost dimensions are extensible through `MetricId`. Operational
+//! limits belong to separately supplied execution policies.
 //!
-//! ## Numerical policy
+//! ## Numerical contract
 //!
-//! All externally supplied floating-point values are validated.
-//! NaN, infinity, negative values, and arithmetic overflow are rejected.
-//! Estimates are not silently saturated or converted into successful
-//! zero-cost results.
+//! Externally supplied quantities and coefficients must be finite and
+//! non-negative. NaN, infinity, and negative values are rejected.
+//!
+//! Arithmetic overflow is reported explicitly. Estimates are never
+//! silently saturated or converted into successful zero-cost results.
+//!
+//! ## Units contract
+//!
+//! A `Quantity` does not carry a physical unit. The metric identity and
+//! the supplied profile define the interpretation of each quantity and
+//! coefficient. Callers must not combine incompatible dimensions in an
+//! objective unless their units and interpretation make that meaningful.
+//!
+//! ## Estimation contract
+//!
+//! An analytical estimate requires a coefficient for every workload
+//! metric. Missing coefficients are errors, not implicit zero costs.
+//!
+//! A profile's standard-deviation coefficient is scaled linearly by
+//! workload quantity. This is a coefficient-based estimate, not a
+//! statistical independence or variance-combination model.
 
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+
+// ============================================================================
+// METRIC IDENTITIES
+// ============================================================================
 
 /// Identifies a cost dimension.
 ///
@@ -49,16 +77,25 @@ use std::fmt;
 pub struct MetricId(String);
 
 impl MetricId {
+    /// Creates a metric identity.
+    ///
+    /// Empty, whitespace-only, surrounding-whitespace, and control
+    /// character-containing identifiers are rejected.
     pub fn new(value: impl Into<String>) -> Result<Self, CostModelError> {
         let value = value.into();
 
-        if value.trim().is_empty() {
+        if value.trim().is_empty()
+            || value.trim() != value
+            || value.chars().any(char::is_control)
+        {
             return Err(CostModelError::InvalidMetricId);
         }
 
         Ok(Self(value))
     }
 
+    /// Returns the canonical metric identity.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -69,20 +106,46 @@ impl MetricId {
 /// These are conventions, not an exhaustive enumeration.
 /// Custom metrics remain supported.
 pub mod metrics {
+    /// Computational operation count.
     pub const COMPUTE_OPERATIONS: &str = "compute.operations";
+
+    /// Memory footprint or movement in bytes.
     pub const MEMORY_BYTES: &str = "memory.bytes";
+
+    /// Memory-read volume in bytes.
     pub const MEMORY_READ_BYTES: &str = "memory.read_bytes";
+
+    /// Memory-write volume in bytes.
     pub const MEMORY_WRITE_BYTES: &str = "memory.write_bytes";
+
+    /// Network transfer volume in bytes.
     pub const NETWORK_BYTES: &str = "network.bytes";
+
+    /// Network message count.
     pub const NETWORK_MESSAGES: &str = "network.messages";
-    pub const SYNCHRONIZATION_POINTS: &str = "synchronization.points";
+
+    /// Synchronization point count.
+    pub const SYNCHRONIZATION_POINTS: &str =
+        "synchronization.points";
+
+    /// Energy in joules.
     pub const ENERGY_JOULES: &str = "energy.joules";
+
+    /// Latency in seconds.
     pub const LATENCY_SECONDS: &str = "latency.seconds";
+
+    /// Storage volume in bytes.
     pub const STORAGE_BYTES: &str = "storage.bytes";
+
+    /// Financial cost in a profile-defined currency or unit.
     pub const FINANCIAL_COST: &str = "financial.cost";
 }
 
-/// A non-negative, finite quantity.
+// ============================================================================
+// QUANTITIES
+// ============================================================================
+
+/// A finite, non-negative quantity.
 ///
 /// Quantities are kept separate from their units and cost coefficients.
 /// This avoids silently combining incompatible units.
@@ -90,6 +153,7 @@ pub mod metrics {
 pub struct Quantity(f64);
 
 impl Quantity {
+    /// Constructs a finite, non-negative quantity.
     pub fn new(value: f64) -> Result<Self, CostModelError> {
         if !value.is_finite() {
             return Err(CostModelError::NonFiniteValue);
@@ -102,37 +166,62 @@ impl Quantity {
         Ok(Self(value))
     }
 
-    pub fn zero() -> Self {
+    /// Returns a zero quantity.
+    #[must_use]
+    pub const fn zero() -> Self {
         Self(0.0)
     }
 
-    pub fn get(self) -> f64 {
+    /// Returns the underlying numerical value.
+    #[must_use]
+    pub const fn get(self) -> f64 {
         self.0
     }
 
     fn checked_add(self, other: Self) -> Result<Self, CostModelError> {
-        Self::new(self.0 + other.0)
+        let result = self.0 + other.0;
+
+        if !result.is_finite() {
+            return Err(CostModelError::ArithmeticOverflow);
+        }
+
+        Self::new(result)
     }
 
     fn checked_mul(self, other: Self) -> Result<Self, CostModelError> {
-        Self::new(self.0 * other.0)
+        let result = self.0 * other.0;
+
+        if !result.is_finite() {
+            return Err(CostModelError::ArithmeticOverflow);
+        }
+
+        Self::new(result)
     }
 }
 
+// ============================================================================
+// WORKLOAD
+// ============================================================================
+
 /// Describes an abstract computational workload.
 ///
-/// This is a collection of logical workload quantities.
-/// It does not describe physical device allocation.
+/// This is a collection of logical workload quantities. It does not
+/// describe physical device allocation.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Workload {
     quantities: BTreeMap<MetricId, Quantity>,
 }
 
 impl Workload {
+    /// Creates an empty workload.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Inserts a metric quantity.
+    ///
+    /// Returns an error if the metric already exists.
     pub fn insert(
         &mut self,
         metric: MetricId,
@@ -148,6 +237,7 @@ impl Workload {
         Ok(())
     }
 
+    /// Inserts or replaces a metric quantity.
     pub fn set(
         &mut self,
         metric: MetricId,
@@ -156,28 +246,36 @@ impl Workload {
         self.quantities.insert(metric, quantity);
     }
 
+    /// Returns a metric quantity, if present.
+    #[must_use]
     pub fn get(&self, metric: &MetricId) -> Option<Quantity> {
         self.quantities.get(metric).copied()
     }
 
+    /// Iterates over workload metrics in deterministic key order.
     pub fn iter(
         &self,
     ) -> impl Iterator<Item = (&MetricId, &Quantity)> {
         self.quantities.iter()
     }
 
+    /// Returns whether the workload has no metrics.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.quantities.is_empty()
     }
 }
 
+// ============================================================================
+// COST COEFFICIENTS
+// ============================================================================
+
 /// A cost coefficient.
 ///
-/// Represents the estimated cost associated with one unit
-/// of a particular workload metric.
+/// Represents the estimated cost associated with one unit of a
+/// particular workload metric.
 ///
-/// The unit and interpretation are defined by the profile
-/// supplying the coefficient.
+/// The unit and interpretation are defined by the supplying profile.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CostCoefficient {
     cost_per_unit: Quantity,
@@ -185,7 +283,11 @@ pub struct CostCoefficient {
 }
 
 impl CostCoefficient {
-    pub fn new(
+    /// Creates a cost coefficient.
+    ///
+    /// Both values must already satisfy the `Quantity` contract.
+    #[must_use]
+    pub const fn new(
         cost_per_unit: Quantity,
         standard_deviation: Quantity,
     ) -> Self {
@@ -195,25 +297,27 @@ impl CostCoefficient {
         }
     }
 
-    pub fn cost_per_unit(&self) -> Quantity {
+    /// Returns the estimated cost per workload unit.
+    #[must_use]
+    pub const fn cost_per_unit(&self) -> Quantity {
         self.cost_per_unit
     }
 
-    pub fn standard_deviation(&self) -> Quantity {
+    /// Returns the standard-deviation coefficient per workload unit.
+    #[must_use]
+    pub const fn standard_deviation(&self) -> Quantity {
         self.standard_deviation
     }
 }
 
+// ============================================================================
+// COST PROFILES
+// ============================================================================
+
 /// An externally supplied cost profile.
 ///
-/// A profile may represent:
-///
-/// - An abstract execution realization.
-/// - A CPU execution cost model.
-/// - A GPU execution cost model.
-/// - A distributed execution cost model.
-/// - A quantum execution cost model.
-/// - A hybrid execution cost model.
+/// A profile may represent an abstract execution realization, CPU,
+/// GPU, distributed, quantum, hybrid, or other execution cost model.
 ///
 /// This module does not determine which profile should be selected.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -223,12 +327,16 @@ pub struct CostProfile {
 }
 
 impl CostProfile {
+    /// Creates a cost profile with a non-empty version identifier.
     pub fn new(
         version: impl Into<String>,
     ) -> Result<Self, CostModelError> {
         let version = version.into();
 
-        if version.trim().is_empty() {
+        if version.trim().is_empty()
+            || version.trim() != version
+            || version.chars().any(char::is_control)
+        {
             return Err(CostModelError::InvalidProfileVersion);
         }
 
@@ -238,10 +346,15 @@ impl CostProfile {
         })
     }
 
+    /// Returns the profile version.
+    #[must_use]
     pub fn version(&self) -> &str {
         &self.version
     }
 
+    /// Registers a coefficient for a metric.
+    ///
+    /// Returns an error if the metric is already registered.
     pub fn register(
         &mut self,
         metric: MetricId,
@@ -257,6 +370,8 @@ impl CostProfile {
         Ok(())
     }
 
+    /// Returns a coefficient for a metric, if present.
+    #[must_use]
     pub fn coefficient(
         &self,
         metric: &MetricId,
@@ -264,6 +379,7 @@ impl CostProfile {
         self.coefficients.get(metric)
     }
 
+    /// Iterates over profile coefficients in deterministic key order.
     pub fn iter(
         &self,
     ) -> impl Iterator<Item = (&MetricId, &CostCoefficient)> {
@@ -271,39 +387,50 @@ impl CostProfile {
     }
 }
 
+// ============================================================================
+// OBJECTIVES
+// ============================================================================
+
 /// Describes how a metric contributes to an optimization objective.
 ///
-/// Objective weights are supplied by the caller.
-/// There are no implicit universal optimization priorities.
+/// Objective weights are supplied by the caller. There are no implicit
+/// universal optimization priorities.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ObjectiveWeight {
     weight: Quantity,
 }
 
 impl ObjectiveWeight {
-    pub fn new(weight: Quantity) -> Self {
+    /// Creates an objective weight.
+    #[must_use]
+    pub const fn new(weight: Quantity) -> Self {
         Self { weight }
     }
 
-    pub fn get(self) -> Quantity {
+    /// Returns the weight quantity.
+    #[must_use]
+    pub const fn get(self) -> Quantity {
         self.weight
     }
 }
 
 /// An explicitly supplied optimization objective.
 ///
-/// Scalar scoring is optional because different objectives may
-/// have incompatible units and should not automatically be combined.
+/// Scalar scoring is optional because different objectives may have
+/// incompatible units and should not automatically be combined.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Objective {
     weights: BTreeMap<MetricId, ObjectiveWeight>,
 }
 
 impl Objective {
+    /// Creates an empty objective.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets or replaces the weight for a metric.
     pub fn set_weight(
         &mut self,
         metric: MetricId,
@@ -312,6 +439,8 @@ impl Objective {
         self.weights.insert(metric, weight);
     }
 
+    /// Returns the weight for a metric, if present.
+    #[must_use]
     pub fn weight(
         &self,
         metric: &MetricId,
@@ -320,17 +449,24 @@ impl Objective {
     }
 }
 
+// ============================================================================
+// ESTIMATES
+// ============================================================================
+
 /// Individual estimated cost contribution.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EstimatedCost {
+    /// Expected cost for the metric.
     pub expected: Quantity,
+
+    /// Estimated standard deviation for the metric.
     pub standard_deviation: Quantity,
 }
 
 /// Multidimensional cost estimate.
 ///
-/// The individual metrics remain available rather than being
-/// prematurely reduced to one scalar.
+/// Individual metrics remain available rather than being prematurely
+/// reduced to one scalar.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct CostEstimate {
     values: BTreeMap<MetricId, EstimatedCost>,
@@ -338,12 +474,14 @@ pub struct CostEstimate {
 }
 
 impl CostEstimate {
-    pub fn values(
-        &self,
-    ) -> &BTreeMap<MetricId, EstimatedCost> {
+    /// Returns all estimated metric values.
+    #[must_use]
+    pub fn values(&self) -> &BTreeMap<MetricId, EstimatedCost> {
         &self.values
     }
 
+    /// Returns the estimate for a metric, if present.
+    #[must_use]
     pub fn get(
         &self,
         metric: &MetricId,
@@ -351,17 +489,19 @@ impl CostEstimate {
         self.values.get(metric)
     }
 
+    /// Returns the profile version used to produce the estimate.
+    #[must_use]
     pub fn profile_version(&self) -> &str {
         &self.profile_version
     }
 
     /// Calculates an optional weighted score.
     ///
-    /// The caller is responsible for ensuring that all objective
+    /// The caller is responsible for ensuring that objective
     /// dimensions have meaningful compatible units.
     ///
-    /// Missing objective dimensions are errors rather than
-    /// silently being treated as zero.
+    /// Missing objective dimensions are errors rather than silently
+    /// being treated as zero.
     pub fn score(
         &self,
         objective: &Objective,
@@ -386,17 +526,29 @@ impl CostEstimate {
     }
 }
 
+// ============================================================================
+// COST MODEL CONTRACT
+// ============================================================================
+
 /// Abstract cost-model interface.
 ///
 /// Implementations can provide analytical, empirical, learned,
 /// simulated, or composite cost estimation.
 pub trait CostModel {
+    /// Estimates the cost of a workload under a supplied profile.
+    ///
+    /// Implementations must not treat missing required data as zero
+    /// cost or return a successful estimate after arithmetic overflow.
     fn estimate(
         &self,
         workload: &Workload,
         profile: &CostProfile,
     ) -> Result<CostEstimate, CostModelError>;
 }
+
+// ============================================================================
+// ANALYTICAL COST MODEL
+// ============================================================================
 
 /// Analytical cost model.
 ///
@@ -406,7 +558,9 @@ pub trait CostModel {
 pub struct AnalyticalCostModel;
 
 impl AnalyticalCostModel {
-    pub fn new() -> Self {
+    /// Creates an analytical cost model.
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -427,13 +581,11 @@ impl CostModel for AnalyticalCostModel {
                     )
                 })?;
 
-            let expected = quantity.checked_mul(
-                coefficient.cost_per_unit(),
-            )?;
+            let expected = quantity
+                .checked_mul(coefficient.cost_per_unit())?;
 
-            let standard_deviation = quantity.checked_mul(
-                coefficient.standard_deviation(),
-            )?;
+            let standard_deviation = quantity
+                .checked_mul(coefficient.standard_deviation())?;
 
             values.insert(
                 metric.clone(),
@@ -451,17 +603,39 @@ impl CostModel for AnalyticalCostModel {
     }
 }
 
-/// Describes why an estimate could not be produced.
+// ============================================================================
+// ERRORS
+// ============================================================================
+
+/// Describes why a cost estimate could not be produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CostModelError {
+    /// A metric identifier is invalid.
     InvalidMetricId,
+
+    /// A profile version is invalid.
     InvalidProfileVersion,
+
+    /// A negative quantity or coefficient was supplied.
     NegativeValue,
+
+    /// A non-finite numerical value was supplied.
     NonFiniteValue,
+
+    /// A metric was inserted more than once.
     DuplicateMetric(String),
+
+    /// A workload metric has no coefficient in the profile.
     MissingCoefficient(String),
+
+    /// An objective references a metric that was not estimated.
     MissingEstimatedMetric(String),
+
+    /// A model configuration is invalid.
     InvalidModelConfiguration(String),
+
+    /// An arithmetic operation overflowed the representable range.
     ArithmeticOverflow,
 }
 
@@ -472,10 +646,10 @@ impl fmt::Display for CostModelError {
     ) -> fmt::Result {
         match self {
             Self::InvalidMetricId => {
-                write!(formatter, "Cost metric identifier is empty")
+                write!(formatter, "Cost metric identifier is invalid")
             }
             Self::InvalidProfileVersion => {
-                write!(formatter, "Cost profile version is empty")
+                write!(formatter, "Cost profile version is invalid")
             }
             Self::NegativeValue => {
                 write!(formatter, "Negative cost quantity is invalid")
@@ -489,13 +663,13 @@ impl fmt::Display for CostModelError {
             Self::MissingCoefficient(metric) => {
                 write!(
                     formatter,
-                    "Missing cost coefficient for metric: {metric}"
+                    "Missing cost coefficient for metric: {metric}",
                 )
             }
             Self::MissingEstimatedMetric(metric) => {
                 write!(
                     formatter,
-                    "Objective references an unestimated metric: {metric}"
+                    "Objective references an unestimated metric: {metric}",
                 )
             }
             Self::InvalidModelConfiguration(message) => {
@@ -510,6 +684,10 @@ impl fmt::Display for CostModelError {
 
 impl Error for CostModelError {}
 
+// ============================================================================
+// PROFILE BUILDER
+// ============================================================================
+
 /// Builder for an analytical cost profile.
 #[derive(Debug, Clone)]
 pub struct CostProfileBuilder {
@@ -517,6 +695,7 @@ pub struct CostProfileBuilder {
 }
 
 impl CostProfileBuilder {
+    /// Creates a profile builder.
     pub fn new(
         version: impl Into<String>,
     ) -> Result<Self, CostModelError> {
@@ -525,6 +704,7 @@ impl CostProfileBuilder {
         })
     }
 
+    /// Adds a metric coefficient.
     pub fn coefficient(
         mut self,
         metric: impl Into<String>,
@@ -543,10 +723,16 @@ impl CostProfileBuilder {
         Ok(self)
     }
 
+    /// Builds the profile.
+    #[must_use]
     pub fn build(self) -> CostProfile {
         self.profile
     }
 }
+
+// ============================================================================
+// REGRESSION TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -556,33 +742,33 @@ mod tests {
         MetricId::new(name).expect("valid metric")
     }
 
+    fn quantity(value: f64) -> Quantity {
+        Quantity::new(value).expect("valid quantity")
+    }
+
     #[test]
     fn estimates_multiple_cost_dimensions() {
         let mut workload = Workload::new();
 
-        workload.insert(
-            metric(metrics::COMPUTE_OPERATIONS),
-            Quantity::new(100.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(
+                metric(metrics::COMPUTE_OPERATIONS),
+                quantity(100.0),
+            )
+            .unwrap();
 
-        workload.insert(
-            metric(metrics::MEMORY_BYTES),
-            Quantity::new(2048.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(
+                metric(metrics::MEMORY_BYTES),
+                quantity(2048.0),
+            )
+            .unwrap();
 
         let profile = CostProfileBuilder::new("test-v1")
             .unwrap()
-            .coefficient(
-                metrics::COMPUTE_OPERATIONS,
-                0.5,
-                0.1,
-            )
+            .coefficient(metrics::COMPUTE_OPERATIONS, 0.5, 0.1)
             .unwrap()
-            .coefficient(
-                metrics::MEMORY_BYTES,
-                0.01,
-                0.002,
-            )
+            .coefficient(metrics::MEMORY_BYTES, 0.01, 0.002)
             .unwrap()
             .build();
 
@@ -591,14 +777,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            estimate.get(&metric(metrics::COMPUTE_OPERATIONS))
-                .unwrap().expected.get(),
+            estimate
+                .get(&metric(metrics::COMPUTE_OPERATIONS))
+                .unwrap()
+                .expected
+                .get(),
             50.0,
         );
 
         assert_eq!(
-            estimate.get(&metric(metrics::MEMORY_BYTES))
-                .unwrap().expected.get(),
+            estimate
+                .get(&metric(metrics::MEMORY_BYTES))
+                .unwrap()
+                .expected
+                .get(),
             20.48,
         );
     }
@@ -607,10 +799,12 @@ mod tests {
     fn supports_extension_metrics() {
         let mut workload = Workload::new();
 
-        workload.insert(
-            metric("custom.quantum.entanglement"),
-            Quantity::new(12.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(
+                metric("custom.quantum.entanglement"),
+                quantity(12.0),
+            )
+            .unwrap();
 
         let profile = CostProfileBuilder::new("custom-v1")
             .unwrap()
@@ -627,9 +821,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            estimate.get(
-                &metric("custom.quantum.entanglement")
-            ).unwrap().expected.get(),
+            estimate
+                .get(&metric("custom.quantum.entanglement"))
+                .unwrap()
+                .expected
+                .get(),
             24.0,
         );
     }
@@ -659,23 +855,31 @@ mod tests {
     }
 
     #[test]
+    fn rejects_negative_zero_only_by_value_semantics() {
+        // IEEE-754 negative zero is numerically equal to zero and is
+        // accepted as a non-negative quantity.
+        assert_eq!(
+            Quantity::new(-0.0).unwrap().get(),
+            0.0,
+        );
+    }
+
+    #[test]
     fn detects_missing_coefficients() {
         let mut workload = Workload::new();
 
-        workload.insert(
-            metric("unknown.metric"),
-            Quantity::new(1.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(metric("unknown.metric"), quantity(1.0))
+            .unwrap();
 
         let profile = CostProfile::new("v1").unwrap();
 
-        let result = AnalyticalCostModel
-            .estimate(&workload, &profile);
+        let result = AnalyticalCostModel.estimate(&workload, &profile);
 
         assert_eq!(
             result,
             Err(CostModelError::MissingCoefficient(
-                "unknown.metric".to_owned()
+                "unknown.metric".to_owned(),
             )),
         );
     }
@@ -684,17 +888,33 @@ mod tests {
     fn rejects_duplicate_workload_metrics() {
         let mut workload = Workload::new();
 
-        workload.insert(
-            metric("compute"),
-            Quantity::new(1.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(metric("compute"), quantity(1.0))
+            .unwrap();
 
         assert!(matches!(
-            workload.insert(
+            workload.insert(metric("compute"), quantity(2.0)),
+            Err(CostModelError::DuplicateMetric(_)),
+        ));
+    }
+
+    #[test]
+    fn rejects_duplicate_profile_coefficients() {
+        let mut profile = CostProfile::new("v1").unwrap();
+
+        profile
+            .register(
                 metric("compute"),
-                Quantity::new(2.0).unwrap(),
+                CostCoefficient::new(quantity(1.0), quantity(0.0)),
+            )
+            .unwrap();
+
+        assert!(matches!(
+            profile.register(
+                metric("compute"),
+                CostCoefficient::new(quantity(2.0), quantity(0.0)),
             ),
-            Err(CostModelError::DuplicateMetric(_))
+            Err(CostModelError::DuplicateMetric(_)),
         ));
     }
 
@@ -702,18 +922,16 @@ mod tests {
     fn weighted_objective_preserves_explicit_priorities() {
         let mut workload = Workload::new();
 
-        workload.insert(
-            metric(metrics::COMPUTE_OPERATIONS),
-            Quantity::new(10.0).unwrap(),
-        ).unwrap();
+        workload
+            .insert(
+                metric(metrics::COMPUTE_OPERATIONS),
+                quantity(10.0),
+            )
+            .unwrap();
 
         let profile = CostProfileBuilder::new("v1")
             .unwrap()
-            .coefficient(
-                metrics::COMPUTE_OPERATIONS,
-                2.0,
-                0.0,
-            )
+            .coefficient(metrics::COMPUTE_OPERATIONS, 2.0, 0.0)
             .unwrap()
             .build();
 
@@ -725,9 +943,7 @@ mod tests {
 
         objective.set_weight(
             metric(metrics::COMPUTE_OPERATIONS),
-            ObjectiveWeight::new(
-                Quantity::new(3.0).unwrap(),
-            ),
+            ObjectiveWeight::new(quantity(3.0)),
         );
 
         assert_eq!(
@@ -737,21 +953,111 @@ mod tests {
     }
 
     #[test]
-    fn detects_arithmetic_overflow() {
-        let result = Quantity::new(f64::MAX)
-            .unwrap()
-            .checked_mul(
-                Quantity::new(2.0).unwrap(),
-            );
+    fn objective_missing_metric_is_an_error() {
+        let estimate = CostEstimate::default();
+        let mut objective = Objective::new();
+
+        objective.set_weight(
+            metric("not.estimated"),
+            ObjectiveWeight::new(quantity(1.0)),
+        );
 
         assert_eq!(
-            result,
-            Err(CostModelError::NonFiniteValue),
+            estimate.score(&objective),
+            Err(CostModelError::MissingEstimatedMetric(
+                "not.estimated".to_owned(),
+            )),
         );
     }
 
     #[test]
-    fn empty_workload_has_zero_cost() {
+    fn multiplication_overflow_is_reported_explicitly() {
+        let result = quantity(f64::MAX).checked_mul(quantity(2.0));
+
+        assert_eq!(
+            result,
+            Err(CostModelError::ArithmeticOverflow),
+        );
+    }
+
+    #[test]
+    fn addition_overflow_is_reported_explicitly() {
+        let result = quantity(f64::MAX).checked_add(quantity(f64::MAX));
+
+        assert_eq!(
+            result,
+            Err(CostModelError::ArithmeticOverflow),
+        );
+    }
+
+    #[test]
+    fn estimate_rejects_overflow_in_expected_cost() {
+        let mut workload = Workload::new();
+
+        workload
+            .insert(metric("compute"), quantity(f64::MAX))
+            .unwrap();
+
+        let profile = CostProfileBuilder::new("overflow-v1")
+            .unwrap()
+            .coefficient("compute", 2.0, 0.0)
+            .unwrap()
+            .build();
+
+        assert_eq!(
+            AnalyticalCostModel.estimate(&workload, &profile),
+            Err(CostModelError::ArithmeticOverflow),
+        );
+    }
+
+    #[test]
+    fn estimate_rejects_overflow_in_standard_deviation() {
+        let mut workload = Workload::new();
+
+        workload
+            .insert(metric("compute"), quantity(f64::MAX))
+            .unwrap();
+
+        let profile = CostProfileBuilder::new("overflow-v1")
+            .unwrap()
+            .coefficient("compute", 0.0, 2.0)
+            .unwrap()
+            .build();
+
+        assert_eq!(
+            AnalyticalCostModel.estimate(&workload, &profile),
+            Err(CostModelError::ArithmeticOverflow),
+        );
+    }
+
+    #[test]
+    fn weighted_score_rejects_overflow() {
+        let estimate = CostEstimate {
+            values: BTreeMap::from([(
+                metric("compute"),
+                EstimatedCost {
+                    expected: quantity(f64::MAX),
+                    standard_deviation: Quantity::zero(),
+                },
+            )]),
+            profile_version: "test-v1".to_owned(),
+        };
+
+        let mut objective = Objective::new();
+
+        objective.set_weight(
+            metric("compute"),
+            ObjectiveWeight::new(quantity(2.0)),
+        );
+
+        assert_eq!(
+            estimate.score(&objective),
+            Err(CostModelError::ArithmeticOverflow),
+        );
+    }
+
+    #[test]
+    fn empty_workload_has_zero_dimensions() {
         let workload = Workload::new();
         let profile = CostProfile::new("v1").unwrap();
 
@@ -772,5 +1078,36 @@ mod tests {
             .unwrap();
 
         assert_eq!(estimate.profile_version(), "2026.1");
+    }
+
+    #[test]
+    fn rejects_invalid_metric_identity() {
+        assert_eq!(
+            MetricId::new("  "),
+            Err(CostModelError::InvalidMetricId),
+        );
+
+        assert_eq!(
+            MetricId::new(" metric"),
+            Err(CostModelError::InvalidMetricId),
+        );
+
+        assert_eq!(
+            MetricId::new("metric\nname"),
+            Err(CostModelError::InvalidMetricId),
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_profile_version() {
+        assert_eq!(
+            CostProfile::new(" "),
+            Err(CostModelError::InvalidProfileVersion),
+        );
+
+        assert_eq!(
+            CostProfile::new("v1\n"),
+            Err(CostModelError::InvalidProfileVersion),
+        );
     }
 }
