@@ -1,4 +1,3 @@
-
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
@@ -13,30 +12,23 @@
 //!
 //! PURPOSE
 //!
-//! Establishes an independent, fail-closed legality boundary for
-//! AI optimization transformations.
+//! Establishes a fail-closed legality boundary for AI optimization
+//! transformations. It validates structural edit consistency and
+//! coordinates evidence-based semantic preservation assessment.
 //!
-//! The module validates structural edit consistency and coordinates
-//! evidence-based semantic preservation assessment.
-//!
-//! It does not create another graph, semantic model, IR, optimizer,
-//! tensor system, execution engine, or hardware abstraction.
+//! This module does not create another graph, semantic model, IR,
+//! optimizer, tensor system, execution engine, or hardware abstraction.
 //!
 //! OWNERSHIP
 //!
-//! This module owns:
-//! - legality evidence contracts;
-//! - preservation obligation identities;
-//! - legality assessment outcomes;
-//! - structural transformation-plan verification;
-//! - evidence completeness verification;
-//! - fail-closed legality decisions;
-//! - the implementation of TransformationLegality;
-//! - legality diagnostics.
+//! This module owns legality evidence contracts, preservation obligation
+//! identities, legality outcomes, structural plan verification,
+//! evidence completeness verification, diagnostics, and the implementation
+//! of the existing TransformationLegality interface.
 //!
 //! AUTHORITIES
 //!
-//! General transformation contracts:
+//! Transformation contracts:
 //!     crate::ai::optimization::transformations
 //!
 //! Graph structure:
@@ -63,45 +55,24 @@
 //! POCO-REAF
 //!
 //! No universal limits are imposed on graph nodes, edges, edits,
-//! obligations, transformations, model parameters, tensor dimensions,
+//! obligations, transformations, parameters, tensor dimensions,
 //! or execution targets.
 //!
-//! Allocation failures are never interpreted as successful validation.
-//!
-//! UNKNOWN EVIDENCE NEVER PROVES LEGALITY.
-//!
-//! SECURITY
+//! UNKNOWN OR MALFORMED EVIDENCE NEVER PROVES LEGALITY.
 //!
 //! Evidence references provide traceability, not cryptographic
-//! authentication. Trusted semantic and IR verification adapters
-//! must establish the truth of their supplied proof statuses.
-//!
-//! TRANSACTIONAL INTEGRATION
+//! authentication. Trusted semantic and IR verification adapters must
+//! establish the truth of supplied proof statuses.
 //!
 //! This module validates plans before TransformationEngine commits them.
 //! The canonical graph adapter remains responsible for atomic mutation.
-//!
-//! FREEZE CONDITIONS
-//!
-//! - Structural edit validation is complete.
-//! - Semantic evidence is fail-closed.
-//! - Missing obligations are never accepted.
-//! - Disproven obligations reject transformations.
-//! - Incomplete evidence cannot produce legal results.
-//! - No duplicate semantic or graph authority is introduced.
-//! - No unsafe Rust is introduced.
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ai::optimization::transformations::{
-    GraphEdit,
-    GraphRevision,
-    LegalityResult,
-    PreservationRequirements,
-    TransformationGraph,
-    TransformationLegality,
-    TransformationPlan,
+    GraphEdit, GraphRevision, LegalityResult, PreservationRequirements,
+    TransformationGraph, TransformationLegality, TransformationPlan,
 };
 
 // ============================================================================
@@ -110,24 +81,14 @@ use crate::ai::optimization::transformations::{
 
 /// Stable, extensible identity of a semantic preservation obligation.
 ///
-/// Namespaces allow future AI computational domains and extensions
-/// to introduce additional obligations without modifying this module.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-)]
+/// Namespaces allow future computational domains and extensions to
+/// introduce obligations without modifying this module.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct ObligationId(String);
 
 impl ObligationId {
     /// Creates an obligation identity.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> Result<Self, LegalityError> {
+    pub fn new(value: impl Into<String>) -> Result<Self, LegalityError> {
         let value = value.into();
 
         if value.trim().is_empty()
@@ -148,10 +109,7 @@ impl ObligationId {
 }
 
 impl fmt::Display for ObligationId {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -163,7 +121,6 @@ impl fmt::Display for ObligationId {
 /// Standard semantic preservation obligation identities.
 ///
 /// These are open-ended identifiers rather than a closed enumeration.
-/// Extensions may introduce additional obligations.
 pub mod obligations {
     /// Observable program behavior must remain equivalent.
     pub const OBSERVABLE_BEHAVIOR: &str =
@@ -174,8 +131,7 @@ pub mod obligations {
         "zamani.semantic.types_and_shapes";
 
     /// Observable effects must remain valid.
-    pub const EFFECTS: &str =
-        "zamani.semantic.effects";
+    pub const EFFECTS: &str = "zamani.semantic.effects";
 
     /// Required numerical semantics must be preserved.
     pub const NUMERICAL_SEMANTICS: &str =
@@ -190,16 +146,13 @@ pub mod obligations {
         "zamani.semantic.state_dependencies";
 
     /// Provenance obligations must be preserved.
-    pub const PROVENANCE: &str =
-        "zamani.semantic.provenance";
+    pub const PROVENANCE: &str = "zamani.semantic.provenance";
 
     /// Security obligations must be preserved.
-    pub const SECURITY: &str =
-        "zamani.security.obligations";
+    pub const SECURITY: &str = "zamani.security.obligations";
 
     /// Determinism requirements must be preserved.
-    pub const DETERMINISM: &str =
-        "zamani.semantic.determinism";
+    pub const DETERMINISM: &str = "zamani.semantic.determinism";
 
     /// Resource requirements must be preserved.
     pub const RESOURCE_REQUIREMENTS: &str =
@@ -210,16 +163,13 @@ pub mod obligations {
         "zamani.semantic.reproducibility";
 
     /// Differentiation semantics must be preserved when applicable.
-    pub const DIFFERENTIATION: &str =
-        "zamani.ai.differentiation";
+    pub const DIFFERENTIATION: &str = "zamani.ai.differentiation";
 
     /// Aliasing and ownership contracts must be preserved.
-    pub const ALIASING: &str =
-        "zamani.semantic.aliasing";
+    pub const ALIASING: &str = "zamani.semantic.aliasing";
 
     /// Control and data dependency semantics must be preserved.
-    pub const DEPENDENCIES: &str =
-        "zamani.semantic.dependencies";
+    pub const DEPENDENCIES: &str = "zamani.semantic.dependencies";
 }
 
 // ============================================================================
@@ -227,16 +177,7 @@ pub mod obligations {
 // ============================================================================
 
 /// Status of a preservation proof supplied by an authoritative verifier.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[non_exhaustive]
 pub enum ProofStatus {
     /// The authoritative verifier established preservation.
@@ -280,12 +221,8 @@ impl LegalityEvidence {
             validate_reference(reference)?;
         }
 
-        if status == ProofStatus::Proven
-            && references.is_empty()
-        {
-            return Err(
-                LegalityError::MissingEvidenceReference,
-            );
+        if status == ProofStatus::Proven && references.is_empty() {
+            return Err(LegalityError::MissingEvidenceReference);
         }
 
         Ok(Self {
@@ -321,16 +258,12 @@ impl LegalityEvidence {
     }
 }
 
-fn validate_reference(
-    reference: &str,
-) -> Result<(), LegalityError> {
+fn validate_reference(reference: &str) -> Result<(), LegalityError> {
     if reference.trim().is_empty()
         || reference.trim() != reference
         || reference.chars().any(char::is_control)
     {
-        return Err(
-            LegalityError::InvalidEvidenceReference,
-        );
+        return Err(LegalityError::InvalidEvidenceReference);
     }
 
     Ok(())
@@ -341,14 +274,7 @@ fn validate_reference(
 // ============================================================================
 
 /// Final legality classification.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Hash,
-)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[non_exhaustive]
 pub enum LegalityStatus {
     /// All required obligations have been proven.
@@ -366,14 +292,7 @@ pub enum LegalityStatus {
 // ============================================================================
 
 /// Classification of a legality diagnostic.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Eq,
-    PartialEq,
-    Hash,
-)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[non_exhaustive]
 pub enum LegalityDiagnosticKind {
     /// Structural graph or edit inconsistency.
@@ -412,9 +331,7 @@ pub struct LegalityDiagnostic {
 impl LegalityDiagnostic {
     /// Returns the diagnostic kind.
     #[must_use]
-    pub const fn kind(
-        &self,
-    ) -> LegalityDiagnosticKind {
+    pub const fn kind(&self) -> LegalityDiagnosticKind {
         self.kind
     }
 
@@ -477,10 +394,7 @@ impl LegalityAssessment {
     /// Returns whether validation is indeterminate.
     #[must_use]
     pub const fn is_indeterminate(&self) -> bool {
-        matches!(
-            self.status,
-            LegalityStatus::Indeterminate
-        )
+        matches!(self.status, LegalityStatus::Indeterminate)
     }
 
     /// Returns diagnostics.
@@ -491,17 +405,13 @@ impl LegalityAssessment {
 
     /// Returns evidence references.
     #[must_use]
-    pub fn evidence_references(
-        &self,
-    ) -> &BTreeSet<String> {
+    pub fn evidence_references(&self) -> &BTreeSet<String> {
         &self.evidence_references
     }
 
     /// Converts the assessment to the existing transformation contract.
     #[must_use]
-    pub fn into_transformation_result(
-        self,
-    ) -> LegalityResult {
+    pub fn into_transformation_result(self) -> LegalityResult {
         let diagnostics = self
             .diagnostics
             .into_iter()
@@ -514,13 +424,11 @@ impl LegalityAssessment {
                 complete: true,
                 diagnostics,
             },
-
             LegalityStatus::Illegal => LegalityResult {
                 legal: false,
                 complete: true,
                 diagnostics,
             },
-
             LegalityStatus::Indeterminate => LegalityResult {
                 legal: false,
                 complete: false,
@@ -536,12 +444,9 @@ impl LegalityAssessment {
 
 /// Resolves the obligations that must be preserved.
 ///
-/// Observable behavior, types, effects, reproducibility, and
-/// dependency semantics are mandatory.
-///
-/// Other requirements are activated by the existing preservation policy.
-///
-/// This module does not invent or replace the canonical semantic model.
+/// Observable behavior, types, effects, reproducibility, and dependency
+/// semantics are mandatory. Other obligations are activated by the
+/// existing preservation policy.
 pub fn required_obligations(
     requirements: &PreservationRequirements,
 ) -> Result<BTreeSet<ObligationId>, LegalityError> {
@@ -577,18 +482,9 @@ pub fn required_obligations(
             requirements.state_dependencies,
             obligations::STATE_DEPENDENCIES,
         ),
-        (
-            requirements.provenance,
-            obligations::PROVENANCE,
-        ),
-        (
-            requirements.security,
-            obligations::SECURITY,
-        ),
-        (
-            requirements.determinism,
-            obligations::DETERMINISM,
-        ),
+        (requirements.provenance, obligations::PROVENANCE),
+        (requirements.security, obligations::SECURITY),
+        (requirements.determinism, obligations::DETERMINISM),
         (
             requirements.resource_requirements,
             obligations::RESOURCE_REQUIREMENTS,
@@ -610,13 +506,12 @@ pub fn required_obligations(
 
 /// Authoritative source of semantic preservation evidence.
 ///
-/// Implementations must delegate to the appropriate canonical semantic,
-/// numerical, security, provenance, and IR verification services.
+/// Implementations must delegate to canonical semantic, numerical,
+/// security, provenance, and IR verification services.
 ///
-/// Returning Proven is a claim that the authoritative verification
-/// actually completed. A reference alone does not establish proof.
-///
-/// A provider must not convert unavailable information into success.
+/// Returning `Proven` asserts that authoritative verification completed.
+/// A reference alone does not establish proof. Providers must not convert
+/// unavailable information into success.
 pub trait LegalityEvidenceProvider<G: TransformationGraph> {
     /// Produces evidence for a proposed transformation.
     fn assess(
@@ -633,12 +528,7 @@ pub trait LegalityEvidenceProvider<G: TransformationGraph> {
 // ============================================================================
 
 /// Errors encountered while performing legality validation.
-#[derive(
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum LegalityError {
     /// Invalid obligation identity.
@@ -691,91 +581,79 @@ pub enum LegalityError {
 }
 
 impl fmt::Display for LegalityError {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidObligationIdentity =>
-                formatter.write_str(
-                    "Invalid preservation obligation identity.",
-                ),
-
-            Self::MissingExplanation =>
-                formatter.write_str(
-                    "Legality evidence requires an explanation.",
-                ),
-
-            Self::InvalidEvidenceReference =>
-                formatter.write_str(
-                    "Invalid legality evidence reference.",
-                ),
-
-            Self::MissingEvidenceReference =>
+            Self::InvalidObligationIdentity => {
+                formatter.write_str("Invalid preservation obligation identity.")
+            }
+            Self::MissingExplanation => {
+                formatter.write_str("Legality evidence requires an explanation.")
+            }
+            Self::InvalidEvidenceReference => {
+                formatter.write_str("Invalid legality evidence reference.")
+            }
+            Self::MissingEvidenceReference => {
                 formatter.write_str(
                     "Proven evidence requires a traceable reference.",
-                ),
-
-            Self::AllocationFailed =>
-                formatter.write_str(
-                    "Legality validation allocation failed.",
-                ),
-
-            Self::DuplicateNode =>
+                )
+            }
+            Self::AllocationFailed => {
+                formatter.write_str("Legality validation allocation failed.")
+            }
+            Self::DuplicateNode => {
                 formatter.write_str(
                     "The canonical graph contains duplicate nodes.",
-                ),
-
-            Self::MissingEndpoint =>
+                )
+            }
+            Self::MissingEndpoint => {
                 formatter.write_str(
                     "A graph edge references an undeclared endpoint.",
-                ),
-
-            Self::MissingEditTarget =>
+                )
+            }
+            Self::MissingEditTarget => {
                 formatter.write_str(
                     "A graph edit references a nonexistent object.",
-                ),
-
-            Self::DuplicateEdit =>
+                )
+            }
+            Self::DuplicateEdit => {
                 formatter.write_str(
                     "The transformation plan contains duplicate edits.",
-                ),
-
-            Self::DanglingEdge =>
+                )
+            }
+            Self::DanglingEdge => {
                 formatter.write_str(
                     "A removed node retains an incident edge.",
-                ),
-
-            Self::InvalidNewEdge =>
-                formatter.write_str(
-                    "A new edge has invalid endpoints.",
-                ),
-
-            Self::InvalidAffectedNode =>
+                )
+            }
+            Self::InvalidNewEdge => {
+                formatter.write_str("A new edge has invalid endpoints.")
+            }
+            Self::InvalidAffectedNode => {
                 formatter.write_str(
                     "A plan identifies a node outside the original graph.",
-                ),
-
-            Self::StalePlan =>
+                )
+            }
+            Self::StalePlan => {
                 formatter.write_str(
                     "The transformation plan uses a stale graph revision.",
-                ),
-
-            Self::EmptyPlan =>
+                )
+            }
+            Self::EmptyPlan => {
                 formatter.write_str(
                     "The transformation plan contains no edits.",
-                ),
-
-            Self::DuplicateEvidence =>
+                )
+            }
+            Self::DuplicateEvidence => {
                 formatter.write_str(
                     "The evidence provider returned duplicate obligations.",
-                ),
-
-            Self::EvidenceProviderFailure(reason) =>
+                )
+            }
+            Self::EvidenceProviderFailure(reason) => {
                 write!(
                     formatter,
                     "Legality evidence provider failed: {reason}",
-                ),
+                )
+            }
         }
     }
 }
@@ -842,20 +720,20 @@ where
 
     let mut remaining_nodes = original_nodes.clone();
     let mut remaining_edges = original_edges.clone();
-
     let mut added_edges = BTreeSet::new();
     let mut identities = BTreeSet::new();
 
     for edit in plan.edits() {
         let identity = match edit {
-            GraphEdit::RemoveNode(node) =>
-                EditIdentity::RemoveNode(node.clone()),
-
-            GraphEdit::RemoveEdge(edge) =>
-                EditIdentity::RemoveEdge(edge.clone()),
-
-            GraphEdit::AddEdge(edge) =>
-                EditIdentity::AddEdge(edge.clone()),
+            GraphEdit::RemoveNode(node) => {
+                EditIdentity::RemoveNode(node.clone())
+            }
+            GraphEdit::RemoveEdge(edge) => {
+                EditIdentity::RemoveEdge(edge.clone())
+            }
+            GraphEdit::AddEdge(edge) => {
+                EditIdentity::AddEdge(edge.clone())
+            }
         };
 
         if !identities.insert(identity) {
@@ -867,22 +745,16 @@ where
                 if !original_nodes.contains(node)
                     || !remaining_nodes.remove(node)
                 {
-                    return Err(
-                        LegalityError::MissingEditTarget,
-                    );
+                    return Err(LegalityError::MissingEditTarget);
                 }
             }
-
             GraphEdit::RemoveEdge(edge) => {
                 if !original_edges.contains(edge)
                     || !remaining_edges.remove(edge)
                 {
-                    return Err(
-                        LegalityError::MissingEditTarget,
-                    );
+                    return Err(LegalityError::MissingEditTarget);
                 }
             }
-
             GraphEdit::AddEdge(edge) => {
                 added_edges.insert(edge.clone());
             }
@@ -904,9 +776,7 @@ where
         }
     }
 
-    for edge in remaining_edges.iter().chain(
-        added_edges.iter(),
-    ) {
+    for edge in remaining_edges.iter().chain(added_edges.iter()) {
         let source = graph.source(edge);
         let destination = graph.destination(edge);
 
@@ -932,8 +802,8 @@ where
 
 /// Evidence-based transformation legality validator.
 ///
-/// This validator delegates semantic proof to an injected authoritative
-/// provider. It never assumes that structural consistency proves legality.
+/// Semantic proof is delegated to an injected authoritative provider.
+/// Structural consistency alone never establishes legality.
 pub struct LegalityValidator<P> {
     provider: P,
 }
@@ -969,44 +839,33 @@ impl<P> LegalityValidator<P> {
         G: TransformationGraph,
         P: LegalityEvidenceProvider<G>,
     {
-        match validate_structure(graph, plan) {
-            Ok(()) => {}
+        if let Err(error) = validate_structure(graph, plan) {
+            let kind = match error {
+                LegalityError::StalePlan => LegalityDiagnosticKind::StalePlan,
+                LegalityError::AllocationFailed => {
+                    LegalityDiagnosticKind::ResourceFailure
+                }
+                _ => LegalityDiagnosticKind::Structural,
+            };
 
-            Err(error) => {
-                let kind = match error {
-                    LegalityError::StalePlan =>
-                        LegalityDiagnosticKind::StalePlan,
-
-                    LegalityError::AllocationFailed =>
-                        LegalityDiagnosticKind::ResourceFailure,
-
-                    _ =>
-                        LegalityDiagnosticKind::Structural,
-                };
-
-                return LegalityAssessment::new(
-                    LegalityStatus::Illegal,
-                    vec![LegalityDiagnostic {
-                        kind,
-                        obligation: None,
-                        message: error.to_string(),
-                    }],
-                    BTreeSet::new(),
-                );
-            }
+            return LegalityAssessment::new(
+                LegalityStatus::Illegal,
+                vec![LegalityDiagnostic {
+                    kind,
+                    obligation: None,
+                    message: error.to_string(),
+                }],
+                BTreeSet::new(),
+            );
         }
 
-        let required = match required_obligations(
-            requirements,
-        ) {
+        let required = match required_obligations(requirements) {
             Ok(required) => required,
-
             Err(error) => {
                 return LegalityAssessment::new(
                     LegalityStatus::Indeterminate,
                     vec![LegalityDiagnostic {
-                        kind:
-                            LegalityDiagnosticKind::IncompleteValidation,
+                        kind: LegalityDiagnosticKind::IncompleteValidation,
                         obligation: None,
                         message: error.to_string(),
                     }],
@@ -1022,7 +881,6 @@ impl<P> LegalityValidator<P> {
             &required,
         ) {
             Ok(evidence) => evidence,
-
             Err(reason) => {
                 return LegalityAssessment::new(
                     LegalityStatus::Indeterminate,
@@ -1045,48 +903,61 @@ impl<P> LegalityValidator<P> {
 // EVIDENCE EVALUATION
 // ============================================================================
 
+/// Evaluates provider evidence against the exact required obligation set.
+///
+/// Duplicate and unexpected evidence make the assessment indeterminate
+/// unless a required obligation is disproven, in which case the result
+/// is illegal. Every evidence item is inspected; duplicates cannot
+/// overwrite a disproven result.
 fn evaluate_evidence(
     required: &BTreeSet<ObligationId>,
     evidence: Vec<LegalityEvidence>,
 ) -> LegalityAssessment {
     let mut by_obligation =
-        BTreeMap::<ObligationId, LegalityEvidence>::new();
+        BTreeMap::<ObligationId, Vec<LegalityEvidence>>::new();
 
     let mut diagnostics = Vec::new();
     let mut references = BTreeSet::new();
+    let mut malformed_evidence = false;
 
     for item in evidence {
-        if !required.contains(item.obligation()) {
+        let obligation = item.obligation().clone();
+
+        if !required.contains(&obligation) {
+            malformed_evidence = true;
+
             diagnostics.push(LegalityDiagnostic {
-                kind:
-                    LegalityDiagnosticKind::IncompleteValidation,
-                obligation: Some(item.obligation().clone()),
+                kind: LegalityDiagnosticKind::IncompleteValidation,
+                obligation: Some(obligation.clone()),
                 message: format!(
-                    "Evidence was supplied for an obligation \
-                     not requested by the current preservation policy: {}",
-                    item.obligation(),
+                    "Evidence was supplied for an obligation not requested \
+                     by the current preservation policy: {obligation}",
                 ),
             });
 
             continue;
         }
 
-        let key = item.obligation().clone();
+        let entries = by_obligation.entry(obligation.clone()).or_default();
 
-        if by_obligation.insert(key.clone(), item).is_some() {
+        if !entries.is_empty() {
+            malformed_evidence = true;
+
             diagnostics.push(LegalityDiagnostic {
-                kind:
-                    LegalityDiagnosticKind::IncompleteValidation,
-                obligation: Some(key),
-                message:
-                    "Duplicate evidence for one preservation obligation."
-                        .to_string(),
+                kind: LegalityDiagnosticKind::IncompleteValidation,
+                obligation: Some(obligation.clone()),
+                message: format!(
+                    "Duplicate evidence for preservation obligation: \
+                     {obligation}",
+                ),
             });
         }
+
+        entries.push(item);
     }
 
     let mut illegal = false;
-    let mut indeterminate = false;
+    let mut indeterminate = malformed_evidence;
 
     for obligation in required {
         match by_obligation.get(obligation) {
@@ -1094,52 +965,51 @@ fn evaluate_evidence(
                 indeterminate = true;
 
                 diagnostics.push(LegalityDiagnostic {
-                    kind:
-                        LegalityDiagnosticKind::MissingEvidence,
+                    kind: LegalityDiagnosticKind::MissingEvidence,
                     obligation: Some(obligation.clone()),
                     message: format!(
-                        "Required preservation evidence is missing: {}",
-                        obligation,
+                        "Required preservation evidence is missing: \
+                         {obligation}",
                     ),
                 });
             }
 
-            Some(item) => {
-                references.extend(
-                    item.references().iter().cloned(),
-                );
+            Some(items) => {
+                for item in items {
+                    references.extend(item.references().iter().cloned());
 
-                match item.status() {
-                    ProofStatus::Proven => {}
+                    match item.status() {
+                        ProofStatus::Proven => {}
 
-                    ProofStatus::Disproven => {
-                        illegal = true;
+                        ProofStatus::Disproven => {
+                            illegal = true;
 
-                        diagnostics.push(LegalityDiagnostic {
-                            kind:
-                                LegalityDiagnosticKind::PreservationViolation,
-                            obligation: Some(obligation.clone()),
-                            message: format!(
-                                "Preservation was disproven for {}: {}",
-                                obligation,
-                                item.explanation(),
-                            ),
-                        });
-                    }
+                            diagnostics.push(LegalityDiagnostic {
+                                kind:
+                                    LegalityDiagnosticKind::PreservationViolation,
+                                obligation: Some(obligation.clone()),
+                                message: format!(
+                                    "Preservation was disproven for \
+                                     {obligation}: {}",
+                                    item.explanation(),
+                                ),
+                            });
+                        }
 
-                    ProofStatus::Unknown => {
-                        indeterminate = true;
+                        ProofStatus::Unknown => {
+                            indeterminate = true;
 
-                        diagnostics.push(LegalityDiagnostic {
-                            kind:
-                                LegalityDiagnosticKind::UnknownEvidence,
-                            obligation: Some(obligation.clone()),
-                            message: format!(
-                                "Preservation remains unverified for {}: {}",
-                                obligation,
-                                item.explanation(),
-                            ),
-                        });
+                            diagnostics.push(LegalityDiagnostic {
+                                kind:
+                                    LegalityDiagnosticKind::UnknownEvidence,
+                                obligation: Some(obligation.clone()),
+                                message: format!(
+                                    "Preservation remains unverified for \
+                                     {obligation}: {}",
+                                    item.explanation(),
+                                ),
+                            });
+                        }
                     }
                 }
             }
@@ -1161,11 +1031,7 @@ fn evaluate_evidence(
         LegalityStatus::Legal
     };
 
-    LegalityAssessment::new(
-        status,
-        diagnostics,
-        references,
-    )
+    LegalityAssessment::new(status, diagnostics, references)
 }
 
 // ============================================================================
@@ -1187,12 +1053,8 @@ where
         plan: &TransformationPlan<G::Node, G::Edge>,
         requirements: &PreservationRequirements,
     ) -> LegalityResult {
-        self.assess(
-            graph,
-            plan,
-            requirements,
-        )
-        .into_transformation_result()
+        self.assess(graph, plan, requirements)
+            .into_transformation_result()
     }
 }
 
@@ -1205,31 +1067,14 @@ mod tests {
     use super::*;
 
     use crate::ai::optimization::transformations::{
-        GraphRevision,
-        TransformationId,
-        TransformationPhase,
-        TransformationPlanBuilder,
+        TransformationId, TransformationPhase, TransformationPlanBuilder,
         TransformationVersion,
     };
 
-    #[derive(
-        Clone,
-        Debug,
-        Eq,
-        PartialEq,
-        Ord,
-        PartialOrd,
-    )]
+    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
     struct Node(&'static str);
 
-    #[derive(
-        Clone,
-        Debug,
-        Eq,
-        PartialEq,
-        Ord,
-        PartialOrd,
-    )]
+    #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
     struct Edge {
         source: Node,
         destination: Node,
@@ -1283,9 +1128,7 @@ mod tests {
         status: ProofStatus,
     }
 
-    impl LegalityEvidenceProvider<TestGraph>
-        for TestEvidenceProvider
-    {
+    impl LegalityEvidenceProvider<TestGraph> for TestEvidenceProvider {
         fn assess(
             &self,
             _: &TestGraph,
@@ -1300,12 +1143,10 @@ mod tests {
                     LegalityEvidence::new(
                         obligation.clone(),
                         self.status,
-                        BTreeSet::from([
-                            format!(
-                                "test:evidence:{}",
-                                obligation.as_str(),
-                            ),
-                        ]),
+                        BTreeSet::from([format!(
+                            "test:evidence:{}",
+                            obligation.as_str(),
+                        )]),
                         "Test verification evidence",
                     )
                     .map_err(|error| error.to_string())?,
@@ -1319,11 +1160,7 @@ mod tests {
     fn graph() -> TestGraph {
         TestGraph {
             revision: GraphRevision::new(1),
-            nodes: vec![
-                Node("a"),
-                Node("b"),
-                Node("c"),
-            ],
+            nodes: vec![Node("a"), Node("b"), Node("c")],
             edges: vec![
                 Edge {
                     source: Node("a"),
@@ -1337,36 +1174,38 @@ mod tests {
         }
     }
 
-    fn plan(
-        graph: &TestGraph,
-    ) -> TransformationPlan<Node, Edge> {
-        let mut builder =
-            TransformationPlanBuilder::new(
-                TransformationId::new(
-                    "zamani.test.rewrite",
-                )
+    fn plan(graph: &TestGraph) -> TransformationPlan<Node, Edge> {
+        let mut builder = TransformationPlanBuilder::new(
+            TransformationId::new("zamani.test.rewrite")
                 .expect("valid identity"),
-                TransformationVersion::new(1, 0, 0),
-                graph.revision,
-                TransformationPhase::GraphSimplification,
-            )
-            .with_description("Test edge removal");
+            TransformationVersion::new(1, 0, 0),
+            graph.revision,
+            TransformationPhase::GraphSimplification,
+        )
+        .with_description("Test edge removal");
 
         builder
-            .push(GraphEdit::RemoveEdge(
-                graph.edges[0].clone(),
-            ))
+            .push(GraphEdit::RemoveEdge(graph.edges[0].clone()))
             .expect("valid edit");
 
-        builder
-            .affect(Node("a"))
-            .expect("affected node");
-
-        builder
-            .affect(Node("b"))
-            .expect("affected node");
+        builder.affect(Node("a")).expect("affected node");
+        builder.affect(Node("b")).expect("affected node");
 
         builder.build().expect("valid plan")
+    }
+
+    fn evidence(
+        obligation: &ObligationId,
+        status: ProofStatus,
+        reference: &str,
+    ) -> LegalityEvidence {
+        LegalityEvidence::new(
+            obligation.clone(),
+            status,
+            BTreeSet::from([reference.to_string()]),
+            "Regression test evidence",
+        )
+        .expect("valid evidence")
     }
 
     #[test]
@@ -1374,11 +1213,9 @@ mod tests {
         let graph = graph();
         let plan = plan(&graph);
 
-        let validator = LegalityValidator::new(
-            TestEvidenceProvider {
-                status: ProofStatus::Proven,
-            },
-        );
+        let validator = LegalityValidator::new(TestEvidenceProvider {
+            status: ProofStatus::Proven,
+        });
 
         let result = validator.assess(
             &graph,
@@ -1386,10 +1223,7 @@ mod tests {
             &PreservationRequirements::default(),
         );
 
-        assert_eq!(
-            result.status(),
-            LegalityStatus::Legal,
-        );
+        assert_eq!(result.status(), LegalityStatus::Legal);
     }
 
     #[test]
@@ -1397,11 +1231,9 @@ mod tests {
         let graph = graph();
         let plan = plan(&graph);
 
-        let validator = LegalityValidator::new(
-            TestEvidenceProvider {
-                status: ProofStatus::Unknown,
-            },
-        );
+        let validator = LegalityValidator::new(TestEvidenceProvider {
+            status: ProofStatus::Unknown,
+        });
 
         let result = validator.assess(
             &graph,
@@ -1418,11 +1250,9 @@ mod tests {
         let graph = graph();
         let plan = plan(&graph);
 
-        let validator = LegalityValidator::new(
-            TestEvidenceProvider {
-                status: ProofStatus::Disproven,
-            },
-        );
+        let validator = LegalityValidator::new(TestEvidenceProvider {
+            status: ProofStatus::Disproven,
+        });
 
         let result = validator.assess(
             &graph,
@@ -1451,25 +1281,19 @@ mod tests {
     fn structural_validation_rejects_dangling_edges() {
         let graph = graph();
 
-        let mut builder =
-            TransformationPlanBuilder::new(
-                TransformationId::new(
-                    "zamani.test.remove_node",
-                )
+        let mut builder = TransformationPlanBuilder::new(
+            TransformationId::new("zamani.test.remove_node")
                 .expect("valid identity"),
-                TransformationVersion::new(1, 0, 0),
-                graph.revision,
-                TransformationPhase::GraphSimplification,
-            )
-            .with_description("Invalid node removal");
+            TransformationVersion::new(1, 0, 0),
+            graph.revision,
+            TransformationPhase::GraphSimplification,
+        )
+        .with_description("Invalid node removal");
 
         builder
             .push(GraphEdit::RemoveNode(Node("b")))
             .expect("valid edit");
-
-        builder
-            .affect(Node("b"))
-            .expect("affected node");
+        builder.affect(Node("b")).expect("affected node");
 
         let plan = builder.build().expect("valid plan");
 
@@ -1486,10 +1310,7 @@ mod tests {
         )
         .expect("required obligations");
 
-        let assessment = evaluate_evidence(
-            &required,
-            Vec::new(),
-        );
+        let assessment = evaluate_evidence(&required, Vec::new());
 
         assert!(assessment.is_indeterminate());
         assert!(!assessment.is_legal());
@@ -1497,49 +1318,36 @@ mod tests {
 
     #[test]
     fn mandatory_semantic_obligations_cannot_be_disabled() {
-        let requirements =
-            PreservationRequirements {
-                observable_behavior: false,
-                numerical_semantics: false,
-                effect_ordering: false,
-                state_dependencies: false,
-                provenance: false,
-                security: false,
-                determinism: false,
-                resource_requirements: false,
-            };
+        let requirements = PreservationRequirements {
+            observable_behavior: false,
+            numerical_semantics: false,
+            effect_ordering: false,
+            state_dependencies: false,
+            provenance: false,
+            security: false,
+            determinism: false,
+            resource_requirements: false,
+        };
 
-        let required = required_obligations(
-            &requirements,
-        )
-        .expect("required obligations");
+        let required =
+            required_obligations(&requirements).expect("required obligations");
 
-        assert!(
-            required.contains(
-                &ObligationId::new(
-                    obligations::OBSERVABLE_BEHAVIOR,
-                )
+        assert!(required.contains(
+            &ObligationId::new(obligations::OBSERVABLE_BEHAVIOR)
                 .expect("valid obligation"),
-            )
-        );
+        ));
 
-        assert!(
-            required.contains(
-                &ObligationId::new(
-                    obligations::TYPES_AND_SHAPES,
-                )
+        assert!(required.contains(
+            &ObligationId::new(obligations::TYPES_AND_SHAPES)
                 .expect("valid obligation"),
-            )
-        );
+        ));
     }
 
     #[test]
     fn proven_evidence_requires_a_reference() {
         let result = LegalityEvidence::new(
-            ObligationId::new(
-                obligations::OBSERVABLE_BEHAVIOR,
-            )
-            .expect("valid obligation"),
+            ObligationId::new(obligations::OBSERVABLE_BEHAVIOR)
+                .expect("valid obligation"),
             ProofStatus::Proven,
             BTreeSet::new(),
             "No evidence",
@@ -1547,9 +1355,7 @@ mod tests {
 
         assert_eq!(
             result,
-            Err(
-                LegalityError::MissingEvidenceReference,
-            ),
+            Err(LegalityError::MissingEvidenceReference),
         );
     }
 
@@ -1594,5 +1400,118 @@ mod tests {
             custom.as_str(),
             "zamani.extension.custom_preservation",
         );
+    }
+
+    #[test]
+    fn unexpected_evidence_makes_assessment_indeterminate() {
+        let required = required_obligations(
+            &PreservationRequirements::default(),
+        )
+        .expect("required obligations");
+
+        let mut evidence = required
+            .iter()
+            .map(|obligation| {
+                evidence(
+                    obligation,
+                    ProofStatus::Proven,
+                    "test:required",
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let unexpected = ObligationId::new(
+            "zamani.extension.unrequested_obligation",
+        )
+        .expect("valid obligation");
+
+        evidence.push(evidence(
+            &unexpected,
+            ProofStatus::Proven,
+            "test:unexpected",
+        ));
+
+        let assessment = evaluate_evidence(&required, evidence);
+
+        assert!(assessment.is_indeterminate());
+        assert!(!assessment.is_legal());
+        assert!(assessment.diagnostics().iter().any(|diagnostic| {
+            diagnostic.kind()
+                == LegalityDiagnosticKind::IncompleteValidation
+        }));
+    }
+
+    #[test]
+    fn duplicate_proven_evidence_makes_assessment_indeterminate() {
+        let required = required_obligations(
+            &PreservationRequirements::default(),
+        )
+        .expect("required obligations");
+
+        let obligation = required
+            .iter()
+            .next()
+            .expect("at least one required obligation")
+            .clone();
+
+        let mut evidence = required
+            .iter()
+            .map(|item| {
+                evidence(item, ProofStatus::Proven, "test:proven")
+            })
+            .collect::<Vec<_>>();
+
+        evidence.push(evidence(
+            &obligation,
+            ProofStatus::Proven,
+            "test:duplicate",
+        ));
+
+        let assessment = evaluate_evidence(&required, evidence);
+
+        assert!(assessment.is_indeterminate());
+        assert!(!assessment.is_legal());
+    }
+
+    #[test]
+    fn duplicate_disproven_evidence_cannot_be_overwritten() {
+        let required = required_obligations(
+            &PreservationRequirements::default(),
+        )
+        .expect("required obligations");
+
+        let obligation = required
+            .iter()
+            .next()
+            .expect("at least one required obligation")
+            .clone();
+
+        let mut evidence = required
+            .iter()
+            .map(|item| {
+                evidence(item, ProofStatus::Proven, "test:proven")
+            })
+            .collect::<Vec<_>>();
+
+        // The later Proven item must not overwrite the Disproven item.
+        evidence.push(evidence(
+            &obligation,
+            ProofStatus::Disproven,
+            "test:disproven",
+        ));
+        evidence.push(evidence(
+            &obligation,
+            ProofStatus::Proven,
+            "test:later-proven",
+        ));
+
+        let assessment = evaluate_evidence(&required, evidence);
+
+        assert!(assessment.is_illegal());
+        assert!(!assessment.is_legal());
+        assert!(assessment.diagnostics().iter().any(|diagnostic| {
+            diagnostic.kind()
+                == LegalityDiagnosticKind::PreservationViolation
+        }));
     }
 }
