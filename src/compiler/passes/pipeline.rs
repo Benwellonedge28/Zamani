@@ -4,172 +4,76 @@
 
 //! # Zamani Compiler Pass Pipeline
 //!
-//! Path: src/compiler/passes/pipeline.rs
-//!
-//! Rust edition: 2021
+//! Path: `src/compiler/passes/pipeline.rs`
+//! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //!
 //! PURPOSE
 //!
-//! Provide a compiler-facing, explicitly ordered, validated sequence of
-//! compiler passes.
+//! Compose and validate an explicitly ordered sequence of compiler passes.
+//! Pass execution is delegated to the existing ZUIR pass manager.
 //!
-//! ARCHITECTURAL AUTHORITY
-//!
-//! This module delegates pass execution to:
-//!
-//!     crate::zuir::pass::manager
-//!
-//! It uses the compiler-facing compatibility facade:
-//!
-//!     crate::compiler::passes::manager
-//!
-//! Pass registration and lookup remain owned by:
-//!
-//!     crate::zuir::pass::registry
-//!
-//! Canonical pass contracts remain owned by:
-//!
-//!     crate::zuir::pass::contracts
-//!
-//! This module MUST NOT implement another pass execution engine.
-//!
-//! ---------------------------------------------------------------------------
 //! OWNERSHIP
-//! ---------------------------------------------------------------------------
 //!
-//! OWNS:
+//! This module owns:
+//! - Ordered pipeline composition.
+//! - Immutable snapshots of registered pass descriptors.
+//! - Pipeline-level structural validation.
+//! - Pipeline-level determinism reporting.
+//! - The compiler-facing pipeline execution API.
 //!
-//! - Ordered compiler pipeline composition.
-//! - Compiler pipeline preflight validation.
-//! - Pipeline-level pass descriptor snapshots.
-//! - Pipeline-level determinism declaration checks.
-//! - Compiler-facing pipeline execution entry point.
-//! - Pipeline validation reports.
-//!
-//! DOES NOT OWN:
-//!
-//! - Pass implementation or pass algorithms.
-//! - Canonical pass identities or canonical descriptors.
-//! - Pass registration infrastructure.
-//! - IR definitions or IR verification algorithms.
-//! - Analysis computation or analysis result storage.
-//! - Analysis invalidation algorithms.
+//! This module does not own:
+//! - Pass identities or canonical pass contracts.
+//! - Pass implementations or transformation algorithms.
+//! - Pass execution or analysis invalidation.
+//! - Analysis computation or analysis-result storage.
+//! - IR definitions or verification algorithms.
+//! - Semantic analysis or semantic-preservation proofs.
 //! - Optimization algorithms.
-//! - Semantic analysis.
-//! - Target discovery or hardware selection.
-//! - Physical allocation, scheduling, or routing.
-//! - Runtime execution.
+//! - Hardware discovery, physical scheduling, or runtime execution.
 //!
-//! ---------------------------------------------------------------------------
-//! EXECUTION MODEL
-//! ---------------------------------------------------------------------------
+//! AUTHORITY
 //!
-//! Passes execute in the order in which they are added.
+//! The operational pass manager remains:
+//! `crate::zuir::pass::manager`
 //!
-//! No implicit sorting, parallel execution, dependency reordering, or
-//! hardware-specific scheduling is performed.
+//! The compiler-facing compatibility exports remain:
+//! `crate::compiler::passes::manager`
 //!
-//! The underlying pass manager performs:
+//! Canonical pass contracts remain:
+//! `crate::zuir::pass::contracts`
 //!
-//! - pass execution;
-//! - cancellation checks;
-//! - configured execution-budget checks;
-//! - verification boundaries;
-//! - required-analysis availability checks;
-//! - analysis invalidation;
-//! - execution reporting.
+//! The current ZUIR manager still exposes legacy operational pass types.
+//! This module deliberately uses the explicitly named Operational* aliases
+//! until the manager and registry have completed their canonical migration.
 //!
-//! A failed pass may have mutated the IR before returning its error.
-//! Consequently, callers MUST NOT assume that IR is unchanged or valid
-//! after an unsuccessful pipeline execution.
+//! EXECUTION ORDER
 //!
-//! The caller must discard the IR or verify it again before reuse.
+//! Passes execute in registration order. This module does not sort passes,
+//! infer dependencies, reorder passes, or execute them concurrently.
 //!
-//! ---------------------------------------------------------------------------
+//! Required analyses are checked by the underlying manager at execution
+//! time. Analysis results must be computed by their authoritative providers.
+//!
+//! FAILURE CONTRACT
+//!
+//! A pass may mutate IR before returning an error. Consequently, after a
+//! failed execution, callers must not assume that the IR is unchanged or
+//! valid. They must discard it or run the appropriate verifier before reuse.
+//!
 //! SCALABILITY
-//! ---------------------------------------------------------------------------
 //!
-//! No universal pass-count limit is introduced.
+//! No arbitrary pass-count, IR-size, hardware-count, or domain-count limit
+//! is introduced. Dynamic collections grow according to available resources.
+//! An absent configured budget does not promise infinite resources.
 //!
-//! The pipeline uses dynamically sized collections.
-//!
-//! Actual resource consumption is governed by:
-//!
-//! - available memory;
-//! - available processing capacity;
-//! - configured execution budgets;
-//! - the underlying IR and pass implementations;
-//! - actual platform and representation limits.
-//!
-//! No hardware inventory or computational-domain enumeration is introduced.
-//!
-//! ---------------------------------------------------------------------------
 //! DETERMINISM
-//! ---------------------------------------------------------------------------
 //!
-//! The pipeline preserves explicit pass order.
+//! Registration order is preserved. Determinism declarations are checked
+//! against the manager configuration. A declaration is a pass contract,
+//! not proof that arbitrary implementation code is deterministic.
 //!
-//! When the manager configuration requires deterministic passes, this
-//! module rejects descriptors that do not declare deterministic behavior.
-//!
-//! A determinism declaration is a contract, not a proof that arbitrary
-//! pass implementation code is deterministic.
-//!
-//! ---------------------------------------------------------------------------
-//! ANALYSIS CONTRACT
-//! ---------------------------------------------------------------------------
-//!
-//! Required analyses are checked by the underlying manager against the
-//! analysis state available at execution time.
-//!
-//! This module does not pretend that a pass descriptor's invalidation list
-//! describes analyses produced by that pass.
-//!
-//! Analysis providers must mark analyses available only after successfully
-//! computing and storing valid results for the current IR state.
-//!
-//! ---------------------------------------------------------------------------
-//! INTEGRATION
-//! ---------------------------------------------------------------------------
-//!
-//! Compiler facade:
-//!     crate::compiler::mod
-//!
-//! Compiler pass manager:
-//!     crate::compiler::passes::manager
-//!
-//! Compiler pass registry:
-//!     crate::compiler::passes::registry
-//!
-//! Canonical ZUIR pass manager:
-//!     crate::zuir::pass::manager
-//!
-//! Canonical ZUIR pass registry:
-//!     crate::zuir::pass::registry
-//!
-//! Canonical pass contracts:
-//!     crate::zuir::pass::contracts
-//!
-//! Canonical IR:
-//!     crate::zuir
-//!
-//! Domain IR ownership remains with the corresponding repository modules.
-//!
-//! ---------------------------------------------------------------------------
-//! COMPATIBILITY
-//! ---------------------------------------------------------------------------
-//!
-//! The existing operational manager uses legacy pass types. This module
-//! intentionally uses the explicitly named Operational* exports from the
-//! compiler manager facade.
-//!
-//! It does not confuse those operational types with the canonical types
-//! exported by contracts.rs.
-//!
-//! ---------------------------------------------------------------------------
 //! SAFETY
-//! ---------------------------------------------------------------------------
 //!
 //! Unsafe Rust is forbidden.
 
@@ -191,62 +95,65 @@ use super::manager::{
     PipelineReport,
 };
 
-// ---------------------------------------------------------------------------
-// Public pipeline types
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Registered pass descriptor snapshots
+// -----------------------------------------------------------------------------
 
-/// A validated snapshot of a pass's declared pipeline metadata.
+/// Immutable metadata captured when a pass is registered.
 ///
-/// This is an operational descriptor snapshot from the current pass-manager
-/// API. It is not a second canonical pass descriptor definition.
+/// The snapshot is intentionally independent of the pass implementation.
+/// The pipeline does not allow a registered pass to change its identity,
+/// version, analysis declarations, or determinism declaration afterwards.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PipelineStep {
     descriptor: OperationalPassDescriptor,
 }
 
 impl PipelineStep {
-    /// Return the pass identity.
+    /// Return the registered pass identity.
     #[must_use]
     pub fn id(&self) -> &OperationalPassId {
         &self.descriptor.id
     }
 
-    /// Return the pass version.
+    /// Return the registered pass version.
     #[must_use]
     pub fn version(&self) -> OperationalPassVersion {
         self.descriptor.version
     }
 
-    /// Return the pass descriptor snapshot.
+    /// Return the immutable descriptor snapshot.
     #[must_use]
     pub fn descriptor(&self) -> &OperationalPassDescriptor {
         &self.descriptor
     }
 
-    /// Return the human-readable pass description.
+    /// Return the registered pass description.
     #[must_use]
     pub fn description(&self) -> &str {
         &self.descriptor.description
     }
 }
 
-/// Result of validating a pipeline before execution.
+// -----------------------------------------------------------------------------
+// Pipeline validation report
+// -----------------------------------------------------------------------------
+
+/// Structural and policy assessment of a pipeline.
 ///
-/// This reports declarations and structural properties. It does not prove
-/// that a pass implementation is semantically correct or deterministic.
+/// This report validates declarations. It does not prove that pass
+/// implementations preserve semantics or are actually deterministic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PipelineValidationReport {
-    /// Number of registered pipeline steps.
+    /// Number of registered passes.
     pub pass_count: usize,
 
-    /// Passes that do not declare deterministic behavior.
-    ///
-    /// Their order is the pipeline execution order.
+    /// Nondeterministic pass identities in execution order.
     pub nondeterministic_passes: Vec<OperationalPassId>,
 }
 
 impl PipelineValidationReport {
-    /// Whether all passes declare deterministic behavior.
+    /// Whether every registered pass declares deterministic behavior.
     #[must_use]
     pub fn all_passes_declare_determinism(&self) -> bool {
         self.nondeterministic_passes.is_empty()
@@ -259,86 +166,133 @@ impl PipelineValidationReport {
     }
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Frozen pass adapter
+// -----------------------------------------------------------------------------
+
+/// Wrap a pass with the descriptor captured at registration.
+///
+/// This adapter prevents a pass implementation from returning different
+/// descriptors at different points in its lifetime.
+///
+/// The underlying implementation remains responsible for executing the pass.
+/// This wrapper does not alter its IR behavior or analysis results.
+struct FrozenPass<P> {
+    descriptor: OperationalPassDescriptor,
+    implementation: P,
+}
+
+impl<P> FrozenPass<P> {
+    fn new(
+        descriptor: OperationalPassDescriptor,
+        implementation: P,
+    ) -> Self {
+        Self {
+            descriptor,
+            implementation,
+        }
+    }
+}
+
+impl<I, P> OperationalPass<I> for FrozenPass<P>
+where
+    P: OperationalPass<I>,
+{
+    fn descriptor(&self) -> OperationalPassDescriptor {
+        self.descriptor.clone()
+    }
+
+    fn run(
+        &mut self,
+        ir: &mut I,
+        context: &mut super::manager::PassContext,
+    ) -> Result<OperationalPassOutcome, OperationalPassError> {
+        self.implementation.run(ir, context)
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Pipeline
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 /// Ordered, validated compiler pass pipeline.
 ///
-/// The pipeline owns the operational pass manager and delegates all
-/// execution to that manager.
+/// `I` is the IR representation accepted by the registered passes. The
+/// pipeline is representation-independent and does not define another IR.
 ///
-/// # IR independence
+/// Pass registration order is execution order.
 ///
-/// `I` is the IR representation accepted by the registered passes.
-/// This type does not impose a particular IR representation.
+/// The underlying ZUIR manager owns execution, verification, cancellation,
+/// budget enforcement, required-analysis checks, and invalidation.
 ///
-/// # Pass ownership
+/// # Configuration lifecycle
 ///
-/// Pass implementations are moved into the underlying manager when
-/// registered. The pipeline retains immutable descriptor snapshots for
-/// inspection and preflight validation.
+/// The verifier, initial analysis declarations, and cancellation token must
+/// be configured before the first pass is registered. This prevents a
+/// configuration change from silently rebuilding the manager and losing
+/// stateful pass implementations.
 ///
-/// # Ordering
+/// # Failure behavior
 ///
-/// The order of `add_pass` calls is the execution order.
-///
-/// The pipeline does not sort passes by name, domain, target, or version.
+/// If `run` returns an error, the caller must treat the IR as potentially
+/// modified and invalid. The manager does not promise transactional rollback.
 pub struct PassPipeline<I> {
     manager: PassManager<I>,
     config: PassManagerConfig,
 
+    /// Descriptor snapshots in registration/execution order.
     steps: Vec<PipelineStep>,
-    registered_ids: BTreeSet<OperationalPassId>,
 
+    /// Verifier shared with the underlying manager.
     verifier: Option<Arc<dyn IrVerifier<I>>>,
+
+    /// Cooperative cancellation shared with the underlying manager.
     cancellation: CancellationToken,
+
+    /// Analyses already computed for the initial IR.
+    ///
+    /// These are declarations of availability, not analysis results.
     initial_analyses: BTreeSet<String>,
 }
 
 impl<I> PassPipeline<I> {
-    /// Construct an empty pipeline.
-    ///
-    /// The supplied manager configuration governs verification,
-    /// determinism, cancellation-related execution behavior, and budgets.
+    /// Create an empty pipeline with explicit manager configuration.
     #[must_use]
     pub fn new(config: PassManagerConfig) -> Self {
         let cancellation = CancellationToken::new();
 
-        let mut pipeline = Self {
-            manager: PassManager::new(config.clone()),
+        let manager = PassManager::new(config.clone())
+            .with_cancellation(cancellation.clone());
+
+        Self {
+            manager,
             config,
             steps: Vec::new(),
-            registered_ids: BTreeSet::new(),
             verifier: None,
             cancellation,
             initial_analyses: BTreeSet::new(),
-        };
-
-        pipeline.rebuild_manager();
-
-        pipeline
+        }
     }
 
-    /// Construct an empty pipeline with default manager configuration.
+    /// Create an empty pipeline with the existing manager defaults.
     #[must_use]
     pub fn with_defaults() -> Self {
         Self::new(PassManagerConfig::default())
     }
 
-    /// Number of registered pipeline steps.
+    /// Return the number of registered passes.
     #[must_use]
     pub fn len(&self) -> usize {
         self.steps.len()
     }
 
-    /// Whether the pipeline contains no passes.
+    /// Return whether the pipeline contains no passes.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.steps.is_empty()
     }
 
-    /// Return the immutable pipeline step snapshots in execution order.
+    /// Iterate over descriptor snapshots in execution order.
     pub fn steps(&self) -> impl ExactSizeIterator<Item = &PipelineStep> {
         self.steps.iter()
     }
@@ -349,20 +303,19 @@ impl<I> PassPipeline<I> {
         &self.config
     }
 
-    /// Return the cancellation token used by this pipeline.
+    /// Return a clone of the cooperative cancellation token.
     ///
-    /// The token can be cloned by a caller and cancelled from another
-    /// thread. Pass implementations must cooperate with cancellation.
+    /// The caller may cancel a running pipeline from another thread.
+    /// Pass implementations must cooperate with cancellation.
     #[must_use]
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation.clone()
     }
 
-    /// Set the IR verifier before registering any passes.
+    /// Configure the verifier before registering any passes.
     ///
-    /// Configuration is intentionally frozen once passes are registered.
-    /// This avoids rebuilding a manager and accidentally losing stateful
-    /// pass implementations.
+    /// The verifier is responsible for the actual IR validation rules.
+    /// The pipeline only forwards it to the ZUIR manager.
     pub fn set_verifier(
         &mut self,
         verifier: Arc<dyn IrVerifier<I>>,
@@ -375,10 +328,13 @@ impl<I> PassPipeline<I> {
         Ok(())
     }
 
-    /// Set the initial analysis availability before registering passes.
+    /// Declare analyses already computed for the initial IR.
     ///
-    /// The caller is responsible for ensuring that every declared initial
-    /// analysis has actually been computed and stored for this exact IR.
+    /// The caller must only provide an analysis identifier when a trusted
+    /// analysis provider has actually computed and stored a valid result for
+    /// the exact IR state that will be passed to `run`.
+    ///
+    /// This method does not compute analyses or create analysis results.
     pub fn set_initial_analyses<S>(
         &mut self,
         analyses: impl IntoIterator<Item = S>,
@@ -404,7 +360,7 @@ impl<I> PassPipeline<I> {
         Ok(())
     }
 
-    /// Replace the cancellation token before registering any passes.
+    /// Replace the cancellation token before pass registration.
     pub fn set_cancellation_token(
         &mut self,
         cancellation: CancellationToken,
@@ -419,11 +375,13 @@ impl<I> PassPipeline<I> {
 
     /// Register a pass at the end of the pipeline.
     ///
-    /// The descriptor is validated before the manager is mutated.
+    /// The pass descriptor is captured and validated before ownership is
+    /// transferred to the underlying manager.
     ///
-    /// A duplicate pass ID is rejected without replacing an existing pass.
+    /// The captured descriptor is frozen by `FrozenPass`.
     ///
-    /// Registration order defines execution order.
+    /// Duplicate pass identities are rejected by the existing manager.
+    /// Registration order determines execution order.
     pub fn add_pass<P>(
         &mut self,
         pass: P,
@@ -435,7 +393,7 @@ impl<I> PassPipeline<I> {
 
         validate_descriptor(&descriptor)?;
 
-        if self.registered_ids.contains(&descriptor.id) {
+        if self.steps.iter().any(|step| step.id() == &descriptor.id) {
             return Err(OperationalPassError::for_pass(
                 OperationalPassErrorKind::DuplicatePass,
                 descriptor.id,
@@ -450,43 +408,47 @@ impl<I> PassPipeline<I> {
             return Err(OperationalPassError::for_pass(
                 OperationalPassErrorKind::NondeterministicPassRejected,
                 descriptor.id,
-                "the pipeline configuration rejects passes that do not \
+                "the active pipeline policy rejects passes that do not \
                  declare deterministic behavior",
             ));
         }
 
-        // Reserve before transferring ownership to the manager. This keeps
-        // the pipeline's descriptor collection from needing to grow after
-        // successful manager registration.
+        // Reserve the snapshot slot before registering with the manager.
+        // Once manager registration succeeds, pushing the snapshot does not
+        // require another Vec capacity allocation.
         self.steps.try_reserve(1).map_err(|error| {
             OperationalPassError::for_pass(
                 OperationalPassErrorKind::InvalidConfiguration,
                 descriptor.id.clone(),
-                format!("unable to reserve pipeline step capacity: {error}"),
+                format!(
+                    "unable to reserve pipeline descriptor storage: {error}"
+                ),
             )
         })?;
 
-        // The canonical operational manager remains the execution owner.
-        // Its own registration checks remain authoritative.
-        self.manager.add_pass(pass)?;
+        let frozen_pass = FrozenPass::new(descriptor.clone(), pass);
 
-        self.registered_ids.insert(descriptor.id.clone());
+        // The ZUIR manager remains the single owner of pass execution.
+        self.manager.add_pass(frozen_pass)?;
 
         self.steps.push(PipelineStep { descriptor });
 
         Ok(())
     }
 
-    /// Validate the pipeline's registered descriptor snapshots.
+    /// Validate registered pass descriptors and pipeline bookkeeping.
     ///
-    /// This performs preflight structural and policy validation. Required
-    /// analysis availability is checked by the manager at execution time,
-    /// because analysis providers may establish availability dynamically.
-    pub fn validate(&self) -> Result<PipelineValidationReport, OperationalPassError> {
-        if self.steps.len() != self.registered_ids.len() {
+    /// This is a structural preflight check. Required-analysis availability
+    /// is checked by the manager against the actual analysis state when the
+    /// pipeline executes.
+    pub fn validate(
+        &self,
+    ) -> Result<PipelineValidationReport, OperationalPassError> {
+        if self.manager.pass_count() != self.steps.len() {
             return Err(OperationalPassError::new(
                 OperationalPassErrorKind::InvalidConfiguration,
-                "pipeline step and pass identity counts differ",
+                "pipeline descriptor count does not match the underlying \
+                 pass-manager registration count",
             ));
         }
 
@@ -494,7 +456,7 @@ impl<I> PassPipeline<I> {
         let mut nondeterministic_passes = Vec::new();
 
         for step in &self.steps {
-            let descriptor = &step.descriptor;
+            let descriptor = step.descriptor();
 
             validate_descriptor(descriptor)?;
 
@@ -523,34 +485,28 @@ impl<I> PassPipeline<I> {
             }
         }
 
-        if observed_ids != self.registered_ids {
-            return Err(OperationalPassError::new(
-                OperationalPassErrorKind::InvalidConfiguration,
-                "pipeline pass identity index is inconsistent",
-            ));
-        }
-
         Ok(PipelineValidationReport {
             pass_count: self.steps.len(),
             nondeterministic_passes,
         })
     }
 
-    /// Execute the pipeline against the supplied IR.
+    /// Execute the registered passes in registration order.
     ///
-    /// Execution is delegated to the canonical ZUIR pass manager.
+    /// Execution is delegated entirely to the existing ZUIR pass manager.
     ///
-    /// # Failure behavior
+    /// The manager performs:
+    /// - cancellation checks;
+    /// - configured execution-budget checks;
+    /// - required-analysis availability checks;
+    /// - configured IR verification;
+    /// - analysis invalidation;
+    /// - execution reporting.
     ///
-    /// On failure, the IR MUST NOT be assumed to be unchanged or valid.
-    /// A pass may have mutated it before returning an error.
+    /// # Important
     ///
-    /// The caller must discard the IR or verify it again before reuse.
-    ///
-    /// # Verification
-    ///
-    /// The manager's verification policy is authoritative. If verification
-    /// is required and no verifier is configured, execution fails closed.
+    /// On error, the IR may have been partially mutated by a pass. The caller
+    /// must discard it or verify it again before reuse.
     pub fn run(
         &mut self,
         ir: &mut I,
@@ -560,31 +516,35 @@ impl<I> PassPipeline<I> {
         self.manager.run(ir)
     }
 
-    /// Return the configured initial analyses.
+    /// Return the identifiers declared available for the initial IR.
     ///
-    /// This reports only the initial availability declaration. It does not
-    /// expose or manufacture analysis results.
+    /// This is only an availability declaration. It is not evidence that
+    /// the corresponding analysis result exists or is valid.
     #[must_use]
     pub fn initial_analyses(&self) -> &BTreeSet<String> {
         &self.initial_analyses
     }
 
-    // -----------------------------------------------------------------------
-    // Internal lifecycle helpers
-    // -----------------------------------------------------------------------
+    // -------------------------------------------------------------------------
+    // Internal lifecycle
+    // -------------------------------------------------------------------------
 
-    fn ensure_unconfigured(&self) -> Result<(), OperationalPassError> {
+    fn ensure_unconfigured(
+        &self,
+    ) -> Result<(), OperationalPassError> {
         if !self.steps.is_empty() {
             return Err(OperationalPassError::new(
                 OperationalPassErrorKind::InvalidConfiguration,
-                "pipeline execution configuration cannot be changed after \
-                 pass registration has started",
+                "pipeline configuration cannot be changed after pass \
+                 registration has started",
             ));
         }
 
         Ok(())
     }
 
+    /// Rebuild the empty manager after a pre-registration configuration
+    /// change. This function is only called while no pass has been registered.
     fn rebuild_manager(&mut self) {
         let mut manager = PassManager::new(self.config.clone());
 
@@ -602,18 +562,16 @@ impl<I> PassPipeline<I> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Descriptor validation
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Descriptor and analysis identifier validation
+// -----------------------------------------------------------------------------
 
-/// Validate an operational pass descriptor before pipeline registration.
+/// Validate the legacy operational descriptor exposed by the existing
+/// ZUIR manager.
 ///
-/// The canonical descriptor validator is used by the canonical contract
-/// subsystem. The operational manager still exposes a separate legacy
-/// descriptor type, so this adapter validates the fields available in that
-/// existing operational contract.
-///
-/// This function does not prove semantic preservation.
+/// The canonical `contracts.rs` descriptor validator remains authoritative
+/// for canonical descriptors. This adapter validates the fields present in
+/// the operational descriptor currently accepted by the manager.
 fn validate_descriptor(
     descriptor: &OperationalPassDescriptor,
 ) -> Result<(), OperationalPassError> {
@@ -631,7 +589,7 @@ fn validate_descriptor(
         return Err(OperationalPassError::for_pass(
             OperationalPassErrorKind::InvalidConfiguration,
             descriptor.id.clone(),
-            "a pass cannot preserve all analyses while declaring \
+            "a pass cannot preserve all analyses while also declaring \
              analyses invalidated",
         ));
     }
@@ -651,8 +609,17 @@ fn validate_descriptor(
 
 /// Validate an extensible analysis identifier.
 ///
-/// Identifiers are namespaced by convention but are not restricted to a
-/// closed list of computational domains.
+/// Analysis names are not restricted to a closed list of domains.
+/// Namespaced names are recommended, for example:
+///
+/// - `core.control_flow`
+/// - `classical.alias_analysis`
+/// - `quantum.logical_liveness`
+/// - `hdl.timing`
+/// - `tensor.shape`
+/// - `distributed.consistency`
+///
+/// This function intentionally imposes no arbitrary length limit.
 fn validate_analysis_id(
     analysis: &str,
 ) -> Result<(), OperationalPassError> {
@@ -660,7 +627,9 @@ fn validate_analysis_id(
         || analysis.trim() != analysis
         || analysis
             .chars()
-            .any(|character| character.is_whitespace() || character.is_control())
+            .any(|character| {
+                character.is_whitespace() || character.is_control()
+            })
     {
         return Err(OperationalPassError::new(
             OperationalPassErrorKind::InvalidConfiguration,
@@ -671,9 +640,9 @@ fn validate_analysis_id(
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -683,7 +652,10 @@ mod tests {
     struct IdentityVerifier;
 
     impl IrVerifier<u64> for IdentityVerifier {
-        fn verify(&self, _ir: &u64) -> Result<(), OperationalPassError> {
+        fn verify(
+            &self,
+            _ir: &u64,
+        ) -> Result<(), OperationalPassError> {
             Ok(())
         }
     }
@@ -709,7 +681,7 @@ mod tests {
             *ir = ir.checked_add(self.amount).ok_or_else(|| {
                 OperationalPassError::new(
                     OperationalPassErrorKind::PassFailed,
-                    "test integer overflow",
+                    "test arithmetic overflow",
                 )
             })?;
 
@@ -755,7 +727,6 @@ mod tests {
         pipeline.add_pass(add_pass("test.add_three", 3)).unwrap();
 
         let mut value = 10_u64;
-
         let report = pipeline.run(&mut value).unwrap();
 
         assert_eq!(value, 15);
@@ -773,12 +744,12 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(pipeline.len(), 1);
+        assert_eq!(pipeline.manager.pass_count(), 1);
     }
 
     #[test]
     fn rejects_invalid_analysis_identifiers() {
         let mut pipeline = verified_pipeline();
-
         let mut pass = add_pass("test.invalid_analysis", 1);
 
         pass.descriptor
@@ -792,7 +763,6 @@ mod tests {
     #[test]
     fn rejects_contradictory_analysis_declarations() {
         let mut pipeline = verified_pipeline();
-
         let mut pass = add_pass("test.contradictory", 1);
 
         pass.descriptor.preserves_all_analyses = true;
@@ -805,7 +775,7 @@ mod tests {
     }
 
     #[test]
-    fn reports_nondeterministic_passes_when_policy_allows_them() {
+    fn reports_nondeterministic_passes_when_allowed() {
         let config = PassManagerConfig {
             deterministic_mode: false,
             reject_nondeterministic_passes: false,
@@ -814,21 +784,21 @@ mod tests {
 
         let mut pipeline = PassPipeline::<u64>::new(config);
         let mut pass = add_pass("test.nondeterministic", 1);
-        pass.descriptor.deterministic = false;
 
+        pass.descriptor.deterministic = false;
         pipeline.add_pass(pass).unwrap();
 
-        let validation = pipeline.validate().unwrap();
+        let report = pipeline.validate().unwrap();
 
-        assert_eq!(validation.pass_count, 1);
-        assert_eq!(validation.nondeterministic_count(), 1);
+        assert_eq!(report.pass_count, 1);
+        assert_eq!(report.nondeterministic_count(), 1);
     }
 
     #[test]
-    fn strict_determinism_policy_rejects_nondeterministic_passes() {
+    fn rejects_nondeterministic_passes_under_strict_policy() {
         let mut pipeline = verified_pipeline();
-
         let mut pass = add_pass("test.nondeterministic", 1);
+
         pass.descriptor.deterministic = false;
 
         assert!(pipeline.add_pass(pass).is_err());
@@ -836,10 +806,12 @@ mod tests {
     }
 
     #[test]
-    fn execution_fails_closed_when_verification_is_required() {
+    fn execution_fails_closed_when_required_verifier_is_missing() {
         let mut pipeline = PassPipeline::<u64>::with_defaults();
 
-        pipeline.add_pass(add_pass("test.needs_verifier", 1)).unwrap();
+        pipeline
+            .add_pass(add_pass("test.requires_verification", 1))
+            .unwrap();
 
         let mut value = 0_u64;
 
@@ -859,15 +831,12 @@ mod tests {
 
         pipeline.add_pass(add_pass("test.configured", 1)).unwrap();
 
-        let result = pipeline.set_initial_analyses(["core.cfg"]);
-
-        assert!(result.is_err());
+        assert!(pipeline.set_initial_analyses(["core.cfg"]).is_err());
     }
 
     #[test]
-    fn cancellation_token_is_shared_with_pipeline_manager() {
+    fn cancellation_token_is_shared_with_manager() {
         let mut pipeline = verified_pipeline();
-
         let token = pipeline.cancellation_token();
 
         assert!(!token.is_cancelled());
@@ -886,12 +855,62 @@ mod tests {
     }
 
     #[test]
-    fn validation_reports_empty_pipeline() {
+    fn validates_empty_pipeline() {
         let pipeline = PassPipeline::<u64>::with_defaults();
-
         let report = pipeline.validate().unwrap();
 
         assert_eq!(report.pass_count, 0);
         assert!(report.all_passes_declare_determinism());
+    }
+
+    #[test]
+    fn freezes_descriptor_identity_after_registration() {
+        struct ChangingDescriptorPass {
+            first: OperationalPassDescriptor,
+            second: OperationalPassDescriptor,
+        }
+
+        impl OperationalPass<u64> for ChangingDescriptorPass {
+            fn descriptor(&self) -> OperationalPassDescriptor {
+                self.first.clone()
+            }
+
+            fn run(
+                &mut self,
+                _ir: &mut u64,
+                _context: &mut super::super::manager::PassContext,
+            ) -> Result<OperationalPassOutcome, OperationalPassError> {
+                // The implementation's own descriptor state is irrelevant
+                // after registration; FrozenPass returns the captured one.
+                self.first = self.second.clone();
+                Ok(OperationalPassOutcome::unchanged())
+            }
+        }
+
+        let mut pipeline = verified_pipeline();
+
+        let first = OperationalPassDescriptor::new(
+            OperationalPassId::new("test.frozen").unwrap(),
+            OperationalPassVersion::new(1, 0, 0),
+            "Original descriptor",
+        );
+
+        let second = OperationalPassDescriptor::new(
+            OperationalPassId::new("test.changed").unwrap(),
+            OperationalPassVersion::new(9, 0, 0),
+            "Changed descriptor",
+        );
+
+        pipeline
+            .add_pass(ChangingDescriptorPass { first, second })
+            .unwrap();
+
+        let mut value = 0_u64;
+        pipeline.run(&mut value).unwrap();
+
+        let step = pipeline.steps().next().unwrap();
+
+        assert_eq!(step.id().as_str(), "test.frozen");
+        assert_eq!(step.version(), OperationalPassVersion::new(1, 0, 0));
     }
 }
