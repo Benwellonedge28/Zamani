@@ -6,7 +6,7 @@
 
 //! # Zamani Compiler — Backend Registry Integration
 //!
-//! Path: `src/compiler/backend/registry.rs`
+//! Path: `src/compiler/backends/registry.rs`
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //! Safety: Safe Rust only. `unsafe` is forbidden.
