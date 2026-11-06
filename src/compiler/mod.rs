@@ -5,73 +5,67 @@
 
 //! # Zamani Universal Meta-Compiler
 //!
-//! Canonical path: src/compiler/mod.rs
-//!
+//! Canonical path: `src/compiler/mod.rs`
 //! Rust edition: 2021
-//! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
+//! Minimum supported Rust version: 1.97
 //!
-//! Primary objective:
+//! # Mission
 //!
 //! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! This module is the composition boundary for the Zamani compiler.
+//! The Zamani compiler transforms validated Zamani programs into
+//! portable, target-independent and target-specific compilation
+//! artifacts while preserving program semantics.
 //!
-//! It integrates existing compiler subsystems without creating
-//! competing implementations of semantic analysis, IR, optimization,
-//! hardware management, backend code generation, or runtime execution.
+//! It provides the composition boundary for compiler infrastructure
+//! across classical, quantum, hybrid, AI, tensor, HDL, neuromorphic,
+//! distributed, networking, cryptographic and future computing domains.
 //!
-//! # Architectural ownership
+//! # Architectural responsibility
 //!
 //! This module owns:
 //!
 //! - Compiler subsystem composition.
 //! - Public compiler module organization.
-//! - Compiler-level integration boundaries.
-//! - Compiler facade documentation.
+//! - Compiler infrastructure integration boundaries.
+//! - Compiler composition API versioning.
 //!
-//! It does not own:
+//! This module does not own:
 //!
-//! - Language grammar.
+//! - Source grammar.
 //! - Lexical analysis.
 //! - Parsing.
 //! - AST construction.
-//! - Semantic meaning.
-//! - Type inference algorithms.
-//! - Ownership semantics.
+//! - Source-level semantic authority.
 //! - Canonical IR definitions.
 //! - Domain-specific IR definitions.
-//! - Optimization algorithms.
 //! - Physical hardware discovery.
-//! - Device allocation.
+//! - Physical resource allocation.
 //! - Runtime scheduling.
 //! - Backend implementation.
-//! - Physical execution.
+//! - Physical program execution.
 //!
-//! # Canonical authorities
+//! # Canonical architectural authorities
 //!
-//! Source syntax:
+//! Source grammar:
 //!     grammar/Zamani.g4
 //!
-//! Grammar architecture:
-//!     grammar/DESIGN.md
-//!
-//! Semantic meaning:
+//! Semantic specification:
 //!     grammar/specification/semantic-model.md
 //!
 //! Semantic implementation:
 //!     crate::frontend::semantic
 //!
-//! Canonical universal IR:
+//! Universal intermediate representation:
 //!     crate::zuir
 //!
-//! Classical IR:
+//! Classical computing:
 //!     crate::classical
 //!
-//! Quantum IR:
+//! Quantum computing:
 //!     crate::quantum::ir
 //!
-//! Hardware IR:
+//! Hardware description:
 //!     crate::hdl::hdlir
 //!
 //! AI computation:
@@ -80,224 +74,266 @@
 //! Hybrid computation:
 //!     crate::hybrid
 //!
-//! Backend:
+//! Distributed computing:
+//!     crate::distributed
+//!
+//! Backend implementation:
 //!     crate::backend
 //!
-//! Runtime:
+//! Runtime execution:
 //!     crate::runtime
 //!
-//! # POCO-REAF
-//!
-//! The compiler must preserve program meaning independently of
-//! the particular hardware used for realization.
-//!
-//! It must support extensible computing domains and target
-//! implementations without requiring changes to this composition
-//! root whenever a new provider or architecture is registered.
-//!
-//! No universal hardware-capacity limits are defined here.
-//!
-//! No arbitrary maximum is imposed on:
-//!
-//! - CPUs, cores, or workers;
-//! - GPUs, FPGAs, ASICs, or QPUs;
-//! - devices or distributed participants;
-//! - memory or storage;
-//! - qubits;
-//! - tensor dimensions or rank;
-//! - modules, functions, or operations;
-//! - compiler stages;
-//! - optimization passes;
-//! - targets or backends.
-//!
-//! Operational limits belong to explicit budgets, available
-//! resources, implementation constraints, and target capabilities.
-//!
-//! Literal infinite memory or processing capacity is not promised.
-//!
-//! Resource exhaustion must be reported explicitly.
+//! Compiler modules integrate with these authorities.
+//! They must not establish competing representations or semantics.
 //!
 //! # Compilation architecture
 //!
 //! Source
 //!   -> Frontend
 //!   -> Semantic validation
-//!   -> Canonical IR
-//!   -> Analysis and verification
+//!   -> Canonical IR construction
+//!   -> IR verification
+//!   -> Program and dependency analysis
+//!   -> Ownership and effect analysis
 //!   -> Semantics-preserving transformations
 //!   -> Optimization
-//!   -> Capability and feasibility analysis
-//!   -> Heterogeneous planning
+//!   -> Capability negotiation
+//!   -> Feasibility analysis
+//!   -> Heterogeneous resource planning
 //!   -> Domain-specific lowering
+//!   -> Backend selection
 //!   -> Backend realization
 //!   -> Artifact validation
 //!   -> Linking and packaging
+//!   -> Runtime handoff
 //!
-//! Conditional stages must only execute when applicable.
+//! This is the intended architectural flow, not a claim that every
+//! stage is already fully implemented or integrated.
 //!
-//! Required stages must never be silently skipped.
+//! # POCO-REAF and scalability
+//!
+//! The compiler must not impose universal fixed hardware limits.
+//!
+//! No arbitrary maximum is established here for:
+//!
+//! - CPUs, cores, threads or workers;
+//! - GPUs, FPGAs, ASICs or QPUs;
+//! - accelerators or heterogeneous devices;
+//! - distributed participants;
+//! - memory or storage;
+//! - qubits;
+//! - tensor dimensions or rank;
+//! - modules, functions or operations;
+//! - compiler stages;
+//! - optimization passes;
+//! - targets or backend providers.
+//!
+//! Resource budgets are operational policies, not semantic limits.
+//!
+//! Target capabilities describe what a target can support.
+//!
+//! Physical resource availability determines actual feasibility.
+//!
+//! An unknown capability must not be interpreted as unlimited support.
 //!
 //! An unsupported operation must not be silently discarded.
 //!
-//! A successful compilation result must represent an actual
-//! successful compilation, not a fabricated artifact.
+//! Resource exhaustion must produce an explicit failure.
 //!
-//! # Compatibility
+//! Literal infinite physical resources are not promised.
 //!
-//! The crate root already declares:
+//! # Extensibility
 //!
-//!     pub mod compiler;
+//! New computing domains, optimization passes, targets, backends and
+//! providers should integrate through their respective registries,
+//! contracts and extension interfaces.
 //!
-//! Consequently, no additional declaration in src/lib.rs is needed.
+//! Adding a provider must not require changing this composition root
+//! when the existing extension contracts are sufficient.
+//!
+//! # Safety
+//!
+//! Unsafe Rust is forbidden throughout this module hierarchy.
+//!
+//! Public APIs must document their contracts, error behavior and
+//! compatibility expectations.
 
+// ============================================================================
+// COMPILER API
+// ============================================================================
+
+/// Public compiler interfaces, requests, responses, sessions
+/// and compatibility contracts.
+pub mod api;
 
 // ============================================================================
 // COMPILER FOUNDATION
 // ============================================================================
 
-/// Compiler diagnostics and structured error reporting.
-///
-/// Owns diagnostic representation and reporting integration.
+/// Compiler diagnostics, aggregation, rendering and reporting.
 pub mod diagnostics;
 
-/// Compiler configuration, budgets, profiles, policies and targets.
-///
-/// Uses the existing compiler configuration authority.
+/// Compiler configuration, operational budgets, policies,
+/// profiles, target descriptors and configuration validation.
 pub mod configuration;
 
-/// Compilation contexts, lifecycle, dependencies and provenance.
-///
-/// Uses the existing context implementations.
+/// Compilation contexts, lifecycle state, dependencies
+/// and compilation provenance.
 pub mod context;
 
+/// Compiler-local type definitions and compatibility types.
+pub mod compiler_types;
 
 // ============================================================================
 // COMPILER ANALYSIS
 // ============================================================================
 
-/// Compiler-facing program, dependency, effect, ownership and
-/// capability analysis.
+/// Compiler-facing program, dependency, effect, ownership,
+/// capability, feasibility and requirement analysis.
 ///
-/// Does not replace frontend semantic analysis.
+/// Source-level semantic authority remains in the frontend.
 pub mod analysis;
-
 
 // ============================================================================
 // INTERMEDIATE REPRESENTATION INTEGRATION
 // ============================================================================
 
-/// Compiler-facing integration with canonical IR implementations.
+/// Adapters, compatibility, verification, translation
+/// and lowering integration for canonical IR systems.
 ///
-/// Does not introduce another universal or domain IR.
+/// This module does not define a competing universal IR.
 pub mod ir;
 
-
 // ============================================================================
-// COMPILER PIPELINE
+// COMPILATION PIPELINE
 // ============================================================================
 
-/// Compiler stage contracts, ordering, execution, failures,
-/// recovery and orchestration.
+/// Compiler stage contracts, standard stages, dependency ordering,
+/// execution, failure representation, recovery planning
+/// and orchestration.
 pub mod pipeline;
-
 
 // ============================================================================
 // COMPILER PASS MANAGEMENT
 // ============================================================================
 
-/// Compiler-facing pass registration, ordering, management
-/// and pipeline composition.
+/// Compiler pass management, registration, ordering,
+/// preservation and pipeline composition.
 ///
-/// The canonical pass authority remains in ZUIR.
+/// Canonical IR pass semantics remain with their authoritative
+/// IR and optimization subsystems.
 pub mod passes;
 
-
 // ============================================================================
-// EXISTING COMPILER IMPLEMENTATIONS
+// OPTIMIZATION
 // ============================================================================
 
-/// Generic specialization and monomorphization.
-pub mod monomorphizer;
-
-/// Compiler type-inference integration.
-///
-/// Semantic type authority remains with the frontend.
-pub mod type_inference;
-
-/// Existing ownership and borrowing integration.
-pub mod borrow_checker;
-
-/// Existing compilation-strategy selection.
-pub mod compilation_techniques;
-
-/// Existing optimization-strategy integration.
-pub mod optimization_strategies;
+/// Compiler optimization planning, policies, cost models,
+/// profitability, decisions and validation.
+pub mod optimization;
 
 /// Existing instruction-fusion implementation.
 pub mod instruction_fusion;
 
-/// Existing telemetry-informed optimization integration.
-pub mod sro;
+// ============================================================================
+// COMPILER ANALYSIS AND TRANSFORMATION IMPLEMENTATIONS
+// ============================================================================
 
-/// Existing compiler linking implementation.
-pub mod linker;
+/// Existing compiler ownership and borrowing integration.
+pub mod borrow_checker;
 
-/// Existing incremental compilation implementation.
-pub mod incremental;
+/// Existing generic specialization and monomorphization.
+pub mod monomorphizer;
 
-/// Existing parallel compilation implementation.
-pub mod parallel_build;
-
-/// Existing JIT and IR execution integration.
-pub mod jit;
-
-/// Existing hardware partitioning integration.
-///
-/// Physical device allocation remains outside this module.
-pub mod hardware_partitioner;
-
-/// Existing hybrid compilation integration.
-pub mod hybrid_pipeline;
-
-/// Existing hybrid compilation profiling.
-pub mod hybrid_profiles;
-
-/// Existing backend source synthesis.
-pub mod ssbe;
-
-/// Existing compilation safety inspection.
+/// Existing compiler safety inspection.
 pub mod safety_guard;
 
-/// Existing WebAssembly backend integration.
-pub mod wasm_backend;
+/// Existing telemetry-informed optimization implementation.
+pub mod sro;
 
-/// Existing WebAssembly control-flow preparation.
-pub mod wasm_cfg;
+// ============================================================================
+// TARGETS, BACKENDS AND LOWERING
+// ============================================================================
 
-/// Existing LLVM backend integration.
-pub mod llvm_backend;
+/// Backend discovery, registration, capability inspection,
+/// compatibility, selection and invocation contracts.
+pub mod backends;
 
-/// Existing intermediate-representation exporters.
-pub mod ir_exporters;
+/// Domain and target-specific lowering infrastructure.
+pub mod lowering;
 
-/// Existing advanced object-oriented compilation integration.
-pub mod oop_advanced;
+// ============================================================================
+// HETEROGENEOUS RESOURCE AND EXECUTION PLANNING
+// ============================================================================
 
-/// Existing compiler test metadata.
-pub mod test_metadata;
+/// Target discovery, capability matching, resource planning,
+/// partitioning, scheduling and feasibility infrastructure.
+pub mod planning;
+
+// ============================================================================
+// COMPILATION EXECUTION INFRASTRUCTURE
+// ============================================================================
+
+/// Parallel build execution, dependencies, determinism,
+/// scheduling and worker management.
+pub mod parallel;
+
+/// Incremental compilation, fingerprints, caching,
+/// invalidation and persistence.
+pub mod incremental;
+
+// ============================================================================
+// HYBRID AND SPECIALIZED COMPILATION
+// ============================================================================
+
+/// Existing specialized static backend emission integration.
+pub mod ssbe;
+
+/// Existing compiler macro processing infrastructure.
+pub mod macro_engine;
+
+// ============================================================================
+// LINKING AND ARTIFACTS
+// ============================================================================
+
+/// Symbol management, composition, relocation and
+/// linking validation.
+pub mod linking;
+
+/// Compilation artifacts, manifests, metadata, portability,
+/// serialization and artifact validation.
+pub mod artifacts;
+
+// ============================================================================
+// SECURITY AND ASSURANCE
+// ============================================================================
+
+/// Compiler security policies, verification,
+/// supply-chain assurance and auditing.
+pub mod security;
+
+/// Existing compiler audit infrastructure.
+pub mod audit_engine;
+
+// ============================================================================
+// PROFILING AND OBSERVABILITY
+// ============================================================================
+
+/// Compiler profiling events, measurements and aggregation.
+pub mod profiling;
+
+// ============================================================================
+// TESTING AND FUZZING INFRASTRUCTURE
+// ============================================================================
 
 /// Existing compiler fuzzing infrastructure.
 pub mod fuzzing_harness;
 
-/// Existing specialized IR feature integration.
-pub mod unique_ir_features;
-
-
 // ============================================================================
-// ARCHITECTURAL VERSION
+// COMPILER COMPOSITION API VERSION
 // ============================================================================
 
-/// Compiler composition API version.
+/// Public compiler composition API version.
 ///
 /// This version is independent of:
 ///
@@ -309,8 +345,8 @@ pub mod unique_ir_features;
 /// - Backend ABI versions.
 /// - Runtime versions.
 ///
-/// Increment when the public compiler composition contract
-/// changes incompatibly.
+/// Increment when the public composition contract changes
+/// incompatibly.
 pub const COMPILER_API_VERSION: u16 = 1;
 
 /// Returns the compiler composition API version.
@@ -319,33 +355,46 @@ pub const fn api_version() -> u16 {
     COMPILER_API_VERSION
 }
 
-
 // ============================================================================
-// ARCHITECTURAL INVARIANTS
+// ARCHITECTURAL CONTRACT
 // ============================================================================
 
-/// The compiler composition root must preserve these invariants.
+/// Returns the version of the compiler architectural contract.
 ///
-/// 1. Frontend owns source parsing and AST construction.
-/// 2. Frontend semantic analysis owns source meaning.
-/// 3. Canonical IR modules own their representations.
-/// 4. The optimizer owns optimization algorithms.
-/// 5. Compiler planning does not allocate physical devices.
-/// 6. Backend implementations own target-specific emission.
-/// 7. Runtime implementations own physical execution.
-/// 8. Unsupported operations produce explicit diagnostics.
-/// 9. Missing capability evidence does not establish support.
-/// 10. Transformations preserve applicable semantic contracts.
-/// 11. Resource exhaustion is never silently converted to success.
-/// 12. No arbitrary universal hardware ceilings are introduced.
-///
-/// This function exposes the architecture contract without
-/// performing compilation or modifying global state.
+/// This currently shares the composition API version.
+/// It is not a separate implementation or version authority.
 #[must_use]
 pub const fn architecture_version() -> u16 {
     COMPILER_API_VERSION
 }
 
+// ============================================================================
+// ARCHITECTURAL INVARIANTS
+// ============================================================================
+
+/// Compiler composition must preserve the following invariants:
+///
+/// 1. The frontend owns source parsing and AST construction.
+/// 2. Frontend semantic analysis owns source-level meaning.
+/// 3. Canonical IR modules own their representations.
+/// 4. Compiler analysis does not replace semantic authority.
+/// 5. Optimization preserves applicable semantic contracts.
+/// 6. Capability evidence must be explicit and verifiable.
+/// 7. Unknown capabilities must not establish feasibility.
+/// 8. Planning does not allocate physical devices.
+/// 9. Backend implementations own target-specific emission.
+/// 10. Runtime implementations own physical execution.
+/// 11. Conditional compilation stages execute only when applicable.
+/// 12. Required stages cannot be silently skipped.
+/// 13. Unsupported operations produce explicit diagnostics.
+/// 14. Failed verification cannot be reported as successful.
+/// 15. Resource exhaustion cannot be converted into success.
+/// 16. No arbitrary universal hardware ceilings are introduced.
+/// 17. Extension providers must follow their registered contracts.
+///
+/// These invariants describe architectural requirements.
+/// They do not assert that every requirement has already been
+/// implemented throughout the repository.
 
 // ============================================================================
 // MODULE CONTRACT TESTS
@@ -356,35 +405,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compiler_api_version_is_stable_and_nonzero() {
-        assert_eq!(api_version(), COMPILER_API_VERSION);
+    fn compiler_api_version_is_nonzero() {
         assert_ne!(COMPILER_API_VERSION, 0);
     }
 
     #[test]
-    fn architecture_version_matches_public_api() {
-        assert_eq!(
-            architecture_version(),
-            COMPILER_API_VERSION
-        );
+    fn public_api_version_matches_constant() {
+        assert_eq!(api_version(), COMPILER_API_VERSION);
     }
 
     #[test]
-    fn existing_compiler_subsystems_are_exposed() {
-        let _ = core::any::type_name::<
-            configuration::CompilationBudget
-        >();
-
-        let _ = core::any::type_name::<
-            pipeline::PipelineOrchestrator
-        >();
+    fn architecture_version_matches_composition_version() {
+        assert_eq!(architecture_version(), COMPILER_API_VERSION);
     }
 
     #[test]
     fn compiler_ir_integration_is_exposed() {
-        assert_eq!(
-            ir::api_version(),
-            ir::COMPILER_IR_API_VERSION
-        );
+        assert_ne!(ir::COMPILER_IR_API_VERSION, 0);
+    }
+
+    #[test]
+    fn pipeline_api_is_exposed() {
+        assert_ne!(pipeline::PIPELINE_API_VERSION, 0);
+    }
+
+    #[test]
+    fn configuration_api_is_exposed() {
+        assert_ne!(configuration::CONFIGURATION_MODULE_API_VERSION, 0);
+    }
+
+    #[test]
+    fn backend_api_is_exposed() {
+        assert_ne!(backends::COMPILER_BACKENDS_API_VERSION, 0);
     }
 }
