@@ -6,77 +6,83 @@
 //! # Zamani Diagnostic Rendering
 //!
 //! Path: src/compiler/diagnostics/rendering.rs
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
 //!
-//! ## Authority
+//! Rust: 1.97+
+//! Edition: 2021
 //!
-//! Diagnostic semantics:
+//! PURPOSE
+//!
+//! Render canonical Zamani diagnostics into human-readable output.
+//!
+//! OWNERSHIP
+//!
+//! This module owns presentation only.
+//!
+//! It does not own:
+//! - Diagnostic construction;
+//! - Diagnostic identity or severity;
+//! - Source-file identity;
+//! - Source storage;
+//! - Source-map construction;
+//! - Diagnostic aggregation;
+//! - Diagnostic ordering;
+//! - Diagnostic serialization;
+//! - Semantic validation;
+//! - Parser recovery;
+//! - Fix-it execution.
+//!
+//! CANONICAL AUTHORITIES
+//!
+//! Diagnostic:
 //! crate::frontend::semantic::diagnostics
 //!
-//! Source coordinates:
+//! Span:
 //! crate::frontend::ast::node::source::span
 //!
 //! Source provenance:
 //! crate::zuir::source_map
 //!
-//! Diagnostic aggregation:
+//! Aggregation:
 //! crate::compiler::diagnostics::aggregation
 //!
-//! Machine-readable reporting:
+//! Reporting:
 //! crate::compiler::diagnostics::reporting
 //!
-//! Normative specifications:
-//! grammar/spec/diagnostics.md
-//! grammar/spec/source-spans.md
-//!
-//! ## Ownership
-//!
-//! This module owns human-readable presentation only.
-//!
-//! It does not own diagnostic construction, semantic validity,
-//! source identity, source storage, diagnostic aggregation,
-//! ordering, deduplication, JSON serialization, or recovery.
-//!
-//! ## Scalability
+//! SCALABILITY
 //!
 //! No universal source-size, diagnostic-count, hardware-count,
 //! or computational-domain limit is introduced.
 //!
-//! Optional rendering budgets are operational policies.
+//! Rendering budgets are optional operational policies.
 //!
-//! The implementation processes source lines on demand rather
-//! than allocating a complete source-line index per diagnostic.
+//! SECURITY
 //!
-//! ## Security
-//!
-//! User-controlled text is escaped before terminal presentation.
-//! Source contents are never executed or interpreted as commands.
-//! Fix-its are displayed but never applied.
-//!
+//! User-controlled presentation text is escaped.
+//! Fix-its are displayed, never executed.
 //! No filesystem, network, process, or hardware access occurs.
 
-use std::fmt;
-use std::fmt::Write as FmtWrite;
-use std::io;
+use core::fmt;
+use std::io::{self, Write};
 use std::num::NonZeroUsize;
 
 use crate::frontend::ast::node::source::span::Span;
 
-use crate::frontend::semantic::diagnostics::diagnostic::{
+use crate::frontend::semantic::diagnostics::{
     Diagnostic,
     FixIt,
 };
 
+// =============================================================================
+// SOURCE PROVIDER
+// =============================================================================
+
 /// Borrowed source document.
 ///
-/// `id` is the raw identity of the canonical source identifier.
+/// Source identity is the canonical raw SourceId.
 ///
-/// `name` is a display name, not a filesystem path that this
-/// renderer is permitted to open.
+/// `name` is a display name, not permission to access a filesystem path.
 ///
-/// Source contents remain owned by the source-management layer.
+/// Source storage remains owned by the source-management subsystem.
 #[derive(Debug, Clone, Copy)]
 pub struct SourceFileRef<'a> {
     pub id: u64,
@@ -95,12 +101,12 @@ impl<'a> SourceFileRef<'a> {
     }
 }
 
-/// Provides source documents to the renderer.
+/// Supplies source documents for diagnostic rendering.
 ///
 /// Implementations must return the requested source identity.
-/// The renderer verifies that the returned identity matches.
 ///
-/// The provider owns source storage and its lifetime.
+/// The provider must keep returned source text alive for the
+/// duration of the rendering operation.
 pub trait SourceProvider {
     fn source(
         &self,
@@ -108,22 +114,25 @@ pub trait SourceProvider {
     ) -> Option<SourceFileRef<'_>>;
 }
 
-/// Defines the terminal display width of a Unicode scalar.
+// =============================================================================
+// DISPLAY WIDTH
+// =============================================================================
+
+/// Defines the presentation width of a Unicode scalar.
 ///
-/// This is a presentation policy, not a source-coordinate policy.
+/// Source coordinates remain UTF-8 byte offsets.
 ///
-/// Implementations must be deterministic.
+/// Display width is exclusively a presentation concern.
 pub trait DisplayWidth {
     fn character_width(&self, character: char) -> usize;
 }
 
-/// Portable scalar-width policy.
+/// Portable scalar-width implementation.
 ///
-/// This implementation counts non-control Unicode scalars
-/// as one display unit.
+/// Non-control Unicode scalars occupy one display unit.
 ///
-/// It does not claim full grapheme-cluster or East Asian
-/// terminal-width conformance.
+/// This is deliberately not advertised as complete terminal
+/// grapheme or East Asian width conformance.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ScalarDisplayWidth;
 
@@ -137,17 +146,20 @@ impl DisplayWidth for ScalarDisplayWidth {
     }
 }
 
-/// Rendering configuration.
+// =============================================================================
+// OPTIONS
+// =============================================================================
+
+/// Diagnostic presentation policies.
 ///
-/// Every configured limit is an operational output budget,
-/// not a restriction on valid Zamani programs.
+/// Every limit is an operational rendering budget, not a
+/// restriction on valid Zamani programs.
 #[derive(Debug, Clone)]
 pub struct RenderingOptions {
     tab_width: NonZeroUsize,
     max_lines_per_location: Option<NonZeroUsize>,
     max_output_bytes: Option<usize>,
     show_fix_replacements: bool,
-    escape_control_characters: bool,
 }
 
 impl Default for RenderingOptions {
@@ -158,7 +170,6 @@ impl Default for RenderingOptions {
             max_lines_per_location: None,
             max_output_bytes: None,
             show_fix_replacements: true,
-            escape_control_characters: true,
         }
     }
 }
@@ -204,22 +215,14 @@ impl RenderingOptions {
         self.show_fix_replacements = enabled;
         self
     }
-
-    #[must_use]
-    pub fn with_control_character_escaping(
-        mut self,
-        enabled: bool,
-    ) -> Self {
-        self.escape_control_characters = enabled;
-        self
-    }
 }
 
-/// Errors encountered while rendering.
-///
-/// These errors describe presentation infrastructure failures.
-/// They do not change the validity of the Zamani program.
-#[derive(Debug, Clone, PartialEq, Eq)]
+// =============================================================================
+// ERRORS
+// =============================================================================
+
+/// Infrastructure failures encountered during rendering.
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum RenderingError {
     MissingSource {
@@ -260,7 +263,7 @@ pub enum RenderingError {
 
     AllocationFailure,
 
-    WriterFailure,
+    WriterFailure(io::Error),
 }
 
 impl fmt::Display for RenderingError {
@@ -282,8 +285,8 @@ impl fmt::Display for RenderingError {
             } => {
                 write!(
                     f,
-                    "source provider returned identity {returned} \
-                     when identity {requested} was requested"
+                    "source identity mismatch: requested {requested}, \
+                     received {returned}"
                 )
             }
 
@@ -302,7 +305,7 @@ impl fmt::Display for RenderingError {
             Self::OffsetNotRepresentable { offset } => {
                 write!(
                     f,
-                    "source offset {offset} cannot be represented \
+                    "source offset {offset} is not representable \
                      on this platform"
                 )
             }
@@ -313,13 +316,13 @@ impl fmt::Display for RenderingError {
             } => {
                 write!(
                     f,
-                    "source offset {offset} is not a valid UTF-8 \
-                     boundary in source {source_id}"
+                    "invalid UTF-8 boundary {offset} \
+                     in source {source_id}"
                 )
             }
 
             Self::InvalidOptions => {
-                f.write_str("invalid rendering options")
+                f.write_str("invalid diagnostic rendering options")
             }
 
             Self::LineBudgetExceeded {
@@ -328,7 +331,7 @@ impl fmt::Display for RenderingError {
             } => {
                 write!(
                     f,
-                    "source rendering requires {required} lines; \
+                    "rendering requires {required} lines; \
                      configured budget is {configured}"
                 )
             }
@@ -345,41 +348,72 @@ impl fmt::Display for RenderingError {
             }
 
             Self::AllocationFailure => {
-                f.write_str("unable to allocate diagnostic output")
+                f.write_str("diagnostic output allocation failed")
             }
 
-            Self::WriterFailure => {
-                f.write_str("diagnostic output writer failed")
+            Self::WriterFailure(error) => {
+                write!(
+                    f,
+                    "diagnostic output writer failed: {error}"
+                )
             }
         }
     }
 }
 
-impl std::error::Error for RenderingError {}
+impl std::error::Error for RenderingError {
+    fn source(
+        &self,
+    ) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::WriterFailure(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
-/// Fallible output accumulator.
+// =============================================================================
+// OUTPUT SINK
+// =============================================================================
+
+/// Internal output abstraction.
 ///
-/// This keeps the output budget separate from language semantics.
-struct Output {
-    text: String,
+/// The renderer writes through this abstraction so byte budgets
+/// are enforced consistently for owned and borrowed output.
+trait RenderSink {
+    fn write_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), RenderingError>;
+}
+
+/// String-backed output.
+struct StringSink {
+    value: String,
     maximum: Option<usize>,
 }
 
-impl Output {
+impl StringSink {
     fn new(maximum: Option<usize>) -> Self {
         Self {
-            text: String::new(),
+            value: String::new(),
             maximum,
         }
     }
 
-    fn reserve(
+    fn finish(self) -> String {
+        self.value
+    }
+}
+
+impl RenderSink for StringSink {
+    fn write_bytes(
         &mut self,
-        additional: usize,
+        bytes: &[u8],
     ) -> Result<(), RenderingError> {
-        let required = self.text
+        let required = self.value
             .len()
-            .checked_add(additional)
+            .checked_add(bytes.len())
             .ok_or(RenderingError::AllocationFailure)?;
 
         if let Some(maximum) = self.maximum {
@@ -393,44 +427,126 @@ impl Output {
             }
         }
 
-        self.text
-            .try_reserve(additional)
-            .map_err(|_| RenderingError::AllocationFailure)
-    }
+        self.value
+            .try_reserve(bytes.len())
+            .map_err(|_| RenderingError::AllocationFailure)?;
 
-    fn push_str(
-        &mut self,
-        value: &str,
-    ) -> Result<(), RenderingError> {
-        self.reserve(value.len())?;
-        self.text.push_str(value);
+        // All renderer-produced fragments are valid UTF-8.
+        let text = std::str::from_utf8(bytes)
+            .map_err(|_| RenderingError::InvalidOptions)?;
+
+        self.value.push_str(text);
+
         Ok(())
     }
+}
 
-    fn push_char(
-        &mut self,
-        value: char,
-    ) -> Result<(), RenderingError> {
-        let mut buffer = [0u8; 4];
-        let encoded = value.encode_utf8(&mut buffer);
-        self.push_str(encoded)
-    }
+/// Borrowed writer-backed output.
+///
+/// A writer can receive partial output if a subsequent write fails.
+/// Such output must not be treated as a complete diagnostic.
+struct WriterSink<'a, W: Write + ?Sized> {
+    writer: &'a mut W,
+    written: usize,
+    maximum: Option<usize>,
+}
 
-    fn finish(self) -> String {
-        self.text
+impl<'a, W: Write + ?Sized> WriterSink<'a, W> {
+    fn new(
+        writer: &'a mut W,
+        maximum: Option<usize>,
+    ) -> Self {
+        Self {
+            writer,
+            written: 0,
+            maximum,
+        }
     }
 }
 
-/// Write formatted text into the bounded accumulator.
-fn write_output(
-    output: &mut Output,
+impl<W: Write + ?Sized> RenderSink for WriterSink<'_, W> {
+    fn write_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(), RenderingError> {
+        let required = self.written
+            .checked_add(bytes.len())
+            .ok_or(RenderingError::AllocationFailure)?;
+
+        if let Some(maximum) = self.maximum {
+            if required > maximum {
+                return Err(
+                    RenderingError::OutputBudgetExceeded {
+                        configured: maximum,
+                        required,
+                    },
+                );
+            }
+        }
+
+        self.writer
+            .write_all(bytes)
+            .map_err(RenderingError::WriterFailure)?;
+
+        self.written = required;
+
+        Ok(())
+    }
+}
+
+fn write_text(
+    output: &mut impl RenderSink,
+    value: &str,
+) -> Result<(), RenderingError> {
+    output.write_bytes(value.as_bytes())
+}
+
+fn write_fmt(
+    output: &mut impl RenderSink,
     arguments: fmt::Arguments<'_>,
 ) -> Result<(), RenderingError> {
-    let formatted = fmt::format(arguments);
-    output.push_str(&formatted)
+    let mut temporary = String::new();
+
+    temporary
+        .try_reserve(arguments.to_string().len())
+        .map_err(|_| RenderingError::AllocationFailure)?;
+
+    fmt::write(&mut temporary, arguments)
+        .map_err(|_| RenderingError::AllocationFailure)?;
+
+    write_text(output, &temporary)
 }
 
-/// Validate a canonical source span against its source text.
+// =============================================================================
+// SAFE TEXT
+// =============================================================================
+
+/// Write untrusted presentation text without permitting terminal
+/// control-character injection.
+///
+/// Escaping is unconditional for control characters.
+fn write_safe_text(
+    output: &mut impl RenderSink,
+    value: &str,
+) -> Result<(), RenderingError> {
+    for character in value.chars() {
+        if character.is_control() {
+            let escaped = character.escape_debug().to_string();
+            write_text(output, &escaped)?;
+        } else {
+            let mut buffer = [0u8; 4];
+            let encoded = character.encode_utf8(&mut buffer);
+            write_text(output, encoded)?;
+        }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// SPAN VALIDATION
+// =============================================================================
+
 fn validate_span(
     span: Span,
     source: SourceFileRef<'_>,
@@ -439,13 +555,17 @@ fn validate_span(
     let end_raw = span.end_raw();
 
     let start = usize::try_from(start_raw)
-        .map_err(|_| RenderingError::OffsetNotRepresentable {
-            offset: start_raw,
+        .map_err(|_| {
+            RenderingError::OffsetNotRepresentable {
+                offset: start_raw,
+            }
         })?;
 
     let end = usize::try_from(end_raw)
-        .map_err(|_| RenderingError::OffsetNotRepresentable {
-            offset: end_raw,
+        .map_err(|_| {
+            RenderingError::OffsetNotRepresentable {
+                offset: end_raw,
+            }
         })?;
 
     if start > end || end > source.text.len() {
@@ -458,172 +578,212 @@ fn validate_span(
 
     for offset in [start, end] {
         if !source.text.is_char_boundary(offset) {
-            return Err(RenderingError::InvalidUtf8Boundary {
-                source_id: source.id,
-                offset,
-            });
+            return Err(
+                RenderingError::InvalidUtf8Boundary {
+                    source_id: source.id,
+                    offset,
+                },
+            );
         }
     }
 
     Ok((start, end))
 }
 
-/// A source line represented by its UTF-8 byte boundaries.
+// =============================================================================
+// SOURCE LINE MODEL
+// =============================================================================
+
 #[derive(Debug, Clone, Copy)]
 struct SourceLine {
     start: usize,
     content_end: usize,
     next_start: usize,
+    number: usize,
 }
 
-/// Find the source line containing a byte offset.
+/// Identify Unicode line terminators.
 ///
-/// LF and CRLF are recognized as line endings.
-/// A trailing newline produces a valid final empty line.
-fn find_line(
-    source: &str,
+/// CRLF is treated as one line ending.
+fn line_ending_at(
+    text: &str,
     offset: usize,
-) -> Option<(SourceLine, usize)> {
-    if offset > source.len()
-        || !source.is_char_boundary(offset)
-    {
+) -> Option<usize> {
+    let character = text.get(offset..)?.chars().next()?;
+
+    match character {
+        '\n' => Some(offset + 1),
+
+        '\r' => {
+            let next = offset + 1;
+
+            if text.as_bytes().get(next) == Some(&b'\n') {
+                Some(next + 1)
+            } else {
+                Some(next)
+            }
+        }
+
+        '\u{0085}' | '\u{2028}' | '\u{2029}' => {
+            Some(offset + character.len_utf8())
+        }
+
+        _ => None,
+    }
+}
+
+/// Return the line containing a byte offset.
+///
+/// This is demand-driven: it does not allocate a complete
+/// source-file line index.
+///
+/// Empty sources and trailing empty lines are supported.
+fn find_line(
+    text: &str,
+    offset: usize,
+) -> Option<SourceLine> {
+    if offset > text.len() || !text.is_char_boundary(offset) {
         return None;
     }
 
-    let bytes = source.as_bytes();
-    let mut start = 0usize;
-    let mut number = 1usize;
-    let mut index = 0usize;
+    let mut line_start = 0usize;
+    let mut line_number = 1usize;
 
-    while index < bytes.len() {
-        if bytes[index] == b'\n' {
-            let mut content_end = index;
+    let mut cursor = 0usize;
 
-            if content_end > start
-                && bytes[content_end - 1] == b'\r'
-            {
-                content_end -= 1;
-            }
-
+    while cursor < text.len() {
+        if let Some(next) = line_ending_at(text, cursor) {
             let line = SourceLine {
-                start,
-                content_end,
-                next_start: index + 1,
+                start: line_start,
+                content_end: cursor,
+                next_start: next,
+                number: line_number,
             };
 
-            if offset < line.next_start {
-                return Some((line, number));
+            // EOF after a line ending belongs to the next,
+            // empty source line.
+            if offset < next {
+                return Some(line);
             }
 
-            start = index + 1;
-            number = number.checked_add(1)?;
-            index += 1;
+            line_start = next;
+            line_number = line_number.checked_add(1)?;
+            cursor = next;
         } else {
-            index += 1;
+            let character = text.get(cursor..)?.chars().next()?;
+            cursor += character.len_utf8();
         }
     }
 
-    Some((
-        SourceLine {
-            start,
-            content_end: bytes.len(),
-            next_start: bytes.len(),
-        },
-        number,
-    ))
+    Some(SourceLine {
+        start: line_start,
+        content_end: text.len(),
+        next_start: text.len(),
+        number: line_number,
+    })
 }
 
-/// Compute the display width of a source prefix.
-///
-/// Tab expansion and marker positioning use exactly the same policy.
-fn display_column<W: DisplayWidth>(
+// =============================================================================
+// DISPLAY COLUMNS
+// =============================================================================
+
+fn advance_column<W: DisplayWidth>(
+    column: usize,
+    character: char,
+    width: &W,
+    tab_width: usize,
+) -> Option<usize> {
+    let advance = if character == '\t' {
+        let remainder = column % tab_width;
+
+        if remainder == 0 {
+            tab_width
+        } else {
+            tab_width - remainder
+        }
+    } else {
+        width.character_width(character)
+    };
+
+    column.checked_add(advance)
+}
+
+fn display_width<W: DisplayWidth>(
     text: &str,
     width: &W,
     tab_width: usize,
-) -> usize {
+) -> Result<usize, RenderingError> {
     let mut column = 0usize;
 
     for character in text.chars() {
-        let advance = if character == '\t' {
-            let remainder = column % tab_width;
-
-            if remainder == 0 {
-                tab_width
-            } else {
-                tab_width - remainder
-            }
-        } else {
-            width.character_width(character)
-        };
-
-        column = column.saturating_add(advance);
+        column = advance_column(
+            column,
+            character,
+            width,
+            tab_width,
+        )
+        .ok_or(RenderingError::AllocationFailure)?;
     }
 
-    column
+    Ok(column)
 }
 
-/// Expand tabs using the same display-width policy as markers.
-fn expand_tabs<W: DisplayWidth>(
+/// Expand tabs and escape control characters while retaining
+/// the exact display-width policy used for marker positions.
+fn write_source_text<W: DisplayWidth>(
+    output: &mut impl RenderSink,
     text: &str,
     width: &W,
     tab_width: usize,
-) -> String {
-    let mut output = String::new();
+) -> Result<usize, RenderingError> {
     let mut column = 0usize;
 
     for character in text.chars() {
         if character == '\t' {
             let remainder = column % tab_width;
 
-            let advance = if remainder == 0 {
+            let spaces = if remainder == 0 {
                 tab_width
             } else {
                 tab_width - remainder
             };
 
-            for _ in 0..advance {
-                output.push(' ');
+            for _ in 0..spaces {
+                write_text(output, " ")?;
             }
 
-            column = column.saturating_add(advance);
-        } else {
-            output.push(character);
-            column = column.saturating_add(
-                width.character_width(character),
-            );
-        }
-    }
-
-    output
-}
-
-/// Escape control characters in untrusted presentation text.
-///
-/// This prevents ANSI escape sequences and terminal control
-/// characters from being interpreted as presentation commands.
-fn write_safe_text(
-    output: &mut Output,
-    value: &str,
-    escape_controls: bool,
-) -> Result<(), RenderingError> {
-    for character in value.chars() {
-        if escape_controls && character.is_control() {
+            column = column
+                .checked_add(spaces)
+                .ok_or(RenderingError::AllocationFailure)?;
+        } else if character.is_control() {
             let escaped = character.escape_debug().to_string();
-            output.push_str(&escaped)?;
+
+            write_text(output, &escaped)?;
+
+            column = column
+                .checked_add(escaped.chars().count())
+                .ok_or(RenderingError::AllocationFailure)?;
         } else {
-            output.push_char(character)?;
+            let mut buffer = [0u8; 4];
+            let encoded = character.encode_utf8(&mut buffer);
+
+            write_text(output, encoded)?;
+
+            column = column
+                .checked_add(width.character_width(character))
+                .ok_or(RenderingError::AllocationFailure)?;
         }
     }
 
-    Ok(())
+    Ok(column)
 }
 
-/// Render one source location.
-///
-/// The renderer scans only the source required to locate the
-/// relevant lines. It does not construct a whole-file line index.
+// =============================================================================
+// SOURCE LOCATION RENDERING
+// =============================================================================
+
 fn render_source_location<W: DisplayWidth>(
-    output: &mut Output,
+    output: &mut impl RenderSink,
     span: Span,
     label: Option<&str>,
     sources: &impl SourceProvider,
@@ -649,15 +809,8 @@ fn render_source_location<W: DisplayWidth>(
 
     let (start, end) = validate_span(span, source)?;
 
-    let (first_line, first_number) = find_line(
-        source.text,
-        start,
-    )
-    .ok_or(RenderingError::InvalidSourceRange {
-        source_id,
-        start: span.start_raw(),
-        end: span.end_raw(),
-    })?;
+    let first = find_line(source.text, start)
+        .ok_or(RenderingError::InvalidOptions)?;
 
     let last_offset = if end > start {
         end - 1
@@ -665,18 +818,11 @@ fn render_source_location<W: DisplayWidth>(
         end
     };
 
-    let (_, last_number) = find_line(
-        source.text,
-        last_offset,
-    )
-    .ok_or(RenderingError::InvalidSourceRange {
-        source_id,
-        start: span.start_raw(),
-        end: span.end_raw(),
-    })?;
+    let last = find_line(source.text, last_offset)
+        .ok_or(RenderingError::InvalidOptions)?;
 
-    let required_lines = last_number
-        .checked_sub(first_number)
+    let required_lines = last.number
+        .checked_sub(first.number)
         .and_then(|value| value.checked_add(1))
         .ok_or(RenderingError::AllocationFailure)?;
 
@@ -691,323 +837,249 @@ fn render_source_location<W: DisplayWidth>(
         }
     }
 
-    write_output(
-        output,
-        format_args!("  --> {}:{}\n", ""),
+    // Derive the displayed column using canonical UTF-8 byte
+    // coordinates and the selected presentation-width policy.
+    let prefix = &source.text[first.start..start.max(first.start)
+        .min(first.content_end)];
+
+    let column = display_width(
+        prefix,
+        width,
+        options.tab_width.get(),
     )?;
 
-    // The display name is rendered separately so control
-    // characters cannot inject terminal control sequences.
-    // Rebuild the location header with the actual source name.
-    let _ = first_line;
-
-    let source_name = source.name;
-
-    // Replace the provisional empty-name header without modifying
-    // source metadata. This branch is retained for no I/O rendering.
-    let _ = source_name;
-
-    render_source_lines(
+    write_text(output, "  --> ")?;
+    write_safe_text(output, source.name)?;
+    write_fmt(
         output,
-        source,
-        start,
-        end,
-        first_number,
-        last_number,
-        label,
-        width,
-        options,
-    )
-}
+        format_args!(":{}:{}\n", first.number, column + 1),
+    )?;
 
-/// Render the source lines and caret markers.
-fn render_source_lines<W: DisplayWidth>(
-    output: &mut Output,
-    source: SourceFileRef<'_>,
-    start: usize,
-    end: usize,
-    first_number: usize,
-    last_number: usize,
-    label: Option<&str>,
-    width: &W,
-    options: &RenderingOptions,
-) -> Result<(), RenderingError> {
-    let (_, actual_first_number) = find_line(
-        source.text,
-        start,
-    )
-    .ok_or(RenderingError::InvalidOptions)?;
+    let number_width = last.number.to_string().len();
 
-    let (_, actual_last_number) = find_line(
-        source.text,
-        if end > start { end - 1 } else { end },
-    )
-    .ok_or(RenderingError::InvalidOptions)?;
+    let mut line = first;
+    let mut rendered = 0usize;
 
-    let number_width = actual_last_number.to_string().len();
-
-    let mut index = 0usize;
-    let mut current_start = 0usize;
-    let mut line_number = 1usize;
-
-    while index < source.text.len() {
-        let bytes = source.text.as_bytes();
-
-        if bytes[index] == b'\n' {
-            let mut content_end = index;
-
-            if content_end > current_start
-                && bytes[content_end - 1] == b'\r'
-            {
-                content_end -= 1;
-            }
-
-            if line_number >= actual_first_number
-                && line_number <= actual_last_number
-            {
-                render_one_line(
-                    output,
-                    source,
-                    current_start,
-                    content_end,
-                    start,
-                    end,
-                    line_number,
-                    number_width,
-                    label,
-                    width,
-                    options,
-                )?;
-            }
-
-            current_start = index + 1;
-            line_number += 1;
-        }
-
-        index += 1;
-    }
-
-    if line_number >= actual_first_number
-        && line_number <= actual_last_number
-    {
+    loop {
         render_one_line(
             output,
             source,
-            current_start,
-            source.text.len(),
+            line,
             start,
             end,
-            line_number,
             number_width,
-            label,
+            label.filter(|_| line.number == first.number),
             width,
             options,
         )?;
-    }
 
-    let _ = first_number;
-    let _ = last_number;
+        rendered += 1;
+
+        if line.number >= last.number {
+            break;
+        }
+
+        if line.next_start <= line.start
+            || line.next_start >= source.text.len()
+        {
+            break;
+        }
+
+        line = find_line(source.text, line.next_start)
+            .ok_or(RenderingError::InvalidOptions)?;
+
+        if rendered >= required_lines {
+            break;
+        }
+    }
 
     Ok(())
 }
 
-/// Render an individual source line and its marker.
 fn render_one_line<W: DisplayWidth>(
-    output: &mut Output,
+    output: &mut impl RenderSink,
     source: SourceFileRef<'_>,
-    line_start: usize,
-    line_end: usize,
+    line: SourceLine,
     span_start: usize,
     span_end: usize,
-    line_number: usize,
     number_width: usize,
     label: Option<&str>,
     width: &W,
     options: &RenderingOptions,
 ) -> Result<(), RenderingError> {
-    let text = &source.text[line_start..line_end];
+    let text = &source.text[line.start..line.content_end];
 
-    let selected_start = if line_number == 1 {
-        span_start.max(line_start)
-    } else {
-        span_start.max(line_start)
-    };
+    let selected_start = span_start
+        .max(line.start)
+        .min(line.content_end);
 
-    let selected_end = span_end.min(line_end);
+    let selected_end = span_end
+        .max(selected_start)
+        .min(line.content_end);
 
-    let selected_start = selected_start.clamp(
-        line_start,
-        line_end,
-    );
+    let prefix = &source.text[line.start..selected_start];
 
-    let selected_end = selected_end.clamp(
-        selected_start,
-        line_end,
-    );
-
-    let prefix = &source.text[line_start..selected_start];
     let selected = &source.text[selected_start..selected_end];
 
-    let column = display_column(
+    let marker_column = display_width(
         prefix,
         width,
         options.tab_width.get(),
-    );
+    )?;
 
-    let marker_width = display_column(
+    let marker_width = display_width(
         selected,
         width,
         options.tab_width.get(),
-    )
-    .max(1);
+    )?.max(1);
 
-    let expanded = expand_tabs(
+    write_fmt(
+        output,
+        format_args!(
+            "{:>number_width$} | ",
+            line.number
+        ),
+    )?;
+
+    let actual_width = write_source_text(
+        output,
         text,
         width,
         options.tab_width.get(),
-    );
+    )?;
 
-    write_output(
+    write_text(output, "\n")?;
+
+    write_fmt(
         output,
         format_args!(
-            "{:>number_width$} | {}\n",
-            line_number,
-            expanded,
+            "{:>number_width$} | ",
+            ""
         ),
     )?;
 
-    write_output(
-        output,
-        format_args!(
-            "{:>number_width$} | {}{}\n",
-            "",
-            " ".repeat(column),
-            "^".repeat(marker_width),
-        ),
-    )?;
+    for _ in 0..marker_column {
+        write_text(output, " ")?;
+    }
+
+    for _ in 0..marker_width {
+        write_text(output, "^")?;
+    }
+
+    if actual_width < marker_column {
+        return Err(RenderingError::InvalidOptions);
+    }
 
     if let Some(message) = label {
-        write_output(
-            output,
-            format_args!("{}note: ", " ".repeat(number_width + 3)),
-        )?;
-
-        write_safe_text(
-            output,
-            message,
-            options.escape_control_characters,
-        )?;
-
-        output.push_str("\n")?;
+        write_text(output, " ")?;
+        write_safe_text(output, message)?;
     }
+
+    write_text(output, "\n")?;
 
     Ok(())
 }
 
-/// Render a structured fix-it.
-///
-/// Fix-its are suggestions. They are never applied here.
+// =============================================================================
+// FIX-IT RENDERING
+// =============================================================================
+
 fn render_fix(
-    output: &mut Output,
+    output: &mut impl RenderSink,
     fix: &FixIt,
+    sources: &impl SourceProvider,
     options: &RenderingOptions,
 ) -> Result<(), RenderingError> {
-    let classification = if fix.is_safe() {
-        "suggestion"
-    } else {
-        "suggestion (review required)"
-    };
-
-    write_output(
+    write_text(
         output,
-        format_args!("  {classification}: "),
+        if fix.is_safe() {
+            "  suggestion: "
+        } else {
+            "  suggestion (review required): "
+        },
     )?;
 
-    write_safe_text(
-        output,
-        fix.title(),
-        options.escape_control_characters,
-    )?;
+    write_safe_text(output, fix.title())?;
+    write_text(output, "\n")?;
 
-    output.push_str("\n")?;
+    if !options.show_fix_replacements {
+        return Ok(());
+    }
 
-    if options.show_fix_replacements {
-        for edit in fix.edits() {
-            write_output(
-                output,
-                format_args!(
-                    "    replace bytes {}..{}\n",
-                    edit.span().start_raw(),
-                    edit.span().end_raw(),
-                ),
-            )?;
+    for edit in fix.edits() {
+        let span = edit.span();
+        let source_id = span.source().as_raw();
 
-            output.push_str("      with: ")?;
+        let source = sources
+            .source(source_id)
+            .ok_or(RenderingError::MissingSource {
+                source_id,
+            })?;
 
-            write_safe_text(
-                output,
-                edit.replacement(),
-                options.escape_control_characters,
-            )?;
-
-            output.push_str("\n")?;
+        if source.id != source_id {
+            return Err(
+                RenderingError::SourceIdentityMismatch {
+                    requested: source_id,
+                    returned: source.id,
+                },
+            );
         }
+
+        validate_span(span, source)?;
+
+        write_fmt(
+            output,
+            format_args!(
+                "    source {} bytes {}..{}\n",
+                source_id,
+                span.start_raw(),
+                span.end_raw(),
+            ),
+        )?;
+
+        write_text(output, "      replacement: ")?;
+        write_safe_text(output, edit.replacement())?;
+        write_text(output, "\n")?;
     }
 
     Ok(())
 }
 
-/// Render a complete canonical diagnostic.
-pub fn render_diagnostic<W: DisplayWidth>(
+// =============================================================================
+// DIAGNOSTIC RENDERING
+// =============================================================================
+
+fn render_diagnostic_into<W: DisplayWidth>(
     diagnostic: &Diagnostic,
     sources: &impl SourceProvider,
     width: &W,
     options: &RenderingOptions,
-) -> Result<String, RenderingError> {
-    render_diagnostic_with_budget(
-        diagnostic,
-        sources,
-        width,
-        options,
-    )
-}
-
-/// Render a diagnostic using explicit rendering policies.
-pub fn render_diagnostic_with_budget<W: DisplayWidth>(
-    diagnostic: &Diagnostic,
-    sources: &impl SourceProvider,
-    width: &W,
-    options: &RenderingOptions,
-) -> Result<String, RenderingError> {
-    let mut output = Output::new(options.max_output_bytes);
-
+    output: &mut impl RenderSink,
+) -> Result<(), RenderingError> {
     write_safe_text(
-        &mut output,
+        output,
         diagnostic.severity().as_str(),
-        options.escape_control_characters,
     )?;
 
-    output.push_str("[")?;
+    write_text(output, "[")?;
 
     write_safe_text(
-        &mut output,
+        output,
         diagnostic.code().as_str(),
-        options.escape_control_characters,
     )?;
 
-    output.push_str("]: ")?;
+    write_text(output, "]: ")?;
 
     write_safe_text(
-        &mut output,
+        output,
         diagnostic.message(),
-        options.escape_control_characters,
     )?;
 
-    output.push_str("\n")?;
+    write_text(output, "\n")?;
 
     if let Some(span) = diagnostic.primary_span() {
         render_source_location(
-            &mut output,
+            output,
             span,
             None,
             sources,
@@ -1018,7 +1090,7 @@ pub fn render_diagnostic_with_budget<W: DisplayWidth>(
 
     for label in diagnostic.labels() {
         render_source_location(
-            &mut output,
+            output,
             label.span(),
             Some(label.message()),
             sources,
@@ -1028,79 +1100,114 @@ pub fn render_diagnostic_with_budget<W: DisplayWidth>(
     }
 
     for note in diagnostic.notes() {
-        output.push_str("  note: ")?;
-
-        write_safe_text(
-            &mut output,
-            note,
-            options.escape_control_characters,
-        )?;
-
-        output.push_str("\n")?;
+        write_text(output, "  note: ")?;
+        write_safe_text(output, note)?;
+        write_text(output, "\n")?;
     }
 
     if let Some(help) = diagnostic.help() {
-        output.push_str("  help: ")?;
-
-        write_safe_text(
-            &mut output,
-            help,
-            options.escape_control_characters,
-        )?;
-
-        output.push_str("\n")?;
+        write_text(output, "  help: ")?;
+        write_safe_text(output, help)?;
+        write_text(output, "\n")?;
     }
 
     for fix in diagnostic.fixes() {
         render_fix(
-            &mut output,
+            output,
             fix,
+            sources,
             options,
         )?;
     }
 
+    Ok(())
+}
+
+// =============================================================================
+// PUBLIC API
+// =============================================================================
+
+/// Render one diagnostic into an owned string.
+///
+/// This convenience API allocates output proportional to the
+/// rendered diagnostic.
+///
+/// For large output, use `write_diagnostic`.
+pub fn render_diagnostic<W: DisplayWidth>(
+    diagnostic: &Diagnostic,
+    sources: &impl SourceProvider,
+    width: &W,
+    options: &RenderingOptions,
+) -> Result<String, RenderingError> {
+    let mut output = StringSink::new(
+        options.max_output_bytes,
+    );
+
+    render_diagnostic_into(
+        diagnostic,
+        sources,
+        width,
+        options,
+        &mut output,
+    )?;
+
     Ok(output.finish())
+}
+
+/// Render one diagnostic using the configured budgets.
+///
+/// Kept as a compatibility entry point.
+pub fn render_diagnostic_with_budget<W: DisplayWidth>(
+    diagnostic: &Diagnostic,
+    sources: &impl SourceProvider,
+    width: &W,
+    options: &RenderingOptions,
+) -> Result<String, RenderingError> {
+    render_diagnostic(
+        diagnostic,
+        sources,
+        width,
+        options,
+    )
 }
 
 /// Render multiple diagnostics in the supplied order.
 ///
-/// Ordering and deduplication remain the responsibility of
-/// frontend::semantic::diagnostics::ordering and aggregation.
-///
-/// This function does not silently reorder diagnostics.
+/// Ordering and deduplication belong to the canonical diagnostic
+/// ordering and aggregation authorities.
 pub fn render_diagnostics<W: DisplayWidth>(
     diagnostics: &[Diagnostic],
     sources: &impl SourceProvider,
     width: &W,
     options: &RenderingOptions,
 ) -> Result<String, RenderingError> {
-    let mut output = Output::new(options.max_output_bytes);
+    let mut output = StringSink::new(
+        options.max_output_bytes,
+    );
 
     for (index, diagnostic) in diagnostics.iter().enumerate() {
         if index != 0 {
-            output.push_str("\n")?;
+            write_text(&mut output, "\n")?;
         }
 
-        let rendered = render_diagnostic(
+        render_diagnostic_into(
             diagnostic,
             sources,
             width,
             options,
+            &mut output,
         )?;
-
-        output.push_str(&rendered)?;
     }
 
     Ok(output.finish())
 }
 
-/// Stream one diagnostic to a caller-provided writer.
+/// Render directly into a caller-provided writer.
 ///
-/// This avoids requiring the caller to retain an additional
-/// complete report string.
+/// This avoids constructing a complete intermediate diagnostic
+/// string. The caller retains ownership of the writer.
 ///
-/// Rendering is completed before writing so a source-validation
-/// failure does not publish a partially rendered diagnostic.
+/// A failed writer may contain partial output.
 pub fn write_diagnostic<W, P, D>(
     diagnostic: &Diagnostic,
     sources: &P,
@@ -1109,25 +1216,28 @@ pub fn write_diagnostic<W, P, D>(
     writer: &mut W,
 ) -> Result<(), RenderingError>
 where
-    W: io::Write,
+    W: Write + ?Sized,
     P: SourceProvider,
     D: DisplayWidth,
 {
-    let rendered = render_diagnostic(
+    let mut output = WriterSink::new(
+        writer,
+        options.max_output_bytes,
+    );
+
+    render_diagnostic_into(
         diagnostic,
         sources,
         width,
         options,
-    )?;
-
-    writer
-        .write_all(rendered.as_bytes())
-        .map_err(|_| RenderingError::WriterFailure)
+        &mut output,
+    )
 }
 
-/// Stream multiple diagnostics to a writer.
+/// Render multiple diagnostics directly into a writer.
 ///
-/// The caller controls writer lifecycle, flushing and closing.
+/// Diagnostics are emitted in their supplied order.
+/// No sorting or deduplication is performed here.
 pub fn write_diagnostics<W, P, D>(
     diagnostics: &[Diagnostic],
     sources: &P,
@@ -1136,23 +1246,26 @@ pub fn write_diagnostics<W, P, D>(
     writer: &mut W,
 ) -> Result<(), RenderingError>
 where
-    W: io::Write,
+    W: Write + ?Sized,
     P: SourceProvider,
     D: DisplayWidth,
 {
+    let mut output = WriterSink::new(
+        writer,
+        options.max_output_bytes,
+    );
+
     for (index, diagnostic) in diagnostics.iter().enumerate() {
         if index != 0 {
-            writer
-                .write_all(b"\n")
-                .map_err(|_| RenderingError::WriterFailure)?;
+            write_text(&mut output, "\n")?;
         }
 
-        write_diagnostic(
+        render_diagnostic_into(
             diagnostic,
             sources,
             width,
             options,
-            writer,
+            &mut output,
         )?;
     }
 
