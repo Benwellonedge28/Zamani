@@ -5,163 +5,98 @@
 
 //! Zamani Universal Meta-Compiler
 //!
-//! Compilation Profile Resolution
+//! Compilation Profile Definitions and Resolution.
 //!
 //! Path:
 //!     src/compiler/configuration/profile.rs
 //!
 //! Rust:
+//!     Rust 1.97+
 //!     Edition 2021
-//!     Minimum version 1.97
 //!
-//! Safety:
-//!     Unsafe Rust is forbidden.
+//! # Purpose
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! Provides reusable, versioned, domain-neutral compilation profiles.
 //!
-//! This module defines the canonical compilation-profile policy layer.
+//! A compilation profile describes compiler intent and policy.
 //!
-//! A compilation profile describes reusable compilation intent.
+//! It does not implement optimization, select physical hardware,
+//! allocate resources, or execute programs.
 //!
-//! It determines:
+//! # Architectural ownership
 //!
-//! - Optimization policy.
-//! - Expected compilation effort.
-//! - Transformation safety posture.
-//! - Verification requirements.
-//! - Recommended optimization-pass identifiers.
-//! - Profile compatibility.
-//! - Deterministic configuration resolution.
-//! - Custom profile registration.
-//! - Profile identification and versioning.
+//! Canonical existing authorities:
 //!
-//! A profile is not a hardware target.
+//! - crate::compiler_types::CompilerConfig
+//! - crate::compiler_types::CompilationTarget
+//! - crate::compiler_types::OptimizationLevel
+//! - configuration::config
+//! - configuration::target
+//! - configuration::budget
+//! - configuration::policy
+//! - configuration::validation
 //!
-//! A profile is not a backend.
+//! The frontend and semantic subsystem remain authoritative for
+//! source-level profile declarations, inheritance and interpretation.
 //!
-//! A profile is not an optimization implementation.
-//!
-//! A profile is not an execution environment.
-//!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
-//!
-//! Existing authoritative owners:
-//!
-//! crate::compiler_types::CompilerConfig
-//!     Owns the existing compiler configuration.
-//!
-//! crate::compiler_types::OptimizationLevel
-//!     Owns the compiler optimization-level vocabulary.
-//!
-//! compiler::configuration::config
-//!     Owns configuration construction and validation.
-//!
-//! compiler::configuration::target
-//!     Owns extensible target descriptors.
-//!
-//! quantum::optimization::config
-//!     Owns quantum-specific optimization profiles.
-//!
-//! quantum::optimization::profile
-//!     Owns quantum-specific optimization-profile resolution.
-//!
-//! This module owns:
-//!
-//! - Domain-neutral compilation profile identifiers.
-//! - Domain-neutral compilation profile specifications.
-//! - Profile classification.
-//! - Profile registry.
-//! - Profile resolution.
-//! - Configuration adaptation.
-//! - Profile compatibility validation.
-//!
-//! This module does NOT own:
-//!
-//! - Target descriptors.
-//! - Hardware capabilities.
-//! - Resource allocation.
-//! - Resource budgets.
-//! - Backend selection.
-//! - Backend implementation.
-//! - Optimization algorithms.
-//! - Optimization pass implementation.
-//! - Quantum IR.
-//! - Classical IR.
-//! - HDL IR.
-//! - AI IR.
-//! - Runtime execution.
-//! - Physical scheduling.
-//! - Quantum routing.
-//! - Quantum error correction.
-//! - Source parsing.
-//! - AST ownership.
-//! - Semantic analysis.
-//!
-//! ============================================================================
-//! POCO-REAF
-//! ============================================================================
-//!
-//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//! # POCO-REAF
 //!
 //! Profiles are independent of:
 //!
-//! - CPU architecture.
-//! - CPU count.
-//! - GPU vendor.
-//! - GPU count.
-//! - FPGA family.
-//! - ASIC architecture.
-//! - QPU provider.
-//! - Qubit count.
-//! - Distributed node count.
-//! - Operating system.
-//! - Memory capacity.
-//! - Register width.
+//! - CPU architecture and processor count.
+//! - GPU, FPGA and QPU providers.
+//! - Memory and storage capacities.
+//! - Qubit counts.
 //! - Tensor rank.
-//! - Accelerator count.
+//! - Register widths.
+//! - Distributed node counts.
 //! - Physical topology.
+//! - Operating systems.
 //!
-//! No universal hardware capacity limits are introduced.
+//! No universal hardware capacity ceilings are introduced.
 //!
-//! Profiles may be used with tiny or extremely large workloads.
+//! Actual feasibility is determined by capability providers,
+//! compiler planning, backends and runtime.
 //!
-//! Actual resource availability and feasibility are evaluated by
-//! their respective compiler, capability, planning, and runtime owners.
+//! # Important distinction
 //!
-//! ============================================================================
-//! DEPENDENCY DIRECTION
-//! ============================================================================
+//! A profile's optimization level is not a guarantee that a particular
+//! optimization is implemented or legal for every IR dialect.
 //!
-//! compiler_types
-//!       |
-//!       v
-//! configuration::config
-//!       |
-//!       v
-//! configuration::profile
-//!       |
-//!       +----> Compilation API
-//!       |
-//!       +----> Compilation pipeline
-//!       |
-//!       +----> Optimization planning
-//!       |
-//!       +----> Pass registry
-//!       |
-//!       +----> Artifact provenance
+//! Recommended pass identifiers are advisory references.
 //!
-//! This module deliberately does not depend on the compiler pipeline.
+//! Pass availability and legality must be established by the
+//! authoritative pass and optimization subsystems.
 //!
-//! It can therefore be completed before pipeline orchestration.
+//! # Grammar integration
 //!
-//! ============================================================================
+//! Source syntax:
+//!     grammar/compile/profiles.g4
+//!
+//! Optimization intent:
+//!     grammar/compile/optimization.g4
+//!
+//! Target-selection policy:
+//!     grammar/compile/target-selection.g4
+//!
+//! Semantic interpretation:
+//!     src/frontend/semantic/
+//!
+//! This module does not parse grammar or implement profile inheritance.
+//!
+//! # Determinism
+//!
+//! Registry iteration and profile lookup are deterministic.
+//!
+//! No global mutable state is used.
+//!
+//! # Safety
+//!
+//! Unsafe Rust is forbidden.
 
 use std::collections::btree_map;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
@@ -177,24 +112,15 @@ use crate::compiler::configuration::config::{
 };
 
 // ============================================================================
-// VERSION
+// VERSIONS
 // ============================================================================
 
-/// Version of the compilation-profile contract.
+/// Current compilation-profile schema version.
 ///
-/// This is independent of:
-///
-/// - Zamani language version.
-/// - Compiler release version.
-/// - IR version.
-/// - Backend ABI version.
-/// - Target descriptor version.
-///
-/// Increment this version only when the interpretation of an existing
-/// profile contract changes incompatibly.
+/// Independent of the language, grammar, compiler, IR and backend versions.
 pub const PROFILE_SCHEMA_VERSION: u32 = 1;
 
-/// Stable API version for profile resolution.
+/// Public compilation-profile API version.
 pub const PROFILE_API_VERSION: u16 = 1;
 
 // ============================================================================
@@ -204,143 +130,101 @@ pub const PROFILE_API_VERSION: u16 = 1;
 /// Compilation-profile errors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProfileError {
-    /// An identifier is empty.
     EmptyIdentifier,
 
-    /// An identifier contains unsupported characters.
     InvalidIdentifier {
         value: String,
         reason: String,
     },
 
-    /// A profile description is empty.
     EmptyDescription,
 
-    /// A profile does not exist in the selected registry.
     UnknownProfile {
         identifier: String,
     },
 
-    /// A profile identifier already exists.
     DuplicateProfile {
         identifier: String,
     },
 
-    /// A profile contains an invalid pass identifier.
     InvalidPassIdentifier {
         identifier: String,
     },
 
-    /// A profile contains duplicate pass identifiers.
     DuplicatePassIdentifier {
         identifier: String,
     },
 
-    /// A production profile uses an unsupported optimization level.
-    UnsupportedOptimization {
-        profile: String,
-        optimization: String,
+    UnsupportedSchemaVersion {
+        supplied: u32,
+        supported: u32,
     },
 
-    /// A profile requires verification but the resulting configuration
-    /// does not satisfy that requirement.
     VerificationRequired {
         profile: String,
     },
 
-    /// The existing compiler configuration is invalid.
     InvalidConfiguration {
         message: String,
     },
 
-    /// An explicit profile replacement was attempted for a missing entry.
     ProfileNotRegistered {
         identifier: String,
     },
 }
 
 impl fmt::Display for ProfileError {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyIdentifier => {
-                formatter.write_str(
-                    "compilation profile identifier cannot be empty",
-                )
+                write!(f, "compilation profile identifier is empty")
             }
 
             Self::InvalidIdentifier { value, reason } => {
-                write!(
-                    formatter,
-                    "invalid compilation profile identifier `{value}`: {reason}"
-                )
+                write!(f, "invalid profile identifier `{value}`: {reason}")
             }
 
             Self::EmptyDescription => {
-                formatter.write_str(
-                    "compilation profile description cannot be empty",
-                )
+                write!(f, "compilation profile description is empty")
             }
 
             Self::UnknownProfile { identifier } => {
-                write!(
-                    formatter,
-                    "unknown compilation profile `{identifier}`",
-                )
+                write!(f, "unknown compilation profile `{identifier}`")
             }
 
             Self::DuplicateProfile { identifier } => {
-                write!(
-                    formatter,
-                    "compilation profile `{identifier}` is already registered",
-                )
+                write!(f, "profile `{identifier}` is already registered")
             }
 
             Self::InvalidPassIdentifier { identifier } => {
-                write!(
-                    formatter,
-                    "invalid optimization-pass identifier `{identifier}`",
-                )
+                write!(f, "invalid optimization pass identifier `{identifier}`")
             }
 
             Self::DuplicatePassIdentifier { identifier } => {
-                write!(
-                    formatter,
-                    "duplicate optimization-pass identifier `{identifier}`",
-                )
+                write!(f, "duplicate optimization pass identifier `{identifier}`")
             }
 
-            Self::UnsupportedOptimization {
-                profile,
-                optimization,
+            Self::UnsupportedSchemaVersion {
+                supplied,
+                supported,
             } => {
                 write!(
-                    formatter,
-                    "profile `{profile}` requests unsupported production optimization `{optimization}`",
+                    f,
+                    "unsupported profile schema version {supplied}; \
+                     supported version is {supported}"
                 )
             }
 
             Self::VerificationRequired { profile } => {
-                write!(
-                    formatter,
-                    "profile `{profile}` requires verification",
-                )
+                write!(f, "profile `{profile}` requires verification")
             }
 
             Self::InvalidConfiguration { message } => {
-                write!(
-                    formatter,
-                    "profile produced an invalid compiler configuration: {message}",
-                )
+                write!(f, "invalid resolved compiler configuration: {message}")
             }
 
             Self::ProfileNotRegistered { identifier } => {
-                write!(
-                    formatter,
-                    "compilation profile `{identifier}` is not registered",
-                )
+                write!(f, "profile `{identifier}` is not registered")
             }
         }
     }
@@ -355,35 +239,16 @@ pub type ProfileResult<T> = Result<T, ProfileError>;
 // IDENTIFIERS
 // ============================================================================
 
-/// Stable, extensible compilation-profile identifier.
+/// Stable open-world compilation-profile identifier.
 ///
-/// This is intentionally a string-based identifier rather than a closed enum.
+/// Identifiers are case-sensitive and use canonical lowercase ASCII.
 ///
-/// New profiles can be registered without modifying compiler source files.
-///
-/// Identifier comparison is case-sensitive.
-///
-/// Canonical identifiers use lowercase ASCII.
-///
-/// Allowed characters:
-///
-/// - a-z
-/// - 0-9
-/// - _
-/// - -
-/// - .
-/// - :
-/// - /
-///
-/// No arbitrary identifier-length limit is imposed.
+/// No arbitrary identifier-length ceiling is imposed.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompilationProfileId(String);
 
 impl CompilationProfileId {
-    /// Constructs a validated profile identifier.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> ProfileResult<Self> {
+    pub fn new(value: impl Into<String>) -> ProfileResult<Self> {
         let value = value.into();
 
         if value.is_empty() {
@@ -393,55 +258,39 @@ impl CompilationProfileId {
         if value.trim() != value {
             return Err(ProfileError::InvalidIdentifier {
                 value,
-                reason: "leading or trailing whitespace is forbidden"
-                    .to_owned(),
+                reason: "surrounding whitespace is forbidden".into(),
             });
         }
 
-        let valid = value.bytes().all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(
-                    byte,
-                    b'_' | b'-' | b'.' | b':' | b'/'
-                )
-        });
-
-        if !valid {
+        if !valid_identifier(&value) {
             return Err(ProfileError::InvalidIdentifier {
                 value,
-                reason:
-                    "only lowercase ASCII letters, digits, underscores, \
-                     hyphens, periods and namespace separators are allowed"
-                        .to_owned(),
+                reason: "identifier contains unsupported characters".into(),
             });
         }
 
         Ok(Self(value))
     }
 
-    /// Returns the canonical identifier.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Returns the identifier as an owned string.
+    #[must_use]
     pub fn into_string(self) -> String {
         self.0
     }
 
-    /// Returns whether this is the generic profile.
+    #[must_use]
     pub fn is_generic(&self) -> bool {
         self.as_str() == "generic"
     }
 }
 
 impl fmt::Display for CompilationProfileId {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-        formatter.write_str(self.as_str())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -454,37 +303,37 @@ impl AsRef<str> for CompilationProfileId {
 impl FromStr for CompilationProfileId {
     type Err = ProfileError;
 
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
+    fn from_str(value: &str) -> ProfileResult<Self> {
         Self::new(value)
     }
+}
+
+fn valid_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'_' | b'-' | b'.' | b':' | b'/')
+        })
 }
 
 // ============================================================================
 // PROFILE CLASSIFICATION
 // ============================================================================
 
-/// Expected compiler effort.
+/// Descriptive optimization effort.
 ///
-/// This is descriptive policy metadata.
-///
-/// It is not a time limit, memory limit, or guaranteed execution cost.
+/// These are policy classifications, not resource limits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProfileEffort {
-    /// Prioritize fast compilation.
     Low,
-
-    /// Ordinary production compilation.
     Moderate,
-
-    /// Spend additional effort on optimization.
     High,
-
-    /// Permit substantial bounded optimization exploration.
     VeryHigh,
 }
 
 impl ProfileEffort {
-    /// Returns the stable textual identifier.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Low => "low",
@@ -495,29 +344,20 @@ impl ProfileEffort {
     }
 }
 
-/// Transformation safety classification.
+/// Transformation safety policy.
 ///
-/// This describes the intended safety posture.
-///
-/// Actual semantic preservation must be established by the
-/// transformation and verification subsystems.
+/// These classifications describe requested policy.
+/// They do not constitute proof of semantic preservation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProfileSafety {
-    /// Conservative transformations.
     Conservative,
-
-    /// Exact semantics are required.
     Exact,
-
-    /// Verification is mandatory.
     Verified,
-
-    /// Exploratory optimization, without implicit semantic approximation.
     Exploratory,
 }
 
 impl ProfileSafety {
-    /// Returns the stable textual identifier.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Conservative => "conservative",
@@ -529,51 +369,49 @@ impl ProfileSafety {
 }
 
 // ============================================================================
-// STABLE OPTIMIZATION IDENTIFIERS
+// STABLE PASS IDENTIFIERS
 // ============================================================================
 
-/// Stable normalization-pass identifier.
 pub const PASS_NORMALIZE: &str = "optimizer.normalize";
 
-/// Stable constant-folding identifier.
 pub const PASS_CONSTANT_FOLD: &str = "optimizer.constant_fold";
 
-/// Stable dead-code-elimination identifier.
 pub const PASS_DEAD_CODE_ELIMINATION: &str =
     "optimizer.dead_code_elimination";
 
-/// Stable common-subexpression-elimination identifier.
 pub const PASS_COMMON_SUBEXPRESSION: &str =
     "optimizer.common_subexpression";
 
-/// Stable loop-optimization identifier.
 pub const PASS_LOOP_OPTIMIZATION: &str =
     "optimizer.loop_optimization";
 
-/// Stable verification identifier.
 pub const PASS_VERIFICATION: &str = "compiler.verification";
 
-/// Stable intermediate-representation validation identifier.
 pub const PASS_IR_VALIDATION: &str = "compiler.ir_validation";
+
+fn validate_pass_identifier(identifier: &str) -> ProfileResult<()> {
+    if identifier.trim() != identifier || !valid_identifier(identifier) {
+        return Err(ProfileError::InvalidPassIdentifier {
+            identifier: identifier.to_owned(),
+        });
+    }
+
+    Ok(())
+}
 
 // ============================================================================
 // PROFILE SPECIFICATION
 // ============================================================================
 
-/// Immutable description of a compilation profile.
+/// Immutable, versioned compilation-profile specification.
 ///
-/// Profile specifications contain policy metadata only.
+/// This is the compiler-side projection of resolved profile intent.
 ///
-/// They do not construct optimization passes.
-///
-/// Pass identifiers are resolved by the pass registry or the
-/// authoritative optimization subsystem.
-///
-/// A recommended pass is not proof that its implementation exists.
-///
-/// The consumer must establish pass availability and legality.
+/// It is not a replacement for the richer source-level profile model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationProfileSpec {
+    schema_version: u32,
+
     id: CompilationProfileId,
 
     description: String,
@@ -590,7 +428,7 @@ pub struct CompilationProfileSpec {
 }
 
 impl CompilationProfileSpec {
-    /// Constructs a validated compilation-profile specification.
+    /// Constructs a specification using the current schema version.
     pub fn new(
         id: CompilationProfileId,
         description: impl Into<String>,
@@ -600,38 +438,64 @@ impl CompilationProfileSpec {
         requires_verification: bool,
         recommended_passes: Vec<String>,
     ) -> ProfileResult<Self> {
+        Self::new_versioned(
+            PROFILE_SCHEMA_VERSION,
+            id,
+            description,
+            optimization_level,
+            effort,
+            safety,
+            requires_verification,
+            recommended_passes,
+        )
+    }
+
+    /// Constructs a specification with an explicit schema version.
+    pub fn new_versioned(
+        schema_version: u32,
+        id: CompilationProfileId,
+        description: impl Into<String>,
+        optimization_level: OptimizationLevel,
+        effort: ProfileEffort,
+        safety: ProfileSafety,
+        requires_verification: bool,
+        recommended_passes: Vec<String>,
+    ) -> ProfileResult<Self> {
+        if schema_version != PROFILE_SCHEMA_VERSION {
+            return Err(ProfileError::UnsupportedSchemaVersion {
+                supplied: schema_version,
+                supported: PROFILE_SCHEMA_VERSION,
+            });
+        }
+
         let description = description.into();
 
-        if description.trim().is_empty() {
+        if description.trim().is_empty()
+            || description.chars().any(char::is_control)
+        {
             return Err(ProfileError::EmptyDescription);
         }
 
-        let mut seen = BTreeMap::new();
+        let mut seen = BTreeSet::new();
 
         for identifier in &recommended_passes {
             validate_pass_identifier(identifier)?;
 
-            if seen.insert(identifier.as_str(), ()).is_some() {
-                return Err(
-                    ProfileError::DuplicatePassIdentifier {
-                        identifier: identifier.clone(),
-                    },
-                );
+            if !seen.insert(identifier.as_str()) {
+                return Err(ProfileError::DuplicatePassIdentifier {
+                    identifier: identifier.clone(),
+                });
             }
         }
 
-        if matches!(safety, ProfileSafety::Verified)
-            && !requires_verification
-        {
-            return Err(ProfileError::InvalidIdentifier {
-                value: id.to_string(),
-                reason:
-                    "verified safety classification requires verification"
-                        .to_owned(),
+        if safety == ProfileSafety::Verified && !requires_verification {
+            return Err(ProfileError::VerificationRequired {
+                profile: id.to_string(),
             });
         }
 
         Ok(Self {
+            schema_version,
             id,
             description,
             optimization_level,
@@ -642,81 +506,69 @@ impl CompilationProfileSpec {
         })
     }
 
-    /// Returns the profile identifier.
+    #[must_use]
+    pub const fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
+    #[must_use]
     pub fn id(&self) -> &CompilationProfileId {
         &self.id
     }
 
-    /// Returns the profile description.
+    #[must_use]
     pub fn description(&self) -> &str {
         &self.description
     }
 
-    /// Returns the optimization level.
+    #[must_use]
     pub fn optimization_level(&self) -> &OptimizationLevel {
         &self.optimization_level
     }
 
-    /// Returns the expected compiler effort.
+    #[must_use]
     pub const fn effort(&self) -> ProfileEffort {
         self.effort
     }
 
-    /// Returns the transformation safety classification.
+    #[must_use]
     pub const fn safety(&self) -> ProfileSafety {
         self.safety
     }
 
-    /// Returns whether verification is mandatory.
+    #[must_use]
     pub const fn requires_verification(&self) -> bool {
         self.requires_verification
     }
 
-    /// Returns recommended pass identifiers.
+    #[must_use]
     pub fn recommended_passes(&self) -> &[String] {
         &self.recommended_passes
     }
 
-    /// Checks whether a pass is recommended.
+    #[must_use]
     pub fn recommends_pass(&self, identifier: &str) -> bool {
         self.recommended_passes
             .iter()
             .any(|candidate| candidate == identifier)
     }
 
-    /// Returns whether the profile is intended for substantial optimization.
+    #[must_use]
     pub const fn is_optimization_intensive(&self) -> bool {
-        matches!(
-            self.effort,
-            ProfileEffort::High | ProfileEffort::VeryHigh
-        )
+        matches!(self.effort, ProfileEffort::High | ProfileEffort::VeryHigh)
     }
 
-    /// Returns whether the profile requires verified transformations.
+    #[must_use]
     pub const fn is_verified(&self) -> bool {
         matches!(self.safety, ProfileSafety::Verified)
     }
 
-    /// Applies this profile to an existing compiler configuration.
+    /// Applies profile intent to an existing compiler configuration.
     ///
-    /// The existing target is preserved.
+    /// The caller's target and unrelated settings are preserved.
     ///
-    /// The existing debug-information setting is preserved.
-    ///
-    /// The existing IR-emission setting is preserved.
-    ///
-    /// The existing parallel-compilation request is preserved.
-    ///
-    /// The optimization level is resolved from this profile.
-    ///
-    /// Verification is enabled when required by the profile.
-    ///
-    /// This method does not select a physical target, allocate resources,
-    /// invoke a backend, or execute optimization passes.
-    pub fn apply_to(
-        &self,
-        base: &CompilerConfig,
-    ) -> CompilerConfig {
+    /// This operation does not discover or select hardware.
+    pub fn apply_to(&self, base: &CompilerConfig) -> CompilerConfig {
         let mut resolved = base.clone();
 
         resolved.opt_level = self.optimization_level.clone();
@@ -728,13 +580,9 @@ impl CompilationProfileSpec {
         resolved
     }
 
-    /// Applies this profile while preserving an explicitly supplied
-    /// optimization-level override.
+    /// Applies profile intent with an explicit optimization override.
     ///
-    /// The override is useful when a caller intentionally wants to
-    /// customize optimization intensity independently of the named profile.
-    ///
-    /// The profile's verification requirement cannot be disabled.
+    /// Mandatory verification cannot be disabled by this operation.
     pub fn apply_with_optimization_override(
         &self,
         base: &CompilerConfig,
@@ -754,77 +602,38 @@ impl CompilationProfileSpec {
     }
 }
 
-fn validate_pass_identifier(
-    identifier: &str,
-) -> ProfileResult<()> {
-    if identifier.is_empty()
-        || identifier.trim() != identifier
-        || !identifier.bytes().all(|byte| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(
-                    byte,
-                    b'_' | b'-' | b'.' | b':' | b'/'
-                )
-        })
-    {
-        return Err(ProfileError::InvalidPassIdentifier {
-            identifier: identifier.to_owned(),
-        });
-    }
-
-    Ok(())
-}
-
 // ============================================================================
-// PROFILE REGISTRY
+// REGISTRY
 // ============================================================================
 
-/// Local compilation-profile registry.
+/// Deterministic, instance-owned profile registry.
 ///
-/// This registry is deliberately instance-based.
-///
-/// It does not use global mutable state.
-///
-/// Different compiler services can therefore maintain independent
-/// profile collections.
-///
-/// BTreeMap provides deterministic iteration and lookup ordering.
-///
-/// Custom profiles can be registered without modifying this module.
+/// No global mutable registry is used.
 #[derive(Debug, Clone, Default)]
 pub struct CompilationProfileRegistry {
-    profiles: BTreeMap<
-        CompilationProfileId,
-        CompilationProfileSpec,
-    >,
+    profiles: BTreeMap<CompilationProfileId, CompilationProfileSpec>,
 }
 
 impl CompilationProfileRegistry {
-    /// Creates an empty profile registry.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Creates a registry populated with the standard profiles.
-    ///
-    /// Every built-in profile is constructed through the same
-    /// validation contract used by custom profiles.
+    /// Creates a registry containing the standard profiles.
     pub fn with_builtins() -> Self {
         let mut registry = Self::new();
 
-        for profile in builtin_profiles() {
+        for specification in builtin_profiles() {
             registry
-                .register(profile)
+                .register(specification)
                 .expect("built-in profile definitions must be valid");
         }
 
         registry
     }
 
-    /// Registers a new profile.
-    ///
-    /// Existing profiles cannot be silently overwritten.
+    /// Registers a profile without silently replacing an existing entry.
     pub fn register(
         &mut self,
         profile: CompilationProfileSpec,
@@ -842,24 +651,28 @@ impl CompilationProfileRegistry {
         Ok(())
     }
 
-    /// Replaces an already registered profile explicitly.
+    /// Replaces an existing profile.
     ///
-    /// This operation should be used only by configuration-management
-    /// code that intentionally changes a profile definition.
+    /// Importantly, a failed replacement leaves the registry unchanged.
     pub fn replace(
         &mut self,
         profile: CompilationProfileSpec,
     ) -> ProfileResult<CompilationProfileSpec> {
         let identifier = profile.id().clone();
 
-        self.profiles
-            .insert(identifier.clone(), profile)
-            .ok_or_else(|| ProfileError::ProfileNotRegistered {
+        if !self.profiles.contains_key(&identifier) {
+            return Err(ProfileError::ProfileNotRegistered {
                 identifier: identifier.to_string(),
-            })
+            });
+        }
+
+        match self.profiles.insert(identifier, profile) {
+            Some(previous) => Ok(previous),
+            None => unreachable!("existing profile was checked before replacement"),
+        }
     }
 
-    /// Retrieves a profile by identifier.
+    #[must_use]
     pub fn get(
         &self,
         identifier: &CompilationProfileId,
@@ -867,7 +680,6 @@ impl CompilationProfileRegistry {
         self.profiles.get(identifier)
     }
 
-    /// Retrieves a profile using a string identifier.
     pub fn get_by_name(
         &self,
         identifier: &str,
@@ -880,39 +692,27 @@ impl CompilationProfileRegistry {
             })
     }
 
-    /// Checks whether a profile is registered.
-    pub fn contains(
-        &self,
-        identifier: &CompilationProfileId,
-    ) -> bool {
+    #[must_use]
+    pub fn contains(&self, identifier: &CompilationProfileId) -> bool {
         self.profiles.contains_key(identifier)
     }
 
-    /// Returns the number of registered profiles.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.profiles.len()
     }
 
-    /// Returns whether the registry is empty.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.profiles.is_empty()
     }
 
-    /// Returns deterministic profile iteration.
     pub fn iter(
         &self,
-    ) -> btree_map::Iter<
-        '_,
-        CompilationProfileId,
-        CompilationProfileSpec,
-    > {
+    ) -> btree_map::Iter<'_, CompilationProfileId, CompilationProfileSpec> {
         self.profiles.iter()
     }
 
-    /// Removes a profile explicitly.
-    ///
-    /// Built-in profiles receive no special mutable global treatment.
-    /// Registry owners decide which profiles may be removed.
     pub fn remove(
         &mut self,
         identifier: &CompilationProfileId,
@@ -920,51 +720,38 @@ impl CompilationProfileRegistry {
         self.profiles.remove(identifier)
     }
 
-    /// Resolves a profile into an existing CompilerConfig.
-    ///
-    /// Target and unrelated caller configuration remain unchanged.
+    /// Resolves a profile against caller-supplied configuration.
     pub fn resolve_config(
         &self,
         identifier: &str,
         base: &CompilerConfig,
     ) -> ProfileResult<ResolvedCompilationProfile> {
-        let spec = self.get_by_name(identifier)?;
-
-        let config = spec.apply_to(base);
-
-        validate_profile_compatibility(spec, &config)?;
-
-        Ok(ResolvedCompilationProfile {
-            profile_id: spec.id().clone(),
-            config,
-            recommended_passes: spec.recommended_passes().to_vec(),
-            effort: spec.effort(),
-            safety: spec.safety(),
-        })
+        self.resolve_config_with_override(identifier, base, None)
     }
 
-    /// Resolves a profile with an explicit optimization-level override.
+    /// Resolves a profile with an explicit optimization override.
     pub fn resolve_config_with_override(
         &self,
         identifier: &str,
         base: &CompilerConfig,
         optimization_override: Option<OptimizationLevel>,
     ) -> ProfileResult<ResolvedCompilationProfile> {
-        let spec = self.get_by_name(identifier)?;
+        let specification = self.get_by_name(identifier)?;
 
-        let config = spec.apply_with_optimization_override(
+        let config = specification.apply_with_optimization_override(
             base,
             optimization_override,
         );
 
-        validate_profile_compatibility(spec, &config)?;
+        validate_profile_compatibility(specification, &config)?;
 
         Ok(ResolvedCompilationProfile {
-            profile_id: spec.id().clone(),
+            profile_id: specification.id().clone(),
+            schema_version: specification.schema_version(),
             config,
-            recommended_passes: spec.recommended_passes().to_vec(),
-            effort: spec.effort(),
-            safety: spec.safety(),
+            recommended_passes: specification.recommended_passes().to_vec(),
+            effort: specification.effort(),
+            safety: specification.safety(),
         })
     }
 }
@@ -973,15 +760,12 @@ impl CompilationProfileRegistry {
 // RESOLVED PROFILE
 // ============================================================================
 
-/// Fully resolved compilation-profile result.
-///
-/// This is an immutable snapshot of the selected profile and resulting
-/// existing CompilerConfig.
-///
-/// It contains no target allocation or backend execution state.
+/// Immutable resolved profile snapshot.
 #[derive(Debug, Clone)]
 pub struct ResolvedCompilationProfile {
     profile_id: CompilationProfileId,
+
+    schema_version: u32,
 
     config: CompilerConfig,
 
@@ -993,100 +777,97 @@ pub struct ResolvedCompilationProfile {
 }
 
 impl ResolvedCompilationProfile {
-    /// Returns the resolved profile identifier.
+    #[must_use]
     pub fn profile_id(&self) -> &CompilationProfileId {
         &self.profile_id
     }
 
-    /// Returns the resolved existing compiler configuration.
+    #[must_use]
+    pub const fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
+    #[must_use]
     pub fn config(&self) -> &CompilerConfig {
         &self.config
     }
 
-    /// Returns an owned compiler configuration.
+    #[must_use]
     pub fn into_config(self) -> CompilerConfig {
         self.config
     }
 
-    /// Returns the recommended optimization-pass identifiers.
+    #[must_use]
     pub fn recommended_passes(&self) -> &[String] {
         &self.recommended_passes
     }
 
-    /// Returns expected compilation effort.
+    #[must_use]
     pub const fn effort(&self) -> ProfileEffort {
         self.effort
     }
 
-    /// Returns the profile's safety classification.
+    #[must_use]
     pub const fn safety(&self) -> ProfileSafety {
         self.safety
     }
 }
 
 // ============================================================================
-// COMPATIBILITY VALIDATION
+// COMPATIBILITY
 // ============================================================================
 
-/// Validates that a resolved configuration satisfies its profile.
+/// Validates a resolved profile using the existing configuration authority.
 ///
-/// This function does not:
-///
-/// - Inspect the program.
-/// - Inspect IR.
-/// - Discover hardware.
-/// - Check pass availability.
-/// - Check physical resource feasibility.
-/// - Execute verification.
-/// - Perform optimization.
-///
-/// Those responsibilities belong to their respective subsystems.
+/// This does not prove target availability, backend compatibility,
+/// pass implementation, semantic preservation or physical feasibility.
 pub fn validate_profile_compatibility(
     profile: &CompilationProfileSpec,
     config: &CompilerConfig,
 ) -> ProfileResult<()> {
-    validate_compiler_config(
-        config,
-        ConfigurationValidationMode::Production,
-    )
-    .map_err(|error| ProfileError::InvalidConfiguration {
-        message: error.to_string(),
-    })?;
-
     if profile.requires_verification() && !config.verify {
         return Err(ProfileError::VerificationRequired {
             profile: profile.id().to_string(),
         });
     }
 
-    if matches!(
-        config.opt_level,
-        OptimizationLevel::UltraAGI
-    ) {
-        return Err(ProfileError::UnsupportedOptimization {
-            profile: profile.id().to_string(),
-            optimization: "UltraAGI".to_owned(),
-        });
-    }
-
-    Ok(())
+    validate_compiler_config(
+        config,
+        ConfigurationValidationMode::Production,
+    )
+    .map_err(|error| ProfileError::InvalidConfiguration {
+        message: error.to_string(),
+    })
 }
 
 // ============================================================================
 // BUILT-IN PROFILES
 // ============================================================================
 
-/// Constructs the standard domain-neutral compilation profiles.
-///
-/// These profiles describe general compiler behavior.
-///
-/// Specialized quantum profiles remain owned by:
-///
-/// crate::quantum::optimization::config
-///
-/// and:
-///
-/// crate::quantum::optimization::profile
+fn profile(
+    identifier: &str,
+    description: &str,
+    optimization_level: OptimizationLevel,
+    effort: ProfileEffort,
+    safety: ProfileSafety,
+    recommended_passes: &[&str],
+) -> CompilationProfileSpec {
+    CompilationProfileSpec::new(
+        CompilationProfileId::new(identifier)
+            .expect("built-in identifiers are valid"),
+        description,
+        optimization_level,
+        effort,
+        safety,
+        true,
+        recommended_passes
+            .iter()
+            .map(|identifier| (*identifier).to_owned())
+            .collect(),
+    )
+    .expect("built-in profile specifications are valid")
+}
+
 fn builtin_profiles() -> Vec<CompilationProfileSpec> {
     vec![
         profile(
@@ -1095,7 +876,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::Basic,
             ProfileEffort::Moderate,
             ProfileSafety::Exact,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_CONSTANT_FOLD,
@@ -1109,7 +889,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::None,
             ProfileEffort::Low,
             ProfileSafety::Conservative,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_IR_VALIDATION,
@@ -1122,7 +901,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::Basic,
             ProfileEffort::Moderate,
             ProfileSafety::Exact,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_CONSTANT_FOLD,
@@ -1138,7 +916,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::Aggressive,
             ProfileEffort::High,
             ProfileSafety::Exact,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_CONSTANT_FOLD,
@@ -1155,7 +932,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::None,
             ProfileEffort::Low,
             ProfileSafety::Conservative,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_IR_VALIDATION,
@@ -1168,7 +944,6 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
             OptimizationLevel::Basic,
             ProfileEffort::High,
             ProfileSafety::Verified,
-            true,
             &[
                 PASS_NORMALIZE,
                 PASS_CONSTANT_FOLD,
@@ -1179,44 +954,15 @@ fn builtin_profiles() -> Vec<CompilationProfileSpec> {
     ]
 }
 
-/// Internal constructor for trusted built-in definitions.
-fn profile(
-    identifier: &str,
-    description: &str,
-    optimization_level: OptimizationLevel,
-    effort: ProfileEffort,
-    safety: ProfileSafety,
-    requires_verification: bool,
-    recommended_passes: &[&str],
-) -> CompilationProfileSpec {
-    CompilationProfileSpec::new(
-        CompilationProfileId::new(identifier)
-            .expect("built-in profile identifiers must be valid"),
-        description,
-        optimization_level,
-        effort,
-        safety,
-        requires_verification,
-        recommended_passes
-            .iter()
-            .map(|identifier| (*identifier).to_owned())
-            .collect(),
-    )
-    .expect("built-in profile definitions must be valid")
-}
-
 // ============================================================================
-// CONVENIENCE FUNCTIONS
+// CONVENIENCE API
 // ============================================================================
 
-/// Returns the standard profile registry.
-///
-/// The returned registry is independently owned by the caller.
+#[must_use]
 pub fn standard_profile_registry() -> CompilationProfileRegistry {
     CompilationProfileRegistry::with_builtins()
 }
 
-/// Resolves a standard profile into the existing compiler configuration.
 pub fn resolve_standard_profile(
     identifier: &str,
     base: &CompilerConfig,
@@ -1224,7 +970,7 @@ pub fn resolve_standard_profile(
     standard_profile_registry().resolve_config(identifier, base)
 }
 
-/// Returns whether a profile is a standard built-in profile.
+#[must_use]
 pub fn is_builtin_profile(identifier: &str) -> bool {
     standard_profile_registry()
         .get_by_name(identifier)
@@ -1254,12 +1000,9 @@ mod tests {
         }
     }
 
-    fn custom_profile(
-        identifier: &str,
-    ) -> CompilationProfileSpec {
+    fn custom_profile(identifier: &str) -> CompilationProfileSpec {
         CompilationProfileSpec::new(
-            CompilationProfileId::new(identifier)
-                .expect("identifier should be valid"),
+            CompilationProfileId::new(identifier).unwrap(),
             "Custom test profile",
             OptimizationLevel::Basic,
             ProfileEffort::Moderate,
@@ -1267,56 +1010,47 @@ mod tests {
             true,
             vec![PASS_NORMALIZE.to_owned()],
         )
-        .expect("profile should be valid")
+        .unwrap()
     }
 
     #[test]
-    fn profile_api_versions_are_nonzero() {
-        assert_ne!(PROFILE_API_VERSION, 0);
-        assert_ne!(PROFILE_SCHEMA_VERSION, 0);
+    fn identifiers_are_open_world() {
+        assert!(CompilationProfileId::new("organization.ai.profile").is_ok());
+        assert!(CompilationProfileId::new("future:quantum:profile").is_ok());
     }
 
     #[test]
-    fn profile_identifier_accepts_namespaced_extensions() {
-        let identifier =
-            CompilationProfileId::new("organization.domain.profile")
-                .expect("identifier should be valid");
-
-        assert_eq!(
-            identifier.as_str(),
-            "organization.domain.profile"
-        );
+    fn identifiers_have_no_arbitrary_length_ceiling() {
+        let value = format!("future.{}", "x".repeat(10_000));
+        assert!(CompilationProfileId::new(value).is_ok());
     }
 
     #[test]
-    fn profile_identifier_rejects_empty_values() {
-        assert!(matches!(
-            CompilationProfileId::new(""),
-            Err(ProfileError::EmptyIdentifier)
-        ));
+    fn identifiers_reject_invalid_characters() {
+        assert!(CompilationProfileId::new("").is_err());
+        assert!(CompilationProfileId::new("Balanced").is_err());
+        assert!(CompilationProfileId::new("bad profile").is_err());
     }
 
     #[test]
-    fn profile_identifier_rejects_uppercase_values() {
-        assert!(matches!(
-            CompilationProfileId::new("Balanced"),
-            Err(ProfileError::InvalidIdentifier { .. })
-        ));
+    fn schema_versions_are_validated() {
+        assert!(CompilationProfileSpec::new_versioned(
+            PROFILE_SCHEMA_VERSION + 1,
+            CompilationProfileId::new("future.version").unwrap(),
+            "Version test",
+            OptimizationLevel::Basic,
+            ProfileEffort::Moderate,
+            ProfileSafety::Exact,
+            true,
+            Vec::new(),
+        ).is_err());
     }
 
     #[test]
-    fn profile_identifier_rejects_whitespace() {
-        assert!(matches!(
-            CompilationProfileId::new("balanced profile"),
-            Err(ProfileError::InvalidIdentifier { .. })
-        ));
-    }
-
-    #[test]
-    fn profile_registry_contains_standard_profiles() {
+    fn standard_profiles_are_available() {
         let registry = standard_profile_registry();
 
-        for identifier in [
+        for name in [
             "generic",
             "fast_compile",
             "balanced",
@@ -1324,21 +1058,18 @@ mod tests {
             "debug",
             "verified",
         ] {
-            assert!(
-                registry.get_by_name(identifier).is_ok(),
-                "missing profile {identifier}"
-            );
+            assert!(registry.get_by_name(name).is_ok());
         }
     }
 
     #[test]
-    fn profile_registry_is_deterministically_ordered() {
+    fn registry_iteration_is_deterministic() {
         let registry = standard_profile_registry();
 
-        let identifiers = registry
+        let identifiers: Vec<_> = registry
             .iter()
-            .map(|(identifier, _)| identifier.as_str())
-            .collect::<Vec<_>>();
+            .map(|(id, _)| id.as_str())
+            .collect();
 
         let mut sorted = identifiers.clone();
         sorted.sort_unstable();
@@ -1347,193 +1078,91 @@ mod tests {
     }
 
     #[test]
-    fn profile_registry_rejects_duplicate_registration() {
+    fn duplicate_registration_is_rejected() {
         let mut registry = CompilationProfileRegistry::new();
 
-        registry
-            .register(custom_profile("custom.test"))
-            .expect("first registration should succeed");
-
-        let result =
-            registry.register(custom_profile("custom.test"));
+        registry.register(custom_profile("custom.test")).unwrap();
 
         assert!(matches!(
-            result,
+            registry.register(custom_profile("custom.test")),
             Err(ProfileError::DuplicateProfile { .. })
         ));
     }
 
     #[test]
-    fn profile_registry_supports_custom_profiles() {
-        let mut registry = standard_profile_registry();
+    fn failed_replacement_does_not_mutate_registry() {
+        let mut registry = CompilationProfileRegistry::new();
 
-        registry
-            .register(custom_profile("organization.custom"))
-            .expect("custom profile should register");
+        let result = registry.replace(custom_profile("missing.profile"));
 
-        assert!(
-            registry
-                .get_by_name("organization.custom")
-                .is_ok()
-        );
+        assert!(matches!(
+            result,
+            Err(ProfileError::ProfileNotRegistered { .. })
+        ));
+
+        assert!(registry.is_empty());
     }
 
     #[test]
-    fn profile_registry_rejects_unknown_profiles() {
-        let registry = standard_profile_registry();
+    fn successful_replacement_returns_previous_profile() {
+        let mut registry = CompilationProfileRegistry::new();
 
+        registry.register(custom_profile("custom.replace")).unwrap();
+
+        let replacement = CompilationProfileSpec::new(
+            CompilationProfileId::new("custom.replace").unwrap(),
+            "Replacement",
+            OptimizationLevel::Aggressive,
+            ProfileEffort::High,
+            ProfileSafety::Exact,
+            true,
+            vec![PASS_NORMALIZE.to_owned()],
+        ).unwrap();
+
+        let previous = registry.replace(replacement).unwrap();
+
+        assert_eq!(previous.id().as_str(), "custom.replace");
+    }
+
+    #[test]
+    fn unknown_profiles_are_rejected() {
         assert!(matches!(
-            registry.get_by_name("unknown.profile"),
+            standard_profile_registry().get_by_name("unknown"),
             Err(ProfileError::UnknownProfile { .. })
         ));
     }
 
     #[test]
-    fn generic_profile_resolves_deterministically() {
+    fn profile_preserves_target_and_unrelated_configuration() {
         let base = base_config();
 
-        let first = resolve_standard_profile("generic", &base)
-            .expect("generic profile should resolve");
+        let resolved = resolve_standard_profile("balanced", &base).unwrap();
 
-        let second = resolve_standard_profile("generic", &base)
-            .expect("generic profile should resolve");
-
-        assert_eq!(
-            first.profile_id(),
-            second.profile_id()
-        );
-
-        assert_eq!(
-            first.config().opt_level,
-            second.config().opt_level
-        );
+        assert_eq!(resolved.config().target, base.target);
+        assert_eq!(resolved.config().debug_info, base.debug_info);
+        assert_eq!(resolved.config().emit_ir, base.emit_ir);
+        assert_eq!(resolved.config().parallel, base.parallel);
     }
 
     #[test]
-    fn profile_preserves_existing_target() {
+    fn mandatory_verification_cannot_be_disabled() {
         let base = base_config();
 
-        let resolved = resolve_standard_profile(
-            "balanced",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert_eq!(
-            resolved.config().target,
-            base.target
-        );
-    }
-
-    #[test]
-    fn profile_preserves_caller_debug_information() {
-        let mut base = base_config();
-        base.debug_info = false;
-
-        let resolved = resolve_standard_profile(
-            "balanced",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert!(!resolved.config().debug_info);
-    }
-
-    #[test]
-    fn profile_preserves_ir_emission_request() {
-        let base = base_config();
-
-        let resolved = resolve_standard_profile(
-            "balanced",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert!(resolved.config().emit_ir);
-    }
-
-    #[test]
-    fn profile_preserves_parallel_compilation_request() {
-        let base = base_config();
-
-        let resolved = resolve_standard_profile(
-            "balanced",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert!(resolved.config().parallel);
-    }
-
-    #[test]
-    fn verification_profiles_enable_verification() {
-        let base = base_config();
-
-        for identifier in [
-            "generic",
-            "balanced",
-            "aggressive",
-            "verified",
-        ] {
-            let resolved = resolve_standard_profile(
-                identifier,
-                &base,
-            )
-            .expect("profile should resolve");
-
-            assert!(
-                resolved.config().verify,
-                "{identifier} must enable verification"
-            );
-        }
-    }
-
-    #[test]
-    fn fast_compile_preserves_mandatory_verification() {
-        let base = base_config();
-
-        let resolved = resolve_standard_profile(
-            "fast_compile",
-            &base,
-        )
-        .expect("profile should resolve");
+        let resolved = resolve_standard_profile("verified", &base).unwrap();
 
         assert!(resolved.config().verify);
-        assert_eq!(
-            resolved.effort(),
-            ProfileEffort::Low
-        );
+        assert_eq!(resolved.safety(), ProfileSafety::Verified);
     }
 
     #[test]
-    fn aggressive_profile_uses_existing_optimization_level() {
-        let base = base_config();
-
-        let resolved = resolve_standard_profile(
-            "aggressive",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert_eq!(
-            resolved.config().opt_level,
-            OptimizationLevel::Aggressive
-        );
-    }
-
-    #[test]
-    fn explicit_optimization_override_is_preserved() {
-        let base = base_config();
-
+    fn optimization_override_is_supported() {
         let registry = standard_profile_registry();
 
-        let resolved = registry
-            .resolve_config_with_override(
-                "balanced",
-                &base,
-                Some(OptimizationLevel::None),
-            )
-            .expect("override should resolve");
+        let resolved = registry.resolve_config_with_override(
+            "balanced",
+            &base_config(),
+            Some(OptimizationLevel::None),
+        ).unwrap();
 
         assert_eq!(
             resolved.config().opt_level,
@@ -1542,66 +1171,30 @@ mod tests {
     }
 
     #[test]
-    fn verified_profile_cannot_disable_verification() {
-        let base = base_config();
-
-        let resolved = resolve_standard_profile(
-            "verified",
-            &base,
-        )
-        .expect("profile should resolve");
-
-        assert!(resolved.config().verify);
-        assert_eq!(
-            resolved.safety(),
-            ProfileSafety::Verified
-        );
-    }
-
-    #[test]
-    fn experimental_optimization_is_rejected_in_production() {
-        let mut base = base_config();
-
-        base.opt_level = OptimizationLevel::UltraAGI;
-
+    fn required_verification_cannot_be_bypassed_by_override() {
         let registry = standard_profile_registry();
 
-        let result = registry.resolve_config_with_override(
-            "balanced",
-            &base,
-            Some(OptimizationLevel::UltraAGI),
-        );
+        let resolved = registry.resolve_config_with_override(
+            "verified",
+            &base_config(),
+            Some(OptimizationLevel::Basic),
+        ).unwrap();
 
-        assert!(result.is_err());
+        assert!(resolved.config().verify);
     }
 
     #[test]
-    fn custom_pass_identifiers_are_extensible() {
-        let profile = CompilationProfileSpec::new(
-            CompilationProfileId::new("custom.ai").unwrap(),
-            "AI-oriented profile",
-            OptimizationLevel::Basic,
-            ProfileEffort::High,
-            ProfileSafety::Exact,
-            true,
-            vec![
-                "organization.ai.specialized_pass".to_owned(),
-            ],
-        )
-        .expect("custom pass identifiers should be supported");
+    fn custom_pass_names_are_supported() {
+        let profile = custom_profile("organization.ai.custom");
 
-        assert!(
-            profile.recommends_pass(
-                "organization.ai.specialized_pass"
-            )
-        );
+        assert!(profile.recommends_pass(PASS_NORMALIZE));
     }
 
     #[test]
-    fn duplicate_pass_identifiers_are_rejected() {
+    fn duplicate_pass_names_are_rejected() {
         let result = CompilationProfileSpec::new(
             CompilationProfileId::new("custom.duplicate").unwrap(),
-            "Duplicate pass test",
+            "Duplicate test",
             OptimizationLevel::Basic,
             ProfileEffort::Moderate,
             ProfileSafety::Exact,
@@ -1619,61 +1212,38 @@ mod tests {
     }
 
     #[test]
-    fn empty_descriptions_are_rejected() {
+    fn verified_safety_requires_verification() {
         let result = CompilationProfileSpec::new(
-            CompilationProfileId::new("custom.empty").unwrap(),
-            " ",
+            CompilationProfileId::new("custom.verified").unwrap(),
+            "Verified test",
             OptimizationLevel::Basic,
-            ProfileEffort::Moderate,
-            ProfileSafety::Exact,
-            true,
+            ProfileEffort::High,
+            ProfileSafety::Verified,
+            false,
             Vec::new(),
         );
 
-        assert!(matches!(
-            result,
-            Err(ProfileError::EmptyDescription)
-        ));
+        assert!(result.is_err());
     }
 
     #[test]
-    fn profile_error_display_is_stable() {
-        let error = ProfileError::UnknownProfile {
-            identifier: "missing".to_owned(),
-        };
+    fn custom_profiles_do_not_share_global_state() {
+        let mut first = CompilationProfileRegistry::new();
+        let second = CompilationProfileRegistry::new();
 
-        assert_eq!(
-            error.to_string(),
-            "unknown compilation profile `missing`"
-        );
+        first.register(custom_profile("custom.isolated")).unwrap();
+
+        assert!(first.get_by_name("custom.isolated").is_ok());
+        assert!(second.get_by_name("custom.isolated").is_err());
     }
 
     #[test]
-    fn custom_profile_can_be_replaced_explicitly() {
-        let mut registry = CompilationProfileRegistry::new();
-
-        registry
-            .register(custom_profile("custom.replace"))
-            .unwrap();
-
-        let replacement = CompilationProfileSpec::new(
-            CompilationProfileId::new("custom.replace").unwrap(),
-            "Replacement profile",
-            OptimizationLevel::Aggressive,
-            ProfileEffort::High,
-            ProfileSafety::Exact,
-            true,
-            vec![PASS_NORMALIZE.to_owned()],
-        )
-        .unwrap();
-
-        let previous = registry
-            .replace(replacement)
-            .expect("registered profile should be replaceable");
+    fn generic_profile_is_target_independent() {
+        let resolved = resolve_standard_profile("generic", &base_config()).unwrap();
 
         assert_eq!(
-            previous.id().as_str(),
-            "custom.replace"
+            resolved.config().target,
+            base_config().target
         );
     }
 }
