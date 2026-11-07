@@ -1,59 +1,148 @@
 
 #![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
-//! Zamani Universal Meta-Compiler — Configuration Foundation
+//! Zamani Universal Meta-Compiler — Compiler Configuration Foundation.
 //!
-//! File:
+//! Path:
 //!     src/compiler/configuration/config.rs
-//!
-//! Purpose:
-//!     Provide the canonical construction, validation, and compatibility
-//!     boundary for compiler configuration.
 //!
 //! Rust:
 //!     Edition 2021
-//!     Minimum version 1.97
+//!     Minimum version: Rust 1.97
 //!
 //! Safety:
 //!     Unsafe Rust is forbidden.
 //!
-//! Architectural ownership:
+//! # Purpose
 //!
-//!     crate::compiler_types
-//!         owns CompilerConfig,
-//!         CompilationTarget,
-//!         OptimizationLevel.
+//! This module provides the construction, structural validation and
+//! compatibility boundary for the repository's existing CompilerConfig.
 //!
-//!     compiler::configuration::config
-//!         owns configuration construction,
-//!         configuration validation,
-//!         and compatibility adaptation.
+//! It does not define a competing compiler configuration model.
 //!
-//!     compiler::configuration::budget
-//!         will own configurable compilation resource budgets.
+//! # Canonical ownership
 //!
-//!     compiler::configuration::policy
-//!         will own compilation policy definitions.
+//! crate::compiler_types:
+//!     CompilerConfig
+//!     CompilationTarget
+//!     OptimizationLevel
 //!
-//!     compiler::configuration::target
-//!         will own extensible target descriptors and target policies.
+//! compiler::configuration::budget:
+//!     CompilationBudget
+//!     BudgetTracker
+//!     Operational budget accounting
 //!
-//!     compiler::configuration::profile
-//!         will own named compilation profiles.
+//! compiler::configuration::target:
+//!     TargetDescriptor
+//!     TargetId
+//!     Target metadata and structural validation
 //!
-//! This module deliberately does not define competing target,
-//! optimization, semantic, capability, resource, or backend types.
+//! compiler::configuration::policy:
+//!     PolicyDocument
+//!     Policy evaluation contracts
 //!
-//! POCO-REAF:
-//!     Configuration must not impose universal hardware capacity limits.
-//!     Concrete target feasibility belongs to target and backend
-//!     capability contracts.
+//! compiler::configuration::profile:
+//!     CompilationProfileSpec
+//!     CompilationProfileRegistry
+//!     Profile resolution
 //!
-//! Compatibility:
-//!     Existing CompilerConfig values remain usable without conversion.
-//!     Existing compile(), compile_with_config(), and compile_source()
-//!     signatures are not changed by this module.
+//! compiler::configuration::validation:
+//!     Aggregate configuration validation
+//!
+//! # Non-responsibilities
+//!
+//! This module does not own:
+//!
+//! - Source grammar or parsing;
+//! - AST construction;
+//! - Source-level semantic validation;
+//! - Target capability discovery;
+//! - Physical target selection;
+//! - Backend registration or invocation;
+//! - Resource allocation;
+//! - Runtime scheduling;
+//! - Optimization algorithms;
+//! - Optimization pass registration;
+//! - IR definitions;
+//! - Physical execution.
+//!
+//! # POCO-REAF
+//!
+//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//!
+//! This module introduces no universal hardware-capacity ceilings.
+//!
+//! It does not define fixed limits for:
+//!
+//! - CPUs, cores, workers or threads;
+//! - GPUs, FPGAs, QPUs or accelerators;
+//! - Distributed nodes or network participants;
+//! - Memory or storage;
+//! - Qubits or logical qubits;
+//! - Tensor dimensions or tensor rank;
+//! - Register widths;
+//! - Modules, functions or IR operations;
+//! - Targets, providers or computational domains.
+//!
+//! Operational compilation budgets belong to budget.rs.
+//!
+//! Target capabilities belong to their authoritative capability
+//! providers and target descriptions.
+//!
+//! Physical availability belongs to planning and runtime systems.
+//!
+//! An absent budget does not promise infinite physical resources.
+//!
+//! # Grammar boundary
+//!
+//! Source-level target intent:
+//!     grammar/compile/target.g4
+//!
+//! Target-selection policy:
+//!     grammar/compile/target-selection.g4
+//!
+//! Compilation profiles:
+//!     grammar/compile/profiles.g4
+//!
+//! Optimization intent:
+//!     grammar/compile/optimization.g4
+//!
+//! The frontend and semantic subsystem own parsing, AST construction,
+//! name resolution and semantic interpretation.
+//!
+//! This module consumes already constructed compiler configuration.
+//!
+//! # Compatibility
+//!
+//! Existing CompilerConfig fields and the existing builder API are
+//! preserved.
+//!
+//! This module does not change the signatures of existing compile
+//! entry points.
+//!
+//! The legacy CompilationTarget enum remains supported as a
+//! compatibility representation.
+//!
+//! New extensible target descriptions belong to target.rs.
+//!
+//! # Important distinction
+//!
+//! Successful configuration validation means that the supplied
+//! configuration is structurally acceptable under the selected
+//! validation mode.
+//!
+//! It does not prove:
+//!
+//! - That a target exists;
+//! - That a target is available;
+//! - That a backend supports the target;
+//! - That the program's requirements are satisfied;
+//! - That resources are available;
+//! - That compilation or execution will succeed.
 
+use std::error::Error;
 use std::fmt;
 
 use crate::compiler_types::{
@@ -62,47 +151,62 @@ use crate::compiler_types::{
     OptimizationLevel,
 };
 
-/// Stable configuration API version.
-///
-/// This identifies the compiler configuration interface. It is not
-/// the Zamani language version, compiler version, IR version, or
-/// backend ABI version.
-pub const CONFIGURATION_API_VERSION: u16 = 1;
+// ============================================================================
+// API VERSION
+// ============================================================================
 
-/// Describes whether configuration validation is being performed
-/// for ordinary compatibility or production compilation.
+/// Version of the compiler configuration construction and validation API.
 ///
-/// This does not select a hardware target and does not alter
-/// program semantics.
+/// This is independent of the Zamani language version, grammar version,
+/// compiler release version, IR version, target descriptor version and
+/// backend ABI version.
+pub const CONFIGURATION_API_VERSION: u16 = 2;
+
+// ============================================================================
+// VALIDATION MODE
+// ============================================================================
+
+/// Determines the validation contract applied to a compiler configuration.
+///
+/// Validation mode does not select a physical target and does not alter
+/// the semantic meaning of a Zamani program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConfigurationValidationMode {
-    /// Validate structural configuration correctness.
-    ///
-    /// This mode is useful for library consumers and tooling that
-    /// construct configurations before deciding how to compile.
+    /// Validate structural correctness and preserve compatibility.
     Standard,
 
-    /// Validate configuration for the currently supported
-    /// production compilation contract.
+    /// Apply the current production configuration restrictions.
     ///
-    /// Experimental optimization modes are rejected.
+    /// Production validation is intentionally conservative.
+    /// It does not certify backend support or target feasibility.
     Production,
 }
 
-/// A structured configuration validation failure.
+// ============================================================================
+// ERRORS
+// ============================================================================
+
+/// A compiler configuration construction or validation error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigurationError {
-    /// The configuration contains an optimization mode that is
-    /// not supported by the selected validation mode.
+    /// A caller attempted to build a new configuration without
+    /// supplying an explicit legacy compilation target.
+    MissingTarget,
+
+    /// A legacy target contains an invalid payload.
+    InvalidTarget {
+        target: String,
+        reason: String,
+    },
+
+    /// An optimization level is not accepted by the selected
+    /// configuration validation mode.
     UnsupportedOptimization {
         optimization: String,
         mode: ConfigurationValidationMode,
     },
 
-    /// The configuration is missing a required explicit target.
-    MissingTarget,
-
-    /// A future configuration extension supplied an invalid value.
+    /// A configuration field contains an invalid value.
     InvalidValue {
         field: String,
         reason: String,
@@ -110,22 +214,33 @@ pub enum ConfigurationError {
 }
 
 impl fmt::Display for ConfigurationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
+            Self::MissingTarget => {
+                formatter.write_str(
+                    "a newly constructed compiler configuration \
+                     requires an explicit target",
+                )
+            }
+
+            Self::InvalidTarget { target, reason } => {
+                write!(
+                    formatter,
+                    "invalid compilation target `{target}`: {reason}"
+                )
+            }
+
             Self::UnsupportedOptimization {
                 optimization,
                 mode,
             } => {
                 write!(
                     formatter,
-                    "optimization mode `{optimization}` is not \
-                     supported in {mode:?} configuration validation"
-                )
-            }
-
-            Self::MissingTarget => {
-                formatter.write_str(
-                    "compiler configuration requires an explicit target",
+                    "optimization level `{optimization}` is not \
+                     accepted in {mode:?} configuration validation"
                 )
             }
 
@@ -139,57 +254,139 @@ impl fmt::Display for ConfigurationError {
     }
 }
 
-impl std::error::Error for ConfigurationError {}
+impl Error for ConfigurationError {}
+
+// ============================================================================
+// LEGACY TARGET VALIDATION
+// ============================================================================
+
+/// Validates a legacy CompilationTarget value.
+///
+/// The legacy target enum is retained for compatibility with existing
+/// compiler APIs.
+///
+/// Open-world target identities and extensible target metadata belong
+/// to configuration::target::TargetDescriptor.
+///
+/// This function checks only the structural validity of the legacy
+/// enum's payload. It does not check target availability, capabilities,
+/// backend compatibility or physical feasibility.
+fn validate_legacy_target(
+    target: &CompilationTarget,
+) -> Result<(), ConfigurationError> {
+    match target {
+        CompilationTarget::UniversalIRExport(identifier) => {
+            if identifier.trim().is_empty() {
+                return Err(ConfigurationError::InvalidTarget {
+                    target: "UniversalIRExport".to_owned(),
+                    reason: "export format identifier cannot be empty"
+                        .to_owned(),
+                });
+            }
+
+            if identifier.trim() != identifier {
+                return Err(ConfigurationError::InvalidTarget {
+                    target: identifier.clone(),
+                    reason: "export format identifier cannot have \
+                             surrounding whitespace"
+                        .to_owned(),
+                });
+            }
+
+            if identifier.chars().any(char::is_control) {
+                return Err(ConfigurationError::InvalidTarget {
+                    target: identifier.clone(),
+                    reason: "export format identifier cannot contain \
+                             control characters"
+                        .to_owned(),
+                });
+            }
+
+            Ok(())
+        }
+
+        CompilationTarget::X86_64Linux
+        | CompilationTarget::Arm64
+        | CompilationTarget::Wasm32
+        | CompilationTarget::QASM
+        | CompilationTarget::NanoControl
+        | CompilationTarget::MTSBytecode
+        | CompilationTarget::LLVMIR
+        | CompilationTarget::RiscV => Ok(()),
+    }
+}
+
+// ============================================================================
+// CONFIGURATION VALIDATION
+// ============================================================================
 
 /// Validates an existing canonical compiler configuration.
 ///
-/// This function intentionally accepts the existing `CompilerConfig`
-/// by reference. It does not create a replacement configuration type.
+/// This function borrows the existing CompilerConfig and does not
+/// replace, mutate or normalize it.
 ///
-/// The current compiler pipeline always performs IR verification,
-/// regardless of the `verify` field. Therefore this function does
-/// not pretend that `verify = false` disables verification.
+/// Standard validation preserves legacy optimization-level compatibility.
 ///
-/// The `verify` field remains available for compatibility with the
-/// existing public configuration contract. Its pipeline semantics
-/// must be reconciled in the compiler orchestration layer.
+/// Production validation rejects the currently designated experimental
+/// UltraAGI optimization level.
+///
+/// This production restriction is a compatibility policy, not evidence
+/// that other optimization levels are implemented for every domain.
+///
+/// Actual optimization availability and legality must be established
+/// by the optimization and pass-management subsystems.
 pub fn validate_compiler_config(
     config: &CompilerConfig,
     mode: ConfigurationValidationMode,
 ) -> Result<(), ConfigurationError> {
-    match (&config.opt_level, mode) {
+    validate_legacy_target(&config.target)?;
+
+    if matches!(
+        (&config.opt_level, mode),
         (
             OptimizationLevel::UltraAGI,
-            ConfigurationValidationMode::Production,
-        ) => Err(ConfigurationError::UnsupportedOptimization {
+            ConfigurationValidationMode::Production
+        )
+    ) {
+        return Err(ConfigurationError::UnsupportedOptimization {
             optimization: "UltraAGI".to_owned(),
             mode,
-        }),
-
-        _ => Ok(()),
+        });
     }
+
+    Ok(())
 }
 
-/// Returns whether an optimization level is currently accepted
-/// by the production compiler pipeline.
+/// Returns whether an optimization level is accepted by the current
+/// production configuration policy.
 ///
-/// This is a compatibility and safety check, not an optimization
-/// implementation or a guarantee that every accepted optimization
-/// has been verified for every future IR dialect.
+/// This is not a claim that the optimization has been implemented,
+/// verified or proven legal for every IR dialect.
+///
+/// Domain-specific legality and implementation availability must be
+/// checked by the optimization and pass-management authorities.
+#[must_use]
 pub fn is_production_optimization_supported(
     level: &OptimizationLevel,
 ) -> bool {
     !matches!(level, OptimizationLevel::UltraAGI)
 }
 
-/// Builder for the repository's existing `CompilerConfig`.
+// ============================================================================
+// BUILDER
+// ============================================================================
+
+/// Builder for the existing canonical CompilerConfig.
 ///
-/// The builder requires an explicit target. This avoids silently
-/// selecting a particular processor architecture when a caller
-/// is constructing a new configuration.
+/// This builder does not define a second configuration structure.
 ///
-/// The builder does not own or define target capabilities.
-/// It uses the canonical `CompilationTarget` type.
+/// A newly constructed configuration requires an explicit legacy target.
+/// No host-specific target is silently selected.
+///
+/// The builder preserves the existing CompilerConfig field layout.
+///
+/// Operational budgets, target descriptors, policies and profiles
+/// remain separately owned by their corresponding modules.
 #[derive(Debug, Clone)]
 pub struct CompilerConfigBuilder {
     target: Option<CompilationTarget>,
@@ -201,9 +398,10 @@ pub struct CompilerConfigBuilder {
 }
 
 impl CompilerConfigBuilder {
-    /// Creates a builder without choosing a target.
+    /// Creates a builder without selecting a target.
     ///
-    /// A target must be supplied before `build()` succeeds.
+    /// The caller must provide a target before building.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             target: None,
@@ -215,18 +413,39 @@ impl CompilerConfigBuilder {
         }
     }
 
-    /// Creates a builder with an explicit compilation target.
+    /// Creates a builder with an explicit legacy target.
+    #[must_use]
     pub fn for_target(target: CompilationTarget) -> Self {
         Self::new().target(target)
     }
 
-    /// Sets the explicit target.
+    /// Creates a builder by adapting an existing CompilerConfig.
+    ///
+    /// This preserves all existing configuration values.
+    ///
+    /// It does not import or copy operational budgets, target descriptors,
+    /// policies or profiles because those are separate contracts.
+    #[must_use]
+    pub fn from_existing(config: &CompilerConfig) -> Self {
+        Self {
+            target: Some(config.target.clone()),
+            opt_level: config.opt_level.clone(),
+            debug_info: config.debug_info,
+            verify: config.verify,
+            emit_ir: config.emit_ir,
+            parallel: config.parallel,
+        }
+    }
+
+    /// Sets the legacy compilation target.
+    #[must_use]
     pub fn target(mut self, target: CompilationTarget) -> Self {
         self.target = Some(target);
         self
     }
 
-    /// Sets the optimization level.
+    /// Sets the requested optimization level.
+    #[must_use]
     pub fn optimization_level(
         mut self,
         level: OptimizationLevel,
@@ -235,71 +454,91 @@ impl CompilerConfigBuilder {
         self
     }
 
-    /// Enables or disables debug information.
+    /// Enables or disables debug information generation.
+    #[must_use]
     pub fn debug_info(mut self, enabled: bool) -> Self {
         self.debug_info = enabled;
         self
     }
 
-    /// Sets the requested IR verification configuration.
+    /// Sets the IR verification request.
     ///
-    /// Important:
-    /// The current compiler pipeline invokes IR verification
-    /// unconditionally. Setting this field to false does not
-    /// currently disable that verification.
+    /// This field preserves the existing CompilerConfig contract.
+    ///
+    /// It does not guarantee that verification is skipped when false,
+    /// or that verification is implemented by every pipeline route.
+    /// The pipeline must enforce its mandatory verification obligations.
+    #[must_use]
     pub fn verify(mut self, enabled: bool) -> Self {
         self.verify = enabled;
         self
     }
 
-    /// Requests intermediate representation output.
+    /// Sets the request to emit intermediate representation output.
     ///
-    /// The existing backend pipeline must be checked to determine
-    /// whether this request is actually honored for each target.
+    /// This is a request only. The selected output path and backend
+    /// must establish whether the requested representation is supported.
+    #[must_use]
     pub fn emit_ir(mut self, enabled: bool) -> Self {
         self.emit_ir = enabled;
         self
     }
 
-    /// Requests parallel compilation.
+    /// Sets the request for parallel compilation.
     ///
-    /// This is a request, not a guarantee that every compiler stage
-    /// supports parallel execution.
+    /// This is not a worker-count setting and does not guarantee that
+    /// every compiler stage can execute concurrently.
+    ///
+    /// Actual parallel execution is controlled by the pipeline,
+    /// available capacity, operational budgets and stage contracts.
+    #[must_use]
     pub fn parallel(mut self, enabled: bool) -> Self {
         self.parallel = enabled;
         self
     }
 
-    /// Builds the existing canonical `CompilerConfig`.
+    /// Builds the existing canonical CompilerConfig using standard
+    /// structural validation.
     ///
-    /// A target is mandatory. No default hardware target is selected.
+    /// No default hardware target is selected.
     pub fn build(self) -> Result<CompilerConfig, ConfigurationError> {
+        self.build_with_validation_mode(
+            ConfigurationValidationMode::Standard,
+        )
+    }
+
+    /// Builds the existing canonical CompilerConfig and validates it
+    /// using the requested validation mode.
+    pub fn build_with_validation_mode(
+        self,
+        mode: ConfigurationValidationMode,
+    ) -> Result<CompilerConfig, ConfigurationError> {
         let target = self
             .target
             .ok_or(ConfigurationError::MissingTarget)?;
 
-        Ok(CompilerConfig {
+        let config = CompilerConfig {
             target,
             opt_level: self.opt_level,
             debug_info: self.debug_info,
             verify: self.verify,
             emit_ir: self.emit_ir,
             parallel: self.parallel,
-        })
+        };
+
+        validate_compiler_config(&config, mode)?;
+
+        Ok(config)
     }
 
-    /// Builds a configuration and validates it for production use.
+    /// Builds and validates a configuration under the current
+    /// production configuration policy.
     pub fn build_production(
         self,
     ) -> Result<CompilerConfig, ConfigurationError> {
-        let config = self.build()?;
-
-        validate_compiler_config(
-            &config,
+        self.build_with_validation_mode(
             ConfigurationValidationMode::Production,
-        )?;
-
-        Ok(config)
+        )
     }
 }
 
@@ -309,12 +548,15 @@ impl Default for CompilerConfigBuilder {
     }
 }
 
-/// Compatibility helpers for the existing canonical configuration.
+// ============================================================================
+// COMPATIBILITY METHODS
+// ============================================================================
+
+/// Compatibility methods on the existing canonical CompilerConfig.
 ///
-/// These methods are implemented on the existing type rather than
-/// introducing a duplicate configuration structure.
+/// These methods do not introduce a replacement configuration type.
 impl CompilerConfig {
-    /// Validates this configuration for standard use.
+    /// Validates this configuration using standard validation.
     pub fn validate_configuration(
         &self,
     ) -> Result<(), ConfigurationError> {
@@ -324,7 +566,7 @@ impl CompilerConfig {
         )
     }
 
-    /// Validates this configuration for production use.
+    /// Validates this configuration using the current production policy.
     pub fn validate_production_configuration(
         &self,
     ) -> Result<(), ConfigurationError> {
@@ -334,27 +576,40 @@ impl CompilerConfig {
         )
     }
 
-    /// Returns whether this configuration requests parallel compilation.
+    /// Returns whether parallel compilation was requested.
     ///
-    /// This reports configuration intent only. It does not establish
-    /// that every pipeline stage supports parallel execution.
+    /// This does not guarantee parallel stage availability.
+    #[must_use]
     pub const fn requests_parallel_compilation(&self) -> bool {
         self.parallel
     }
 
-    /// Returns whether this configuration requests debug information.
+    /// Returns whether debug information was requested.
+    #[must_use]
     pub const fn requests_debug_information(&self) -> bool {
         self.debug_info
     }
 
-    /// Returns whether this configuration requests IR emission.
+    /// Returns whether IR emission was requested.
     ///
-    /// This reports the configured request, not proof that a backend
-    /// has implemented the corresponding output behavior.
+    /// This does not guarantee that the selected backend implements it.
+    #[must_use]
     pub const fn requests_ir_emission(&self) -> bool {
         self.emit_ir
     }
+
+    /// Returns whether verification was requested in this configuration.
+    ///
+    /// Mandatory pipeline verification obligations remain authoritative.
+    #[must_use]
+    pub const fn requests_verification(&self) -> bool {
+        self.verify
+    }
 }
+
+// ============================================================================
+// TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -375,10 +630,8 @@ mod tests {
 
     #[test]
     fn builder_requires_an_explicit_target() {
-        let result = CompilerConfigBuilder::new().build();
-
         assert!(matches!(
-            result,
+            CompilerConfigBuilder::new().build(),
             Err(ConfigurationError::MissingTarget)
         ));
     }
@@ -394,7 +647,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_uses_safe_production_friendly_defaults() {
+    fn builder_preserves_existing_defaults() {
         let config = explicit_target_config();
 
         assert_eq!(config.opt_level, OptimizationLevel::Basic);
@@ -405,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_preserves_explicit_configuration_values() {
+    fn builder_preserves_explicit_values() {
         let config = CompilerConfigBuilder::for_target(
             CompilationTarget::Wasm32,
         )
@@ -429,40 +682,70 @@ mod tests {
     }
 
     #[test]
-    fn production_validation_accepts_basic_optimization() {
-        let config = explicit_target_config();
+    fn builder_adapts_existing_configuration_without_losing_values() {
+        let original = CompilerConfig {
+            target: CompilationTarget::UniversalIRExport(
+                "portable-format".to_owned(),
+            ),
+            opt_level: OptimizationLevel::Aggressive,
+            debug_info: false,
+            verify: true,
+            emit_ir: true,
+            parallel: true,
+        };
 
-        assert!(config.validate_production_configuration().is_ok());
+        let adapted = CompilerConfigBuilder::from_existing(&original)
+            .build()
+            .expect("existing configuration should remain valid");
+
+        assert_eq!(adapted.target, original.target);
+        assert_eq!(adapted.opt_level, original.opt_level);
+        assert_eq!(adapted.debug_info, original.debug_info);
+        assert_eq!(adapted.verify, original.verify);
+        assert_eq!(adapted.emit_ir, original.emit_ir);
+        assert_eq!(adapted.parallel, original.parallel);
     }
 
     #[test]
-    fn production_validation_accepts_aggressive_optimization() {
-        let config = CompilerConfigBuilder::for_target(
-            CompilationTarget::Arm64,
-        )
-        .optimization_level(OptimizationLevel::Aggressive)
-        .build()
-        .expect("configuration should build");
+    fn standard_validation_accepts_basic_optimization() {
+        assert!(
+            explicit_target_config()
+                .validate_configuration()
+                .is_ok()
+        );
+    }
 
-        assert!(config.validate_production_configuration().is_ok());
+    #[test]
+    fn production_validation_accepts_supported_optimization_levels() {
+        for level in [
+            OptimizationLevel::None,
+            OptimizationLevel::Basic,
+            OptimizationLevel::Aggressive,
+        ] {
+            let config = CompilerConfigBuilder::for_target(
+                CompilationTarget::Arm64,
+            )
+            .optimization_level(level)
+            .build_production()
+            .expect("supported production configuration should build");
+
+            assert!(
+                config.validate_production_configuration().is_ok()
+            );
+        }
     }
 
     #[test]
     fn production_validation_rejects_experimental_optimization() {
-        let config = CompilerConfigBuilder::for_target(
+        let result = CompilerConfigBuilder::for_target(
             CompilationTarget::X86_64Linux,
         )
         .optimization_level(OptimizationLevel::UltraAGI)
-        .build()
-        .expect("configuration construction should succeed");
-
-        let result = config.validate_production_configuration();
+        .build_production();
 
         assert!(matches!(
             result,
-            Err(ConfigurationError::UnsupportedOptimization {
-                ..
-            })
+            Err(ConfigurationError::UnsupportedOptimization { .. })
         ));
     }
 
@@ -477,35 +760,57 @@ mod tests {
     }
 
     #[test]
-    fn production_optimization_support_is_explicit() {
-        assert!(is_production_optimization_supported(
-            &OptimizationLevel::None
-        ));
+    fn empty_universal_ir_export_identifier_is_rejected() {
+        let config = CompilerConfig {
+            target: CompilationTarget::UniversalIRExport(
+                "   ".to_owned(),
+            ),
+            ..CompilerConfig::default()
+        };
 
-        assert!(is_production_optimization_supported(
-            &OptimizationLevel::Basic
-        ));
-
-        assert!(is_production_optimization_supported(
-            &OptimizationLevel::Aggressive
-        ));
-
-        assert!(!is_production_optimization_supported(
-            &OptimizationLevel::UltraAGI
+        assert!(matches!(
+            config.validate_configuration(),
+            Err(ConfigurationError::InvalidTarget { .. })
         ));
     }
 
     #[test]
-    fn existing_configuration_fields_remain_accessible() {
-        let config = explicit_target_config();
+    fn universal_ir_export_identifier_with_control_characters_is_rejected() {
+        let config = CompilerConfig {
+            target: CompilationTarget::UniversalIRExport(
+                "portable\nformat".to_owned(),
+            ),
+            ..CompilerConfig::default()
+        };
 
-        assert!(!config.requests_parallel_compilation());
-        assert!(config.requests_debug_information());
-        assert!(!config.requests_ir_emission());
+        assert!(matches!(
+            config.validate_configuration(),
+            Err(ConfigurationError::InvalidTarget { .. })
+        ));
     }
 
     #[test]
-    fn builder_supports_existing_target_variants() {
+    fn valid_universal_ir_export_identifier_is_preserved() {
+        let identifier = "custom-portable-format";
+
+        let config = CompilerConfigBuilder::for_target(
+            CompilationTarget::UniversalIRExport(
+                identifier.to_owned(),
+            ),
+        )
+        .build()
+        .expect("valid export identifier should be accepted");
+
+        assert_eq!(
+            config.target,
+            CompilationTarget::UniversalIRExport(
+                identifier.to_owned()
+            )
+        );
+    }
+
+    #[test]
+    fn every_existing_legacy_target_variant_is_supported() {
         let targets = vec![
             CompilationTarget::X86_64Linux,
             CompilationTarget::Arm64,
@@ -523,21 +828,14 @@ mod tests {
         for target in targets {
             let config = CompilerConfigBuilder::for_target(target.clone())
                 .build()
-                .expect("explicit target should be accepted");
+                .expect("valid legacy target should be accepted");
 
             assert_eq!(config.target, target);
         }
     }
 
     #[test]
-    fn standard_validation_does_not_reject_existing_configurations() {
-        let config = CompilerConfig::default();
-
-        assert!(config.validate_configuration().is_ok());
-    }
-
-    #[test]
-    fn production_validation_does_not_change_configuration() {
+    fn configuration_validation_does_not_mutate_input() {
         let config = explicit_target_config();
         let original_target = config.target.clone();
         let original_level = config.opt_level.clone();
@@ -548,5 +846,23 @@ mod tests {
 
         assert_eq!(config.target, original_target);
         assert_eq!(config.opt_level, original_level);
+    }
+
+    #[test]
+    fn configuration_accessors_report_requests() {
+        let config = CompilerConfigBuilder::for_target(
+            CompilationTarget::Wasm32,
+        )
+        .debug_info(false)
+        .verify(true)
+        .emit_ir(true)
+        .parallel(true)
+        .build()
+        .expect("configuration should build");
+
+        assert!(config.requests_parallel_compilation());
+        assert!(!config.requests_debug_information());
+        assert!(config.requests_ir_emission());
+        assert!(config.requests_verification());
     }
 }
