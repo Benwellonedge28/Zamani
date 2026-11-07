@@ -1,4 +1,3 @@
-
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(missing_docs)]
@@ -6,99 +5,127 @@
 
 //! # Zamani Compiler — Backend Invocation
 //!
-//! Path: `src/compiler/backends/invocation.rs`
-//! Edition: Rust 2021
+//! Path: src/compiler/backends/invocation.rs
+//! Edition: 2021
 //! Minimum Rust version: 1.97
 //!
-//! ## Purpose
+//! # Responsibility
 //!
-//! Invoke an explicitly selected, registered backend using the canonical
-//! backend registry and the existing backend generation interface.
+//! This module coordinates invocation of an explicitly selected backend
+//! through the canonical backend registry.
 //!
-//! This module is the final compiler-side invocation adapter. It connects
-//! backend selection to actual backend construction and code generation.
+//! It owns:
 //!
-//! ## Architectural ownership
+//! - invocation request validation;
+//! - backend identifier validation;
+//! - canonical backend resolution;
+//! - consistent descriptor/implementation acquisition;
+//! - implementation metadata verification;
+//! - backend generation invocation;
+//! - structured error propagation;
+//! - generated-output classification.
 //!
-//! This module owns:
-//!
-//! - backend invocation request validation;
-//! - canonical backend identifier and alias resolution;
-//! - backend construction through the canonical registry;
-//! - backend implementation metadata consistency checks;
-//! - invocation of the existing backend generation interface;
-//! - structured invocation results and errors;
-//! - explicit distinction between generated text and verified artifacts.
-//!
-//! This module does not own:
+//! It does not own:
 //!
 //! - backend registration;
 //! - backend discovery;
-//! - capability models;
-//! - semantic requirement matching;
-//! - target compatibility evaluation;
-//! - hardware allocation;
-//! - physical device discovery;
+//! - target selection;
+//! - semantic requirement evaluation;
+//! - capability matching;
+//! - physical resource allocation;
 //! - IR construction or transformation;
-//! - IR verification;
-//! - target-specific code generation algorithms;
-//! - filesystem artifact writing;
+//! - backend implementation algorithms;
+//! - artifact verification algorithms;
+//! - filesystem operations;
 //! - linking;
 //! - deployment;
-//! - runtime execution;
-//! - scheduling or routing.
+//! - runtime execution.
 //!
-//! ## POCO-REAF
+//! # Architectural authorities
 //!
-//! The compiler may invoke any registered backend that has been selected
-//! through the appropriate compatibility and feasibility processes.
+//! Backend interface:
+//!     crate::backend::Backend
 //!
-//! Backend invocation does not imply that every backend supports every
-//! program or that every physical target is available.
+//! Backend registration:
+//!     crate::backend::registry::BackendRegistry
 //!
-//! A backend failure must be propagated explicitly. This module never
-//! substitutes a different backend or silently changes program semantics.
+//! Backend metadata:
+//!     crate::backend::registry::BackendDescriptor
 //!
-//! ## Scalability
+//! Existing compiler IR input:
+//!     crate::ir_gen::IrModule
 //!
-//! No fixed maximum is imposed on:
+//! Backend compilation pipeline:
+//!     crate::backend::pipeline
 //!
-//! - registered backends;
-//! - target architectures;
+//! Artifact verification:
+//!     crate::backend::pipeline
+//!
+//! # POCO-REAF
+//!
+//! The selected backend must preserve the semantics of the supplied
+//! intermediate representation.
+//!
+//! Invocation never silently substitutes another backend.
+//!
+//! Backend registration does not establish compatibility.
+//!
+//! Compatibility does not establish physical availability.
+//!
+//! Successful generation does not establish artifact validity.
+//!
+//! # Scalability
+//!
+//! This module imposes no universal limits on:
+//!
+//! - backend registrations;
+//! - target identifiers;
 //! - computational domains;
 //! - IR module sizes;
 //! - generated output sizes;
-//! - hardware resource counts;
-//! - accelerator counts;
-//! - future backend types.
+//! - resource counts;
+//! - hardware capacities;
+//! - future backend categories.
 //!
-//! Actual memory, time, and output constraints are determined by the
-//! available resources and the surrounding compilation budget policies.
+//! Actual operational limits belong to the configured compilation
+//! pipeline, backend implementation, operating environment and
+//! available resources.
 //!
-//! ## Output trust boundary
+//! # Security
 //!
-//! The existing backend API returns generated text. Generated text is not
-//! automatically a verified executable artifact.
+//! Backend factories and implementations are extension boundaries.
 //!
-//! This module therefore labels successful output as generated but
-//! unverified. Artifact validation, serialization, hashing, linking,
-//! packaging, and deployment belong to their respective subsystems.
+//! Registry identity checks are necessary but are not proof that a
+//! backend is trustworthy.
 //!
-//! ## Required integration
+//! Untrusted implementations must be isolated by the appropriate
+//! extension/process security subsystem.
 //!
-//! `src/compiler/backends/mod.rs` must declare:
+//! This module does not claim to sandbox backend code.
 //!
-//!     pub mod invocation;
+//! # Output trust
 //!
-//! `src/backend/mod.rs` must expose the canonical backend registry and
-//! resolve its existing legacy backend module migration.
+//! The current Backend trait returns String output.
 //!
-//! `src/compiler/mod.rs` must expose the compiler backend facade.
+//! Generated text is not automatically:
 //!
-//! No second Backend trait or registry is introduced.
+//! - executable;
+//! - verified;
+//! - portable;
+//! - linked;
+//! - deployable;
+//! - a valid FPGA bitstream;
+//! - a valid quantum package.
+//!
+//! The result therefore retains an explicit unverified status.
 
 use std::error::Error;
 use std::fmt;
+
+use crate::backend::{
+    Backend,
+    CodeGenError,
+};
 
 use crate::backend::registry::{
     BackendDescriptor,
@@ -112,33 +139,31 @@ use crate::ir_gen::IrModule;
 // MODULE IDENTITY
 // ============================================================================
 
-/// Stable identity of this compiler backend-invocation module.
+/// Stable module identity.
 pub const BACKEND_INVOCATION_MODULE_NAME: &str =
     "zamani.compiler.backends.invocation";
 
-/// Public API version of this module.
+/// Invocation API version.
 ///
-/// This version is independent of the Zamani language version, backend
-/// implementation versions, and IR format versions.
-pub const BACKEND_INVOCATION_API_VERSION: u16 = 1;
+/// Independent of the Zamani language version, IR version and backend
+/// implementation version.
+pub const BACKEND_INVOCATION_API_VERSION: u16 = 2;
 
 // ============================================================================
 // IDENTIFIER VALIDATION
 // ============================================================================
 
-/// Validate a backend identifier supplied to the invocation boundary.
+/// Validate a backend identifier at the invocation boundary.
 ///
-/// Canonical identifier syntax and alias uniqueness remain the
-/// responsibility of the canonical backend registry.
+/// The canonical registry remains authoritative for identifier syntax,
+/// uniqueness, aliases and canonical identity.
 ///
-/// This boundary rejects empty identifiers, surrounding whitespace,
-/// and control characters.
-///
-/// No arbitrary identifier length limit is imposed.
+/// This function rejects malformed invocation input without imposing
+/// an arbitrary identifier-length ceiling.
 fn validate_backend_identifier(
     identifier: &str,
 ) -> Result<(), BackendInvocationError> {
-    if identifier.trim().is_empty() {
+    if identifier.is_empty() {
         return Err(
             BackendInvocationError::InvalidBackendIdentifier {
                 identifier: identifier.to_owned(),
@@ -151,9 +176,8 @@ fn validate_backend_identifier(
         return Err(
             BackendInvocationError::InvalidBackendIdentifier {
                 identifier: identifier.to_owned(),
-                reason:
-                    "identifier must not contain surrounding whitespace"
-                        .to_owned(),
+                reason: "surrounding whitespace is not permitted"
+                    .to_owned(),
             },
         );
     }
@@ -162,9 +186,8 @@ fn validate_backend_identifier(
         return Err(
             BackendInvocationError::InvalidBackendIdentifier {
                 identifier: identifier.to_owned(),
-                reason:
-                    "identifier must not contain control characters"
-                        .to_owned(),
+                reason: "control characters are not permitted"
+                    .to_owned(),
             },
         );
     }
@@ -173,39 +196,31 @@ fn validate_backend_identifier(
 }
 
 // ============================================================================
-// INVOCATION REQUEST
+// REQUEST
 // ============================================================================
 
-/// Immutable request to invoke a registered backend.
+/// Immutable backend invocation request.
 ///
-/// The request borrows the canonical IR module. It does not clone or
-/// reconstruct the program representation.
+/// The IR module is borrowed. The invocation boundary does not clone,
+/// reconstruct or reinterpret it.
 ///
-/// The backend identifier may be either a canonical identifier or an
-/// alias registered with the canonical backend registry.
+/// The identifier may be a canonical registered identifier or an
+/// explicitly registered alias.
 ///
-/// Compatibility and feasibility must already have been established by
-/// the appropriate compiler planning and backend compatibility systems.
-///
-/// This request does not independently establish target suitability.
+/// Compatibility and feasibility must have been established by the
+/// preceding compiler planning and backend-selection stages.
 pub struct BackendInvocationRequest<'a> {
     backend_identifier: String,
     module: &'a IrModule,
 }
 
 impl<'a> BackendInvocationRequest<'a> {
-    /// Construct a backend invocation request.
-    ///
-    /// # Arguments
-    ///
-    /// - `backend_identifier`: canonical backend identifier or registered
-    ///   alias.
-    /// - `module`: canonical IR module to pass to the backend.
+    /// Construct a validated invocation request.
     ///
     /// # Errors
     ///
     /// Returns an error if the backend identifier is empty, contains
-    /// surrounding whitespace, or contains control characters.
+    /// surrounding whitespace or contains control characters.
     pub fn new(
         backend_identifier: impl Into<String>,
         module: &'a IrModule,
@@ -220,10 +235,9 @@ impl<'a> BackendInvocationRequest<'a> {
         })
     }
 
-    /// Return the requested backend identifier.
+    /// Return the requested identifier.
     ///
-    /// This may be an alias. The canonical identifier is available in
-    /// the invocation result.
+    /// It may be a registered alias.
     #[must_use]
     pub fn backend_identifier(&self) -> &str {
         &self.backend_identifier
@@ -237,40 +251,28 @@ impl<'a> BackendInvocationRequest<'a> {
 }
 
 // ============================================================================
-// OUTPUT CLASSIFICATION
+// OUTPUT STATUS
 // ============================================================================
 
-/// Verification state of output returned by the existing backend API.
-///
-/// The current backend interface returns a string and does not provide
-/// a universal artifact-verification contract.
-///
-/// Therefore, successful invocation is classified as unverified output.
-///
-/// Future artifact-validation integration may produce a separate
-/// verified-artifact result. It must not silently reinterpret this
-/// status.
+/// Trust and verification classification of generated output.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackendOutputStatus {
-    /// The backend returned output successfully, but this module has not
-    /// established that the output is a valid executable artifact.
+    /// Generation succeeded, but artifact verification has not been
+    /// established by the invocation boundary.
     GeneratedUnverified,
 }
 
 // ============================================================================
-// INVOCATION RESULT
+// RESULT
 // ============================================================================
 
-/// Successful result of invoking a registered backend.
+/// Successful backend invocation result.
 ///
-/// The result retains the canonical backend descriptor and the output
-/// returned by the existing backend interface.
+/// The output remains text because that is the existing Backend trait
+/// contract.
 ///
-/// `generated_output` is deliberately represented as text because that
-/// is the existing backend API contract.
-///
-/// It must not be treated as a binary artifact, executable, bitstream,
-/// quantum package, or deployable bundle without additional validation.
+/// This type does not pretend that text output is a verified binary
+/// artifact or a deployable target package.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendInvocationResult {
     descriptor: BackendDescriptor,
@@ -279,7 +281,7 @@ pub struct BackendInvocationResult {
 }
 
 impl BackendInvocationResult {
-    /// Construct a result after successful backend generation.
+    /// Create a result from a successful generation operation.
     fn new(
         descriptor: BackendDescriptor,
         generated_output: String,
@@ -303,39 +305,35 @@ impl BackendInvocationResult {
         &self.descriptor.id
     }
 
-    /// Return the backend's declared output extension.
+    /// Return the advertised output extension.
     ///
-    /// This is descriptive registry metadata. It does not prove that
-    /// the returned text is valid for that extension.
+    /// This is registry metadata, not proof of output validity.
     #[must_use]
     pub fn file_extension(&self) -> &str {
         &self.descriptor.file_extension
     }
 
     /// Return the complete generated output.
-    ///
-    /// No truncation or arbitrary output-size ceiling is imposed.
     #[must_use]
     pub fn generated_output(&self) -> &str {
         &self.generated_output
     }
 
-    /// Consume the result and return its generated output.
+    /// Consume the result and return generated output.
     #[must_use]
     pub fn into_generated_output(self) -> String {
         self.generated_output
     }
 
-    /// Return the output verification status.
+    /// Return the output status.
     #[must_use]
     pub const fn status(&self) -> BackendOutputStatus {
         self.status
     }
 
-    /// Whether this result represents verified executable output.
+    /// Return whether this result is a verified executable artifact.
     ///
-    /// The current implementation always returns `false` because the
-    /// legacy backend API does not provide artifact verification evidence.
+    /// This invocation API does not perform artifact verification.
     #[must_use]
     pub const fn is_verified_artifact(&self) -> bool {
         false
@@ -346,47 +344,45 @@ impl BackendInvocationResult {
 // ERRORS
 // ============================================================================
 
-/// Errors produced at the compiler/backend invocation boundary.
+/// Structured backend invocation failures.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BackendInvocationError {
-    /// The requested backend identifier is malformed.
+    /// The supplied backend identifier is malformed.
     InvalidBackendIdentifier {
-        /// Identifier supplied by the caller.
+        /// Original identifier.
         identifier: String,
 
-        /// Explanation of the validation failure.
+        /// Validation explanation.
         reason: String,
     },
 
-    /// The canonical backend registry failed.
+    /// Canonical registry operation failed.
     Registry(RegistryError),
 
-    /// The backend implementation reported an unexpected extension.
-    ///
-    /// The descriptor and implementation must agree before generation
-    /// is accepted.
+    /// The backend implementation's extension differs from its
+    /// registered descriptor.
     ImplementationExtensionMismatch {
         /// Canonical backend identifier.
         backend_id: String,
 
-        /// Extension registered in backend metadata.
+        /// Extension recorded in the registry.
         registered_extension: String,
 
-        /// Extension reported by the constructed implementation.
+        /// Extension reported by the implementation.
         implementation_extension: String,
     },
 
-    /// The backend failed while generating output.
+    /// The backend failed during code generation.
+    ///
+    /// The original error is preserved rather than flattened into a
+    /// string-only representation.
     CodeGenerationFailed {
         /// Canonical backend identifier.
         backend_id: String,
 
-        /// Target identifier reported by the backend error.
-        target: String,
-
-        /// Backend-provided error message.
-        message: String,
+        /// Original backend error.
+        source: CodeGenError,
     },
 }
 
@@ -399,44 +395,35 @@ impl fmt::Display for BackendInvocationError {
             Self::InvalidBackendIdentifier {
                 identifier,
                 reason,
-            } => {
-                write!(
-                    formatter,
-                    "invalid backend identifier `{identifier}`: {reason}"
-                )
-            }
+            } => write!(
+                formatter,
+                "invalid backend identifier `{identifier}`: {reason}"
+            ),
 
-            Self::Registry(error) => {
-                write!(
-                    formatter,
-                    "backend invocation registry failure: {error}"
-                )
-            }
+            Self::Registry(error) => write!(
+                formatter,
+                "backend registry operation failed: {error}"
+            ),
 
             Self::ImplementationExtensionMismatch {
                 backend_id,
                 registered_extension,
                 implementation_extension,
-            } => {
-                write!(
-                    formatter,
-                    "backend `{backend_id}` declares extension \
-                     `{registered_extension}` in the registry but its \
-                     implementation reports `{implementation_extension}`"
-                )
-            }
+            } => write!(
+                formatter,
+                "backend `{backend_id}` reports extension \
+                 `{implementation_extension}`, but its registered \
+                 descriptor declares `{registered_extension}`"
+            ),
 
             Self::CodeGenerationFailed {
                 backend_id,
-                target,
-                message,
-            } => {
-                write!(
-                    formatter,
-                    "code generation failed for backend `{backend_id}` \
-                     and target `{target}`: {message}"
-                )
-            }
+                source,
+            } => write!(
+                formatter,
+                "code generation failed for backend `{backend_id}`: \
+                 {source}"
+            ),
         }
     }
 }
@@ -445,9 +432,11 @@ impl Error for BackendInvocationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Registry(error) => Some(error),
+
+            Self::CodeGenerationFailed { source, .. } => Some(source),
+
             Self::InvalidBackendIdentifier { .. }
-            | Self::ImplementationExtensionMismatch { .. }
-            | Self::CodeGenerationFailed { .. } => None,
+            | Self::ImplementationExtensionMismatch { .. } => None,
         }
     }
 }
@@ -462,22 +451,9 @@ impl From<RegistryError> for BackendInvocationError {
 // INVOCATION SERVICE
 // ============================================================================
 
-/// Stateless backend invocation coordinator.
+/// Stateless invocation coordinator over the canonical backend registry.
 ///
-/// The service borrows the canonical backend registry. It does not
-/// maintain its own backend inventory.
-///
-/// The canonical registry is responsible for:
-///
-/// - canonical identifier resolution;
-/// - alias resolution;
-/// - backend factory invocation;
-/// - backend factory identity verification.
-///
-/// This service additionally checks that the constructed implementation's
-/// output extension agrees with its registered descriptor.
-///
-/// It then invokes the existing backend generation interface.
+/// It owns no backend registrations and no backend factories.
 pub struct BackendInvocationService<'a> {
     registry: &'a BackendRegistry,
 }
@@ -486,7 +462,9 @@ impl<'a> BackendInvocationService<'a> {
     /// Construct an invocation service over the canonical registry.
     #[must_use]
     pub fn new(registry: &'a BackendRegistry) -> Self {
-        Self { registry }
+        Self {
+            registry,
+        }
     }
 
     /// Return the stable module identity.
@@ -501,43 +479,32 @@ impl<'a> BackendInvocationService<'a> {
         BACKEND_INVOCATION_API_VERSION
     }
 
-    /// Invoke a registered backend with the supplied IR module.
+    /// Invoke the explicitly requested registered backend.
     ///
-    /// The method performs the following steps:
+    /// The operation:
     ///
-    /// 1. Validate the requested backend identifier.
-    /// 2. Resolve the canonical backend descriptor.
-    /// 3. Construct the backend through the canonical registry.
-    /// 4. Verify implementation and registry extension agreement.
-    /// 5. Invoke the backend's existing `generate` method.
-    /// 6. Return the generated text with an explicit unverified status.
+    /// 1. Validates the identifier.
+    /// 2. Obtains a consistent descriptor/factory snapshot.
+    /// 3. Constructs the registered backend.
+    /// 4. Checks implementation/descriptor extension agreement.
+    /// 5. Invokes the existing Backend generation interface.
+    /// 6. Returns output classified as unverified.
     ///
-    /// The backend factory is invoked by the canonical registry outside
-    /// its internal registry lock.
+    /// The canonical registry executes the backend factory outside its
+    /// internal lock.
     ///
-    /// This method does not:
+    /// No fallback is attempted.
     ///
-    /// - perform capability matching;
-    /// - perform hardware allocation;
-    /// - run an external compiler or linker;
-    /// - write files;
-    /// - validate executable formats;
-    /// - execute generated output;
-    /// - silently fall back to another backend.
+    /// No target is inferred from the host machine.
     ///
-    /// Callers must perform compatibility and feasibility evaluation
-    /// before invoking a backend.
+    /// No physical resource is allocated.
+    ///
+    /// No generated output is executed.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    ///
-    /// - the identifier is malformed;
-    /// - the backend is not registered;
-    /// - registry access fails;
-    /// - backend construction fails its canonical identity check;
-    /// - implementation and registry extensions disagree;
-    /// - backend code generation fails.
+    /// Returns an error for invalid identifiers, registry failures,
+    /// implementation metadata inconsistencies or generation failures.
     pub fn invoke(
         &self,
         request: &BackendInvocationRequest<'_>,
@@ -546,45 +513,41 @@ impl<'a> BackendInvocationService<'a> {
             request.backend_identifier(),
         )?;
 
-        // Resolve aliases before retaining the descriptor. This ensures
-        // the result always reports the canonical backend identity.
-        let descriptor = self
+        // The registry must provide descriptor and implementation
+        // from the same registration snapshot.
+        let (descriptor, implementation) = self
             .registry
-            .descriptor(request.backend_identifier())?;
+            .create_with_descriptor(
+                request.backend_identifier(),
+            )?;
 
-        // The canonical registry verifies that the constructed backend
-        // reports the registered canonical target identifier.
-        let implementation = self
-            .registry
-            .create(request.backend_identifier())?;
-
-        // The backend implementation and its registered metadata must
-        // agree before the generated output is accepted.
+        // Do not trust an implementation's advertised output extension
+        // when it disagrees with the registered descriptor.
         let implementation_extension =
-            implementation.file_extension().to_owned();
+            implementation.file_extension();
 
         if implementation_extension != descriptor.file_extension {
             return Err(
                 BackendInvocationError::ImplementationExtensionMismatch {
                     backend_id: descriptor.id.clone(),
-                    registered_extension:
-                        descriptor.file_extension.clone(),
-                    implementation_extension,
+                    registered_extension: descriptor.file_extension.clone(),
+                    implementation_extension:
+                        implementation_extension.to_owned(),
                 },
             );
         }
 
-        // Invoke the canonical backend implementation.
+        // Invoke the exact selected backend.
         //
-        // The existing API returns a String. This module preserves that
-        // contract and does not claim the output is a verified artifact.
+        // The existing Backend trait accepts the legacy IR module and
+        // returns generated text. This adapter does not claim that the
+        // returned text has passed artifact verification.
         let generated_output = implementation
             .generate(request.module())
-            .map_err(|error| {
+            .map_err(|source| {
                 BackendInvocationError::CodeGenerationFailed {
                     backend_id: descriptor.id.clone(),
-                    target: error.target.clone(),
-                    message: error.message.clone(),
+                    source,
                 }
             })?;
 
@@ -609,7 +572,10 @@ mod tests {
             BackendInvocationService::module_name(),
             BACKEND_INVOCATION_MODULE_NAME,
         );
+    }
 
+    #[test]
+    fn api_version_is_nonzero() {
         assert_ne!(
             BackendInvocationService::api_version(),
             0,
@@ -617,65 +583,77 @@ mod tests {
     }
 
     #[test]
-    fn empty_backend_identifier_is_rejected() {
-        let result = validate_backend_identifier("");
-
+    fn empty_identifier_is_rejected() {
         assert!(matches!(
-            result,
-            Err(BackendInvocationError::InvalidBackendIdentifier { .. })
+            validate_backend_identifier(""),
+            Err(
+                BackendInvocationError::InvalidBackendIdentifier {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
-    fn whitespace_only_backend_identifier_is_rejected() {
-        let result = validate_backend_identifier("   ");
-
+    fn whitespace_only_identifier_is_rejected() {
         assert!(matches!(
-            result,
-            Err(BackendInvocationError::InvalidBackendIdentifier { .. })
+            validate_backend_identifier("   "),
+            Err(
+                BackendInvocationError::InvalidBackendIdentifier {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
     fn surrounding_whitespace_is_rejected() {
-        let result = validate_backend_identifier(" backend.cpu ");
-
         assert!(matches!(
-            result,
-            Err(BackendInvocationError::InvalidBackendIdentifier { .. })
+            validate_backend_identifier(" backend.cpu "),
+            Err(
+                BackendInvocationError::InvalidBackendIdentifier {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
     fn control_characters_are_rejected() {
-        let result = validate_backend_identifier("backend.\nexample");
-
         assert!(matches!(
-            result,
-            Err(BackendInvocationError::InvalidBackendIdentifier { .. })
+            validate_backend_identifier("backend.\nexample"),
+            Err(
+                BackendInvocationError::InvalidBackendIdentifier {
+                    ..
+                }
+            )
         ));
     }
 
     #[test]
-    fn valid_backend_identifier_is_accepted() {
+    fn open_world_identifiers_are_accepted() {
         assert!(
-            validate_backend_identifier("vendor.future-architecture")
-                .is_ok()
+            validate_backend_identifier(
+                "future.vendor:heterogeneous-architecture"
+            )
+            .is_ok()
         );
     }
 
     #[test]
-    fn identifier_validation_has_no_arbitrary_length_ceiling() {
+    fn identifier_validation_has_no_arbitrary_length_limit() {
         let identifier = format!(
             "backend.{}",
             "x".repeat(16_384),
         );
 
-        assert!(validate_backend_identifier(&identifier).is_ok());
+        assert!(
+            validate_backend_identifier(&identifier).is_ok()
+        );
     }
 
     #[test]
-    fn output_status_never_claims_verification() {
+    fn generated_output_is_not_misrepresented_as_verified() {
         let status = BackendOutputStatus::GeneratedUnverified;
 
         assert_eq!(
@@ -685,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_errors_are_preserved_as_error_sources() {
+    fn registry_errors_preserve_their_source() {
         let error = BackendInvocationError::Registry(
             RegistryError::BackendNotFound {
                 identifier: "backend.missing".to_owned(),
@@ -704,31 +682,31 @@ mod tests {
                 implementation_extension: ".other".to_owned(),
             };
 
-        assert!(
-            error
-                .to_string()
-                .contains("backend.example")
-        );
+        let rendered = error.to_string();
 
-        assert!(
-            error
-                .to_string()
-                .contains(".other")
-        );
+        assert!(rendered.contains("backend.example"));
+        assert!(rendered.contains(".bin"));
+        assert!(rendered.contains(".other"));
     }
 
     #[test]
-    fn code_generation_failure_preserves_backend_context() {
+    fn code_generation_error_is_preserved() {
+        let source = CodeGenError::new(
+            "generation failed",
+            "target.example",
+        );
+
         let error = BackendInvocationError::CodeGenerationFailed {
             backend_id: "backend.example".to_owned(),
-            target: "target.example".to_owned(),
-            message: "generation failed".to_owned(),
+            source,
         };
+
+        assert!(error.source().is_some());
 
         let rendered = error.to_string();
 
         assert!(rendered.contains("backend.example"));
-        assert!(rendered.contains("target.example"));
         assert!(rendered.contains("generation failed"));
+        assert!(rendered.contains("target.example"));
     }
 }
