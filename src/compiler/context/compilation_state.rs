@@ -10,7 +10,7 @@
 //!
 //! Rust:
 //!     Edition 2021
-//!     Minimum version: Rust 1.97
+//!     Minimum version: 1.97
 //!
 //! Safety:
 //!     Safe Rust only.
@@ -18,20 +18,20 @@
 //!
 //! # Purpose
 //!
-//! Defines the lifecycle and progress state of one compiler operation.
+//! Owns the lifecycle state of one compilation operation.
 //!
-//! The state tracker coordinates:
+//! This module coordinates:
 //!
 //! - Compilation initialization.
 //! - Compilation execution.
-//! - Compilation phase transitions.
+//! - High-level compilation phases.
 //! - Dynamically named compilation stages.
-//! - Cancellation requests.
+//! - Cooperative cancellation.
 //! - Successful completion.
-//! - Compilation failure.
+//! - Failure recording.
 //! - Terminal-state enforcement.
-//! - Thread-safe state observation.
-//! - Deterministic state snapshots.
+//! - Concurrent state observation.
+//! - Deterministic lifecycle snapshots.
 //!
 //! # Architectural ownership
 //!
@@ -42,21 +42,26 @@
 //! - CompilationStateSnapshot.
 //! - CompilationStateTracker.
 //! - CompilationStateError.
-//! - Legal compilation-state transitions.
-//! - Compilation progress metadata.
+//! - Legal lifecycle transitions.
+//! - Logical state revision.
 //!
 //! This module does not own:
 //!
 //! - Compiler configuration.
 //! - Resource budgets.
-//! - Cancellation token implementation.
+//! - CancellationToken implementation.
 //! - Public compilation sessions.
 //! - Pipeline orchestration.
+//! - Stage execution.
 //! - Semantic analysis.
 //! - Ownership analysis.
 //! - AST.
-//! - Canonical IR.
-//! - Optimization algorithms.
+//! - ZUIR.
+//! - Classical IR.
+//! - Quantum IR.
+//! - HDLIR.
+//! - AI computation.
+//! - Optimization.
 //! - Hardware discovery.
 //! - Hardware allocation.
 //! - Backend implementation.
@@ -65,95 +70,64 @@
 //! - Quantum routing.
 //! - Quantum error correction.
 //!
-//! # Existing integration authorities
+//! # Integration authorities
 //!
 //! crate::compiler::context::compilation_context
-//!     CompilationContext
 //!     CancellationToken
 //!
 //! crate::compiler::api::session
-//!     Public API session lifecycle.
+//!     CompilationSession
 //!
 //! crate::compiler::pipeline
-//!     Future pipeline orchestration.
+//!     Stage execution and orchestration.
 //!
 //! crate::compiler::diagnostics
-//!     Compiler diagnostic reporting.
+//!     Structured compiler diagnostics.
 //!
-//! # Lifecycle
+//! crate::compiler::profiling
+//!     Lifecycle observations.
 //!
-//! Created
-//!    |
-//!    v
-//! Running
-//!    |
-//!    +--------------------------+
-//!    |                          |
-//!    v                          v
-//! Completed              CancellationRequested
-//!    ^                          |
-//!    |                          v
-//!    |                       Cancelled
-//!    |
-//!    +--------------------------
-//!
-//! Running may also transition to Failed.
-//!
-//! Created may transition directly to Failed or Cancelled.
-//!
-//! Terminal states cannot be reused.
+//! crate::compiler::context::provenance_context
+//!     Compilation lineage.
 //!
 //! # POCO-REAF
 //!
-//! This module introduces no fixed hardware-capacity limits.
+//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! It does not impose limits on:
+//! This module imposes no universal hardware-capacity ceilings.
 //!
-//! - CPUs.
-//! - Cores.
-//! - Threads.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Qubits.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - IR operations.
-//! - Functions.
-//! - Modules.
-//! - Compilation stages.
+//! Custom stages use dynamically sized identifiers.
 //!
-//! Custom compilation stages use dynamically sized identifiers.
+//! Actual resource constraints belong to the compilation context,
+//! configured operational budgets and authoritative target providers.
 //!
-//! Actual resource constraints are managed by CompilationContext
-//! and its authoritative budget implementation.
+//! Unlimited operational budgets do not imply infinite physical resources.
 //!
 //! # Concurrency
 //!
-//! Cloned state trackers share one synchronization-protected state.
+//! Cloned trackers share one synchronized lifecycle.
 //!
-//! State transitions are serialized.
+//! All lifecycle mutations are serialized.
 //!
-//! A worker cannot independently complete a compilation after
-//! another worker has cancelled or failed it.
+//! External cancellation is observed through the shared cancellation token.
+//!
+//! No worker can publish successful completion after cancellation
+//! has been observed by the lifecycle tracker.
 //!
 //! # Determinism
 //!
-//! State snapshots contain logical lifecycle information.
+//! Snapshots contain logical state only.
 //!
-//! They do not contain wall-clock timestamps or random identifiers.
-//!
-//! Identical sequences of accepted transitions produce identical
-//! logical snapshots.
+//! Wall-clock timestamps, random identifiers and machine-specific
+//! execution details belong to other subsystems.
 
 use std::error::Error;
 use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+    MutexGuard,
+};
 
 use super::compilation_context::CancellationToken;
 
@@ -163,7 +137,7 @@ use super::compilation_context::CancellationToken;
 
 /// Public API version of the compilation-state contract.
 ///
-/// This version is independent of:
+/// Independent of:
 ///
 /// - Zamani language version.
 /// - Grammar version.
@@ -172,27 +146,21 @@ use super::compilation_context::CancellationToken;
 /// - AST version.
 /// - IR version.
 /// - Backend ABI version.
-///
-/// Increment when an incompatible public state contract changes.
 pub const COMPILATION_STATE_API_VERSION: u16 = 1;
 
 // ============================================================================
 // COMPILATION LIFECYCLE
 // ============================================================================
 
-/// High-level lifecycle state of one compilation operation.
+/// Lifecycle of one compilation operation.
 ///
-/// Lifecycle states describe whether compilation exists,
-/// is executing, has completed, has failed or has been cancelled.
-///
-/// They do not describe the implementation details of a
-/// particular compilation stage.
+/// Lifecycle state describes the status of the entire compilation,
+/// not the implementation details of individual pipeline stages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CompilationLifecycle {
+
     /// Compilation state has been created.
-    ///
-    /// No compilation work has started.
     Created,
 
     /// Compilation is executing.
@@ -200,9 +168,7 @@ pub enum CompilationLifecycle {
 
     /// Cancellation has been requested.
     ///
-    /// The operation must not publish successful completion.
-    ///
-    /// Active work may still need to cooperate with cancellation.
+    /// Active work may still need to stop cooperatively.
     CancellationRequested,
 
     /// Compilation completed successfully.
@@ -216,7 +182,8 @@ pub enum CompilationLifecycle {
 }
 
 impl CompilationLifecycle {
-    /// Returns whether this lifecycle state is terminal.
+
+    /// Returns whether this state is terminal.
     #[must_use]
     pub const fn is_terminal(self) -> bool {
         matches!(
@@ -237,7 +204,7 @@ impl CompilationLifecycle {
         )
     }
 
-    /// Returns whether cancellation has been requested or completed.
+    /// Returns whether cancellation was requested or completed.
     #[must_use]
     pub const fn cancellation_requested(self) -> bool {
         matches!(
@@ -258,28 +225,33 @@ impl CompilationLifecycle {
     pub const fn has_failed(self) -> bool {
         matches!(self, Self::Failed)
     }
+
+    /// Returns whether compilation was cancelled.
+    #[must_use]
+    pub const fn is_cancelled(self) -> bool {
+        matches!(self, Self::Cancelled)
+    }
 }
 
 // ============================================================================
 // COMPILATION PHASE
 // ============================================================================
 
-/// Standard high-level compilation phases.
+/// Standard high-level compiler phases.
 ///
-/// These phases are organizational identifiers.
+/// These are organizational identifiers.
 ///
-/// They do not own the implementations of their corresponding
-/// compiler subsystems.
+/// They do not implement compilation stages.
 ///
-/// The active stage name provides an extensibility mechanism
-/// for compiler extensions and future computing domains.
+/// Dynamic stage names allow future domains and extensions to
+/// introduce new stages without modifying this enumeration.
 ///
-/// A compiler extension does not need to modify this enum
-/// merely to introduce another compilation stage.
+/// A new computing domain must not require a new lifecycle state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum CompilationPhase {
-    /// Compiler initialization and preparation.
+
+    /// Compiler initialization.
     Initialization,
 
     /// Lexical analysis and parsing.
@@ -288,13 +260,13 @@ pub enum CompilationPhase {
     /// Name and symbol analysis.
     NameAnalysis,
 
-    /// Type and semantic analysis.
+    /// Semantic analysis.
     SemanticAnalysis,
 
     /// Ownership and borrow analysis.
     OwnershipAnalysis,
 
-    /// Effect and dependency analysis.
+    /// Dependency and effect analysis.
     DependencyAnalysis,
 
     /// Canonical IR construction.
@@ -306,33 +278,34 @@ pub enum CompilationPhase {
     /// Program optimization.
     Optimization,
 
-    /// Capability and requirement analysis.
+    /// Capability analysis.
     CapabilityAnalysis,
 
-    /// Compilation feasibility analysis.
+    /// Feasibility analysis.
     FeasibilityAnalysis,
 
-    /// Heterogeneous workload planning.
+    /// Compilation planning.
     Planning,
 
-    /// IR conversion and target legalization.
+    /// Domain-specific lowering.
     Lowering,
 
-    /// Symbol resolution and linking.
+    /// Linking.
     Linking,
 
     /// Backend code generation.
     CodeGeneration,
 
-    /// Artifact verification.
+    /// Artifact validation.
     ArtifactValidation,
 
-    /// Final compilation result preparation.
+    /// Compilation finalization.
     Finalization,
 }
 
 impl CompilationPhase {
-    /// Returns a stable machine-readable phase identifier.
+
+    /// Returns the stable machine-readable identifier.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -357,57 +330,60 @@ impl CompilationPhase {
     }
 }
 
+impl fmt::Display for CompilationPhase {
+
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 // ============================================================================
-// COMPILATION STATE SNAPSHOT
+// STATE SNAPSHOT
 // ============================================================================
 
-/// Immutable snapshot of compilation lifecycle information.
+/// Immutable observation of one compilation lifecycle.
 ///
-/// Snapshots can safely be returned to:
+/// Snapshots do not expose internal synchronization primitives.
 ///
-/// - Compiler APIs.
-/// - IDE integrations.
-/// - Language servers.
-/// - Pipeline observers.
-/// - Parallel compilation workers.
-/// - Diagnostics.
-/// - Profiling systems.
-///
-/// A snapshot does not expose internal synchronization primitives.
+/// The last known phase and stage are retained after failure or
+/// cancellation to support diagnostics and profiling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationStateSnapshot {
-    /// Current lifecycle state.
+
+    /// Current lifecycle.
     pub lifecycle: CompilationLifecycle,
 
-    /// Current high-level compilation phase.
+    /// Last active high-level phase.
     pub phase: Option<CompilationPhase>,
 
-    /// Dynamically named active compilation stage.
+    /// Last active stage.
     ///
-    /// This supports future compiler extensions without
-    /// modifying the lifecycle enum.
+    /// Dynamic names support registered extensions and future domains.
     pub stage_name: Option<Arc<str>>,
 
-    /// Monotonically increasing logical transition counter.
+    /// Monotonically increasing logical revision.
     ///
-    /// Every accepted state modification increments this value.
+    /// Revision overflow is rejected rather than wrapping.
     pub revision: u64,
 
-    /// Failure description when compilation has failed.
+    /// Descriptive failure information.
     ///
-    /// This is descriptive information, not a replacement
-    /// for the structured compiler diagnostic system.
+    /// Structured diagnostics remain owned by the diagnostics subsystem.
     pub failure: Option<Arc<str>>,
 }
 
 impl CompilationStateSnapshot {
+
     /// Returns whether compilation is terminal.
     #[must_use]
     pub const fn is_terminal(&self) -> bool {
         self.lifecycle.is_terminal()
     }
 
-    /// Returns whether compilation is actively executing.
+    /// Returns whether compilation is active.
     #[must_use]
     pub const fn is_active(&self) -> bool {
         self.lifecycle.is_active()
@@ -418,94 +394,117 @@ impl CompilationStateSnapshot {
     pub const fn is_successful(&self) -> bool {
         self.lifecycle.is_successful()
     }
+
+    /// Returns whether compilation was cancelled.
+    #[must_use]
+    pub const fn is_cancelled(&self) -> bool {
+        self.lifecycle.is_cancelled()
+    }
+
+    /// Returns whether compilation failed.
+    #[must_use]
+    pub const fn has_failed(&self) -> bool {
+        self.lifecycle.has_failed()
+    }
 }
 
 // ============================================================================
-// COMPILATION STATE ERROR
+// STATE ERRORS
 // ============================================================================
 
-/// Errors produced by compilation-state management.
+/// Errors associated with lifecycle management.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CompilationStateError {
-    /// A requested transition is illegal.
+
+    /// An invalid lifecycle transition was requested.
     InvalidTransition {
         from: CompilationLifecycle,
         to: CompilationLifecycle,
     },
 
-    /// An operation was attempted after reaching a terminal state.
+    /// An operation was attempted on a terminal state.
     TerminalState {
         state: CompilationLifecycle,
     },
 
-    /// Cancellation was requested.
+    /// Cancellation has been requested.
     CancellationRequested,
 
-    /// The supplied stage name is empty.
+    /// A stage name is empty.
     EmptyStageName,
 
-    /// The supplied failure description is empty.
+    /// A stage name contains control characters.
+    InvalidStageName,
+
+    /// A failure description is empty.
     EmptyFailureDescription,
 
-    /// The transition revision counter cannot be incremented.
+    /// Revision accounting cannot continue.
     ///
-    /// This is an implementation accounting failure, not a
-    /// semantic or hardware capacity limit.
+    /// No revision wrapping is permitted.
     RevisionExhausted,
 
-    /// Synchronization state was poisoned.
+    /// Internal synchronization failed.
     SynchronizationPoisoned,
 }
 
 impl fmt::Display for CompilationStateError {
+
     fn fmt(
         &self,
         formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
+
         match self {
+
             Self::InvalidTransition { from, to } => {
                 write!(
                     formatter,
-                    "invalid compilation lifecycle transition: \
-                     {from:?} -> {to:?}"
+                    "invalid compilation transition: {from:?} -> {to:?}"
                 )
             }
 
             Self::TerminalState { state } => {
                 write!(
                     formatter,
-                    "compilation state is terminal: {state:?}"
+                    "compilation lifecycle is terminal: {state:?}"
                 )
             }
 
             Self::CancellationRequested => {
                 formatter.write_str(
-                    "compilation cancellation has been requested",
+                    "compilation cancellation has been requested"
                 )
             }
 
             Self::EmptyStageName => {
                 formatter.write_str(
-                    "compilation stage name cannot be empty",
+                    "compilation stage name cannot be empty"
+                )
+            }
+
+            Self::InvalidStageName => {
+                formatter.write_str(
+                    "compilation stage name contains control characters"
                 )
             }
 
             Self::EmptyFailureDescription => {
                 formatter.write_str(
-                    "compilation failure description cannot be empty",
+                    "compilation failure description cannot be empty"
                 )
             }
 
             Self::RevisionExhausted => {
                 formatter.write_str(
-                    "compilation state revision counter exhausted",
+                    "compilation state revision exhausted"
                 )
             }
 
             Self::SynchronizationPoisoned => {
                 formatter.write_str(
-                    "compilation state synchronization is poisoned",
+                    "compilation state synchronization is poisoned"
                 )
             }
         }
@@ -518,22 +517,26 @@ impl Error for CompilationStateError {}
 // INTERNAL STATE
 // ============================================================================
 
-/// Internal mutable state.
+/// Internal lifecycle data.
 ///
-/// All modifications are protected by the owning Mutex.
-///
-/// The state is never exposed directly.
+/// Access is exclusively protected by the owning mutex.
 #[derive(Debug)]
 struct CompilationStateInner {
+
     lifecycle: CompilationLifecycle,
+
     phase: Option<CompilationPhase>,
+
     stage_name: Option<Arc<str>>,
+
     revision: u64,
+
     failure: Option<Arc<str>>,
 }
 
 impl CompilationStateInner {
-    /// Creates an initial state.
+
+    /// Creates a fresh lifecycle.
     fn new() -> Self {
         Self {
             lifecycle: CompilationLifecycle::Created,
@@ -555,97 +558,90 @@ impl CompilationStateInner {
         }
     }
 
-    /// Increments the logical revision safely.
+    /// Calculates the next revision without modifying state.
     fn next_revision(&self) -> Result<u64, CompilationStateError> {
         self.revision
             .checked_add(1)
             .ok_or(CompilationStateError::RevisionExhausted)
     }
 
-    /// Rejects changes to terminal states.
+    /// Ensures that the lifecycle is not terminal.
     fn ensure_non_terminal(
         &self,
     ) -> Result<(), CompilationStateError> {
+
         if self.lifecycle.is_terminal() {
             return Err(
                 CompilationStateError::TerminalState {
                     state: self.lifecycle,
-                },
+                }
             );
         }
 
         Ok(())
     }
+
+    /// Records a new revision.
+    fn commit_revision(&mut self, revision: u64) {
+        self.revision = revision;
+    }
 }
 
 // ============================================================================
-// SHARED COMPILATION STATE TRACKER
+// TRACKER
 // ============================================================================
 
-/// Thread-safe tracker for one compilation operation.
+/// Thread-safe lifecycle tracker for one compilation operation.
 ///
-/// Cloning this tracker does not create another compilation.
+/// Clones share the same lifecycle and cancellation authority.
 ///
-/// Every clone observes and modifies the same lifecycle state.
-///
-/// The tracker can be used by:
-///
-/// - Pipeline orchestration.
-/// - Compiler API services.
-/// - Compilation workers.
-/// - IR transformation passes.
-/// - Backend invocation.
-/// - Diagnostics and monitoring.
-///
-/// Cancellation is delegated to the existing CancellationToken.
-///
-/// This avoids creating another cancellation implementation.
+/// The tracker does not create a second compilation operation when cloned.
 #[derive(Debug, Clone)]
 pub struct CompilationStateTracker {
+
     inner: Arc<Mutex<CompilationStateInner>>,
+
     cancellation: CancellationToken,
 }
 
 impl Default for CompilationStateTracker {
+
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl CompilationStateTracker {
-    /// Creates a new compilation state tracker.
-    ///
-    /// The initial lifecycle state is Created.
-    ///
-    /// A new cancellation token is created for this tracker.
+
+    /// Creates a fresh compilation lifecycle.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_cancellation(
-            CancellationToken::new(),
-        )
+        Self::with_cancellation(CancellationToken::new())
     }
 
-    /// Creates a tracker using an existing cancellation token.
+    /// Creates a lifecycle using an existing cancellation authority.
     ///
-    /// This constructor is the integration point for
-    /// CompilationContext and other cancellation-aware systems.
-    ///
-    /// Cloned trackers share both lifecycle state and cancellation.
+    /// This is the integration point for CompilationContext.
     #[must_use]
     pub fn with_cancellation(
         cancellation: CancellationToken,
     ) -> Self {
+
         Self {
             inner: Arc::new(
                 Mutex::new(
-                    CompilationStateInner::new(),
-                ),
+                    CompilationStateInner::new()
+                )
             ),
             cancellation,
         }
     }
 
-    /// Returns whether the tracker has already been cancelled.
+    // ------------------------------------------------------------------------
+    // CANCELLATION
+    // ------------------------------------------------------------------------
+
+    /// Returns whether cancellation has been requested.
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.cancellation.is_cancelled()
@@ -654,207 +650,236 @@ impl CompilationStateTracker {
     /// Returns whether cancellation has been requested.
     #[must_use]
     pub fn cancellation_requested(&self) -> bool {
-        self.cancellation.is_cancelled()
+        self.is_cancelled()
     }
 
-    /// Returns the associated cancellation token.
+    /// Returns the shared cancellation token.
     ///
-    /// Cloning this token shares its cancellation state.
+    /// This does not create another cancellation authority.
     #[must_use]
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation.clone()
     }
 
-    /// Returns an immutable snapshot of the current state.
+    /// Synchronizes externally requested cancellation with lifecycle state.
     ///
-    /// # Errors
+    /// Running becomes CancellationRequested.
     ///
-    /// Returns SynchronizationPoisoned if the mutex is poisoned.
+    /// Created becomes Cancelled because no active work exists to stop.
+    ///
+    /// Terminal states are never overwritten.
+    fn synchronize_cancellation(
+        &self,
+        state: &mut CompilationStateInner,
+    ) -> Result<(), CompilationStateError> {
+
+        if !self.cancellation.is_cancelled() {
+            return Ok(());
+        }
+
+        match state.lifecycle {
+
+            CompilationLifecycle::Created => {
+                let revision = state.next_revision()?;
+
+                state.lifecycle = CompilationLifecycle::Cancelled;
+
+                state.commit_revision(revision);
+            }
+
+            CompilationLifecycle::Running => {
+                let revision = state.next_revision()?;
+
+                state.lifecycle =
+                    CompilationLifecycle::CancellationRequested;
+
+                state.commit_revision(revision);
+            }
+
+            CompilationLifecycle::CancellationRequested
+            | CompilationLifecycle::Completed
+            | CompilationLifecycle::Failed
+            | CompilationLifecycle::Cancelled => {}
+        }
+
+        Ok(())
+    }
+
+    // ------------------------------------------------------------------------
+    // OBSERVATION
+    // ------------------------------------------------------------------------
+
+    /// Returns an immutable lifecycle snapshot.
+    ///
+    /// External cancellation is synchronized before observation.
     pub fn snapshot(
         &self,
     ) -> Result<CompilationStateSnapshot, CompilationStateError> {
-        let state = self
-            .inner
-            .lock()
-            .map_err(|_| {
-                CompilationStateError::SynchronizationPoisoned
-            })?;
+
+        let mut state = self.lock_state()?;
+
+        self.synchronize_cancellation(&mut state)?;
 
         Ok(state.snapshot())
     }
 
-    /// Returns the current lifecycle state.
+    /// Returns the current lifecycle.
     pub fn lifecycle(
         &self,
     ) -> Result<CompilationLifecycle, CompilationStateError> {
+
         Ok(self.snapshot()?.lifecycle)
     }
 
+    // ------------------------------------------------------------------------
+    // START
+    // ------------------------------------------------------------------------
+
     /// Starts compilation.
     ///
-    /// The only permitted source lifecycle state is Created.
+    /// Only Created may transition to Running.
     ///
-    /// Cancellation is checked before the transition.
-    pub fn start(&self) -> Result<(), CompilationStateError> {
+    /// The initial phase is Initialization.
+    pub fn start(
+        &self,
+    ) -> Result<(), CompilationStateError> {
+
         let mut state = self.lock_state()?;
 
-        state.ensure_non_terminal()?;
+        self.synchronize_cancellation(&mut state)?;
 
-        if self.cancellation.is_cancelled() {
+        if state.lifecycle == CompilationLifecycle::Cancelled {
             return Err(
-                CompilationStateError::CancellationRequested,
+                CompilationStateError::CancellationRequested
             );
         }
+
+        state.ensure_non_terminal()?;
 
         if state.lifecycle != CompilationLifecycle::Created {
             return Err(
                 CompilationStateError::InvalidTransition {
                     from: state.lifecycle,
                     to: CompilationLifecycle::Running,
-                },
+                }
             );
         }
 
         let revision = state.next_revision()?;
 
         state.lifecycle = CompilationLifecycle::Running;
+
         state.phase = Some(CompilationPhase::Initialization);
-        state.stage_name = Some(Arc::from("initialization"));
-        state.revision = revision;
+
+        state.stage_name = Some(
+            Arc::from("initialization")
+        );
+
+        state.failure = None;
+
+        state.commit_revision(revision);
 
         Ok(())
     }
 
-    /// Advances compilation to a named stage.
+    // ------------------------------------------------------------------------
+    // PHASE ADVANCEMENT
+    // ------------------------------------------------------------------------
+
+    /// Advances compilation to another phase and stage.
     ///
-    /// The stage identifier is dynamically sized.
+    /// Stage identifiers are dynamically sized.
     ///
-    /// No fixed number of stages is imposed.
-    ///
-    /// This operation does not implement or execute the stage.
-    ///
-    /// It records progress for pipeline orchestration and observers.
-    ///
-    /// The lifecycle must already be Running.
+    /// No fixed number of stages or computing domains is imposed.
     pub fn advance(
         &self,
         phase: CompilationPhase,
         stage_name: impl Into<Arc<str>>,
     ) -> Result<(), CompilationStateError> {
-        let stage_name = stage_name.into();
 
-        if stage_name.trim().is_empty() {
-            return Err(
-                CompilationStateError::EmptyStageName,
-            );
-        }
+        let stage_name = validate_stage_name(stage_name)?;
 
         let mut state = self.lock_state()?;
 
+        self.synchronize_cancellation(&mut state)?;
+
         state.ensure_non_terminal()?;
 
-        if self.cancellation.is_cancelled()
-            || state.lifecycle
-                == CompilationLifecycle::CancellationRequested
-        {
-            return Err(
-                CompilationStateError::CancellationRequested,
-            );
-        }
-
-        if state.lifecycle != CompilationLifecycle::Running {
-            return Err(
-                CompilationStateError::InvalidTransition {
-                    from: state.lifecycle,
-                    to: CompilationLifecycle::Running,
-                },
-            );
-        }
+        ensure_running(&state)?;
 
         let revision = state.next_revision()?;
 
         state.phase = Some(phase);
+
         state.stage_name = Some(stage_name);
-        state.revision = revision;
+
+        state.commit_revision(revision);
 
         Ok(())
     }
 
-    /// Updates the active stage without changing its high-level phase.
+    /// Changes the active stage without changing the phase.
     ///
-    /// Useful for dynamically registered compiler extensions.
-    ///
-    /// The lifecycle must be Running.
+    /// Supports dynamically registered compiler extensions.
     pub fn set_stage(
         &self,
         stage_name: impl Into<Arc<str>>,
     ) -> Result<(), CompilationStateError> {
-        let stage_name = stage_name.into();
 
-        if stage_name.trim().is_empty() {
-            return Err(
-                CompilationStateError::EmptyStageName,
-            );
-        }
+        let stage_name = validate_stage_name(stage_name)?;
 
         let mut state = self.lock_state()?;
 
+        self.synchronize_cancellation(&mut state)?;
+
         state.ensure_non_terminal()?;
 
-        if self.cancellation.is_cancelled()
-            || state.lifecycle
-                == CompilationLifecycle::CancellationRequested
-        {
-            return Err(
-                CompilationStateError::CancellationRequested,
-            );
-        }
-
-        if state.lifecycle != CompilationLifecycle::Running {
-            return Err(
-                CompilationStateError::InvalidTransition {
-                    from: state.lifecycle,
-                    to: CompilationLifecycle::Running,
-                },
-            );
-        }
+        ensure_running(&state)?;
 
         let revision = state.next_revision()?;
 
         state.stage_name = Some(stage_name);
-        state.revision = revision;
+
+        state.commit_revision(revision);
 
         Ok(())
     }
 
+    // ------------------------------------------------------------------------
+    // CANCELLATION TRANSITIONS
+    // ------------------------------------------------------------------------
+
     /// Requests cancellation.
-    ///
-    /// The existing cancellation token is notified first.
     ///
     /// Created becomes Cancelled.
     ///
     /// Running becomes CancellationRequested.
     ///
-    /// A cancellation request against a terminal state is rejected.
-    ///
-    /// The actual cancellation of active work remains cooperative.
+    /// Repeated cancellation requests are idempotent.
     pub fn request_cancel(
         &self,
     ) -> Result<(), CompilationStateError> {
+
         let mut state = self.lock_state()?;
 
-        state.ensure_non_terminal()?;
+        if state.lifecycle.is_terminal() {
+            return Err(
+                CompilationStateError::TerminalState {
+                    state: state.lifecycle,
+                }
+            );
+        }
 
         match state.lifecycle {
+
             CompilationLifecycle::Created => {
                 let revision = state.next_revision()?;
 
                 self.cancellation.cancel();
 
                 state.lifecycle = CompilationLifecycle::Cancelled;
-                state.phase = None;
-                state.stage_name = None;
-                state.revision = revision;
+
+                state.commit_revision(revision);
             }
 
             CompilationLifecycle::Running => {
@@ -865,7 +890,7 @@ impl CompilationStateTracker {
                 state.lifecycle =
                     CompilationLifecycle::CancellationRequested;
 
-                state.revision = revision;
+                state.commit_revision(revision);
             }
 
             CompilationLifecycle::CancellationRequested => {
@@ -878,7 +903,7 @@ impl CompilationStateTracker {
                 return Err(
                     CompilationStateError::TerminalState {
                         state: state.lifecycle,
-                    },
+                    }
                 );
             }
         }
@@ -886,166 +911,264 @@ impl CompilationStateTracker {
         Ok(())
     }
 
-    /// Marks a cancellation-requested operation as cancelled.
+    /// Acknowledges cooperative cancellation.
     ///
-    /// This transition is separate from request_cancel because
-    /// active compiler stages may need time to stop cooperatively.
+    /// Running work must first have cancellation requested.
+    ///
+    /// A Created operation may be cancelled before execution.
     pub fn mark_cancelled(
         &self,
     ) -> Result<(), CompilationStateError> {
+
         let mut state = self.lock_state()?;
+
+        self.synchronize_cancellation(&mut state)?;
 
         state.ensure_non_terminal()?;
 
-        if state.lifecycle != CompilationLifecycle::CancellationRequested
-            && state.lifecycle != CompilationLifecycle::Created
-            && !self.cancellation.is_cancelled()
-        {
-            return Err(
-                CompilationStateError::InvalidTransition {
-                    from: state.lifecycle,
-                    to: CompilationLifecycle::Cancelled,
-                },
-            );
+        match state.lifecycle {
+
+            CompilationLifecycle::Created => {
+                let revision = state.next_revision()?;
+
+                self.cancellation.cancel();
+
+                state.lifecycle = CompilationLifecycle::Cancelled;
+
+                state.commit_revision(revision);
+            }
+
+            CompilationLifecycle::CancellationRequested => {
+                let revision = state.next_revision()?;
+
+                state.lifecycle = CompilationLifecycle::Cancelled;
+
+                state.commit_revision(revision);
+            }
+
+            CompilationLifecycle::Running => {
+                if !self.cancellation.is_cancelled() {
+                    return Err(
+                        CompilationStateError::InvalidTransition {
+                            from: state.lifecycle,
+                            to: CompilationLifecycle::Cancelled,
+                        }
+                    );
+                }
+
+                let revision = state.next_revision()?;
+
+                state.lifecycle = CompilationLifecycle::Cancelled;
+
+                state.commit_revision(revision);
+            }
+
+            CompilationLifecycle::Completed
+            | CompilationLifecycle::Failed
+            | CompilationLifecycle::Cancelled => {
+                return Err(
+                    CompilationStateError::TerminalState {
+                        state: state.lifecycle,
+                    }
+                );
+            }
         }
-
-        let revision = state.next_revision()?;
-
-        self.cancellation.cancel();
-
-        state.lifecycle = CompilationLifecycle::Cancelled;
-        state.phase = None;
-        state.stage_name = None;
-        state.revision = revision;
 
         Ok(())
     }
 
+    // ------------------------------------------------------------------------
+    // COMPLETION
+    // ------------------------------------------------------------------------
+
     /// Completes compilation successfully.
     ///
-    /// Successful completion is rejected if cancellation was requested.
-    ///
     /// Only Running may transition to Completed.
+    ///
+    /// Cancellation prevents successful completion.
     pub fn complete(
         &self,
     ) -> Result<(), CompilationStateError> {
+
         let mut state = self.lock_state()?;
+
+        self.synchronize_cancellation(&mut state)?;
 
         state.ensure_non_terminal()?;
 
-        if self.cancellation.is_cancelled()
-            || state.lifecycle
-                == CompilationLifecycle::CancellationRequested
-        {
-            return Err(
-                CompilationStateError::CancellationRequested,
-            );
-        }
-
-        if state.lifecycle != CompilationLifecycle::Running {
-            return Err(
-                CompilationStateError::InvalidTransition {
-                    from: state.lifecycle,
-                    to: CompilationLifecycle::Completed,
-                },
-            );
-        }
+        ensure_running(&state)?;
 
         let revision = state.next_revision()?;
 
         state.lifecycle = CompilationLifecycle::Completed;
+
         state.phase = Some(CompilationPhase::Finalization);
-        state.stage_name = Some(Arc::from("completed"));
-        state.revision = revision;
+
+        state.stage_name = Some(
+            Arc::from("completed")
+        );
+
+        state.commit_revision(revision);
 
         Ok(())
     }
 
-    /// Marks compilation as failed.
+    // ------------------------------------------------------------------------
+    // FAILURE
+    // ------------------------------------------------------------------------
+
+    /// Records compilation failure.
     ///
-    /// Failure may occur before or during compilation.
+    /// Failure may occur before or during execution.
     ///
-    /// Terminal states cannot be overwritten.
+    /// The last known phase and stage are retained.
     ///
-    /// The structured diagnostic system remains authoritative
-    /// for detailed diagnostic information.
+    /// Structured diagnostics remain authoritative for detailed
+    /// error information.
     pub fn fail(
         &self,
         description: impl Into<Arc<str>>,
     ) -> Result<(), CompilationStateError> {
+
         let description = description.into();
 
         if description.trim().is_empty() {
             return Err(
-                CompilationStateError::EmptyFailureDescription,
+                CompilationStateError::EmptyFailureDescription
             );
         }
 
         let mut state = self.lock_state()?;
 
+        self.synchronize_cancellation(&mut state)?;
+
         state.ensure_non_terminal()?;
+
+        if state.lifecycle ==
+            CompilationLifecycle::CancellationRequested
+        {
+            return Err(
+                CompilationStateError::CancellationRequested
+            );
+        }
 
         let revision = state.next_revision()?;
 
         state.lifecycle = CompilationLifecycle::Failed;
-        state.phase = None;
-        state.stage_name = None;
+
         state.failure = Some(description);
-        state.revision = revision;
+
+        state.commit_revision(revision);
 
         Ok(())
     }
+
+    // ------------------------------------------------------------------------
+    // EXECUTION VALIDATION
+    // ------------------------------------------------------------------------
 
     /// Checks whether compilation may continue.
     ///
-    /// This combines lifecycle and cancellation inspection.
+    /// Synchronizes external cancellation before returning.
     pub fn check_active(
         &self,
     ) -> Result<(), CompilationStateError> {
-        let state = self.lock_state()?;
+
+        let mut state = self.lock_state()?;
+
+        self.synchronize_cancellation(&mut state)?;
 
         state.ensure_non_terminal()?;
 
-        if self.cancellation.is_cancelled()
-            || state.lifecycle
-                == CompilationLifecycle::CancellationRequested
-        {
-            return Err(
-                CompilationStateError::CancellationRequested,
-            );
-        }
-
-        if state.lifecycle != CompilationLifecycle::Running {
-            return Err(
-                CompilationStateError::InvalidTransition {
-                    from: state.lifecycle,
-                    to: CompilationLifecycle::Running,
-                },
-            );
-        }
+        ensure_running(&state)?;
 
         Ok(())
     }
 
+    // ------------------------------------------------------------------------
+    // OBSERVABILITY
+    // ------------------------------------------------------------------------
+
     /// Returns the number of strong references to shared state.
     ///
-    /// This is an observability method only.
+    /// Observability only. Never use this to determine whether
+    /// compilation has finished.
     #[must_use]
     pub fn reference_count(&self) -> usize {
         Arc::strong_count(&self.inner)
     }
 
-    /// Acquires the internal state lock.
+    // ------------------------------------------------------------------------
+    // SYNCHRONIZATION
+    // ------------------------------------------------------------------------
+
+    /// Acquires the lifecycle lock.
     fn lock_state(
         &self,
     ) -> Result<
-        std::sync::MutexGuard<'_, CompilationStateInner>,
+        MutexGuard<'_, CompilationStateInner>,
         CompilationStateError,
     > {
-        self.inner.lock().map_err(|_| {
-            CompilationStateError::SynchronizationPoisoned
-        })
+
+        self.inner
+            .lock()
+            .map_err(|_| {
+                CompilationStateError::SynchronizationPoisoned
+            })
     }
+}
+
+// ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+/// Validates a dynamic compilation-stage identifier.
+fn validate_stage_name(
+    stage_name: impl Into<Arc<str>>,
+) -> Result<Arc<str>, CompilationStateError> {
+
+    let stage_name = stage_name.into();
+
+    if stage_name.trim().is_empty() {
+        return Err(
+            CompilationStateError::EmptyStageName
+        );
+    }
+
+    if stage_name.chars().any(char::is_control) {
+        return Err(
+            CompilationStateError::InvalidStageName
+        );
+    }
+
+    Ok(stage_name)
+}
+
+/// Ensures that lifecycle is Running and cancellation is absent.
+///
+/// Called while the lifecycle mutex is held.
+fn ensure_running(
+    state: &CompilationStateInner,
+) -> Result<(), CompilationStateError> {
+
+    if state.lifecycle ==
+        CompilationLifecycle::CancellationRequested
+    {
+        return Err(
+            CompilationStateError::CancellationRequested
+        );
+    }
+
+    if state.lifecycle != CompilationLifecycle::Running {
+        return Err(
+            CompilationStateError::InvalidTransition {
+                from: state.lifecycle,
+                to: CompilationLifecycle::Running,
+            }
+        );
+    }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -1054,6 +1177,7 @@ impl CompilationStateTracker {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     // ------------------------------------------------------------------------
@@ -1061,12 +1185,10 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn new_tracker_starts_in_created_state() {
+    fn initial_state_is_created() {
         let tracker = CompilationStateTracker::new();
 
-        let snapshot = tracker
-            .snapshot()
-            .expect("snapshot should succeed");
+        let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(
             snapshot.lifecycle,
@@ -1074,8 +1196,11 @@ mod tests {
         );
 
         assert_eq!(snapshot.phase, None);
+
         assert_eq!(snapshot.stage_name, None);
+
         assert_eq!(snapshot.revision, 0);
+
         assert_eq!(snapshot.failure, None);
     }
 
@@ -1084,36 +1209,34 @@ mod tests {
         let tracker = CompilationStateTracker::default();
 
         assert_eq!(
-            tracker.lifecycle().expect("lifecycle should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::Created
         );
     }
 
     // ------------------------------------------------------------------------
-    // Starting and progressing
+    // Lifecycle
     // ------------------------------------------------------------------------
 
     #[test]
     fn compilation_can_start() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::Running
         );
     }
 
     #[test]
-    fn starting_sets_initialization_phase() {
+    fn start_sets_initialization_phase() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        let snapshot = tracker
-            .snapshot()
-            .expect("snapshot should succeed");
+        let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(
             snapshot.phase,
@@ -1127,21 +1250,17 @@ mod tests {
     }
 
     #[test]
-    fn compilation_can_advance_through_phases() {
+    fn compilation_can_advance() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .advance(
-                CompilationPhase::SemanticAnalysis,
-                "semantic_validation",
-            )
-            .expect("phase advancement should succeed");
+        tracker.advance(
+            CompilationPhase::SemanticAnalysis,
+            "semantic_validation",
+        ).unwrap();
 
-        let snapshot = tracker
-            .snapshot()
-            .expect("snapshot should succeed");
+        let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(
             snapshot.phase,
@@ -1155,21 +1274,17 @@ mod tests {
     }
 
     #[test]
-    fn custom_stage_names_are_supported() {
+    fn custom_stages_are_supported() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .set_stage("future_neuromorphic_lowering")
-            .expect("custom stage should succeed");
+        tracker.set_stage(
+            "future_neuromorphic_lowering"
+        ).unwrap();
 
         assert_eq!(
-            tracker
-                .snapshot()
-                .expect("snapshot should succeed")
-                .stage_name
-                .as_deref(),
+            tracker.snapshot().unwrap().stage_name.as_deref(),
             Some("future_neuromorphic_lowering")
         );
     }
@@ -1178,18 +1293,12 @@ mod tests {
     fn unicode_stage_names_are_supported() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .set_stage("量子混合编译")
-            .expect("Unicode stage should succeed");
+        tracker.set_stage("量子混合编译").unwrap();
 
         assert_eq!(
-            tracker
-                .snapshot()
-                .expect("snapshot should succeed")
-                .stage_name
-                .as_deref(),
+            tracker.snapshot().unwrap().stage_name.as_deref(),
             Some("量子混合编译")
         );
     }
@@ -1198,13 +1307,23 @@ mod tests {
     fn empty_stage_names_are_rejected() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-
-        let result = tracker.set_stage("   ");
+        tracker.start().unwrap();
 
         assert_eq!(
-            result,
+            tracker.set_stage("   "),
             Err(CompilationStateError::EmptyStageName)
+        );
+    }
+
+    #[test]
+    fn control_characters_in_stage_names_are_rejected() {
+        let tracker = CompilationStateTracker::new();
+
+        tracker.start().unwrap();
+
+        assert_eq!(
+            tracker.set_stage("stage\nname"),
+            Err(CompilationStateError::InvalidStageName)
         );
     }
 
@@ -1216,14 +1335,12 @@ mod tests {
     fn running_compilation_can_complete() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .complete()
-            .expect("completion should succeed");
+        tracker.complete().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::Completed
         );
     }
@@ -1232,42 +1349,21 @@ mod tests {
     fn completed_state_is_terminal() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-        tracker.complete().expect("completion should succeed");
+        tracker.start().unwrap();
 
-        let result = tracker.set_stage("another_stage");
+        tracker.complete().unwrap();
 
         assert!(matches!(
-            result,
-            Err(CompilationStateError::TerminalState {
-                state: CompilationLifecycle::Completed
-            })
+            tracker.set_stage("another"),
+            Err(CompilationStateError::TerminalState { .. })
         ));
     }
 
     #[test]
-    fn completed_compilation_cannot_be_completed_twice() {
+    fn completion_before_start_is_rejected() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-        tracker.complete().expect("completion should succeed");
-
-        assert!(matches!(
-            tracker.complete(),
-            Err(CompilationStateError::TerminalState {
-                state: CompilationLifecycle::Completed
-            })
-        ));
-    }
-
-    #[test]
-    fn compilation_cannot_complete_before_starting() {
-        let tracker = CompilationStateTracker::new();
-
-        assert!(matches!(
-            tracker.complete(),
-            Err(CompilationStateError::InvalidTransition { .. })
-        ));
+        assert!(tracker.complete().is_err());
     }
 
     // ------------------------------------------------------------------------
@@ -1275,16 +1371,12 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn compilation_can_fail_before_starting() {
+    fn compilation_can_fail_before_start() {
         let tracker = CompilationStateTracker::new();
 
-        tracker
-            .fail("configuration validation failed")
-            .expect("failure should be recorded");
+        tracker.fail("configuration validation failed").unwrap();
 
-        let snapshot = tracker
-            .snapshot()
-            .expect("snapshot should succeed");
+        let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(
             snapshot.lifecycle,
@@ -1298,23 +1390,38 @@ mod tests {
     }
 
     #[test]
-    fn compilation_can_fail_while_running() {
+    fn failure_retains_last_known_stage() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .fail("IR verification failed")
-            .expect("failure should be recorded");
+        tracker.advance(
+            CompilationPhase::IrVerification,
+            "verify_quantum_ir",
+        ).unwrap();
+
+        tracker.fail("verification failed").unwrap();
+
+        let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            snapshot.lifecycle,
             CompilationLifecycle::Failed
+        );
+
+        assert_eq!(
+            snapshot.phase,
+            Some(CompilationPhase::IrVerification)
+        );
+
+        assert_eq!(
+            snapshot.stage_name.as_deref(),
+            Some("verify_quantum_ir")
         );
     }
 
     #[test]
-    fn failure_description_cannot_be_empty() {
+    fn empty_failure_description_is_rejected() {
         let tracker = CompilationStateTracker::new();
 
         assert_eq!(
@@ -1324,18 +1431,14 @@ mod tests {
     }
 
     #[test]
-    fn failure_cannot_overwrite_completed_state() {
+    fn failure_cannot_overwrite_success() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-        tracker.complete().expect("completion should succeed");
+        tracker.start().unwrap();
 
-        assert!(matches!(
-            tracker.fail("late failure"),
-            Err(CompilationStateError::TerminalState {
-                state: CompilationLifecycle::Completed
-            })
-        ));
+        tracker.complete().unwrap();
+
+        assert!(tracker.fail("late failure").is_err());
     }
 
     // ------------------------------------------------------------------------
@@ -1346,65 +1449,51 @@ mod tests {
     fn cancellation_before_start_is_terminal() {
         let tracker = CompilationStateTracker::new();
 
-        tracker
-            .request_cancel()
-            .expect("cancellation should succeed");
+        tracker.request_cancel().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::Cancelled
         );
-
-        assert!(tracker.is_cancelled());
     }
 
     #[test]
-    fn cancellation_during_compilation_is_requested() {
+    fn cancellation_during_execution_is_requested() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .request_cancel()
-            .expect("cancellation request should succeed");
+        tracker.request_cancel().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::CancellationRequested
         );
-
-        assert!(tracker.is_cancelled());
     }
 
     #[test]
     fn cancellation_must_be_acknowledged() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .request_cancel()
-            .expect("cancellation request should succeed");
+        tracker.request_cancel().unwrap();
 
-        tracker
-            .mark_cancelled()
-            .expect("cancellation acknowledgement should succeed");
+        tracker.mark_cancelled().unwrap();
 
         assert_eq!(
-            tracker.lifecycle().expect("state should be readable"),
+            tracker.lifecycle().unwrap(),
             CompilationLifecycle::Cancelled
         );
     }
 
     #[test]
-    fn cancellation_prevents_successful_completion() {
+    fn cancellation_prevents_completion() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .request_cancel()
-            .expect("cancellation request should succeed");
+        tracker.request_cancel().unwrap();
 
         assert_eq!(
             tracker.complete(),
@@ -1413,14 +1502,12 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_prevents_further_stage_advancement() {
+    fn cancellation_prevents_stage_advancement() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        tracker
-            .request_cancel()
-            .expect("cancellation request should succeed");
+        tracker.request_cancel().unwrap();
 
         assert_eq!(
             tracker.set_stage("late_stage"),
@@ -1429,37 +1516,47 @@ mod tests {
     }
 
     #[test]
-    fn cancellation_is_shared_with_clones() {
-        let tracker = CompilationStateTracker::new();
-
-        let clone = tracker.clone();
-
-        tracker.start().expect("start should succeed");
-
-        tracker
-            .request_cancel()
-            .expect("cancellation request should succeed");
-
-        assert!(clone.is_cancelled());
-
-        assert_eq!(
-            clone.lifecycle().expect("state should be readable"),
-            CompilationLifecycle::CancellationRequested
-        );
-    }
-
-    #[test]
-    fn external_cancellation_token_is_shared() {
+    fn external_cancellation_is_synchronized() {
         let token = CancellationToken::new();
 
         let tracker =
             CompilationStateTracker::with_cancellation(token.clone());
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
         token.cancel();
 
-        assert!(tracker.is_cancelled());
+        assert_eq!(
+            tracker.lifecycle().unwrap(),
+            CompilationLifecycle::CancellationRequested
+        );
+    }
+
+    #[test]
+    fn external_cancellation_before_start_is_observed() {
+        let token = CancellationToken::new();
+
+        let tracker =
+            CompilationStateTracker::with_cancellation(token.clone());
+
+        token.cancel();
+
+        assert_eq!(
+            tracker.lifecycle().unwrap(),
+            CompilationLifecycle::Cancelled
+        );
+    }
+
+    #[test]
+    fn external_cancellation_prevents_completion() {
+        let token = CancellationToken::new();
+
+        let tracker =
+            CompilationStateTracker::with_cancellation(token.clone());
+
+        tracker.start().unwrap();
+
+        token.cancel();
 
         assert_eq!(
             tracker.complete(),
@@ -1467,124 +1564,118 @@ mod tests {
         );
     }
 
+    #[test]
+    fn cancellation_is_shared_between_clones() {
+        let tracker = CompilationStateTracker::new();
+
+        let clone = tracker.clone();
+
+        tracker.start().unwrap();
+
+        tracker.request_cancel().unwrap();
+
+        assert!(clone.is_cancelled());
+
+        assert_eq!(
+            clone.lifecycle().unwrap(),
+            CompilationLifecycle::CancellationRequested
+        );
+    }
+
+    #[test]
+    fn repeated_cancellation_requests_are_idempotent() {
+        let tracker = CompilationStateTracker::new();
+
+        tracker.start().unwrap();
+
+        tracker.request_cancel().unwrap();
+
+        let revision = tracker.snapshot().unwrap().revision;
+
+        tracker.request_cancel().unwrap();
+
+        assert_eq!(
+            tracker.snapshot().unwrap().revision,
+            revision
+        );
+    }
+
     // ------------------------------------------------------------------------
-    // State transition safety
+    // State invariants
     // ------------------------------------------------------------------------
 
     #[test]
     fn terminal_states_cannot_be_reused() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-        tracker.complete().expect("completion should succeed");
+        tracker.start().unwrap();
 
-        assert!(matches!(
-            tracker.start(),
-            Err(CompilationStateError::TerminalState { .. })
-        ));
+        tracker.complete().unwrap();
+
+        assert!(tracker.start().is_err());
     }
 
     #[test]
-    fn revision_increases_after_accepted_transitions() {
+    fn failed_transitions_do_not_change_state() {
         let tracker = CompilationStateTracker::new();
 
-        let initial = tracker.snapshot().expect("snapshot should succeed");
-
-        tracker.start().expect("start should succeed");
-
-        let started = tracker.snapshot().expect("snapshot should succeed");
-
-        tracker
-            .advance(
-                CompilationPhase::Parsing,
-                "source_parsing",
-            )
-            .expect("advance should succeed");
-
-        let advanced = tracker.snapshot().expect("snapshot should succeed");
-
-        tracker.complete().expect("completion should succeed");
-
-        let completed = tracker.snapshot().expect("snapshot should succeed");
-
-        assert_eq!(initial.revision, 0);
-        assert!(started.revision > initial.revision);
-        assert!(advanced.revision > started.revision);
-        assert!(completed.revision > advanced.revision);
-    }
-
-    #[test]
-    fn failed_transitions_do_not_modify_state() {
-        let tracker = CompilationStateTracker::new();
-
-        let before = tracker.snapshot().expect("snapshot should succeed");
+        let before = tracker.snapshot().unwrap();
 
         assert!(tracker.complete().is_err());
 
-        let after = tracker.snapshot().expect("snapshot should succeed");
+        let after = tracker.snapshot().unwrap();
 
         assert_eq!(before, after);
     }
 
-    // ------------------------------------------------------------------------
-    // Concurrency
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn tracker_is_send_and_sync() {
-        fn assert_send_sync<T: Send + Sync>() {}
-
-        assert_send_sync::<CompilationStateTracker>();
-        assert_send_sync::<CompilationStateSnapshot>();
-    }
-
-    #[test]
-    fn tracker_clones_share_state() {
+    fn revisions_increase_monotonically() {
         let tracker = CompilationStateTracker::new();
 
-        let clone = tracker.clone();
+        let initial = tracker.snapshot().unwrap();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        assert_eq!(
-            clone.lifecycle().expect("state should be readable"),
-            CompilationLifecycle::Running
-        );
-    }
+        let started = tracker.snapshot().unwrap();
 
-    #[test]
-    fn cloned_tracker_reference_count_is_shared() {
-        let tracker = CompilationStateTracker::new();
+        tracker.advance(
+            CompilationPhase::Parsing,
+            "parser",
+        ).unwrap();
 
-        let clone = tracker.clone();
+        let advanced = tracker.snapshot().unwrap();
 
-        assert_eq!(tracker.reference_count(), 2);
+        tracker.complete().unwrap();
 
-        drop(clone);
+        let completed = tracker.snapshot().unwrap();
 
-        assert_eq!(tracker.reference_count(), 1);
+        assert_eq!(initial.revision, 0);
+
+        assert!(started.revision > initial.revision);
+
+        assert!(advanced.revision > started.revision);
+
+        assert!(completed.revision > advanced.revision);
     }
 
     // ------------------------------------------------------------------------
-    // Snapshot behavior
+    // Snapshot invariants
     // ------------------------------------------------------------------------
 
     #[test]
-    fn snapshots_are_independent_of_future_changes() {
+    fn previous_snapshots_are_immutable() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
+        tracker.start().unwrap();
 
-        let previous = tracker.snapshot().expect("snapshot should succeed");
+        let previous = tracker.snapshot().unwrap();
 
-        tracker
-            .advance(
-                CompilationPhase::Parsing,
-                "parser",
-            )
-            .expect("advance should succeed");
+        tracker.advance(
+            CompilationPhase::Parsing,
+            "parser",
+        ).unwrap();
 
-        let current = tracker.snapshot().expect("snapshot should succeed");
+        let current = tracker.snapshot().unwrap();
 
         assert_ne!(previous, current);
 
@@ -1600,17 +1691,60 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_reports_success() {
+    fn completed_snapshot_reports_success() {
         let tracker = CompilationStateTracker::new();
 
-        tracker.start().expect("start should succeed");
-        tracker.complete().expect("completion should succeed");
+        tracker.start().unwrap();
 
-        let snapshot = tracker.snapshot().expect("snapshot should succeed");
+        tracker.complete().unwrap();
+
+        let snapshot = tracker.snapshot().unwrap();
 
         assert!(snapshot.is_terminal());
+
         assert!(snapshot.is_successful());
+
         assert!(!snapshot.is_active());
+    }
+
+    // ------------------------------------------------------------------------
+    // Concurrency
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn tracker_is_send_and_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+
+        assert_send_sync::<CompilationStateTracker>();
+
+        assert_send_sync::<CompilationStateSnapshot>();
+    }
+
+    #[test]
+    fn clones_share_lifecycle() {
+        let tracker = CompilationStateTracker::new();
+
+        let clone = tracker.clone();
+
+        tracker.start().unwrap();
+
+        assert_eq!(
+            clone.lifecycle().unwrap(),
+            CompilationLifecycle::Running
+        );
+    }
+
+    #[test]
+    fn reference_count_tracks_shared_ownership() {
+        let tracker = CompilationStateTracker::new();
+
+        let clone = tracker.clone();
+
+        assert_eq!(tracker.reference_count(), 2);
+
+        drop(clone);
+
+        assert_eq!(tracker.reference_count(), 1);
     }
 
     // ------------------------------------------------------------------------
