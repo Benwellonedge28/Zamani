@@ -14,14 +14,15 @@
 //!
 //! Provide the compiler-facing capability-analysis boundary.
 //!
-//! This module evaluates the canonical semantic capability requirements of
-//! a program against explicitly scoped capability evidence.
+//! This module evaluates canonical frontend semantic capability
+//! requirements against explicitly scoped capability evidence.
 //!
-//! It delegates the actual semantic evaluation to:
+//! The authoritative evaluation is delegated to:
 //!
 //! `crate::frontend::semantic::capabilities::evaluate_compatibility`
 //!
-//! It does not create a second capability model, evidence registry,
+//! This module adds compiler-facing reporting and aggregate classification.
+//! It does not create a competing capability model, evidence registry,
 //! compatibility algorithm, target model, or resource model.
 //!
 //! ## ARCHITECTURAL POSITION
@@ -36,17 +37,17 @@
 //! Frontend AST
 //!      |
 //!      v
-//! Semantic capability analysis
+//! Frontend semantic analysis
 //!      |
 //!      v
 //! CapabilityRequirements
 //!      |
-//!      +------------------------------+
-//!      |                              |
-//!      v                              v
-//! Compiler capability analysis   Scoped capability evidence
-//!      |                              |
-//!      +---------------+--------------+
+//!      +-------------------------------+
+//!      |                               |
+//!      v                               v
+//! Compiler capability analysis    Scoped capability evidence
+//!      |                               |
+//!      +---------------+---------------+
 //!                      |
 //!                      v
 //!       Canonical semantic compatibility evaluator
@@ -55,7 +56,7 @@
 //!          Compiler capability-analysis report
 //!                      |
 //!                      v
-//!          Target compatibility / feasibility
+//!          Target matching / feasibility
 //!                      |
 //!                      v
 //!          Planning / lowering / backend
@@ -64,10 +65,13 @@
 //! ## OWNS
 //!
 //! - The compiler-facing capability-analysis entry point.
-//! - Compiler-facing classification of semantic compatibility results.
+//! - Compiler-facing aggregate classification.
 //! - Preservation of the canonical semantic compatibility report.
-//! - The distinction between no requirements, satisfied requirements,
-//!   incompatible requirements, and unresolved requirements.
+//! - Convenient inspection of individual compatibility outcomes.
+//! - Explicit distinction between empty, satisfied, incompatible,
+//!   and unresolved requirement sets.
+//! - Accurate reporting when incompatible and unresolved requirements
+//!   occur in the same analysis.
 //!
 //! ## DOES_NOT_OWN
 //!
@@ -77,6 +81,7 @@
 //! - Semantic capability requirements.
 //! - Capability evidence storage.
 //! - Evidence authentication or trust verification.
+//! - Capability-definition registries.
 //! - Backend capability inventories.
 //! - Target discovery or target selection.
 //! - Resource requirements or resource feasibility.
@@ -87,18 +92,25 @@
 //!
 //! ## AUTHORITATIVE DEPENDENCIES
 //!
-//! - `frontend::semantic::capabilities::model`
-//! - `frontend::semantic::capabilities::requirements`
-//! - `frontend::semantic::capabilities::evidence`
-//! - `frontend::semantic::capabilities::compatibility`
-//! - `compiler::analysis::program`
-//! - `compiler::api::compatibility`
-//! - `backend::compatibility`
+//! Canonical capability model:
+//! `frontend::semantic::capabilities::model`
 //!
-//! Only the canonical frontend capability model and evaluator are directly
-//! required by this implementation.
+//! Canonical requirement collection:
+//! `frontend::semantic::capabilities::requirements`
 //!
-//! Backend and compiler API compatibility remain downstream authorities.
+//! Canonical evidence:
+//! `frontend::semantic::capabilities::evidence`
+//!
+//! Canonical compatibility evaluation:
+//! `frontend::semantic::capabilities::compatibility`
+//!
+//! Target discovery and target-specific evidence scoping are downstream
+//! responsibilities of:
+//! `compiler::planning::target_discovery`
+//! `compiler::planning::capability_matching`
+//!
+//! Backend capability declarations and backend compatibility remain owned
+//! by the backend subsystem.
 //!
 //! ## SEMANTIC INVARIANTS
 //!
@@ -114,6 +126,12 @@
 //! 8. Capability compatibility does not establish authorization.
 //! 9. Capability compatibility does not authenticate evidence.
 //! 10. A capability name does not imply that a target implements it.
+//! 11. A satisfied capability report does not prove backend code generation.
+//! 12. A satisfied capability report does not guarantee later execution.
+//! 13. An incompatible result must not hide unresolved results in the same
+//!     report.
+//! 14. Unknown future capability identifiers remain the responsibility of
+//!     the canonical semantic model and its extension contracts.
 //!
 //! ## SCALABILITY
 //!
@@ -128,39 +146,72 @@
 //! - processors;
 //! - accelerators;
 //! - quantum resources;
-//! - distributed nodes;
+//! - distributed participants;
 //! - hardware capacity.
 //!
-//! The canonical semantic model uses dynamically sized collections.
+//! It introduces no universal `MAX_*` constants, closed hardware inventory,
+//! fixed device count, or fixed capability count.
 //!
-//! This module does not impose a separate semantic limit or silently truncate
-//! input. Actual processing remains bounded by available memory, address
-//! space, allocator behavior, and caller-configured operational budgets.
+//! The canonical semantic model uses dynamically sized collections.
+//! This module neither truncates input nor imposes another semantic limit.
+//!
+//! Processing is necessarily subject to available memory, address space,
+//! allocator behavior, processing capacity, and explicitly configured
+//! operational budgets.
 //!
 //! Literal infinity is not a realizable guarantee for a finite computer.
 //!
+//! Operational budget exhaustion must be reported by the owning compilation
+//! session or pipeline. It must never be converted into successful or
+//! complete capability analysis.
+//!
 //! ## DETERMINISM
 //!
-//! This module preserves the ordering of the canonical semantic report.
-//! It does not introduce randomized maps, randomized identifiers, global
-//! mutable registries, or order-dependent evidence selection.
+//! This module preserves the canonical semantic report and its ordering.
+//!
+//! The canonical requirement collection orders records by source AST node
+//! identity. The canonical compatibility evaluator preserves that order.
+//!
+//! This module introduces no randomized maps, random identifiers, timestamps,
+//! global mutable registries, or order-dependent evidence selection.
+//!
+//! ## TRUST
+//!
+//! Capability evidence is a claim, not proof of authenticity.
+//!
+//! Evidence authentication, issuer trust, signature verification,
+//! authorization, and provenance verification remain responsibilities of
+//! their authoritative security and provenance subsystems.
+//!
+//! Consumers must not use an unauthenticated capability report as a
+//! deployment authorization decision.
 //!
 //! ## INTEGRATION
 //!
-//! Input:
-//!   - `CapabilityRequirements`
-//!   - `EvidenceSubject`
-//!   - `CapabilityEvidenceSet`
+//! Inputs:
+//! - `CapabilityRequirements`
+//! - `EvidenceSubject`
+//! - `CapabilityEvidenceSet`
 //!
 //! Output:
-//!   - `CapabilityAnalysisReport`
+//! - `CapabilityAnalysisReport`
 //!
-//! The report contains the original canonical
-//! `CapabilityCompatibilityReport`; individual source-associated records
-//! are not reconstructed or discarded.
+//! The report retains the original canonical
+//! `CapabilityCompatibilityReport`.
 //!
-//! The compiler pipeline may consume the disposition while diagnostics,
-//! tooling, and reporting consumers inspect the complete canonical report.
+//! Target-specific matching remains in:
+//! `compiler::planning::capability_matching`
+//!
+//! Resource feasibility remains in:
+//! `compiler::planning::resource_planning`
+//! and `compiler::planning::feasibility`.
+//!
+//! Backend compatibility remains in:
+//! `compiler::backends::compatibility`
+//! and the authoritative backend compatibility subsystem.
+//!
+//! The report does not claim that any target has been selected, allocated,
+//! reserved, authorized, or executed.
 
 use std::fmt;
 
@@ -170,15 +221,26 @@ pub use crate::frontend::semantic::capabilities::{
     CapabilityCompatibilityReport,
     CapabilityCompatibilityStatus,
     CapabilityCompatibilitySummary,
+    CapabilityEvidence,
+    CapabilityEvidenceError,
+    CapabilityEvidenceResult,
     CapabilityEvidenceSet,
+    CapabilityEvidenceStatus,
+    CapabilityRequirement,
+    CapabilityRequirementError,
+    CapabilityRequirementRecord,
     CapabilityRequirements,
+    CapabilityVersion,
+    CapabilityVersionConstraint,
+    EvidenceEvaluation,
+    EvidenceOrigin,
     EvidenceSubject,
 };
 
 use crate::frontend::semantic::capabilities::evaluate_compatibility;
 
 // =============================================================================
-// Module identity
+// MODULE IDENTITY
 // =============================================================================
 
 /// Stable architectural identity of this compiler analysis module.
@@ -188,22 +250,39 @@ pub const CAPABILITY_ANALYSIS_MODULE_NAME: &str =
 /// Version of this module's compiler-facing report contract.
 ///
 /// This is not the Zamani language version, capability-definition version,
-/// backend version, or artifact serialization version.
-pub const CAPABILITY_ANALYSIS_SCHEMA_VERSION: u16 = 1;
+/// backend version, target-profile version, or artifact serialization
+/// version.
+pub const CAPABILITY_ANALYSIS_SCHEMA_VERSION: u16 = 2;
 
 // =============================================================================
-// Analysis disposition
+// ANALYSIS DISPOSITION
 // =============================================================================
 
-/// Compiler-facing classification of a canonical capability compatibility
-/// report.
+/// Aggregate classification of a canonical capability compatibility report.
 ///
 /// This is deliberately not a replacement for
-/// `CapabilityCompatibilityStatus`. The canonical report retains the
-/// individual outcome of every requirement.
+/// [`CapabilityCompatibilityStatus`].
 ///
-/// The disposition summarizes the report for compiler orchestration.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// The canonical report retains the individual outcome of every requirement.
+/// This disposition provides a concise aggregate classification for
+/// compiler orchestration.
+///
+/// When a report contains both incompatible and unresolved requirements,
+/// `Incompatible` is the primary disposition. The report's summary and
+/// inspection methods continue to expose the unresolved requirements.
+///
+/// Therefore, consumers must not use this enum alone when they need to know
+/// whether further evidence is also required.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 #[non_exhaustive]
 pub enum CapabilityAnalysisDisposition {
     /// There were no capability requirements to evaluate.
@@ -214,7 +293,9 @@ pub enum CapabilityAnalysisDisposition {
     /// Every evaluated requirement has evidence establishing support.
     Satisfied,
 
-    /// At least one requirement is explicitly incompatible.
+    /// At least one requirement has explicit incompatible evidence.
+    ///
+    /// Other requirements may still be unresolved.
     Incompatible,
 
     /// No explicit incompatibility was established, but one or more
@@ -238,7 +319,11 @@ impl CapabilityAnalysisDisposition {
         matches!(self, Self::Incompatible)
     }
 
-    /// Whether more evidence is needed.
+    /// Whether the aggregate classification is unresolved.
+    ///
+    /// Use [`CapabilityAnalysisReport::has_unresolved_requirements`] to
+    /// inspect the report itself. A report may be classified as incompatible
+    /// and still contain unresolved requirements.
     #[must_use]
     pub const fn is_unresolved(self) -> bool {
         matches!(self, Self::Unresolved)
@@ -250,9 +335,10 @@ impl CapabilityAnalysisDisposition {
         matches!(self, Self::NoRequirements)
     }
 
-    /// Whether this report establishes successful capability compatibility.
+    /// Whether this disposition establishes successful capability
+    /// compatibility.
     ///
-    /// NoRequirements deliberately does not return true.
+    /// `NoRequirements` deliberately does not return true.
     #[must_use]
     pub const fn is_compatible(self) -> bool {
         self.is_satisfied()
@@ -271,16 +357,18 @@ impl fmt::Display for CapabilityAnalysisDisposition {
 }
 
 // =============================================================================
-// Capability-analysis report
+// CAPABILITY-ANALYSIS REPORT
 // =============================================================================
 
 /// Compiler-facing capability-analysis result.
 ///
-/// The canonical semantic report is retained in full. This wrapper adds only
-/// the compiler-level disposition needed for pipeline orchestration.
+/// The complete canonical semantic report is retained. This wrapper adds
+/// aggregate classification and convenient inspection methods without
+/// reconstructing, merging, or discarding source-associated records.
 ///
-/// It does not discard source AST identities, source spans, individual
-/// capability requirements, evidence outcomes, or the evaluated subject.
+/// The report is an evidence-based compatibility result. It is not a
+/// resource-feasibility, authorization, backend-realization, or execution
+/// certificate.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CapabilityAnalysisReport {
     compatibility: CapabilityCompatibilityReport,
@@ -288,11 +376,11 @@ pub struct CapabilityAnalysisReport {
 }
 
 impl CapabilityAnalysisReport {
-    /// Construct a compiler-facing report from the canonical semantic report.
+    /// Construct a compiler-facing report from a canonical semantic report.
     ///
-    /// This constructor is public so that other compiler components can
-    /// adapt an already evaluated canonical report without re-running
-    /// semantic analysis.
+    /// This constructor allows another compiler component to adapt an
+    /// already evaluated canonical report without repeating semantic
+    /// capability evaluation.
     #[must_use]
     pub fn from_compatibility_report(
         compatibility: CapabilityCompatibilityReport,
@@ -317,13 +405,13 @@ impl CapabilityAnalysisReport {
         self.compatibility
     }
 
-    /// Return the compiler-facing disposition.
+    /// Return the compiler-facing aggregate disposition.
     #[must_use]
     pub const fn disposition(&self) -> CapabilityAnalysisDisposition {
         self.disposition
     }
 
-    /// Return the evaluated evidence subject.
+    /// Return the exact evidence subject that was evaluated.
     #[must_use]
     pub fn subject(&self) -> &str {
         self.compatibility.subject()
@@ -347,11 +435,49 @@ impl CapabilityAnalysisReport {
         self.compatibility.summary()
     }
 
-    /// Iterate over the canonical source-associated compatibility records.
+    /// Iterate over all canonical source-associated compatibility records.
+    ///
+    /// Records retain the ordering established by the canonical semantic
+    /// requirement collection.
     pub fn iter(
         &self,
     ) -> impl ExactSizeIterator<Item = &CapabilityCompatibilityRecord> {
         self.compatibility.iter()
+    }
+
+    /// Iterate over requirements whose evidence establishes support.
+    pub fn satisfied(
+        &self,
+    ) -> impl Iterator<Item = &CapabilityCompatibilityRecord> {
+        self.iter().filter(|record| {
+            record.status() == CapabilityCompatibilityStatus::Satisfied
+        })
+    }
+
+    /// Iterate over requirements with explicit incompatible evidence.
+    pub fn incompatible(
+        &self,
+    ) -> impl Iterator<Item = &CapabilityCompatibilityRecord> {
+        self.iter().filter(|record| {
+            record.status() == CapabilityCompatibilityStatus::Incompatible
+        })
+    }
+
+    /// Iterate over requirements with missing, indeterminate, or conflicting
+    /// evidence.
+    pub fn unresolved(
+        &self,
+    ) -> impl Iterator<Item = &CapabilityCompatibilityRecord> {
+        self.iter().filter(|record| record.status().is_unresolved())
+    }
+
+    /// Find the compatibility result for one source AST node.
+    #[must_use]
+    pub fn get(
+        &self,
+        source_node: crate::frontend::ast::node::node_id::NodeId,
+    ) -> Option<&CapabilityCompatibilityRecord> {
+        self.compatibility.get(source_node)
     }
 
     /// Whether every evaluated requirement is established as satisfied.
@@ -364,8 +490,7 @@ impl CapabilityAnalysisReport {
 
     /// Whether this report establishes capability compatibility.
     ///
-    /// This method intentionally does not treat an empty requirement set
-    /// as evidence of target compatibility.
+    /// An empty requirement set does not establish compatibility.
     #[must_use]
     pub const fn is_compatible(&self) -> bool {
         self.disposition.is_compatible()
@@ -374,13 +499,26 @@ impl CapabilityAnalysisReport {
     /// Whether at least one requirement is explicitly incompatible.
     #[must_use]
     pub const fn has_incompatibilities(&self) -> bool {
-        self.disposition.is_incompatible()
+        self.summary().has_incompatibilities()
     }
 
-    /// Whether compatibility remains unresolved.
+    /// Whether at least one requirement remains unresolved.
+    ///
+    /// Unlike the aggregate disposition, this method remains accurate when
+    /// incompatible and unresolved requirements occur together.
+    #[must_use]
+    pub const fn has_unresolved_requirements(&self) -> bool {
+        self.summary().has_unresolved_requirements()
+    }
+
+    /// Whether further capability evidence or conflict resolution is needed.
+    ///
+    /// This method deliberately examines the canonical summary rather than
+    /// the aggregate disposition. An incompatible report can still require
+    /// further evidence for other requirements.
     #[must_use]
     pub const fn needs_more_evidence(&self) -> bool {
-        self.disposition.is_unresolved()
+        self.has_unresolved_requirements()
     }
 
     /// Whether the report contains no requirements.
@@ -388,16 +526,59 @@ impl CapabilityAnalysisReport {
     pub const fn has_no_requirements(&self) -> bool {
         self.disposition.has_no_requirements()
     }
+
+    /// Number of requirements whose evidence establishes support.
+    #[must_use]
+    pub const fn satisfied_count(&self) -> usize {
+        self.summary().satisfied()
+    }
+
+    /// Number of requirements with explicit incompatible evidence.
+    #[must_use]
+    pub const fn incompatible_count(&self) -> usize {
+        self.summary().incompatible()
+    }
+
+    /// Number of requirements for which no evidence exists.
+    #[must_use]
+    pub const fn no_evidence_count(&self) -> usize {
+        self.summary().no_evidence()
+    }
+
+    /// Number of requirements with indeterminate evidence.
+    #[must_use]
+    pub const fn indeterminate_count(&self) -> usize {
+        self.summary().indeterminate()
+    }
+
+    /// Number of requirements with conflicting evidence.
+    #[must_use]
+    pub const fn conflicting_evidence_count(&self) -> usize {
+        self.summary().conflicting_evidence()
+    }
+
+    /// Whether the report has at least one evaluated requirement and every
+    /// requirement has a definitive evidence outcome.
+    ///
+    /// A definitive outcome may be either satisfied or incompatible.
+    /// An empty report is not considered evidence-complete.
+    #[must_use]
+    pub const fn has_complete_evidence(&self) -> bool {
+        self.len() > 0 && !self.has_unresolved_requirements()
+    }
 }
 
 // =============================================================================
-// Capability analysis service
+// CAPABILITY ANALYSIS SERVICE
 // =============================================================================
 
 /// Stateless compiler-facing capability-analysis service.
 ///
 /// All authoritative semantic data and compatibility behavior remain owned
 /// by the frontend semantic capability subsystem.
+///
+/// This service is safe to share between compiler tasks because it contains
+/// no mutable state or global registry.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CapabilityAnalysis;
 
@@ -406,13 +587,14 @@ impl CapabilityAnalysis {
     /// explicitly identified subject.
     ///
     /// Evidence belonging to other subjects is not combined with the
-    /// requested subject.
+    /// requested subject's evidence.
     ///
-    /// The canonical evaluator validates evidence before evaluating it.
+    /// The canonical evaluator validates the complete evidence set before
+    /// evaluating requirements.
     ///
     /// # Errors
     ///
-    /// Returns `CapabilityAnalysisError` when the canonical evidence
+    /// Returns [`CapabilityAnalysisError`] when canonical evidence
     /// validation or compatibility evaluation fails.
     ///
     /// Such an error indicates malformed or invalid evidence data. It is
@@ -440,7 +622,12 @@ impl CapabilityAnalysis {
         subject: &EvidenceSubject,
         evidence: &CapabilityEvidenceSet,
     ) -> Result<CapabilityAnalysisReport, CapabilityAnalysisError> {
-        Self.analyze(&Self, requirements, subject, evidence)
+        let compatibility =
+            evaluate_compatibility(requirements, subject, evidence)?;
+
+        Ok(CapabilityAnalysisReport::from_compatibility_report(
+            compatibility,
+        ))
     }
 
     /// Return this module's stable contract version.
@@ -457,12 +644,17 @@ impl CapabilityAnalysis {
 }
 
 // =============================================================================
-// Public convenience function
+// PUBLIC CONVENIENCE FUNCTION
 // =============================================================================
 
 /// Analyze semantic capability requirements for one evidence subject.
 ///
 /// This is the preferred free-function entry point for compiler stages.
+///
+/// The subject must identify the scope to which the supplied evidence
+/// applies. Target-specific subject construction belongs to the target
+/// matching layer.
+#[must_use]
 pub fn analyze_capabilities(
     requirements: &CapabilityRequirements,
     subject: &EvidenceSubject,
@@ -476,11 +668,22 @@ pub fn analyze_capabilities(
 }
 
 // =============================================================================
-// Classification
+// CLASSIFICATION
 // =============================================================================
 
 /// Classify a canonical report without changing or reconstructing its
 /// individual results.
+///
+/// Precedence:
+///
+/// 1. No requirements.
+/// 2. At least one explicit incompatibility.
+/// 3. At least one unresolved requirement.
+/// 4. Every requirement satisfied.
+///
+/// The report summary independently preserves both incompatible and
+/// unresolved counts. Consumers must inspect those methods when they need
+/// the full state rather than a single aggregate label.
 fn classify(
     report: &CapabilityCompatibilityReport,
 ) -> CapabilityAnalysisDisposition {
@@ -490,41 +693,112 @@ fn classify(
         return CapabilityAnalysisDisposition::NoRequirements;
     }
 
-    // An explicit incompatibility takes precedence in the aggregate
-    // disposition. The original report still preserves every other result.
-    if summary.incompatible() > 0 {
+    if summary.has_incompatibilities() {
         return CapabilityAnalysisDisposition::Incompatible;
     }
 
-    // Missing, incomplete, or contradictory evidence cannot establish
-    // successful compatibility.
-    if summary.no_evidence() > 0
-        || summary.indeterminate() > 0
-        || summary.conflicting_evidence() > 0
-    {
+    if summary.has_unresolved_requirements() {
         return CapabilityAnalysisDisposition::Unresolved;
     }
 
-    if summary.satisfied() == summary.total() {
+    if summary.all_satisfied() {
         return CapabilityAnalysisDisposition::Satisfied;
     }
 
-    // Conservative defensive fallback. A future extension of the canonical
-    // status model must not accidentally become a successful result here.
+    // Defensive fallback. An unexpected future status must never become
+    // successful merely because it was not explicitly recognized here.
     CapabilityAnalysisDisposition::Unresolved
 }
 
 // =============================================================================
-// Tests
+// TESTS
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use std::collections::BTreeMap;
+
+    use crate::frontend::ast::node::node_id::NodeId;
+    use crate::frontend::ast::node::source::span::{
+        SourceId,
+        Span,
+    };
+    use crate::frontend::semantic::capabilities::model::CapabilityId;
+
     fn subject() -> EvidenceSubject {
         EvidenceSubject::new("compiler.capability-analysis.test")
             .expect("test evidence subject must be valid")
+    }
+
+    fn capability_id() -> CapabilityId {
+        CapabilityId::new(
+            "zamani.quantum",
+            "dynamic_control",
+        )
+        .expect("test capability identity must be valid")
+    }
+
+    fn requirements() -> CapabilityRequirements {
+        let node_id = NodeId::new(1)
+            .expect("test node identity must be valid");
+
+        let span = Span::from_usize(
+            SourceId::from_raw(1),
+            0,
+            1,
+        )
+        .expect("test source span must be valid");
+
+        let requirement =
+            CapabilityRequirement::new(capability_id());
+
+        let record = CapabilityRequirementRecord::new(
+            node_id,
+            span,
+            requirement,
+        );
+
+        let mut requirements = CapabilityRequirements::new();
+
+        requirements
+            .insert_record(record)
+            .expect("test requirement must be valid");
+
+        requirements
+    }
+
+    fn evidence(
+        requested_subject: &EvidenceSubject,
+        status: CapabilityEvidenceStatus,
+        origin: &str,
+    ) -> CapabilityEvidence {
+        CapabilityEvidence::new(
+            capability_id(),
+            requested_subject.clone(),
+            status,
+            None,
+            BTreeMap::new(),
+            EvidenceOrigin::new(
+                "test",
+                origin,
+                None,
+            )
+            .expect("test evidence origin must be valid"),
+        )
+        .expect("test capability evidence must be valid")
+    }
+
+    fn evidence_set(
+        records: impl IntoIterator<Item = CapabilityEvidence>,
+    ) -> CapabilityEvidenceSet {
+        let mut set = CapabilityEvidenceSet::new();
+
+        set.extend(records)
+            .expect("test evidence records must be valid");
+
+        set
     }
 
     #[test]
@@ -550,10 +824,277 @@ mod tests {
         assert!(!report.all_satisfied());
         assert!(!report.has_incompatibilities());
         assert!(!report.needs_more_evidence());
+        assert!(!report.has_complete_evidence());
         assert!(report.has_no_requirements());
 
         assert_eq!(report.summary().total(), 0);
         assert!(!report.summary().all_satisfied());
+    }
+
+    #[test]
+    fn missing_evidence_is_unresolved_not_satisfied() {
+        let requirements = requirements();
+        let evidence = CapabilityEvidenceSet::new();
+
+        let report = analyze_capabilities(
+            &requirements,
+            &subject(),
+            &evidence,
+        )
+        .expect("capability analysis should succeed");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Unresolved
+        );
+
+        assert!(!report.is_compatible());
+        assert!(!report.all_satisfied());
+        assert!(report.has_unresolved_requirements());
+        assert!(report.needs_more_evidence());
+        assert!(!report.has_incompatibilities());
+        assert_eq!(report.no_evidence_count(), 1);
+        assert_eq!(report.unresolved().count(), 1);
+    }
+
+    #[test]
+    fn supported_evidence_satisfies_the_requirement() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Supported,
+            "test-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("supported capability evidence should be valid");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Satisfied
+        );
+
+        assert!(report.is_compatible());
+        assert!(report.all_satisfied());
+        assert!(!report.has_unresolved_requirements());
+        assert!(!report.has_incompatibilities());
+        assert!(report.has_complete_evidence());
+        assert_eq!(report.satisfied_count(), 1);
+        assert_eq!(report.satisfied().count(), 1);
+    }
+
+    #[test]
+    fn unsupported_evidence_is_incompatible() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Unsupported,
+            "test-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("unsupported capability evidence should be valid");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Incompatible
+        );
+
+        assert!(!report.is_compatible());
+        assert!(report.has_incompatibilities());
+        assert!(!report.has_unresolved_requirements());
+        assert_eq!(report.incompatible_count(), 1);
+        assert_eq!(report.incompatible().count(), 1);
+        assert!(report.has_complete_evidence());
+    }
+
+    #[test]
+    fn unknown_evidence_is_unresolved() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Unknown,
+            "test-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("unknown capability evidence should be valid");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Unresolved
+        );
+
+        assert!(!report.is_compatible());
+        assert!(report.has_unresolved_requirements());
+        assert!(report.needs_more_evidence());
+        assert_eq!(report.indeterminate_count(), 1);
+    }
+
+    #[test]
+    fn evidence_from_another_subject_is_not_combined() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let other_subject = EvidenceSubject::new(
+            "another.execution.environment",
+        )
+        .expect("other subject must be valid");
+
+        let evidence = evidence_set([evidence(
+            &other_subject,
+            CapabilityEvidenceStatus::Supported,
+            "other-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("scoped capability analysis should succeed");
+
+        assert_eq!(report.subject(), requested_subject.as_str());
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Unresolved
+        );
+        assert_eq!(report.no_evidence_count(), 1);
+        assert!(!report.is_compatible());
+    }
+
+    #[test]
+    fn contradictory_evidence_remains_visible() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([
+            evidence(
+                &requested_subject,
+                CapabilityEvidenceStatus::Supported,
+                "provider-a",
+            ),
+            evidence(
+                &requested_subject,
+                CapabilityEvidenceStatus::Unsupported,
+                "provider-b",
+            ),
+        ]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("conflicting evidence should produce a report");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Unresolved
+        );
+
+        assert!(report.has_unresolved_requirements());
+        assert!(report.needs_more_evidence());
+        assert_eq!(report.conflicting_evidence_count(), 1);
+        assert_eq!(report.unresolved().count(), 1);
+    }
+
+    #[test]
+    fn mixed_incompatible_and_unresolved_results_preserve_both_states() {
+        let first_node = NodeId::new(1)
+            .expect("first node identity must be valid");
+
+        let second_node = NodeId::new(2)
+            .expect("second node identity must be valid");
+
+        let first_span = Span::from_usize(
+            SourceId::from_raw(1),
+            0,
+            1,
+        )
+        .expect("first source span must be valid");
+
+        let second_span = Span::from_usize(
+            SourceId::from_raw(1),
+            2,
+            3,
+        )
+        .expect("second source span must be valid");
+
+        let mut requirements = CapabilityRequirements::new();
+
+        requirements
+            .insert_record(CapabilityRequirementRecord::new(
+                first_node,
+                first_span,
+                CapabilityRequirement::new(capability_id()),
+            ))
+            .expect("first requirement must be valid");
+
+        let second_capability = CapabilityId::new(
+            "zamani.classical",
+            "parallel_execution",
+        )
+        .expect("second capability identity must be valid");
+
+        requirements
+            .insert_record(CapabilityRequirementRecord::new(
+                second_node,
+                second_span,
+                CapabilityRequirement::new(second_capability),
+            ))
+            .expect("second requirement must be valid");
+
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Unsupported,
+            "test-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("mixed capability analysis should succeed");
+
+        assert_eq!(
+            report.disposition(),
+            CapabilityAnalysisDisposition::Incompatible
+        );
+
+        // This is the critical regression test: an incompatible aggregate
+        // disposition must not hide unresolved requirements.
+        assert!(report.has_incompatibilities());
+        assert!(report.has_unresolved_requirements());
+        assert!(report.needs_more_evidence());
+
+        assert_eq!(report.incompatible_count(), 1);
+        assert_eq!(report.no_evidence_count(), 1);
+        assert_eq!(report.incompatible().count(), 1);
+        assert_eq!(report.unresolved().count(), 1);
+        assert!(!report.is_compatible());
+        assert!(!report.has_complete_evidence());
     }
 
     #[test]
@@ -577,8 +1118,40 @@ mod tests {
     }
 
     #[test]
+    fn report_preserves_source_associated_records() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Supported,
+            "test-provider",
+        )]);
+
+        let report = analyze_capabilities(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("capability analysis should succeed");
+
+        let source_node = NodeId::new(1)
+            .expect("test node identity must be valid");
+
+        let record = report
+            .get(source_node)
+            .expect("source-associated result must be retained");
+
+        assert_eq!(record.source_node(), source_node);
+        assert_eq!(
+            record.status(),
+            CapabilityCompatibilityStatus::Satisfied
+        );
+    }
+
+    #[test]
     fn service_and_free_function_use_the_same_contract() {
-        let requirements = CapabilityRequirements::new();
+        let requirements = requirements();
         let evidence = CapabilityEvidenceSet::new();
         let requested_subject = subject();
 
@@ -598,6 +1171,33 @@ mod tests {
         .expect("free-function analysis should succeed");
 
         assert_eq!(service_report, function_report);
+    }
+
+    #[test]
+    fn report_conversion_preserves_the_canonical_report() {
+        let requirements = requirements();
+        let requested_subject = subject();
+
+        let evidence = evidence_set([evidence(
+            &requested_subject,
+            CapabilityEvidenceStatus::Supported,
+            "test-provider",
+        )]);
+
+        let canonical = evaluate_compatibility(
+            &requirements,
+            &requested_subject,
+            &evidence,
+        )
+        .expect("canonical evaluation should succeed");
+
+        let expected = canonical.clone();
+
+        let report =
+            CapabilityAnalysisReport::from_compatibility_report(canonical);
+
+        assert_eq!(report.compatibility(), &expected);
+        assert_eq!(report.into_compatibility(), expected);
     }
 
     #[test]
