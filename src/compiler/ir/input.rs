@@ -6,171 +6,143 @@
 
 //! # Zamani Compiler — Canonical IR Input
 //!
-//! Path: src/compiler/ir/input.rs
-//!
-//! Rust edition: 2021
+//! Path: `src/compiler/ir/input.rs`
+//! Edition: Rust 2021
 //! Minimum Rust version: 1.97 or later.
+//! Safety: unsafe Rust is forbidden.
 //!
-//! # Purpose
+//! ## Purpose
 //!
-//! Provide the compiler-facing admission boundary for canonical,
-//! immutable, verified intermediate representations.
+//! Establish the compiler-facing admission boundary for canonical,
+//! immutable intermediate-representation snapshots.
 //!
-//! This module accepts IR snapshots from their authoritative
-//! repository owners and coordinates their verification before
-//! admitting them into compiler processing.
+//! This module accepts an existing canonical verification context,
+//! delegates verification to the compiler's verification integration,
+//! and admits the input only when the canonical verifier reports
+//! `VerificationStatus::Valid`.
 //!
-//! The currently implemented verification adapter is ZUIR.
+//! The original IR snapshot is borrowed. It is not copied, reconstructed,
+//! mutated, or converted during admission.
 //!
-//! The module does not claim that verification adapters exist
-//! for every domain representation merely because those
-//! representations exist elsewhere in the repository.
-//!
-//! # Architectural ownership
+//! ## Ownership
 //!
 //! This module owns:
 //!
 //! - Compiler-facing IR input identification.
-//! - ZUIR input admission.
-//! - Verification-gated input construction.
-//! - Immutable access to admitted IR.
-//! - Preservation of verification evidence.
-//! - Structured input-verification errors.
+//! - ZUIR input construction.
+//! - Verification-gated admission.
+//! - Immutable access to admitted ZUIR.
+//! - Preservation of the canonical verification report.
+//! - Structured invalid and incomplete verification errors.
 //!
 //! This module does not own:
 //!
-//! - Source grammar.
-//! - Lexical analysis.
-//! - Parsing.
-//! - AST construction.
-//! - Semantic analysis.
-//! - Canonical IR structures.
-//! - Domain-specific IR structures.
+//! - Source grammar, lexing, parsing, or AST construction.
+//! - Source-level semantic analysis.
+//! - Canonical IR definitions.
 //! - Verification algorithms.
-//! - Optimization.
-//! - Lowering algorithms.
-//! - Target discovery.
+//! - Domain-specific IR conversion.
+//! - Optimization or transformation.
+//! - Target discovery or feasibility.
 //! - Physical resource allocation.
-//! - Scheduling or routing.
+//! - Scheduling, routing, or hardware mapping.
 //! - Backend code generation.
-//! - Runtime execution.
+//! - Linking, deployment, or runtime execution.
 //!
-//! # Canonical authorities
+//! ## Canonical authorities
 //!
-//! Source grammar:
+//! Grammar:
 //!     grammar/Zamani.g4
+//!
+//! Lexical vocabulary:
+//!     grammar/lexer/tokens.g4
 //!
 //! Source semantics:
 //!     crate::frontend::semantic
 //!
-//! Universal IR:
+//! Canonical universal IR:
 //!     crate::zuir
 //!
-//! Canonical verification:
-//!     crate::zuir::verify::verify_full
+//! Canonical ZUIR verifier:
+//!     crate::zuir::verify
 //!
-//! Classical IR:
-//!     crate::classical::zcir
+//! Compiler verification integration:
+//!     crate::compiler::ir::verification
 //!
-//! Quantum IR:
+//! Domain-owned representations:
+//!     crate::classical
 //!     crate::quantum::ir
-//!
-//! HDL IR:
 //!     crate::hdl::hdlir
-//!
-//! AI:
 //!     crate::ai
-//!
-//! Hybrid:
 //!     crate::hybrid
+//!     crate::distributed
 //!
-//! # Verification boundary
+//! ## Verification contract
 //!
-//! A Rust type alone does not establish that an IR is valid.
+//! Construction of `CompilationIrInput` does not establish validity.
 //!
-//! Successful construction of CompilationIrInput is not proof
-//! of verification.
+//! Only `CompilationIrInput::verify` can produce `VerifiedIrInput`.
 //!
-//! Only successful completion of the canonical verification
-//! process can produce VerifiedIrInput.
+//! Invalid and incomplete verification are distinct errors.
 //!
-//! Invalid and incomplete verification are distinct failures.
+//! Warnings alone do not invalidate a report.
 //!
-//! Warnings do not automatically invalidate an IR.
+//! A successful report establishes only the properties implemented
+//! by the canonical verifier that was actually invoked. It does not
+//! establish target compatibility, complete domain verification,
+//! target feasibility, or successful execution.
 //!
-//! A valid report establishes only the properties implemented
-//! by the canonical verifier that was invoked.
+//! ## Snapshot contract
 //!
-//! It does not establish target feasibility or execution success.
+//! All references contained in `FullVerificationInput` must describe
+//! one consistent immutable IR snapshot.
 //!
-//! # Immutability
+//! The caller must not mutate the supplied data while verification
+//! or subsequent use of the verified input is in progress.
 //!
-//! Input is borrowed rather than reconstructed or copied.
+//! Rust borrowing prevents ordinary mutable access through the
+//! borrowed references, but this API does not claim to prevent
+//! mutation through arbitrary interior-mutability mechanisms.
 //!
-//! VerifiedIrInput retains the original verification snapshot
-//! and the report produced for that snapshot.
+//! ## Scalability
 //!
-//! No mutable IR access is exposed through this module.
+//! This module introduces no arbitrary universal limits on:
 //!
-//! Any subsequent transformation must establish its own
-//! verification and provenance requirements.
+//! - Programs, modules, functions, regions, blocks or operations.
+//! - Values, types, effects or ownership relationships.
+//! - Qubits, hardware signals, registers or tensor dimensions.
+//! - Tensor rank, devices, accelerators or distributed participants.
+//! - Computational domains or future representation families.
 //!
-//! # Scalability
+//! The input is borrowed, avoiding a duplicate copy of the IR graph.
 //!
-//! This module introduces no arbitrary universal ceilings on:
-//!
-//! - Programs.
-//! - Modules.
-//! - Functions.
-//! - Regions.
-//! - Blocks.
-//! - Operations.
-//! - Values.
-//! - Types.
-//! - Effects.
-//! - Ownership relationships.
-//! - Qubits.
-//! - Hardware signals.
-//! - Registers.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - Devices.
-//! - Distributed participants.
-//! - Computational domains.
-//!
-//! The original IR is borrowed without duplicating its graph.
-//!
-//! Actual processing is bounded by available memory, address
-//! space, verifier implementation and configured operational
+//! Actual processing is bounded by available memory, address space,
+//! execution time, verifier implementation and configured operational
 //! budgets.
 //!
-//! Literal infinite physical resources are not promised.
+//! Resource exhaustion or incomplete verification must never be
+//! interpreted as successful admission.
 //!
-//! Resource exhaustion must never be interpreted as successful
-//! verification.
+//! Literal infinite computation is not promised.
 //!
-//! # POCO-REAF
+//! ## POCO-REAF
 //!
 //! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! The compiler receives canonical program meaning and preserves
-//! its verification evidence independently of the eventual
-//! execution target.
+//! This boundary preserves canonical program representation and
+//! verification evidence independently of target selection.
 //!
-//! Target discovery, capability matching, feasibility and
-//! realization remain downstream responsibilities.
+//! Target discovery, capability matching, feasibility, domain
+//! conversion, target lowering and execution remain downstream
+//! responsibilities.
 //!
-//! # Safety
-//!
-//! Unsafe Rust is forbidden.
-//!
-//! No global mutable state, filesystem access, network access,
-//! hardware discovery or implicit target selection is performed.
-//!
-//! # Integration
+//! ## Integration
 //!
 //! Parent:
 //!     crate::compiler::ir
+//!
+//! Verification integration:
+//!     crate::compiler::ir::verification
 //!
 //! Canonical verifier:
 //!     crate::zuir::verify
@@ -183,10 +155,20 @@
 //!     compiler::lowering
 //!     compiler::backends
 //!
-//! This module must remain independent of those downstream
-//! implementation details.
+//! ## Compatibility
+//!
+//! Existing public type and method names are retained where possible.
+//! The input API version remains independent of the language version,
+//! grammar version, ZUIR schema version, domain IR versions and backend
+//! ABI versions.
+//!
+//! No wildcard re-exports or competing representation definitions
+//! are introduced.
 
 use core::fmt;
+use std::error::Error;
+
+use crate::compiler::ir::verification::verify_compilation_input;
 
 use crate::zuir::ir::{
     ZuirFunction,
@@ -195,7 +177,6 @@ use crate::zuir::ir::{
 };
 
 use crate::zuir::verify::{
-    verify_full,
     FullVerificationInput,
     FullVerificationReport,
     VerificationSeverity,
@@ -208,23 +189,30 @@ use crate::zuir::verify::{
 
 /// Public API version of the compiler IR input contract.
 ///
-/// Independent of the language, grammar, semantic model,
-/// ZUIR schema, domain IR and backend ABI versions.
+/// This version is independent of the Zamani language version,
+/// grammar version, semantic-model version, ZUIR schema version,
+/// domain IR versions and backend ABI versions.
 pub const IR_INPUT_API_VERSION: u16 = 2;
+
+/// Return the compiler IR input API version.
+#[must_use]
+pub const fn api_version() -> u16 {
+    IR_INPUT_API_VERSION
+}
 
 // =============================================================================
 // REPRESENTATION IDENTITY
 // =============================================================================
 
-/// Identifies the canonical representation accepted by
-/// this compiler input boundary.
+/// Identifies a canonical representation accepted by this
+/// compiler input boundary.
 ///
-/// This enum is non-exhaustive so additional representation
-/// families can be introduced without requiring callers
-/// to assume that the existing list is complete.
+/// This enum is non-exhaustive so additional representations can
+/// be integrated without requiring callers to assume that the
+/// existing variants form a complete list.
 ///
-/// A representation identifier does not establish that
-/// a corresponding verification adapter exists.
+/// A representation identifier does not establish that a
+/// corresponding verifier or adapter has been implemented.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum IrRepresentationKind {
@@ -236,18 +224,15 @@ pub enum IrRepresentationKind {
 // ERROR CLASSIFICATION
 // =============================================================================
 
-/// Classification of a compiler IR input failure.
-///
-/// The classification is separate from the associated
-/// verification report.
+/// Classification of a compiler IR input verification failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum IrInputErrorKind {
-    /// The canonical verifier identified invalid IR.
+    /// The canonical verifier established that the IR is invalid.
     InvalidIr,
 
-    /// The canonical verifier could not establish all
-    /// required verification properties.
+    /// The canonical verifier could not establish all required
+    /// verification properties.
     IncompleteVerification,
 }
 
@@ -255,11 +240,11 @@ pub enum IrInputErrorKind {
 // INPUT ERROR
 // =============================================================================
 
-/// Structured error returned when canonical IR input
-/// cannot pass the compiler admission boundary.
+/// Structured error returned when canonical IR input cannot pass
+/// the compiler admission boundary.
 ///
-/// The report and classification are private to prevent
-/// callers from constructing contradictory error states.
+/// The classification and report are private so callers cannot
+/// construct contradictory error states through the public API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrInputError {
     kind: IrInputErrorKind,
@@ -267,13 +252,20 @@ pub struct IrInputError {
 }
 
 impl IrInputError {
-    /// Construct an input error from an actual verification result.
+    /// Require a valid canonical verification report.
     ///
-    /// This constructor is private because error classification
-    /// must agree with the canonical report.
-    fn from_report(report: FullVerificationReport) -> Option<Self> {
+    /// Returns the original report unchanged when its status is valid.
+    /// Otherwise, returns an error retaining the complete report.
+    ///
+    /// This helper does not reconstruct or discard verification
+    /// findings.
+    fn require_valid_report(
+        report: FullVerificationReport,
+    ) -> Result<FullVerificationReport, Self> {
         let kind = match report.status() {
-            VerificationStatus::Valid => return None,
+            VerificationStatus::Valid => {
+                return Ok(report);
+            }
 
             VerificationStatus::Invalid => {
                 IrInputErrorKind::InvalidIr
@@ -284,7 +276,7 @@ impl IrInputError {
             }
         };
 
-        Some(Self {
+        Err(Self {
             kind,
             report,
         })
@@ -296,7 +288,8 @@ impl IrInputError {
         self.kind
     }
 
-    /// Return the representation associated with the error.
+    /// Return the canonical representation associated with
+    /// this verification error.
     #[must_use]
     pub const fn representation(&self) -> IrRepresentationKind {
         IrRepresentationKind::Zuir
@@ -308,13 +301,31 @@ impl IrInputError {
         &self.report
     }
 
-    /// Return the number of verification errors.
+    /// Consume the error and recover the original verification report.
+    #[must_use]
+    pub fn into_report(self) -> FullVerificationReport {
+        self.report
+    }
+
+    /// Return the total number of verification findings.
+    #[must_use]
+    pub fn finding_count(&self) -> usize {
+        self.report.issues().len()
+    }
+
+    /// Return the number of error findings.
     #[must_use]
     pub fn error_count(&self) -> usize {
         self.report.count(VerificationSeverity::Error)
     }
 
-    /// Return the number of deferred verification findings.
+    /// Return the number of warning findings.
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.report.count(VerificationSeverity::Warning)
+    }
+
+    /// Return the number of deferred findings.
     #[must_use]
     pub fn deferred_count(&self) -> usize {
         self.report.count(VerificationSeverity::Deferred)
@@ -323,7 +334,10 @@ impl IrInputError {
     /// Return whether the failure was caused by invalid IR.
     #[must_use]
     pub const fn is_invalid(&self) -> bool {
-        matches!(self.kind, IrInputErrorKind::InvalidIr)
+        matches!(
+            self.kind,
+            IrInputErrorKind::InvalidIr
+        )
     }
 
     /// Return whether verification was incomplete.
@@ -345,7 +359,7 @@ impl fmt::Display for IrInputError {
             IrInputErrorKind::InvalidIr => {
                 write!(
                     formatter,
-                    "ZUIR verification failed: {} verification errors",
+                    "ZUIR input verification failed: {} error finding(s)",
                     self.error_count()
                 )
             }
@@ -353,7 +367,7 @@ impl fmt::Display for IrInputError {
             IrInputErrorKind::IncompleteVerification => {
                 write!(
                     formatter,
-                    "ZUIR verification incomplete: {} deferred findings",
+                    "ZUIR input verification incomplete: {} deferred finding(s)",
                     self.deferred_count()
                 )
             }
@@ -361,18 +375,18 @@ impl fmt::Display for IrInputError {
     }
 }
 
-impl std::error::Error for IrInputError {}
+impl Error for IrInputError {}
 
 // =============================================================================
 // UNVERIFIED COMPILATION INPUT
 // =============================================================================
 
-/// An immutable reference to canonical IR supplied for
-/// compiler admission.
+/// An immutable reference to canonical IR supplied for compiler
+/// admission.
 ///
 /// This type represents an input candidate, not verified IR.
 ///
-/// Construction does not perform verification.
+/// Construction does not execute verification.
 ///
 /// Call [`CompilationIrInput::verify`] to obtain a
 /// [`VerifiedIrInput`].
@@ -390,17 +404,16 @@ impl<'a> CompilationIrInput<'a> {
     /// Construct compiler input from canonical ZUIR.
     ///
     /// The supplied verification context must describe one
-    /// consistent, immutable IR snapshot.
+    /// consistent immutable IR snapshot.
     ///
-    /// This function does not execute the verifier.
+    /// This function does not execute verification.
     ///
     /// # Arguments
     ///
-    /// `input`:
-    ///
-    /// The complete canonical verification context containing
-    /// the program, regions, blocks, operations, types, effects,
-    /// ownership information, resource intents and dialect data.
+    /// `input` is the complete canonical verification context
+    /// containing the program, regions, blocks, operations,
+    /// types, effects, ownership information, resource intents,
+    /// dialect registry and operation schemas.
     ///
     /// # Returns
     ///
@@ -426,9 +439,14 @@ impl<'a> CompilationIrInput<'a> {
         }
     }
 
-    /// Execute canonical full-program verification.
+    /// Execute canonical compiler-input verification.
     ///
-    /// Verification is delegated to:
+    /// Verification is delegated through:
+    ///
+    /// `crate::compiler::ir::verification::verify_compilation_input`
+    ///
+    /// That integration delegates the actual verification algorithm
+    /// to the canonical ZUIR verifier:
     ///
     /// `crate::zuir::verify::verify_full`
     ///
@@ -436,56 +454,52 @@ impl<'a> CompilationIrInput<'a> {
     ///
     /// # Success
     ///
-    /// Returns VerifiedIrInput only when the canonical
-    /// verification report has status `Valid`.
+    /// Returns `VerifiedIrInput` only when the canonical report has
+    /// status `VerificationStatus::Valid`.
+    ///
+    /// The exact canonical report is retained in the returned value.
     ///
     /// # Failure
     ///
-    /// Returns IrInputError when the report is:
+    /// Returns `IrInputError` when the report is:
     ///
     /// - Invalid.
     /// - Incomplete.
     ///
-    /// The complete report is retained in the error.
+    /// The complete canonical report is retained in the error.
     ///
     /// # Important
     ///
-    /// Verification success does not establish:
+    /// Successful verification does not establish:
     ///
     /// - Target compatibility.
     /// - Physical resource availability.
     /// - Backend compatibility.
     /// - Hardware allocation.
+    /// - Successful domain conversion.
     /// - Successful lowering.
     /// - Successful linking.
     /// - Runtime execution.
     ///
-    /// These remain separate compiler responsibilities.
+    /// Those remain separate compiler and runtime responsibilities.
     pub fn verify(
         self,
     ) -> Result<VerifiedIrInput<'a>, IrInputError> {
         match self.representation {
             IrRepresentation::Zuir(input) => {
-                let report = verify_full(input);
+                // The compiler verification integration owns the
+                // verification request and delegates to the canonical
+                // ZUIR verifier. Preserve its original report.
+                let report = verify_compilation_input(input)
+                    .into_report();
 
-                match IrInputError::from_report(report) {
-                    None => {
-                        // The canonical report was valid.
-                        //
-                        // Obtain the report again would be incorrect
-                        // and wasteful. The successful report is
-                        // retained directly by the private helper
-                        // below in the implementation.
-                        //
-                        // This branch is replaced by the direct
-                        // verification path below.
-                        unreachable!(
-                            "successful verification is handled below"
-                        )
-                    }
+                // This operation consumes the report exactly once.
+                // It does not rerun verification, clone the report,
+                // or discard successful verification evidence.
+                let report =
+                    IrInputError::require_valid_report(report)?;
 
-                    Some(error) => Err(error),
-                }
+                Ok(VerifiedIrInput::new(input, report))
             }
         }
     }
@@ -496,28 +510,30 @@ impl<'a> CompilationIrInput<'a> {
 // =============================================================================
 
 /// Immutable canonical ZUIR input admitted by the compiler
-/// after successful full-program verification.
+/// after successful canonical full-program verification.
 ///
-/// This type is constructed exclusively through the
-/// verification boundary.
+/// This type can only be constructed through the private
+/// verification-gated admission path.
 ///
 /// It preserves:
 ///
-/// - The original complete IR verification snapshot.
-/// - The canonical verification report.
+/// - The original canonical verification snapshot.
+/// - The exact canonical verification report.
 ///
-/// It does not claim target feasibility or universal
-/// backend compatibility.
+/// It does not claim target feasibility, universal backend
+/// compatibility, or verification of properties that the
+/// canonical verifier has not implemented.
 pub struct VerifiedIrInput<'a> {
     input: &'a FullVerificationInput<'a>,
     report: FullVerificationReport,
 }
 
 impl<'a> VerifiedIrInput<'a> {
-    /// Construct a verified input from an already completed
-    /// canonical verification report.
+    /// Construct verified input from a successfully verified
+    /// canonical report.
     ///
-    /// This constructor is private.
+    /// This constructor is private. Callers cannot bypass the
+    /// public verification-gated admission boundary.
     fn new(
         input: &'a FullVerificationInput<'a>,
         report: FullVerificationReport,
@@ -538,7 +554,8 @@ impl<'a> VerifiedIrInput<'a> {
 
     /// Borrow the original canonical ZUIR program.
     ///
-    /// No cloning, reconstruction or IR conversion occurs.
+    /// No cloning, reconstruction or representation conversion
+    /// occurs.
     #[must_use]
     pub fn program(
         &self,
@@ -548,8 +565,7 @@ impl<'a> VerifiedIrInput<'a> {
 
     /// Borrow the complete verification snapshot.
     ///
-    /// This is the same snapshot supplied to the canonical
-    /// verifier.
+    /// This is the same snapshot supplied to the canonical verifier.
     #[must_use]
     pub fn verification_input(
         &self,
@@ -557,9 +573,9 @@ impl<'a> VerifiedIrInput<'a> {
         self.input
     }
 
-    /// Borrow the verification report.
+    /// Borrow the exact canonical verification report.
     ///
-    /// The report contains the exact findings and stages
+    /// The report retains the findings and completed stages
     /// produced by the canonical verification process.
     #[must_use]
     pub fn verification_report(
@@ -568,25 +584,51 @@ impl<'a> VerifiedIrInput<'a> {
         &self.report
     }
 
-    /// Return whether the canonical verification succeeded.
+    /// Return the canonical verification status.
     ///
-    /// This is always true for a correctly constructed
-    /// VerifiedIrInput.
+    /// This is always `VerificationStatus::Valid` for a correctly
+    /// constructed `VerifiedIrInput`.
+    #[must_use]
+    pub fn verification_status(
+        &self,
+    ) -> VerificationStatus {
+        self.report.status()
+    }
+
+    /// Return whether canonical verification succeeded.
+    ///
+    /// This is always true for a correctly constructed value.
     #[must_use]
     pub fn is_verified(&self) -> bool {
-        self.report.status() == VerificationStatus::Valid
+        self.verification_status() == VerificationStatus::Valid
     }
 
     /// Return the number of verification findings.
+    ///
+    /// A valid report may contain warnings.
     #[must_use]
     pub fn finding_count(&self) -> usize {
         self.report.issues().len()
     }
 
-    /// Return the number of completed verification stages.
+    /// Return the number of warning findings.
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.report.count(VerificationSeverity::Warning)
+    }
+
+    /// Return the number of completed canonical verification stages.
     #[must_use]
     pub fn completed_stage_count(&self) -> usize {
         self.report.stages_completed().len()
+    }
+
+    /// Borrow the completed canonical verification stages.
+    #[must_use]
+    pub fn completed_stages(
+        &self,
+    ) -> &[crate::zuir::verify::VerificationStage] {
+        self.report.stages_completed()
     }
 
     /// Return the public input API version.
@@ -594,16 +636,6 @@ impl<'a> VerifiedIrInput<'a> {
     pub const fn api_version(&self) -> u16 {
         IR_INPUT_API_VERSION
     }
-}
-
-// =============================================================================
-// API VERSION
-// =============================================================================
-
-/// Return the compiler IR input API version.
-#[must_use]
-pub const fn api_version() -> u16 {
-    IR_INPUT_API_VERSION
 }
 
 // =============================================================================
@@ -616,8 +648,15 @@ mod tests {
 
     #[test]
     fn api_version_is_stable() {
-        assert_eq!(api_version(), IR_INPUT_API_VERSION);
-        assert_eq!(IR_INPUT_API_VERSION, 2);
+        assert_eq!(
+            api_version(),
+            IR_INPUT_API_VERSION
+        );
+
+        assert_eq!(
+            IR_INPUT_API_VERSION,
+            2
+        );
     }
 
     #[test]
@@ -629,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn error_classification_is_distinct() {
+    fn error_classifications_are_distinct() {
         assert_ne!(
             IrInputErrorKind::InvalidIr,
             IrInputErrorKind::IncompleteVerification
@@ -637,7 +676,7 @@ mod tests {
     }
 
     #[test]
-    fn default_verification_report_is_not_an_input_error() {
+    fn valid_report_is_preserved_without_reverification() {
         let report = FullVerificationReport::default();
 
         assert_eq!(
@@ -645,40 +684,94 @@ mod tests {
             VerificationStatus::Valid
         );
 
-        assert!(IrInputError::from_report(report).is_none());
+        let accepted =
+            IrInputError::require_valid_report(report)
+                .expect("valid report must be accepted");
+
+        assert_eq!(
+            accepted.status(),
+            VerificationStatus::Valid
+        );
+
+        assert!(accepted.issues().is_empty());
     }
 
     #[test]
-    fn error_classification_matches_report_status() {
-        let mut report = FullVerificationReport::default();
-
-        // A report containing a deferred finding must not be
-        // admitted as verified.
+    fn valid_report_with_warnings_remains_valid() {
+        // The canonical report's public API determines whether
+        // warnings invalidate admission. A warning-only report
+        // has VerificationStatus::Valid by the canonical contract.
         //
-        // Report mutation is private to the canonical verifier,
-        // so this test exercises the public report semantics
-        // through the actual verifier's test suite instead.
-        //
-        // Here we verify that the input error classification
-        // cannot be independently fabricated.
-        assert!(IrInputError::from_report(report).is_none());
+        // This test verifies the admission helper's handling of
+        // the valid status without manufacturing verifier internals.
+        let report = FullVerificationReport::default();
 
-        report = FullVerificationReport::default();
+        let accepted =
+            IrInputError::require_valid_report(report)
+                .expect("valid report must be accepted");
 
         assert_eq!(
-            report.status(),
+            accepted.status(),
             VerificationStatus::Valid
         );
     }
 
     #[test]
-    fn input_error_kind_is_non_exhaustive() {
-        let kind = IrInputErrorKind::InvalidIr;
+    fn invalid_and_incomplete_kinds_remain_distinct() {
+        let invalid = IrInputErrorKind::InvalidIr;
+        let incomplete = IrInputErrorKind::IncompleteVerification;
 
-        assert!(matches!(
-            kind,
-            IrInputErrorKind::InvalidIr
-                | IrInputErrorKind::IncompleteVerification
-        ));
+        assert_ne!(invalid, incomplete);
+    }
+
+    #[test]
+    fn error_representation_is_zuiR() {
+        let report = FullVerificationReport::default();
+
+        // The private fields are accessible to this module's tests.
+        let error = IrInputError {
+            kind: IrInputErrorKind::InvalidIr,
+            report,
+        };
+
+        assert_eq!(
+            error.representation(),
+            IrRepresentationKind::Zuir
+        );
+    }
+
+    #[test]
+    fn error_report_can_be_recovered() {
+        let report = FullVerificationReport::default();
+
+        let error = IrInputError {
+            kind: IrInputErrorKind::IncompleteVerification,
+            report: report.clone(),
+        };
+
+        assert_eq!(
+            error.report(),
+            &report
+        );
+
+        assert_eq!(
+            error.into_report(),
+            report
+        );
+    }
+
+    #[test]
+    fn error_implements_standard_error_trait() {
+        fn accepts_error<E: Error>() {}
+
+        accepts_error::<IrInputError>();
+    }
+
+    #[test]
+    fn verified_input_api_version_is_available() {
+        assert_eq!(
+            IR_INPUT_API_VERSION,
+            2
+        );
     }
 }
