@@ -1,62 +1,161 @@
-//! Cost estimates for compiler analysis and realization planning.
-//!
-//! This module provides a target-independent, extensible cost vocabulary.
-//! It does not:
-//! - select a target or backend;
-//! - allocate physical resources;
-//! - schedule runtime work;
-//! - determine feasibility;
-//! - own canonical IR or semantic information.
-//!
-//! Callers provide estimates from canonical program analysis, target
-//! capability providers, or registered cost-model implementations.
-//!
-//! # Numeric representation
-//!
-//! Integer quantities use `u128` to avoid common narrow-counter limits.
-//! This is a representation limit, not a hardware or program-size limit.
-//! Arithmetic overflow is reported as `CostError::ArithmeticOverflow`.
-//! Floating-point values are not used for exact resource quantities.
-//!
-//! # Extensibility
-//!
-//! `CostMetric` includes an extensible namespaced metric. New compiler
-//! domains can add metrics without changing this module's enum variants.
-//! Existing metrics retain their meaning across compiler stages.
 
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_docs)]
+
+//! # Zamani Compiler — Cost Analysis
+//!
+//! Path: src/compiler/analysis/cost.rs
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
+//!
+//! # Purpose
+//!
+//! Provides target-independent cost observations and estimates for
+//! compiler analysis, optimization, and realization planning.
+//!
+//! This module establishes a common representation for:
+//!
+//! - extensible cost metric identities;
+//! - cost units;
+//! - arbitrary-length exact quantities;
+//! - exact and uncertain cost bounds;
+//! - estimate quality;
+//! - estimator and measurement provenance;
+//! - multidimensional cost vectors;
+//! - explicit aggregation semantics;
+//! - multi-objective comparison policies.
+//!
+//! # Architectural ownership
+//!
+//! This module owns compiler-facing cost evidence.
+//!
+//! It does not own:
+//!
+//! - source-language semantics;
+//! - canonical IR;
+//! - hardware capabilities;
+//! - resource requirement semantics;
+//! - physical resource discovery;
+//! - resource allocation;
+//! - backend selection;
+//! - optimization algorithms;
+//! - physical scheduling;
+//! - quantum routing;
+//! - QEC;
+//! - runtime execution.
+//!
+//! # Canonical authorities
+//!
+//! Semantic authority:
+//!     crate::frontend::semantic
+//!
+//! Resource semantics:
+//!     crate::frontend::semantic::resources
+//!
+//! Capability analysis:
+//!     crate::compiler::analysis::capabilities
+//!
+//! Feasibility:
+//!     crate::compiler::analysis::feasibility
+//!
+//! Resource planning:
+//!     crate::compiler::planning::resource_planning
+//!
+//! Analytical optimization cost models:
+//!     crate::compiler::optimization::cost_model
+//!
+//! Optimization profitability:
+//!     crate::compiler::optimization::profitability
+//!
+//! Optimization planning:
+//!     crate::compiler::optimization::planning
+//!
+//! Quantum-specific cost semantics:
+//!     crate::quantum::optimization
+//!
+//! Quantum routing:
+//!     crate::quantum::routing
+//!
+//! # POCO-REAF
+//!
+//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//!
+//! No universal hardware population, resource capacity, operation count,
+//! workload size, or computing-domain ceiling is introduced.
+//!
+//! Quantities use arbitrary-length decimal representations rather than
+//! fixed-width machine integers.
+//!
+//! This does not promise infinite physical memory or infinite execution.
+//! Processing remains subject to actual available resources and explicit
+//! operational budgets.
+//!
+//! # Important invariant
+//!
+//! An unknown estimate is never zero.
+//! An unbounded estimate is never treated as a finite estimate.
+//! An estimate is not a performance guarantee.
+//! A cost comparison is not a feasibility determination.
+//! A cost model does not establish semantic correctness.
+
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::fmt;
 
-/// Stable identifier for a cost metric.
+// ============================================================================
+// MODULE IDENTITY
+// ============================================================================
+
+/// Stable architectural identity of this module.
+pub const COST_ANALYSIS_MODULE_NAME: &str =
+    "zamani.compiler.analysis.cost";
+
+/// Version of the public cost-analysis contract.
 ///
-/// Names are namespaced strings, for example:
-/// - `compiler.compile_time`
-— - `resource.memory_bytes`
-/// - `execution.latency_ns`
-/// - `communication.transfer_bytes`
-/// - `quantum.estimated_error`
+/// This is not the language version or artifact format version.
+pub const COST_ANALYSIS_API_VERSION: u16 = 1;
+
+// ============================================================================
+// IDENTIFIERS
+// ============================================================================
+
+/// Identifies an extensible cost metric.
 ///
-/// The identifier is deliberately not a closed enum so new domains can
-/// introduce metrics without modifying this module.
+/// Examples:
+///
+/// - compiler.compile_work
+/// - compiler.compile_time_ns
+/// - execution.latency_ns
+/// - execution.throughput
+/// - resource.memory_bytes
+/// - resource.storage_bytes
+/// - communication.bytes
+/// - quantum.gate_operations
+/// - quantum.estimated_error
+/// - ai.tensor_operations
+/// - hdl.synthesis_area
+/// - distributed.communication_latency
+/// - future.photonic.operation_cost
+///
+/// The namespace is open-ended.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct MetricId(String);
 
 impl MetricId {
-    /// Construct a metric identifier.
-    ///
-    /// Empty names and names containing only whitespace are rejected.
-    /// No arbitrary maximum name length is imposed here.
-    pub fn new(name: impl Into<String>) -> Result<Self, CostError> {
-        let name = name.into();
+    /// Creates a validated metric identifier.
+    pub fn new(value: impl Into<String>) -> Result<Self, CostError> {
+        let value = value.into();
 
-        if name.trim().is_empty() {
-            return Err(CostError::InvalidMetricId);
-        }
+        validate_identifier(&value, "metric")?;
 
-        Ok(Self(name))
+        Ok(Self(value))
     }
 
-    /// Return the metric's canonical name.
+    /// Returns the identifier.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -68,182 +167,320 @@ impl fmt::Display for MetricId {
     }
 }
 
-/// Standard cost metrics used across compiler domains.
+/// Identifies a cost measurement unit.
 ///
-/// Domain-specific metrics should use [`CostMetric::Custom`] rather than
-/// adding a new variant for every backend or computing architecture.
+/// Units are extensible identifiers, not a closed enumeration.
+///
+/// Examples:
+///
+/// - bytes
+/// - seconds
+/// - nanoseconds
+/// - joules
+/// - operations
+/// - messages
+/// - gates
+/// - qubits
+/// - implementation-defined units
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum CostMetric {
-    /// Estimated compiler work, measured in an implementation-defined unit.
-    CompileWork,
+pub struct CostUnit(String);
 
-    /// Estimated compilation wall-clock duration, in nanoseconds.
-    CompileTimeNs,
+impl CostUnit {
+    /// Creates a validated unit identifier.
+    pub fn new(value: impl Into<String>) -> Result<Self, CostError> {
+        let value = value.into();
 
-    /// Estimated execution latency, in nanoseconds.
-    ExecutionLatencyNs,
+        validate_identifier(&value, "unit")?;
 
-    /// Estimated throughput, in operations per second.
-    ThroughputPerSecond,
+        Ok(Self(value))
+    }
 
-    /// Estimated energy, in microjoules.
-    EnergyMicrojoules,
-
-    /// Estimated memory consumption, in bytes.
-    MemoryBytes,
-
-    /// Estimated storage consumption, in bytes.
-    StorageBytes,
-
-    /// Estimated communication volume, in bytes.
-    CommunicationBytes,
-
-    /// Estimated number of operations.
-    OperationCount,
-
-    /// Estimated number of synchronization events.
-    SynchronizationCount,
-
-    /// Domain-specific metric.
-    Custom(MetricId),
-}
-
-impl CostMetric {
-    /// Return the metric's stable textual name.
-    pub fn name(&self) -> String {
-        match self {
-            Self::CompileWork => "compiler.compile_work".to_owned(),
-            Self::CompileTimeNs => "compiler.compile_time_ns".to_owned(),
-            Self::ExecutionLatencyNs => "execution.latency_ns".to_owned(),
-            Self::ThroughputPerSecond => "execution.throughput_per_second".to_owned(),
-            Self::EnergyMicrojoules => "execution.energy_microjoules".to_owned(),
-            Self::MemoryBytes => "resource.memory_bytes".to_owned(),
-            Self::StorageBytes => "resource.storage_bytes".to_owned(),
-            Self::CommunicationBytes => "communication.bytes".to_owned(),
-            Self::OperationCount => "program.operation_count".to_owned(),
-            Self::SynchronizationCount => {
-                "execution.synchronization_count".to_owned()
-            }
-            Self::Custom(id) => id.as_str().to_owned(),
-        }
+    /// Returns the unit identifier.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
-/// A non-negative, exact quantity.
+impl fmt::Display for CostUnit {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+fn validate_identifier(
+    value: &str,
+    kind: &'static str,
+) -> Result<(), CostError> {
+    if value.trim().is_empty()
+        || value.trim() != value
+        || value.chars().any(char::is_control)
+    {
+        return Err(CostError::InvalidIdentifier {
+            kind,
+            value: value.to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// EXACT QUANTITIES
+// ============================================================================
+
+/// An arbitrary-length exact non-negative integer.
 ///
-/// Units are defined by the associated [`CostMetric`]. This type does not
-/// assume that every metric is additive or comparable with every other one.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct CostQuantity(u128);
+/// The canonical representation is a decimal string.
+///
+/// Examples:
+///
+/// - 0
+/// - 1024
+/// - 18446744073709551616
+/// - 999999999999999999999999999999999999999999
+///
+/// No u64, u128, usize, pointer-width or hardware-width ceiling is imposed.
+///
+/// Actual representation size is bounded by available memory.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct CostQuantity {
+    digits: String,
+}
 
 impl CostQuantity {
-    /// Construct a quantity from its exact integer representation.
-    pub const fn new(value: u128) -> Self {
-        Self(value)
+    /// Creates a canonical exact quantity.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, CostError> {
+        let value = value.as_ref();
+
+        if value.is_empty()
+            || !value.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Err(CostError::InvalidQuantity {
+                value: value.to_owned(),
+            });
+        }
+
+        let normalized = value.trim_start_matches('0');
+
+        Ok(Self {
+            digits: if normalized.is_empty() {
+                "0".to_owned()
+            } else {
+                normalized.to_owned()
+            },
+        })
     }
 
-    /// Return the exact integer representation.
-    pub const fn value(self) -> u128 {
-        self.0
-    }
-
-    /// Add two quantities with overflow checking.
-    pub fn checked_add(self, rhs: Self) -> Result<Self, CostError> {
-        self.0
-            .checked_add(rhs.0)
-            .map(Self)
-            .ok_or(CostError::ArithmeticOverflow)
-    }
-
-    /// Multiply two quantities with overflow checking.
-    pub fn checked_mul(self, rhs: Self) -> Result<Self, CostError> {
-        self.0
-            .checked_mul(rhs.0)
-            .map(Self)
-            .ok_or(CostError::ArithmeticOverflow)
-    }
-
-    /// Return the maximum of two quantities.
-    pub const fn max(self, rhs: Self) -> Self {
-        if self.0 >= rhs.0 {
-            self
-        } else {
-            rhs
+    /// Creates zero.
+    #[must_use]
+    pub fn zero() -> Self {
+        Self {
+            digits: "0".to_owned(),
         }
     }
 
-    /// Return the minimum of two quantities.
-    pub const fn min(self, rhs: Self) -> Self {
-        if self.0 <= rhs.0 {
-            self
-        } else {
-            rhs
+    /// Returns the canonical decimal representation.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.digits
+    }
+
+    /// Returns whether the quantity is zero.
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        self.digits == "0"
+    }
+
+    /// Adds two quantities without machine-integer conversion.
+    pub fn checked_add(&self, rhs: &Self) -> Result<Self, CostError> {
+        let mut left = self.digits.bytes().rev();
+        let mut right = rhs.digits.bytes().rev();
+
+        let mut result = Vec::new();
+        let mut carry = 0_u8;
+
+        loop {
+            let a = left.next();
+            let b = right.next();
+
+            if a.is_none() && b.is_none() && carry == 0 {
+                break;
+            }
+
+            let a = a.map(|v| v - b'0').unwrap_or(0);
+            let b = b.map(|v| v - b'0').unwrap_or(0);
+
+            let sum = a + b + carry;
+
+            result.push(b'0' + sum % 10);
+            carry = sum / 10;
         }
+
+        result.reverse();
+
+        let digits = String::from_utf8(result)
+            .map_err(|_| CostError::ArithmeticFailure)?;
+
+        Ok(Self { digits })
+    }
+
+    /// Multiplies two quantities without machine-integer conversion.
+    ///
+    /// Intermediate arithmetic operates on individual decimal digits.
+    pub fn checked_mul(&self, rhs: &Self) -> Result<Self, CostError> {
+        if self.is_zero() || rhs.is_zero() {
+            return Ok(Self::zero());
+        }
+
+        let left = self.digits.as_bytes();
+        let right = rhs.digits.as_bytes();
+
+        let mut result = vec![0_u8; left.len() + right.len() + 1];
+
+        for i in (0..left.len()).rev() {
+            let mut carry = 0_u16;
+
+            for j in (0..right.len()).rev() {
+                let index = i + j + 1;
+
+                let a = u16::from(left[i] - b'0');
+                let b = u16::from(right[j] - b'0');
+
+                let total =
+                    a * b + u16::from(result[index]) + carry;
+
+                result[index] = (total % 10) as u8;
+                carry = total / 10;
+            }
+
+            let mut index = i;
+
+            while carry > 0 {
+                let total =
+                    u16::from(result[index]) + carry;
+
+                result[index] = (total % 10) as u8;
+                carry = total / 10;
+
+                if index == 0 && carry > 0 {
+                    return Err(CostError::ArithmeticFailure);
+                }
+
+                index = index.saturating_sub(1);
+            }
+        }
+
+        let first = result
+            .iter()
+            .position(|digit| *digit != 0)
+            .unwrap_or(result.len() - 1);
+
+        let digits = result[first..]
+            .iter()
+            .map(|digit| char::from(b'0' + *digit))
+            .collect();
+
+        Ok(Self { digits })
+    }
+
+    /// Compares two exact quantities numerically.
+    #[must_use]
+    pub fn compare(&self, rhs: &Self) -> Ordering {
+        self.cmp(rhs)
+    }
+}
+
+impl Ord for CostQuantity {
+    fn cmp(&self, rhs: &Self) -> Ordering {
+        self.digits
+            .len()
+            .cmp(&rhs.digits.len())
+            .then_with(|| self.digits.cmp(&rhs.digits))
+    }
+}
+
+impl PartialOrd for CostQuantity {
+    fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
+        Some(self.cmp(rhs))
     }
 }
 
 impl From<u64> for CostQuantity {
     fn from(value: u64) -> Self {
-        Self(u128::from(value))
+        Self::new(value.to_string()).expect("u64 is a valid quantity")
     }
 }
 
 impl From<u128> for CostQuantity {
     fn from(value: u128) -> Self {
-        Self(value)
+        Self::new(value.to_string()).expect("u128 is a valid quantity")
     }
 }
 
 impl fmt::Display for CostQuantity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        f.write_str(&self.digits)
     }
 }
 
-/// Whether a cost value is exact, estimated, or not currently known.
+// ============================================================================
+// ESTIMATE QUALITY
+// ============================================================================
+
+/// Describes the quality of an estimate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum EstimateQuality {
-    /// Derived from exact analysis or an exact measurement.
+    /// Established through exact analysis or exact measurement.
     Exact,
 
-    /// Derived from a model, heuristic, or measurement extrapolation.
+    /// Obtained through a model, heuristic or extrapolation.
     Estimated,
 
-    /// A value is not currently available.
+    /// Insufficient evidence is available.
     Unknown,
 }
 
-/// Bound on a non-negative cost quantity.
+// ============================================================================
+// COST BOUNDS
+// ============================================================================
+
+/// Describes the known bounds of a non-negative cost.
 ///
-/// `Unknown` is not zero. `Unbounded` means the model cannot provide a
-/// finite upper bound. These states prevent missing data from being
-/// silently treated as free work or unlimited capacity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+/// Unknown and unbounded are distinct states.
+///
+/// Unknown means the value cannot currently be established.
+///
+/// Unbounded means the model cannot establish a finite upper bound.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CostBound {
     /// The exact value is known.
     Exact(CostQuantity),
 
-    /// A lower bound is known, but the exact value is not.
+    /// The value is at least the specified quantity.
     AtLeast(CostQuantity),
 
-    /// A finite upper bound is known, but the exact value is not.
+    /// The value is at most the specified quantity.
     AtMost(CostQuantity),
 
     /// Both lower and upper bounds are known.
     Range {
+        /// Inclusive lower bound.
         lower: CostQuantity,
+
+        /// Inclusive upper bound.
         upper: CostQuantity,
     },
 
-    /// The cost is unknown.
+    /// The value is unknown.
     Unknown,
 
-    /// The cost has no finite upper bound in this model.
+    /// The value has no established finite upper bound.
     Unbounded,
 }
 
 impl CostBound {
-    /// Construct a validated range.
+    /// Constructs a validated range.
     pub fn range(
         lower: CostQuantity,
         upper: CostQuantity,
@@ -255,157 +492,130 @@ impl CostBound {
         Ok(Self::Range { lower, upper })
     }
 
-    /// Return the exact value, if this bound is exact.
-    pub const fn exact_value(self) -> Option<CostQuantity> {
+    /// Returns the exact value if available.
+    #[must_use]
+    pub fn exact_value(&self) -> Option<&CostQuantity> {
         match self {
             Self::Exact(value) => Some(value),
             _ => None,
         }
     }
 
-    /// Return a known lower bound, if available.
-    pub const fn lower_bound(self) -> Option<CostQuantity> {
+    /// Returns an established lower bound.
+    #[must_use]
+    pub fn lower_bound(&self) -> Option<&CostQuantity> {
         match self {
-            Self::Exact(value) | Self::AtLeast(value) => Some(value),
+            Self::Exact(value)
+            | Self::AtLeast(value) => Some(value),
+
             Self::Range { lower, .. } => Some(lower),
-            Self::AtMost(_) | Self::Unknown | Self::Unbounded => None,
+
+            Self::AtMost(_)
+            | Self::Unknown
+            | Self::Unbounded => None,
         }
     }
 
-    /// Return a known finite upper bound, if available.
-    pub const fn upper_bound(self) -> Option<CostQuantity> {
+    /// Returns an established finite upper bound.
+    #[must_use]
+    pub fn upper_bound(&self) -> Option<&CostQuantity> {
         match self {
-            Self::Exact(value) | Self::AtMost(value) => Some(value),
+            Self::Exact(value)
+            | Self::AtMost(value) => Some(value),
+
             Self::Range { upper, .. } => Some(upper),
-            Self::AtLeast(_) | Self::Unknown | Self::Unbounded => None,
+
+            Self::AtLeast(_)
+            | Self::Unknown
+            | Self::Unbounded => None,
         }
     }
 
-    /// Add two bounds conservatively.
+    /// Adds two independent non-negative cost bounds.
     ///
-    /// The method never converts unknown or unbounded quantities into
-    /// exact values. If finite arithmetic overflows, it returns an error.
-    pub fn checked_add(self, rhs: Self) -> Result<Self, CostError> {
-        use CostBound::*;
+    /// Bound propagation is conservative.
+    ///
+    /// Unknown information is never converted into zero.
+    /// Missing upper bounds are never converted into finite bounds.
+    pub fn checked_add(&self, rhs: &Self) -> Result<Self, CostError> {
+        if matches!(self, Self::Unknown)
+            || matches!(rhs, Self::Unknown)
+        {
+            return Ok(Self::Unknown);
+        }
 
-        match (self, rhs) {
-            (Exact(a), Exact(b)) => Ok(Exact(a.checked_add(b)?)),
+        let zero = CostQuantity::zero();
 
-            (Unbounded, _) | (_, Unbounded) => Ok(Unbounded),
+        let left_lower = self.lower_bound().unwrap_or(&zero);
+        let right_lower = rhs.lower_bound().unwrap_or(&zero);
 
-            (Unknown, _) | (_, Unknown) => Ok(Unknown),
+        let left_upper = self.upper_bound();
+        let right_upper = rhs.upper_bound();
 
-            (AtLeast(a), AtLeast(b)) => Ok(AtLeast(a.checked_add(b)?)),
+        let lower = if self.lower_bound().is_some()
+            && rhs.lower_bound().is_some()
+        {
+            Some(left_lower.checked_add(right_lower)?)
+        } else {
+            None
+        };
 
-            (AtLeast(a), Exact(b)) | (Exact(b), AtLeast(a)) => {
-                Ok(AtLeast(a.checked_add(b)?))
-            }
+        let upper = match (left_upper, right_upper) {
+            (Some(a), Some(b)) => Some(a.checked_add(b)?),
+            _ => None,
+        };
 
-            (AtMost(a), AtMost(b)) => Ok(AtMost(a.checked_add(b)?)),
-
-            (AtMost(a), Exact(b)) | (Exact(b), AtMost(a)) => {
-                Ok(AtMost(a.checked_add(b)?))
-            }
-
-            (
-                Range {
-                    lower: a_lower,
-                    upper: a_upper,
-                },
-                Range {
-                    lower: b_lower,
-                    upper: b_upper,
-                },
-            ) => Self::range(
-                a_lower.checked_add(b_lower)?,
-                a_upper.checked_add(b_upper)?,
-            ),
-
-            (
-                Range {
-                    lower,
-                    upper,
-                },
-                Exact(value),
-            )
-            | (
-                Exact(value),
-                Range {
-                    lower,
-                    upper,
-                },
-            ) => Self::range(
-                lower.checked_add(value)?,
-                upper.checked_add(value)?,
-            ),
-
-            (
-                Range {
-                    lower,
-                    upper,
-                },
-                AtLeast(value),
-            )
-            | (
-                AtLeast(value),
-                Range {
-                    lower,
-                    upper,
-                },
-            ) => Ok(AtLeast(lower.checked_add(value)?.min(upper.checked_add(value)?))),
-
-            (
-                Range {
-                    lower,
-                    upper,
-                },
-                AtMost(value),
-            )
-            | (
-                AtMost(value),
-                Range {
-                    lower,
-                    upper,
-                },
-            ) => Ok(AtMost(upper.checked_add(value)?.max(lower.checked_add(value)?))),
-
-            (AtLeast(a), AtMost(b)) | (AtMost(b), AtLeast(a)) => {
-                // Both bounds exist, but their exact relationship may not.
-                // We can retain a valid interval only when it is ordered.
-                if a <= b {
-                    Self::range(a, b)
+        match (lower, upper) {
+            (Some(lower), Some(upper)) => {
+                if lower == upper {
+                    Ok(Self::Exact(lower))
                 } else {
-                    Ok(Unknown)
+                    Self::range(lower, upper)
                 }
             }
+
+            (Some(lower), None) => Ok(Self::AtLeast(lower)),
+
+            (None, Some(upper)) => Ok(Self::AtMost(upper)),
+
+            (None, None) => Ok(Self::Unbounded),
         }
+    }
+
+    /// Returns whether the estimate has an established exact value.
+    #[must_use]
+    pub fn is_exact(&self) -> bool {
+        matches!(self, Self::Exact(_))
     }
 }
 
-/// Provenance of a cost estimate.
+// ============================================================================
+// PROVENANCE
+// ============================================================================
+
+/// Identifies the origin of a cost estimate.
 ///
-/// This is descriptive metadata; it does not claim that the named source
-/// has been independently verified.
+/// Provenance is descriptive evidence.
+///
+/// It does not automatically authenticate the source.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct CostProvenance {
-    /// Stable identifier of the estimator, analysis, or measurement source.
+    /// Estimator, analysis or measurement source.
     pub source: String,
 
-    /// Optional version of the estimator or model.
+    /// Optional estimator version.
     pub model_version: Option<String>,
 
-    /// Optional note explaining the estimate.
+    /// Optional explanatory note.
     pub note: Option<String>,
 }
 
 impl CostProvenance {
-    /// Construct provenance with a source identifier.
+    /// Creates validated provenance.
     pub fn new(source: impl Into<String>) -> Result<Self, CostError> {
         let source = source.into();
 
-        if source.trim().is_empty() {
-            return Err(CostError::InvalidProvenance);
-        }
+        validate_identifier(&source, "provenance")?;
 
         Ok(Self {
             source,
@@ -413,139 +623,446 @@ impl CostProvenance {
             note: None,
         })
     }
+
+    /// Attaches a model version.
+    pub fn with_model_version(
+        mut self,
+        version: impl Into<String>,
+    ) -> Result<Self, CostError> {
+        let version = version.into();
+
+        validate_identifier(&version, "model version")?;
+
+        self.model_version = Some(version);
+
+        Ok(self)
+    }
+
+    /// Attaches an explanatory note.
+    #[must_use]
+    pub fn with_note(mut self, note: impl Into<String>) -> Self {
+        self.note = Some(note.into());
+        self
+    }
 }
 
-/// One cost estimate for a single metric.
+// ============================================================================
+// COST ESTIMATES
+// ============================================================================
+
+/// One cost estimate for one metric and one unit.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CostEstimate {
-    /// Metric being estimated.
-    pub metric: CostMetric,
+    metric: CostMetric,
+    unit: CostUnit,
+    bound: CostBound,
+    quality: EstimateQuality,
+    provenance: Option<CostProvenance>,
+}
 
-    /// Exact, bounded, unknown, or unbounded value.
-    pub bound: CostBound,
+/// A cost metric identity.
+///
+/// Standard metric identities are provided for common compiler needs.
+/// Custom metrics remain open-ended.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub enum CostMetric {
+    /// Compiler work.
+    CompileWork,
 
-    /// Confidence/quality classification.
-    pub quality: EstimateQuality,
+    /// Compilation duration.
+    CompileTime,
 
-    /// Optional source provenance.
-    pub provenance: Option<CostProvenance>,
+    /// Execution latency.
+    ExecutionLatency,
+
+    /// Execution throughput.
+    Throughput,
+
+    /// Energy consumption.
+    Energy,
+
+    /// Peak memory consumption.
+    Memory,
+
+    /// Storage consumption.
+    Storage,
+
+    /// Communication volume.
+    Communication,
+
+    /// Operation count.
+    Operations,
+
+    /// Synchronization count.
+    Synchronizations,
+
+    /// Custom extensible metric.
+    Custom(MetricId),
+}
+
+impl CostMetric {
+    /// Returns the stable textual identity.
+    #[must_use]
+    pub fn name(&self) -> String {
+        match self {
+            Self::CompileWork => "compiler.compile_work".to_owned(),
+            Self::CompileTime => "compiler.compile_time".to_owned(),
+            Self::ExecutionLatency => "execution.latency".to_owned(),
+            Self::Throughput => "execution.throughput".to_owned(),
+            Self::Energy => "execution.energy".to_owned(),
+            Self::Memory => "resource.memory".to_owned(),
+            Self::Storage => "resource.storage".to_owned(),
+            Self::Communication => "communication.volume".to_owned(),
+            Self::Operations => "program.operations".to_owned(),
+            Self::Synchronizations => {
+                "execution.synchronizations".to_owned()
+            }
+            Self::Custom(id) => id.as_str().to_owned(),
+        }
+    }
 }
 
 impl CostEstimate {
-    /// Construct an estimate.
-    pub const fn new(
+    /// Constructs a validated cost estimate.
+    pub fn new(
         metric: CostMetric,
+        unit: CostUnit,
         bound: CostBound,
         quality: EstimateQuality,
+    ) -> Result<Self, CostError> {
+        match (&bound, quality) {
+            (CostBound::Exact(_), EstimateQuality::Exact) => {}
+
+            (CostBound::Unknown, EstimateQuality::Unknown) => {}
+
+            (CostBound::Unknown, _) => {
+                return Err(CostError::QualityMismatch);
+            }
+
+            (_, EstimateQuality::Exact) => {
+                return Err(CostError::QualityMismatch);
+            }
+
+            (_, EstimateQuality::Unknown) => {
+                return Err(CostError::QualityMismatch);
+            }
+
+            (_, EstimateQuality::Estimated) => {}
+        }
+
+        Ok(Self {
+            metric,
+            unit,
+            bound,
+            quality,
+            provenance: None,
+        })
+    }
+
+    /// Creates an exact estimate.
+    pub fn exact(
+        metric: CostMetric,
+        unit: CostUnit,
+        value: CostQuantity,
     ) -> Self {
         Self {
             metric,
-            bound,
-            quality,
+            unit,
+            bound: CostBound::Exact(value),
+            quality: EstimateQuality::Exact,
             provenance: None,
         }
     }
 
-    /// Attach provenance.
-    pub fn with_provenance(mut self, provenance: CostProvenance) -> Self {
+    /// Creates an unknown estimate.
+    pub fn unknown(
+        metric: CostMetric,
+        unit: CostUnit,
+    ) -> Self {
+        Self {
+            metric,
+            unit,
+            bound: CostBound::Unknown,
+            quality: EstimateQuality::Unknown,
+            provenance: None,
+        }
+    }
+
+    /// Attaches provenance.
+    #[must_use]
+    pub fn with_provenance(
+        mut self,
+        provenance: CostProvenance,
+    ) -> Self {
         self.provenance = Some(provenance);
         self
     }
 
-    /// Construct an exact estimate.
-    pub const fn exact(metric: CostMetric, value: CostQuantity) -> Self {
-        Self::new(
-            metric,
-            CostBound::Exact(value),
-            EstimateQuality::Exact,
-        )
+    /// Returns the metric.
+    #[must_use]
+    pub fn metric(&self) -> &CostMetric {
+        &self.metric
     }
 
-    /// Construct an unknown estimate.
-    pub const fn unknown(metric: CostMetric) -> Self {
-        Self::new(
-            metric,
-            CostBound::Unknown,
-            EstimateQuality::Unknown,
-        )
+    /// Returns the unit.
+    #[must_use]
+    pub fn unit(&self) -> &CostUnit {
+        &self.unit
+    }
+
+    /// Returns the bound.
+    #[must_use]
+    pub fn bound(&self) -> &CostBound {
+        &self.bound
+    }
+
+    /// Returns estimate quality.
+    #[must_use]
+    pub const fn quality(&self) -> EstimateQuality {
+        self.quality
+    }
+
+    /// Returns provenance.
+    #[must_use]
+    pub fn provenance(&self) -> Option<&CostProvenance> {
+        self.provenance.as_ref()
     }
 }
 
-/// A collection of cost estimates for a program, operation, plan, or stage.
+// ============================================================================
+// EXPLICIT AGGREGATION
+// ============================================================================
+
+/// Defines how two observations of the same metric may be aggregated.
 ///
-/// Metrics are stored by identifier for deterministic iteration.
-/// Each metric is kept separate: memory bytes are not added to latency,
-/// and latency is not compared with energy unless a policy explicitly
-/// defines a conversion or weighting.
+/// Aggregation is never inferred merely from the metric name.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum CostAggregation {
+    /// Add independent quantities.
+    Sum,
+
+    /// Retain the larger quantity.
+    Maximum,
+
+    /// Retain the smaller quantity.
+    Minimum,
+}
+
+impl CostAggregation {
+    /// Aggregates two bounds using the declared operation.
+    pub fn aggregate(
+        self,
+        left: &CostBound,
+        right: &CostBound,
+    ) -> Result<CostBound, CostError> {
+        match self {
+            Self::Sum => left.checked_add(right),
+
+            Self::Maximum => aggregate_extreme(left, right, true),
+
+            Self::Minimum => aggregate_extreme(left, right, false),
+        }
+    }
+}
+
+fn aggregate_extreme(
+    left: &CostBound,
+    right: &CostBound,
+    maximum: bool,
+) -> Result<CostBound, CostError> {
+    if matches!(left, CostBound::Unknown)
+        || matches!(right, CostBound::Unknown)
+    {
+        return Ok(CostBound::Unknown);
+    }
+
+    let lower = match (left.lower_bound(), right.lower_bound()) {
+        (Some(a), Some(b)) => {
+            Some(if maximum {
+                a.max(b).clone()
+            } else {
+                a.min(b).clone()
+            })
+        }
+        _ => None,
+    };
+
+    let upper = match (left.upper_bound(), right.upper_bound()) {
+        (Some(a), Some(b)) => {
+            Some(if maximum {
+                a.max(b).clone()
+            } else {
+                a.min(b).clone()
+            })
+        }
+        _ => None,
+    };
+
+    match (lower, upper) {
+        (Some(lower), Some(upper)) => {
+            if lower == upper {
+                Ok(CostBound::Exact(lower))
+            } else {
+                CostBound::range(lower, upper)
+            }
+        }
+
+        (Some(lower), None) => Ok(CostBound::AtLeast(lower)),
+
+        (None, Some(upper)) => Ok(CostBound::AtMost(upper)),
+
+        (None, None) => Ok(CostBound::Unbounded),
+    }
+}
+
+// ============================================================================
+// COST VECTOR
+// ============================================================================
+
+/// A deterministic collection of independent cost estimates.
+///
+/// Metrics are kept separate.
+///
+/// Different units are never implicitly converted.
+///
+/// The vector does not automatically assume that latency, energy,
+/// memory and operation counts can be added together.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CostVector {
     estimates: BTreeMap<CostMetric, CostEstimate>,
 }
 
 impl CostVector {
-    /// Create an empty cost vector.
+    /// Creates an empty vector.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Insert or replace an estimate for its metric.
-    pub fn insert(&mut self, estimate: CostEstimate) {
-        self.estimates.insert(estimate.metric.clone(), estimate);
+    /// Inserts an estimate.
+    ///
+    /// Duplicate metric identities are rejected.
+    pub fn insert(
+        &mut self,
+        estimate: CostEstimate,
+    ) -> Result<(), CostError> {
+        let metric = estimate.metric.clone();
+
+        if self.estimates.contains_key(&metric) {
+            return Err(CostError::DuplicateMetric {
+                metric: metric.name(),
+            });
+        }
+
+        self.estimates.insert(metric, estimate);
+
+        Ok(())
     }
 
-    /// Get an estimate by metric.
+    /// Explicitly replaces an existing estimate.
+    ///
+    /// This is intended for deliberate evidence refinement.
+    pub fn replace(
+        &mut self,
+        estimate: CostEstimate,
+    ) -> Option<CostEstimate> {
+        self.estimates
+            .insert(estimate.metric.clone(), estimate)
+    }
+
+    /// Retrieves an estimate.
+    #[must_use]
     pub fn get(&self, metric: &CostMetric) -> Option<&CostEstimate> {
         self.estimates.get(metric)
     }
 
-    /// Iterate estimates in deterministic metric order.
-    pub fn iter(&self) -> impl Iterator<Item = (&CostMetric, &CostEstimate)> {
+    /// Iterates estimates in deterministic order.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (&CostMetric, &CostEstimate)> {
         self.estimates.iter()
     }
 
-    /// Return true if the vector has no estimates.
-    pub fn is_empty(&self) -> bool {
-        self.estimates.is_empty()
-    }
-
-    /// Return the number of metrics in this vector.
+    /// Returns the number of metrics.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.estimates.len()
     }
 
-    /// Add a cost vector metric-by-metric.
+    /// Returns whether the vector is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.estimates.is_empty()
+    }
+
+    /// Merges two vectors without performing numerical aggregation.
     ///
-    /// Metrics missing from one side are preserved as-is. Matching metrics
-    /// are combined only when their bounds can be combined conservatively.
-    pub fn checked_add(&self, rhs: &Self) -> Result<Self, CostError> {
+    /// A duplicate metric is an error because its aggregation semantics
+    /// have not been specified.
+    pub fn merge(&self, rhs: &Self) -> Result<Self, CostError> {
         let mut result = self.clone();
 
-        for (metric, rhs_estimate) in rhs.iter() {
+        for estimate in rhs.estimates.values() {
+            result.insert(estimate.clone())?;
+        }
+
+        Ok(result)
+    }
+
+    /// Aggregates two vectors using explicitly supplied metric operations.
+    ///
+    /// A missing metric on either side is preserved.
+    ///
+    /// Duplicate metrics require an explicit aggregation operation.
+    ///
+    /// Units must match exactly. Unit conversion belongs to an
+    /// authoritative unit-conversion service.
+    pub fn aggregate(
+        &self,
+        rhs: &Self,
+        operations: &BTreeMap<CostMetric, CostAggregation>,
+    ) -> Result<Self, CostError> {
+        let mut result = self.clone();
+
+        for (metric, incoming) in &rhs.estimates {
             match result.estimates.get(metric) {
-                Some(lhs_estimate) => {
-                    let bound = lhs_estimate.bound.checked_add(rhs_estimate.bound)?;
+                None => {
+                    result.insert(incoming.clone())?;
+                }
 
-                    let quality = if lhs_estimate.quality == EstimateQuality::Unknown
-                        || rhs_estimate.quality == EstimateQuality::Unknown
-                    {
-                        EstimateQuality::Unknown
-                    } else if lhs_estimate.quality == EstimateQuality::Estimated
-                        || rhs_estimate.quality == EstimateQuality::Estimated
-                    {
-                        EstimateQuality::Estimated
-                    } else {
-                        EstimateQuality::Exact
-                    };
+                Some(existing) => {
+                    let operation = operations
+                        .get(metric)
+                        .ok_or_else(|| CostError::MissingAggregation {
+                            metric: metric.name(),
+                        })?;
 
-                    result.insert(CostEstimate {
-                        metric: metric.clone(),
+                    if existing.unit != incoming.unit {
+                        return Err(CostError::UnitMismatch {
+                            metric: metric.name(),
+                            left: existing.unit.as_str().to_owned(),
+                            right: incoming.unit.as_str().to_owned(),
+                        });
+                    }
+
+                    let bound = operation.aggregate(
+                        &existing.bound,
+                        &incoming.bound,
+                    )?;
+
+                    let quality = combine_quality(
+                        existing.quality,
+                        incoming.quality,
+                    );
+
+                    let estimate = CostEstimate::new(
+                        metric.clone(),
+                        existing.unit.clone(),
                         bound,
                         quality,
-                        provenance: None,
-                    });
-                }
-                None => {
-                    result.insert(rhs_estimate.clone());
+                    )?;
+
+                    result.replace(estimate);
                 }
             }
         }
@@ -554,159 +1071,410 @@ impl CostVector {
     }
 }
 
-/// A cost objective.
-///
-/// Objective direction is explicit; lower cost is not universally better
-/// for metrics such as throughput.
+fn combine_quality(
+    left: EstimateQuality,
+    right: EstimateQuality,
+) -> EstimateQuality {
+    match (left, right) {
+        (EstimateQuality::Unknown, _)
+        | (_, EstimateQuality::Unknown) => EstimateQuality::Unknown,
+
+        (EstimateQuality::Estimated, _)
+        | (_, EstimateQuality::Estimated) => EstimateQuality::Estimated,
+
+        _ => EstimateQuality::Exact,
+    }
+}
+
+// ============================================================================
+// OBJECTIVES AND COMPARISON
+// ============================================================================
+
+/// Direction of a cost objective.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ObjectiveDirection {
+    /// Prefer smaller values.
     Minimize,
+
+    /// Prefer larger values.
     Maximize,
 }
 
-/// One objective used to compare plans.
+/// One objective in a comparison policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CostObjective {
+    /// Metric to compare.
     pub metric: CostMetric,
+
+    /// Desired direction.
     pub direction: ObjectiveDirection,
 }
 
-/// A policy describing which metrics matter to a decision.
-///
-/// This policy does not itself decide feasibility. Resource constraints and
-/// capability requirements must be evaluated by their respective analyses.
+/// A deterministic lexicographic comparison policy.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CostPolicy {
     objectives: Vec<CostObjective>,
 }
 
 impl CostPolicy {
-    /// Create an empty policy.
+    /// Creates an empty policy.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Add an objective.
-    pub fn add_objective(&mut self, objective: CostObjective) {
+    /// Adds an objective.
+    ///
+    /// Duplicate objectives are rejected.
+    pub fn add_objective(
+        &mut self,
+        objective: CostObjective,
+    ) -> Result<(), CostError> {
+        if self.objectives.iter().any(|existing| {
+            existing.metric == objective.metric
+        }) {
+            return Err(CostError::DuplicateObjective {
+                metric: objective.metric.name(),
+            });
+        }
+
         self.objectives.push(objective);
+
+        Ok(())
     }
 
-    /// Return objectives in policy order.
+    /// Returns objectives in priority order.
+    #[must_use]
     pub fn objectives(&self) -> &[CostObjective] {
         &self.objectives
     }
 
-    /// Compare two cost vectors lexicographically using this policy.
+    /// Compares two cost vectors.
     ///
-    /// Returns `None` if the policy is empty, a required metric is missing,
-    /// or an estimate is not exact. This avoids inventing an ordering from
-    /// unknown or partial data.
-    pub fn compare_exact(
+    /// Returns None when:
+    ///
+    /// - the policy is empty;
+    /// - a required metric is missing;
+    /// - units differ;
+    /// - evidence is unknown;
+    /// - uncertainty prevents a defensible ordering.
+    ///
+    /// Disjoint conservative ranges can be compared safely.
+    pub fn compare(
         &self,
-        lhs: &CostVector,
-        rhs: &CostVector,
-    ) -> Option<std::cmp::Ordering> {
-        use std::cmp::Ordering;
+        left: &CostVector,
+        right: &CostVector,
+    ) -> Result<Option<Ordering>, CostError> {
+        if self.objectives.is_empty() {
+            return Ok(None);
+        }
 
         for objective in &self.objectives {
-            let lhs_value = lhs
-                .get(&objective.metric)?
-                .bound
-                .exact_value()?;
-
-            let rhs_value = rhs
-                .get(&objective.metric)?
-                .bound
-                .exact_value()?;
-
-            let ordering = lhs_value.cmp(&rhs_value);
-
-            let ordering = match objective.direction {
-                ObjectiveDirection::Minimize => ordering,
-                ObjectiveDirection::Maximize => ordering.reverse(),
+            let Some(a) = left.get(&objective.metric) else {
+                return Ok(None);
             };
 
+            let Some(b) = right.get(&objective.metric) else {
+                return Ok(None);
+            };
+
+            if a.unit != b.unit {
+                return Err(CostError::UnitMismatch {
+                    metric: objective.metric.name(),
+                    left: a.unit.as_str().to_owned(),
+                    right: b.unit.as_str().to_owned(),
+                });
+            }
+
+            let Some(mut ordering) = compare_bounds(
+                &a.bound,
+                &b.bound,
+            ) else {
+                return Ok(None);
+            };
+
+            if objective.direction == ObjectiveDirection::Maximize {
+                ordering = ordering.reverse();
+            }
+
             if ordering != Ordering::Equal {
-                return Some(ordering);
+                return Ok(Some(ordering));
             }
         }
 
-        if self.objectives.is_empty() {
-            None
-        } else {
-            Some(Ordering::Equal)
-        }
+        Ok(Some(Ordering::Equal))
     }
 }
 
-/// Errors produced by cost construction or arithmetic.
+fn compare_bounds(
+    left: &CostBound,
+    right: &CostBound,
+) -> Option<Ordering> {
+    if let (
+        CostBound::Exact(a),
+        CostBound::Exact(b),
+    ) = (left, right) {
+        return Some(a.cmp(b));
+    }
+
+    let left_lower = left.lower_bound()?;
+    let right_lower = right.lower_bound()?;
+
+    let left_upper = left.upper_bound();
+    let right_upper = right.upper_bound();
+
+    if let Some(upper) = left_upper {
+        if upper < right_lower {
+            return Some(Ordering::Less);
+        }
+    }
+
+    if let Some(upper) = right_upper {
+        if upper < left_lower {
+            return Some(Ordering::Greater);
+        }
+    }
+
+    None
+}
+
+// ============================================================================
+// ERRORS
+// ============================================================================
+
+/// Errors produced by cost analysis.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum CostError {
-    InvalidMetricId,
+    /// An identifier was invalid.
+    InvalidIdentifier {
+        /// Identifier category.
+        kind: &'static str,
+
+        /// Supplied value.
+        value: String,
+    },
+
+    /// A quantity was invalid.
+    InvalidQuantity {
+        /// Supplied value.
+        value: String,
+    },
+
+    /// A cost range had reversed bounds.
     InvalidRange,
-    InvalidProvenance,
-    ArithmeticOverflow,
+
+    /// Estimate quality disagreed with its bound.
+    QualityMismatch,
+
+    /// An estimate duplicated an existing metric.
+    DuplicateMetric {
+        /// Metric identity.
+        metric: String,
+    },
+
+    /// An objective duplicated an existing objective.
+    DuplicateObjective {
+        /// Metric identity.
+        metric: String,
+    },
+
+    /// An aggregation operation was not supplied.
+    MissingAggregation {
+        /// Metric identity.
+        metric: String,
+    },
+
+    /// Units were incompatible.
+    UnitMismatch {
+        /// Metric identity.
+        metric: String,
+
+        /// Left unit.
+        left: String,
+
+        /// Right unit.
+        right: String,
+    },
+
+    /// Arithmetic or internal representation failed.
+    ArithmeticFailure,
 }
 
 impl fmt::Display for CostError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidMetricId => {
-                f.write_str("cost metric identifier must not be empty")
+            Self::InvalidIdentifier { kind, value } => {
+                write!(f, "invalid {kind} identifier: {value}")
             }
+
+            Self::InvalidQuantity { value } => {
+                write!(f, "invalid non-negative cost quantity: {value}")
+            }
+
             Self::InvalidRange => {
                 f.write_str("cost range lower bound exceeds upper bound")
             }
-            Self::InvalidProvenance => {
-                f.write_str("cost provenance source must not be empty")
+
+            Self::QualityMismatch => {
+                f.write_str("cost estimate quality disagrees with its bound")
             }
-            Self::ArithmeticOverflow => {
-                f.write_str("cost arithmetic overflowed its numeric representation")
+
+            Self::DuplicateMetric { metric } => {
+                write!(f, "duplicate cost metric: {metric}")
+            }
+
+            Self::DuplicateObjective { metric } => {
+                write!(f, "duplicate cost objective: {metric}")
+            }
+
+            Self::MissingAggregation { metric } => {
+                write!(f, "aggregation semantics missing for metric: {metric}")
+            }
+
+            Self::UnitMismatch {
+                metric,
+                left,
+                right,
+            } => {
+                write!(
+                    f,
+                    "incompatible units for {metric}: {left} and {right}"
+                )
+            }
+
+            Self::ArithmeticFailure => {
+                f.write_str("cost arithmetic failed")
             }
         }
     }
 }
 
-impl std::error::Error for CostError {}
+impl Error for CostError {}
+
+// ============================================================================
+// TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn quantity(value: u128) -> CostQuantity {
-        CostQuantity::new(value)
+    fn quantity(value: &str) -> CostQuantity {
+        CostQuantity::new(value).expect("valid quantity")
+    }
+
+    fn unit(value: &str) -> CostUnit {
+        CostUnit::new(value).expect("valid unit")
+    }
+
+    fn estimate(
+        metric: CostMetric,
+        value: &str,
+        unit_name: &str,
+    ) -> CostEstimate {
+        CostEstimate::exact(
+            metric,
+            unit(unit_name),
+            quantity(value),
+        )
     }
 
     #[test]
-    fn metric_id_rejects_empty_name() {
+    fn canonicalizes_arbitrary_length_quantities() {
+        let value = quantity("000000123456789012345678901234567890");
+
         assert_eq!(
-            MetricId::new("  "),
-            Err(CostError::InvalidMetricId)
+            value.as_str(),
+            "123456789012345678901234567890"
         );
     }
 
     #[test]
-    fn metric_id_accepts_namespaced_domain_metric() {
-        let id = MetricId::new("quantum.estimated_error")
-            .expect("valid metric identifier");
-
-        assert_eq!(id.as_str(), "quantum.estimated_error");
+    fn compares_arbitrary_length_quantities() {
+        assert!(quantity("99999999999999999999")
+            < quantity("100000000000000000000"));
     }
 
     #[test]
-    fn exact_bounds_add_exactly() {
-        let result = CostBound::Exact(quantity(10))
-            .checked_add(CostBound::Exact(quantity(12)))
+    fn arbitrary_length_addition_is_exact() {
+        let result = quantity("999999999999999999999999")
+            .checked_add(&quantity("1"))
             .expect("addition succeeds");
 
-        assert_eq!(result, CostBound::Exact(quantity(22)));
+        assert_eq!(result.as_str(), "1000000000000000000000000");
     }
 
     #[test]
-    fn unknown_is_not_treated_as_zero() {
+    fn arbitrary_length_multiplication_is_exact() {
+        let result = quantity("999999999999")
+            .checked_mul(&quantity("999999999999"))
+            .expect("multiplication succeeds");
+
+        assert_eq!(
+            result.as_str(),
+            "999999999998000000000001"
+        );
+    }
+
+    #[test]
+    fn multiplication_by_zero_returns_zero() {
+        let result = quantity("999999999999999999")
+            .checked_mul(&CostQuantity::zero())
+            .expect("multiplication succeeds");
+
+        assert!(result.is_zero());
+    }
+
+    #[test]
+    fn rejects_invalid_quantities() {
+        for value in ["", "-1", "+1", "1.5", "1e9", "abc"] {
+            assert!(CostQuantity::new(value).is_err());
+        }
+    }
+
+    #[test]
+    fn exact_bounds_add_correctly() {
+        let result = CostBound::Exact(quantity("10"))
+            .checked_add(&CostBound::Exact(quantity("20")))
+            .expect("addition succeeds");
+
+        assert_eq!(result, CostBound::Exact(quantity("30")));
+    }
+
+    #[test]
+    fn at_least_plus_at_most_preserves_only_lower_bound() {
+        let result = CostBound::AtLeast(quantity("10"))
+            .checked_add(&CostBound::AtMost(quantity("20")))
+            .expect("addition succeeds");
+
+        assert_eq!(result, CostBound::AtLeast(quantity("10")));
+    }
+
+    #[test]
+    fn range_plus_exact_preserves_range() {
+        let result = CostBound::range(
+            quantity("10"),
+            quantity("20"),
+        )
+        .expect("range")
+        .checked_add(&CostBound::Exact(quantity("5")))
+        .expect("addition succeeds");
+
+        assert_eq!(
+            result,
+            CostBound::Range {
+                lower: quantity("15"),
+                upper: quantity("25"),
+            }
+        );
+    }
+
+    #[test]
+    fn unknown_is_not_zero() {
         let result = CostBound::Unknown
-            .checked_add(CostBound::Exact(quantity(12)))
-            .expect("unknown addition succeeds");
+            .checked_add(&CostBound::Exact(quantity("10")))
+            .expect("unknown propagation");
 
         assert_eq!(result, CostBound::Unknown);
     }
@@ -714,122 +1482,271 @@ mod tests {
     #[test]
     fn unbounded_remains_unbounded() {
         let result = CostBound::Unbounded
-            .checked_add(CostBound::Exact(quantity(12)))
-            .expect("unbounded addition succeeds");
+            .checked_add(&CostBound::Exact(quantity("10")))
+            .expect("unbounded propagation");
 
         assert_eq!(result, CostBound::Unbounded);
     }
 
     #[test]
-    fn range_rejects_reversed_bounds() {
+    fn rejects_reversed_ranges() {
+        assert!(CostBound::range(
+            quantity("20"),
+            quantity("10"),
+        ).is_err());
+    }
+
+    #[test]
+    fn vectors_keep_different_metrics_separate() {
+        let mut vector = CostVector::new();
+
+        vector.insert(estimate(
+            CostMetric::Memory,
+            "4096",
+            "bytes",
+        )).expect("insert memory");
+
+        vector.insert(estimate(
+            CostMetric::ExecutionLatency,
+            "200",
+            "nanoseconds",
+        )).expect("insert latency");
+
+        assert_eq!(vector.len(), 2);
+    }
+
+    #[test]
+    fn vectors_reject_duplicate_metrics() {
+        let mut vector = CostVector::new();
+
+        vector.insert(estimate(
+            CostMetric::Memory,
+            "100",
+            "bytes",
+        )).expect("first insert");
+
+        assert!(vector.insert(estimate(
+            CostMetric::Memory,
+            "200",
+            "bytes",
+        )).is_err());
+    }
+
+    #[test]
+    fn aggregation_requires_explicit_semantics() {
+        let mut left = CostVector::new();
+        left.insert(estimate(
+            CostMetric::Operations,
+            "10",
+            "operations",
+        )).unwrap();
+
+        let mut right = CostVector::new();
+        right.insert(estimate(
+            CostMetric::Operations,
+            "20",
+            "operations",
+        )).unwrap();
+
+        assert!(left.aggregate(
+            &right,
+            &BTreeMap::new(),
+        ).is_err());
+    }
+
+    #[test]
+    fn explicit_sum_aggregates_correctly() {
+        let metric = CostMetric::Operations;
+
+        let mut left = CostVector::new();
+        left.insert(estimate(
+            metric.clone(),
+            "10",
+            "operations",
+        )).unwrap();
+
+        let mut right = CostVector::new();
+        right.insert(estimate(
+            metric.clone(),
+            "20",
+            "operations",
+        )).unwrap();
+
+        let operations = BTreeMap::from([
+            (metric.clone(), CostAggregation::Sum),
+        ]);
+
+        let result = left.aggregate(&right, &operations)
+            .expect("aggregation succeeds");
+
         assert_eq!(
-            CostBound::range(quantity(9), quantity(3)),
-            Err(CostError::InvalidRange)
+            result.get(&metric)
+                .unwrap()
+                .bound()
+                .exact_value()
+                .unwrap()
+                .as_str(),
+            "30"
         );
     }
 
     #[test]
-    fn arithmetic_overflow_is_reported() {
-        let result = quantity(u128::MAX).checked_add(quantity(1));
+    fn aggregation_rejects_incompatible_units() {
+        let metric = CostMetric::Memory;
 
-        assert_eq!(result, Err(CostError::ArithmeticOverflow));
+        let mut left = CostVector::new();
+        left.insert(estimate(
+            metric.clone(),
+            "10",
+            "bytes",
+        )).unwrap();
+
+        let mut right = CostVector::new();
+        right.insert(estimate(
+            metric.clone(),
+            "10",
+            "kilobytes",
+        )).unwrap();
+
+        let operations = BTreeMap::from([
+            (metric, CostAggregation::Sum),
+        ]);
+
+        assert!(left.aggregate(&right, &operations).is_err());
     }
 
     #[test]
-    fn cost_vector_preserves_distinct_metrics() {
-        let mut costs = CostVector::new();
+    fn comparison_handles_exact_costs() {
+        let metric = CostMetric::ExecutionLatency;
 
-        costs.insert(CostEstimate::exact(
-            CostMetric::MemoryBytes,
-            quantity(4096),
-        ));
-
-        costs.insert(CostEstimate::exact(
-            CostMetric::ExecutionLatencyNs,
-            quantity(200),
-        ));
-
-        assert_eq!(
-            costs.get(&CostMetric::MemoryBytes)
-                .and_then(|estimate| estimate.bound.exact_value()),
-            Some(quantity(4096))
-        );
-
-        assert_eq!(
-            costs.get(&CostMetric::ExecutionLatencyNs)
-                .and_then(|estimate| estimate.bound.exact_value()),
-            Some(quantity(200))
-        );
-    }
-
-    #[test]
-    fn cost_vector_adds_matching_metrics() {
-        let mut lhs = CostVector::new();
-        lhs.insert(CostEstimate::exact(
-            CostMetric::OperationCount,
-            quantity(4),
-        ));
-
-        let mut rhs = CostVector::new();
-        rhs.insert(CostEstimate::exact(
-            CostMetric::OperationCount,
-            quantity(6),
-        ));
-
-        let result = lhs.checked_add(&rhs).expect("vector addition succeeds");
-
-        assert_eq!(
-            result.get(&CostMetric::OperationCount)
-                .and_then(|estimate| estimate.bound.exact_value()),
-            Some(quantity(10))
-        );
-    }
-
-    #[test]
-    fn policy_compares_exact_values_in_declared_order() {
         let mut policy = CostPolicy::new();
+
         policy.add_objective(CostObjective {
-            metric: CostMetric::ExecutionLatencyNs,
+            metric: metric.clone(),
             direction: ObjectiveDirection::Minimize,
-        });
+        }).unwrap();
 
         let mut faster = CostVector::new();
-        faster.insert(CostEstimate::exact(
-            CostMetric::ExecutionLatencyNs,
-            quantity(20),
-        ));
+        faster.insert(estimate(
+            metric.clone(),
+            "10",
+            "nanoseconds",
+        )).unwrap();
 
         let mut slower = CostVector::new();
-        slower.insert(CostEstimate::exact(
-            CostMetric::ExecutionLatencyNs,
-            quantity(30),
-        ));
+        slower.insert(estimate(
+            metric,
+            "20",
+            "nanoseconds",
+        )).unwrap();
 
         assert_eq!(
-            policy.compare_exact(&faster, &slower),
-            Some(std::cmp::Ordering::Less)
+            policy.compare(&faster, &slower).unwrap(),
+            Some(Ordering::Less)
         );
     }
 
     #[test]
-    fn policy_does_not_order_unknown_estimates() {
+    fn comparison_uses_disjoint_uncertainty_ranges() {
+        let metric = CostMetric::ExecutionLatency;
+
         let mut policy = CostPolicy::new();
+
         policy.add_objective(CostObjective {
-            metric: CostMetric::ExecutionLatencyNs,
+            metric: metric.clone(),
             direction: ObjectiveDirection::Minimize,
-        });
+        }).unwrap();
 
-        let mut unknown = CostVector::new();
-        unknown.insert(CostEstimate::unknown(
-            CostMetric::ExecutionLatencyNs,
-        ));
+        let mut first = CostVector::new();
+        first.insert(CostEstimate::new(
+            metric.clone(),
+            unit("nanoseconds"),
+            CostBound::range(
+                quantity("10"),
+                quantity("20"),
+            ).unwrap(),
+            EstimateQuality::Estimated,
+        ).unwrap()).unwrap();
 
-        let mut exact = CostVector::new();
-        exact.insert(CostEstimate::exact(
-            CostMetric::ExecutionLatencyNs,
-            quantity(10),
-        ));
+        let mut second = CostVector::new();
+        second.insert(CostEstimate::new(
+            metric,
+            unit("nanoseconds"),
+            CostBound::range(
+                quantity("30"),
+                quantity("40"),
+            ).unwrap(),
+            EstimateQuality::Estimated,
+        ).unwrap()).unwrap();
 
-        assert_eq!(policy.compare_exact(&unknown, &exact), None);
+        assert_eq!(
+            policy.compare(&first, &second).unwrap(),
+            Some(Ordering::Less)
+        );
+    }
+
+    #[test]
+    fn overlapping_ranges_are_not_arbitrarily_ordered() {
+        let metric = CostMetric::ExecutionLatency;
+
+        let mut policy = CostPolicy::new();
+
+        policy.add_objective(CostObjective {
+            metric: metric.clone(),
+            direction: ObjectiveDirection::Minimize,
+        }).unwrap();
+
+        let mut first = CostVector::new();
+        first.insert(CostEstimate::new(
+            metric.clone(),
+            unit("nanoseconds"),
+            CostBound::range(
+                quantity("10"),
+                quantity("30"),
+            ).unwrap(),
+            EstimateQuality::Estimated,
+        ).unwrap()).unwrap();
+
+        let mut second = CostVector::new();
+        second.insert(CostEstimate::new(
+            metric,
+            unit("nanoseconds"),
+            CostBound::range(
+                quantity("20"),
+                quantity("40"),
+            ).unwrap(),
+            EstimateQuality::Estimated,
+        ).unwrap()).unwrap();
+
+        assert_eq!(
+            policy.compare(&first, &second).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn custom_future_domain_metrics_are_supported() {
+        let metric = CostMetric::Custom(
+            MetricId::new("future.photonic.operation_cost")
+                .unwrap()
+        );
+
+        let estimate = estimate(
+            metric.clone(),
+            "100000000000000000000",
+            "implementation_units",
+        );
+
+        assert_eq!(estimate.metric(), &metric);
+    }
+
+    #[test]
+    fn module_identity_is_stable() {
+        assert_eq!(
+            COST_ANALYSIS_MODULE_NAME,
+            "zamani.compiler.analysis.cost"
+        );
+
+        assert_eq!(COST_ANALYSIS_API_VERSION, 1);
     }
 }
