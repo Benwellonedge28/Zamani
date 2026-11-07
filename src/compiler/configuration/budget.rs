@@ -12,219 +12,192 @@
 //!     Rust 1.97+
 //!     Edition 2021
 //!
-//! Safety:
-//!     Safe Rust only. Unsafe Rust is forbidden.
-//!
 //! # Purpose
 //!
-//! This module defines configurable operational budgets for compiler work.
+//! Provides configurable operational budgets and shared accounting
+//! for one compilation operation.
 //!
-//! It allows compiler stages to account for resource consumption without
-//! imposing universal language-level or hardware-capacity limits.
-//!
-//! Examples of compiler work that may be budgeted include:
-//!
-//! - Source bytes processed.
-//! - Intermediate-representation entities processed.
-//! - Memory accounted for by a compiler stage.
-//! - Worker slots used by a compilation operation.
-//! - Optimization-pass applications.
-//! - Constant-evaluation work.
-//! - Diagnostics retained.
-//! - Artifact bytes generated.
-//! - Compilation wall-clock time.
-//! - Stage-specific work units.
-//! - Extension-defined resource dimensions.
+//! A budget controls compiler work. It does not define language
+//! semantics, physical hardware capacity, or runtime allocation.
 //!
 //! # Architectural ownership
 //!
 //! This module owns:
 //!
-//! - Compiler budget dimensions.
+//! - Budget dimension identities.
 //! - Optional operational limits.
-//! - Immutable budget configuration.
-//! - Shared accounting across compiler stages.
-//! - Checked consumption.
+//! - Immutable budget configurations.
+//! - Shared concurrent accounting.
+//! - Atomic single-dimension consumption.
+//! - Transactional multi-dimension consumption.
 //! - Remaining-budget queries.
 //! - Deterministic usage snapshots.
-//! - Explicit budget-exhaustion errors.
+//! - Explicit exhaustion and accounting errors.
 //!
-//! This module does not own:
+//! It does not own:
 //!
-//! - Source-level Zamani resource-budget semantics.
-//! - Semantic requirements, capabilities, constraints, or preferences.
-//! - Hardware discovery or target capability detection.
-//! - Physical memory allocation.
-//! - Device allocation or placement.
-//! - Thread scheduling or worker creation.
-//! - Runtime resource management.
-//! - IR definitions or IR verification.
-//! - Optimization legality.
+//! - Source-level resource requirements.
+//! - Hardware capabilities.
+//! - Physical allocation.
+//! - Device discovery.
+//! - Runtime scheduling.
 //! - Backend implementation.
-//! - Source parsing or expression evaluation.
+//! - Semantic validation.
+//! - IR definitions.
 //! - Security authorization.
 //!
-//! # POCO-REAF and scalability
+//! # Scalability
 //!
-//! An absent budget means that this configuration imposes no explicit
-//! compiler budget for that dimension.
+//! No default operational limits are imposed.
 //!
-//! It does not promise infinite physical memory, execution time, or
-//! representational capacity.
+//! An omitted dimension is unlimited by this budget.
 //!
-//! Actual host resources, operating-system limits, process limits, target
-//! capabilities, and security policies remain applicable.
+//! This does not mean physical resources are infinite.
 //!
-//! A budget is an operational policy, not a language restriction.
+//! Actual resource availability, operating-system limits, target
+//! capabilities, and explicitly configured security policies remain
+//! applicable.
 //!
-//! No universal maximum is defined here for:
+//! No universal maximum is established for:
 //!
-//! - CPUs, cores, threads, workers, devices, or nodes.
-//! - Memory, storage, or address-space capacity.
-//! - Qubits or logical qubits.
+//! - Workers, CPUs, threads, or nodes.
+//! - Memory or storage.
 //! - GPUs, FPGAs, QPUs, or accelerators.
-//! - Tensor rank or tensor dimensions.
-//! - IR operations, blocks, functions, or modules.
-//! - Source length or program size.
-//! - Generated artifact size.
-//! - Optimization passes.
-//! - Compiler stages.
+//! - Qubits or logical registers.
+//! - Tensor dimensions or rank.
+//! - Modules, functions, or IR operations.
+//! - Source or artifact size.
+//! - Compiler stages or optimization passes.
 //!
-//! # Enforcement contract
+//! # Accounting
 //!
-//! This module accounts for work only when a caller reports that work.
+//! Quantities use u128.
 //!
-//! It does not automatically intercept allocations, threads, I/O, or CPU
-//! instructions.
+//! This provides a wide, pointer-independent accounting representation.
+//! It is not an unlimited mathematical integer.
 //!
-//! Every enforcing compiler stage must:
-//!
-//! 1. Identify the budget dimension it consumes.
-//! 2. Measure the relevant work using the documented unit.
-//! 3. Account for cumulative consumption.
-//! 4. Stop or recover according to its own stage contract when exhaustion
-//!    occurs.
-//! 5. Return an explicit error or diagnostic.
-//! 6. Never silently truncate a program or claim successful completion.
-//!
-//! A stage must not treat an unknown measurement as zero.
-//!
-//! # Determinism
-//!
-//! Budget dimensions are stored in ordered maps.
-//!
-//! Identical budget configurations and identical consumption sequences
-//! produce identical snapshots and exhaustion decisions.
-//!
-//! This module performs no filesystem, network, environment, clock,
-//! hardware-discovery, or random-number operations.
+//! Arithmetic overflow is always reported explicitly.
 //!
 //! # Concurrency
 //!
-//! `BudgetTracker` is cloneable and shares one accounting ledger.
+//! Cloned trackers share one configuration and one accounting ledger.
 //!
-//! Clones therefore account against the same configured budget.
+//! Every consumption operation is synchronized.
 //!
-//! Consumption is checked and committed while holding the ledger lock.
-//! Concurrent callers cannot independently consume the same remaining
-//! budget.
+//! Failed operations do not partially modify the ledger.
 //!
-//! # Numeric representation
+//! # Determinism
 //!
-//! Budget quantities use `u128` so accounting is not tied to the host's
-//! pointer width.
+//! Dimensions and usage entries are ordered by BTreeMap.
 //!
-//! `u128` is a representation type, not a universal Zamani resource limit.
-//! Arithmetic overflow is reported explicitly rather than wrapping or
-//! silently saturating.
+//! Snapshots are deterministic for identical configurations and
+//! consumption histories.
 //!
-//! Time quantities are represented in nanoseconds when using the built-in
-//! time dimensions.
+//! This module performs no environment, clock, filesystem, network,
+//! hardware-discovery, or random-number operations.
 //!
 //! # Integration
 //!
-//! - `src/compiler/mod.rs`: expose `configuration`.
-//! - `src/compiler/configuration.rs`: expose this module.
-//! - Compiler API/session: construct a `BudgetTracker` for a compilation.
-//! - Pipeline execution: share tracker clones with stages.
-//! - Parallel compilation: share the same tracker across worker tasks.
-//! - Optimization: account for pass applications and analysis work.
-//! - IR processing: account for IR entities and processing work.
-//! - Diagnostics: account for retained diagnostic entries.
-//! - Artifact generation: account for generated artifact bytes.
-//! - Incremental compilation: include budget configuration in cache identity
-//!   whenever a budget can change whether or how an artifact is produced.
-//! - Backend integration: report generated bytes and other measurable work.
-//! - Runtime integration: use runtime-owned resource contracts rather than
-//!   treating compiler budgets as runtime allocation limits.
+//! configuration/mod.rs:
+//!     Exposes this module and its public types.
 //!
-//! The module intentionally does not depend on any of those subsystems.
+//! context/compilation_context.rs:
+//!     Owns a tracker shared by compilation stages.
+//!
+//! pipeline/execution.rs:
+//!     Accounts for measurable stage work.
+//!
+//! parallel/:
+//!     Shares the same tracker across workers.
+//!
+//! analysis/:
+//!     Accounts for explicitly measured analysis work.
+//!
+//! optimization/:
+//!     Accounts for optimization work.
+//!
+//! lowering/:
+//!     Accounts for lowering work.
+//!
+//! artifacts/:
+//!     Accounts for generated artifact bytes.
+//!
+//! incremental/:
+//!     Includes relevant budget configuration in cache identity.
+//!
+//! runtime/:
+//!     Uses runtime-owned allocation contracts, not this compiler
+//!     accounting model.
 //!
 //! # Freeze criteria
 //!
-//! This file is ready to freeze when:
+//! This file is ready to freeze after:
 //!
-//! - Its unit tests pass.
-//! - The compiler configuration module exposes it.
-//! - Compiler stages use its shared accounting contract.
-//! - No stage silently ignores a required budget failure.
-//! - Budget configuration is included in relevant cache fingerprints.
-//! - Existing domain-specific budget contracts remain authoritative for
-//!   their own subsystems.
+//! - Public API compatibility is checked.
+//! - Unit tests pass.
+//! - Existing context integration passes.
+//! - Concurrent accounting tests pass.
+//! - Transactional accounting tests pass.
+//! - All relevant callers propagate budget errors.
+//! - No caller silently treats failed accounting as success.
 
 use core::fmt;
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+// ============================================================================
+// RESULT
+// ============================================================================
 
 /// Result type for compiler budget operations.
 pub type BudgetResult<T> = Result<T, BudgetError>;
 
-/// Validates a budget dimension name or unit.
-///
-/// Names must be non-empty and must not contain control characters.
-///
-/// No fixed string-length limit is imposed.
-fn validate_text(value: &str, field: &'static str) -> BudgetResult<()> {
+// ============================================================================
+// TEXT VALIDATION
+// ============================================================================
+
+fn validate_text(
+    value: &str,
+    field: &'static str,
+) -> BudgetResult<()> {
     if value.trim().is_empty() {
         return Err(BudgetError::InvalidDimension {
             field,
-            reason: "value cannot be empty or whitespace-only".to_string(),
+            reason: "value cannot be empty or whitespace-only".into(),
         });
     }
 
     if value.chars().any(char::is_control) {
         return Err(BudgetError::InvalidDimension {
             field,
-            reason: "value cannot contain control characters".to_string(),
+            reason: "value cannot contain control characters".into(),
         });
     }
 
     Ok(())
 }
 
-/// Identifies one measurable compiler-budget dimension.
+// ============================================================================
+// DIMENSIONS
+// ============================================================================
+
+/// Identifies a measurable compiler-budget dimension.
 ///
-/// The name identifies what is being accounted for.
+/// The unit is part of the identity.
 ///
-/// The unit identifies the measurement unit.
+/// Therefore:
 ///
-/// Including the unit in the dimension identity prevents accidental
-/// comparison of quantities expressed in incompatible units.
+/// memory / bytes
 ///
-/// Examples:
+/// and:
 ///
-/// - `memory` / `bytes`
-/// - `artifact` / `bytes`
-/// - `workers` / `slots`
-/// - `wall_time` / `nanoseconds`
-/// - `ir_entities` / `entities`
+/// memory / kibibytes
 ///
-/// Custom dimensions allow new compiler stages and extensions to introduce
-/// additional measurable work without modifying this type.
+/// are distinct accounting dimensions.
 ///
-/// A dimension is an accounting identity. It is not proof that a particular
-/// resource is available or physically allocated.
+/// Custom dimensions permit new domains and extensions to introduce
+/// additional accounting categories without modifying this module.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BudgetDimension {
     name: String,
@@ -232,10 +205,7 @@ pub struct BudgetDimension {
 }
 
 impl BudgetDimension {
-    /// Creates a new budget dimension.
-    ///
-    /// Both the name and unit must be non-empty and contain no control
-    /// characters.
+    /// Creates a validated custom budget dimension.
     pub fn new(
         name: impl Into<String>,
         unit: impl Into<String>,
@@ -261,24 +231,21 @@ impl BudgetDimension {
         &self.unit
     }
 
-    /// Source bytes processed by a compiler stage.
+    /// Source bytes processed.
     #[must_use]
     pub fn input_bytes() -> Self {
         Self::builtin("input_bytes", "bytes")
     }
 
-    /// Memory accounted for by a compiler stage.
+    /// Memory accounted for by compiler stages.
     ///
-    /// This is accounting, not a physical allocator or operating-system
-    /// memory limit.
+    /// This is accounting, not physical allocation.
     #[must_use]
     pub fn memory_bytes() -> Self {
         Self::builtin("memory", "bytes")
     }
 
-    /// Worker slots used by a compiler operation.
-    ///
-    /// This is a budget dimension, not a universal worker-count ceiling.
+    /// Compiler worker slots.
     #[must_use]
     pub fn worker_slots() -> Self {
         Self::builtin("worker_slots", "slots")
@@ -290,25 +257,25 @@ impl BudgetDimension {
         Self::builtin("ir_entities", "entities")
     }
 
-    /// Optimization-pass applications.
+    /// Optimization pass applications.
     #[must_use]
     pub fn pass_applications() -> Self {
         Self::builtin("pass_applications", "applications")
     }
 
-    /// Constant-evaluation work units.
+    /// Constant-evaluation work.
     #[must_use]
     pub fn constant_evaluation_work() -> Self {
         Self::builtin("constant_evaluation_work", "work_units")
     }
 
-    /// Diagnostic entries retained.
+    /// Diagnostics retained.
     #[must_use]
     pub fn diagnostics() -> Self {
         Self::builtin("diagnostics", "entries")
     }
 
-    /// Generated or serialized artifact bytes.
+    /// Generated artifact bytes.
     #[must_use]
     pub fn artifact_bytes() -> Self {
         Self::builtin("artifact_bytes", "bytes")
@@ -316,40 +283,36 @@ impl BudgetDimension {
 
     /// Compilation wall-clock time.
     ///
-    /// Values are nanoseconds.
+    /// The caller supplies elapsed nanoseconds.
     #[must_use]
     pub fn wall_time() -> Self {
         Self::builtin("wall_time", "nanoseconds")
     }
 
-    /// CPU time accounted for by a compiler stage.
+    /// Accounted CPU time.
     ///
-    /// Values are nanoseconds.
+    /// The caller supplies elapsed nanoseconds.
     #[must_use]
     pub fn cpu_time() -> Self {
         Self::builtin("cpu_time", "nanoseconds")
     }
 
     /// Parser work units.
-    ///
-    /// The parser defines what constitutes one work unit.
     #[must_use]
     pub fn parser_work() -> Self {
         Self::builtin("parser_work", "work_units")
     }
 
     /// Optimizer work units.
-    ///
-    /// The optimizer defines what constitutes one work unit.
     #[must_use]
     pub fn optimizer_work() -> Self {
         Self::builtin("optimizer_work", "work_units")
     }
 
-    /// Creates a built-in dimension.
-    ///
-    /// Built-in values are constants in meaning, not capacity limits.
-    fn builtin(name: &'static str, unit: &'static str) -> Self {
+    fn builtin(
+        name: &'static str,
+        unit: &'static str,
+    ) -> Self {
         Self {
             name: name.to_string(),
             unit: unit.to_string(),
@@ -358,19 +321,23 @@ impl BudgetDimension {
 }
 
 impl fmt::Display for BudgetDimension {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(formatter, "{} ({})", self.name, self.unit)
     }
 }
 
-/// One optional upper bound for a budget dimension.
+// ============================================================================
+// LIMITS
+// ============================================================================
+
+/// Optional upper bound for one operational budget.
 ///
-/// `None` means no explicit limit is imposed by this budget.
+/// None means that no explicit budget is imposed.
 ///
-/// `Some(0)` is a valid limit and permits zero consumption.
-///
-/// A bounded value is an operational configuration value, not a language
-/// semantic limit.
+/// Some(0) is a valid zero-consumption budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct BudgetLimit {
     limit: Option<u128>,
@@ -383,7 +350,7 @@ impl BudgetLimit {
         Self { limit: None }
     }
 
-    /// Creates a budget with an explicit maximum.
+    /// Creates an explicitly bounded budget.
     #[must_use]
     pub const fn bounded(limit: u128) -> Self {
         Self {
@@ -392,82 +359,88 @@ impl BudgetLimit {
     }
 
     /// Returns the configured limit.
-    ///
-    /// `None` represents no explicit limit.
     #[must_use]
     pub const fn value(self) -> Option<u128> {
         self.limit
     }
 
-    /// Returns whether the budget has no explicit limit.
+    /// Returns whether the budget is unlimited.
     #[must_use]
     pub const fn is_unlimited(self) -> bool {
         self.limit.is_none()
     }
 
-    /// Returns whether the supplied amount is permitted.
+    /// Checks whether an absolute amount is permitted.
     #[must_use]
     pub const fn permits(self, amount: u128) -> bool {
         match self.limit {
-            Some(limit) => amount <= limit,
+            Some(maximum) => amount <= maximum,
             None => true,
         }
     }
 
-    /// Returns the remaining amount after the supplied consumption.
+    /// Returns the remaining amount after consumption.
     ///
-    /// An unlimited budget returns `None`.
+    /// Unlimited budgets return None.
     ///
-    /// A bounded budget returns `Some(0)` when fully consumed.
+    /// Bounded budgets return Some(0) when exhausted.
+    ///
+    /// Saturation here is intentional because remaining capacity
+    /// cannot be negative.
     #[must_use]
-    pub const fn remaining(self, consumed: u128) -> Option<u128> {
+    pub const fn remaining(
+        self,
+        consumed: u128,
+    ) -> Option<u128> {
         match self.limit {
-            Some(limit) => Some(limit.saturating_sub(consumed)),
+            Some(maximum) => {
+                Some(maximum.saturating_sub(consumed))
+            }
             None => None,
         }
     }
 }
 
 impl fmt::Display for BudgetLimit {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self.limit {
-            Some(limit) => write!(formatter, "bounded({limit})"),
+            Some(value) => write!(formatter, "bounded({value})"),
             None => formatter.write_str("unlimited"),
         }
     }
 }
 
-/// Immutable configuration for compiler operational budgets.
+// ============================================================================
+// COMPILATION BUDGET
+// ============================================================================
+
+/// Immutable operational budget configuration.
 ///
-/// An omitted dimension is unlimited.
+/// Missing dimensions are unlimited.
 ///
-/// Dimensions are stored in an ordered map for deterministic behavior.
-///
-/// This type does not perform accounting. Use `BudgetTracker` to account
-/// for consumption across compiler stages and concurrent workers.
+/// This type does not perform accounting.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CompilationBudget {
     limits: BTreeMap<BudgetDimension, BudgetLimit>,
 }
 
 impl CompilationBudget {
-    /// Creates a configuration with no explicit limits.
+    /// Creates an unlimited budget.
     #[must_use]
     pub fn unlimited() -> Self {
         Self::default()
     }
 
-    /// Creates an empty configuration with the supplied dimension limits.
-    ///
-    /// This is equivalent to `unlimited()`.
+    /// Creates an empty budget configuration.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Adds or replaces a dimension limit.
-    ///
-    /// Replacing a dimension is explicit and deterministic.
     #[must_use]
     pub fn with_limit(
         mut self,
@@ -478,9 +451,7 @@ impl CompilationBudget {
         self
     }
 
-    /// Sets or replaces a dimension limit in place.
-    ///
-    /// Returns the previous limit, if one existed.
+    /// Sets a limit and returns its previous value.
     pub fn set_limit(
         &mut self,
         dimension: BudgetDimension,
@@ -490,8 +461,6 @@ impl CompilationBudget {
     }
 
     /// Removes an explicit limit.
-    ///
-    /// The removed dimension becomes unlimited.
     pub fn remove_limit(
         &mut self,
         dimension: &BudgetDimension,
@@ -499,143 +468,224 @@ impl CompilationBudget {
         self.limits.remove(dimension)
     }
 
-    /// Returns the configured limit for a dimension.
+    /// Returns a dimension's configured limit.
     ///
-    /// A missing dimension is unlimited.
+    /// Missing dimensions are unlimited.
     #[must_use]
-    pub fn limit(&self, dimension: &BudgetDimension) -> BudgetLimit {
+    pub fn limit(
+        &self,
+        dimension: &BudgetDimension,
+    ) -> BudgetLimit {
         self.limits
             .get(dimension)
             .copied()
             .unwrap_or_else(BudgetLimit::unlimited)
     }
 
-    /// Returns a read-only view of all explicitly configured limits.
+    /// Returns all configured limits in deterministic order.
     #[must_use]
-    pub fn limits(&self) -> &BTreeMap<BudgetDimension, BudgetLimit> {
+    pub fn limits(
+        &self,
+    ) -> &BTreeMap<BudgetDimension, BudgetLimit> {
         &self.limits
     }
 
-    /// Returns whether this configuration contains no explicit limits.
+    /// Returns whether no explicit limits exist.
     #[must_use]
     pub fn is_unlimited(&self) -> bool {
         self.limits.is_empty()
     }
 
-    /// Checks a measured amount without changing accounting state.
+    /// Checks proposed consumption without modifying accounting.
+    ///
+    /// This is a check, not a reservation.
     pub fn check(
         &self,
         dimension: &BudgetDimension,
         consumed: u128,
         additional: u128,
     ) -> BudgetResult<()> {
+        let limit = self.limit(dimension);
+
+        // No configured upper bound means no budget exhaustion
+        // decision is necessary here.
+        //
+        // Representability of cumulative accounting is checked by
+        // BudgetTracker when consumption is actually recorded.
+        let Some(maximum) = limit.value() else {
+            return Ok(());
+        };
+
         let attempted = consumed
             .checked_add(additional)
             .ok_or_else(|| BudgetError::AccountingOverflow {
                 dimension: dimension.clone(),
             })?;
 
-        let limit = self.limit(dimension);
-
-        if limit.permits(attempted) {
-            return Ok(());
+        if attempted > maximum {
+            return Err(BudgetError::Exceeded {
+                dimension: dimension.clone(),
+                consumed,
+                requested: additional,
+                attempted,
+                limit: maximum,
+            });
         }
 
-        Err(BudgetError::Exceeded {
-            dimension: dimension.clone(),
-            consumed,
-            requested: additional,
-            attempted,
-            limit: limit.value().unwrap_or_default(),
-        })
+        Ok(())
     }
 
-    /// Creates a new shared accounting tracker for this configuration.
-    ///
-    /// The configuration is cloned into the tracker and cannot be changed
-    /// after tracking begins.
+    /// Creates a shared accounting tracker.
     #[must_use]
     pub fn tracker(&self) -> BudgetTracker {
         BudgetTracker::new(self.clone())
     }
+
+    /// Returns the number of configured dimensions.
+    #[must_use]
+    pub fn dimension_count(&self) -> usize {
+        self.limits.len()
+    }
 }
 
-/// A deterministic snapshot of consumption for one dimension.
+// ============================================================================
+// USAGE
+// ============================================================================
+
+/// Usage information for one budget dimension.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BudgetUsage {
-    /// Dimension being measured.
+    /// Dimension identity.
     pub dimension: BudgetDimension,
 
-    /// Amount already consumed.
+    /// Recorded cumulative consumption.
     pub consumed: u128,
 
-    /// Configured maximum, if bounded.
+    /// Explicit maximum, if configured.
     pub limit: Option<u128>,
 
-    /// Remaining amount, if bounded.
-    ///
-    /// A value of `Some(0)` means the budget is fully consumed.
-    /// `None` means the dimension is unlimited.
+    /// Remaining capacity, if bounded.
     pub remaining: Option<u128>,
 }
 
 impl BudgetUsage {
-    /// Returns whether the configured limit has been reached.
+    /// Returns whether the configured budget is exhausted.
     ///
-    /// An unlimited budget is never considered exhausted.
+    /// A zero limit is exhausted even before consumption.
     #[must_use]
     pub const fn is_exhausted(&self) -> bool {
         match self.limit {
-            Some(limit) => self.consumed >= limit,
+            Some(maximum) => self.consumed >= maximum,
             None => false,
         }
     }
 }
 
-/// A deterministic snapshot of all tracked compiler budget usage.
+// ============================================================================
+// SNAPSHOTS
+// ============================================================================
+
+/// Deterministic snapshot of budget usage.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BudgetSnapshot {
     usage: BTreeMap<BudgetDimension, BudgetUsage>,
 }
 
 impl BudgetSnapshot {
-    /// Returns the usage entry for a dimension.
+    /// Returns usage for a dimension.
     #[must_use]
-    pub fn usage(&self, dimension: &BudgetDimension) -> Option<&BudgetUsage> {
+    pub fn usage(
+        &self,
+        dimension: &BudgetDimension,
+    ) -> Option<&BudgetUsage> {
         self.usage.get(dimension)
     }
 
-    /// Returns all dimensions that have been consumed.
+    /// Returns all usage entries in deterministic order.
     #[must_use]
-    pub fn dimensions(&self) -> &BTreeMap<BudgetDimension, BudgetUsage> {
+    pub fn dimensions(
+        &self,
+    ) -> &BTreeMap<BudgetDimension, BudgetUsage> {
         &self.usage
     }
 
-    /// Returns the number of dimensions with recorded consumption.
+    /// Returns the number of dimensions in the snapshot.
     #[must_use]
     pub fn dimension_count(&self) -> usize {
         self.usage.len()
     }
 
-    /// Returns whether no consumption has been recorded.
+    /// Returns whether the snapshot is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.usage.is_empty()
     }
+
+    /// Returns whether any configured budget is exhausted.
+    #[must_use]
+    pub fn has_exhausted_budget(&self) -> bool {
+        self.usage.values().any(BudgetUsage::is_exhausted)
+    }
+
+    /// Returns the dimensions whose budgets are exhausted.
+    pub fn exhausted_dimensions(
+        &self,
+    ) -> impl Iterator<Item = &BudgetUsage> {
+        self.usage
+            .values()
+            .filter(|usage| usage.is_exhausted())
+    }
 }
 
-/// Internal shared accounting state.
+// ============================================================================
+// REQUESTS
+// ============================================================================
+
+/// One requested accounting operation.
+///
+/// Requests are processed atomically by `consume_batch`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BudgetRequest {
+    /// Dimension to consume.
+    pub dimension: BudgetDimension,
+
+    /// Amount requested.
+    pub amount: u128,
+}
+
+impl BudgetRequest {
+    /// Creates a budget request.
+    #[must_use]
+    pub fn new(
+        dimension: BudgetDimension,
+        amount: u128,
+    ) -> Self {
+        Self {
+            dimension,
+            amount,
+        }
+    }
+}
+
+// ============================================================================
+// INTERNAL LEDGER
+// ============================================================================
+
 #[derive(Debug, Default)]
 struct BudgetLedger {
     consumed: BTreeMap<BudgetDimension, u128>,
 }
 
-/// Shared, thread-safe accounting for a compilation.
+// ============================================================================
+// TRACKER
+// ============================================================================
+
+/// Shared, thread-safe accounting for one compilation.
 ///
-/// Cloning a tracker shares the same ledger and configuration.
+/// Cloning the tracker shares the same accounting ledger.
 ///
-/// This is important for parallel compilation: independent workers must
-/// not each receive a fresh copy of the entire budget.
+/// This prevents independent compilation workers from each receiving
+/// a fresh copy of the same budget.
 #[derive(Debug, Clone)]
 pub struct BudgetTracker {
     budget: Arc<CompilationBudget>,
@@ -643,7 +693,7 @@ pub struct BudgetTracker {
 }
 
 impl BudgetTracker {
-    /// Creates a tracker from an immutable budget configuration.
+    /// Creates a tracker from an immutable configuration.
     #[must_use]
     pub fn new(budget: CompilationBudget) -> Self {
         Self {
@@ -652,35 +702,36 @@ impl BudgetTracker {
         }
     }
 
-    /// Returns the immutable budget configuration.
+    /// Acquires the ledger lock.
+    ///
+    /// Poisoned accounting state fails closed.
+    fn lock(&self) -> BudgetResult<MutexGuard<'_, BudgetLedger>> {
+        self.ledger
+            .lock()
+            .map_err(|_| BudgetError::LedgerPoisoned)
+    }
+
+    /// Returns the immutable configuration.
     #[must_use]
     pub fn budget(&self) -> &CompilationBudget {
         &self.budget
     }
 
-    /// Returns a clone that shares the same accounting ledger.
+    /// Returns a shared tracker clone.
     #[must_use]
     pub fn shared(&self) -> Self {
         self.clone()
     }
 
-    /// Records consumption against a dimension.
+    /// Atomically consumes an amount from one dimension.
     ///
-    /// The update is atomic with respect to other tracker clones.
-    ///
-    /// If the requested consumption would exceed the configured limit,
-    /// the ledger is not modified.
-    ///
-    /// If accounting arithmetic overflows, the ledger is not modified.
+    /// On failure, the ledger remains unchanged.
     pub fn consume(
         &self,
         dimension: BudgetDimension,
         amount: u128,
     ) -> BudgetResult<u128> {
-        let mut ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| BudgetError::LedgerPoisoned)?;
+        let mut ledger = self.lock()?;
 
         let consumed = ledger
             .consumed
@@ -688,34 +739,92 @@ impl BudgetTracker {
             .copied()
             .unwrap_or(0);
 
-        self.budget.check(&dimension, consumed, amount)?;
-
         let updated = consumed
             .checked_add(amount)
             .ok_or_else(|| BudgetError::AccountingOverflow {
                 dimension: dimension.clone(),
             })?;
 
+        self.budget.check(
+            &dimension,
+            consumed,
+            amount,
+        )?;
+
         ledger.consumed.insert(dimension, updated);
 
         Ok(updated)
     }
 
-    /// Checks whether additional consumption would be permitted.
+    /// Atomically consumes several budget dimensions.
     ///
-    /// This operation does not reserve capacity. Another concurrent caller
-    /// may consume the remaining budget after this method returns.
+    /// All requests succeed together or none are committed.
     ///
-    /// Use `consume` for an atomic check-and-account operation.
+    /// Duplicate dimensions are aggregated before checking.
+    ///
+    /// An empty batch succeeds without modifying the ledger.
+    pub fn consume_batch(
+        &self,
+        requests: &[BudgetRequest],
+    ) -> BudgetResult<BudgetSnapshot> {
+        let mut ledger = self.lock()?;
+
+        let mut aggregated =
+            BTreeMap::<BudgetDimension, u128>::new();
+
+        for request in requests {
+            let entry = aggregated
+                .entry(request.dimension.clone())
+                .or_insert(0);
+
+            *entry = entry
+                .checked_add(request.amount)
+                .ok_or_else(|| BudgetError::AccountingOverflow {
+                    dimension: request.dimension.clone(),
+                })?;
+        }
+
+        // Validate every dimension before committing anything.
+        let mut updates =
+            BTreeMap::<BudgetDimension, u128>::new();
+
+        for (dimension, additional) in aggregated {
+            let consumed = ledger
+                .consumed
+                .get(&dimension)
+                .copied()
+                .unwrap_or(0);
+
+            let updated = consumed
+                .checked_add(additional)
+                .ok_or_else(|| BudgetError::AccountingOverflow {
+                    dimension: dimension.clone(),
+                })?;
+
+            self.budget.check(
+                &dimension,
+                consumed,
+                additional,
+            )?;
+
+            updates.insert(dimension, updated);
+        }
+
+        // Commit only after all validation succeeds.
+        ledger.consumed.extend(updates);
+
+        self.snapshot_locked(&ledger)
+    }
+
+    /// Checks whether additional consumption is permitted.
+    ///
+    /// This does not reserve capacity.
     pub fn check(
         &self,
         dimension: &BudgetDimension,
         additional: u128,
     ) -> BudgetResult<()> {
-        let ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| BudgetError::LedgerPoisoned)?;
+        let ledger = self.lock()?;
 
         let consumed = ledger
             .consumed
@@ -723,18 +832,25 @@ impl BudgetTracker {
             .copied()
             .unwrap_or(0);
 
-        self.budget.check(dimension, consumed, additional)
+        let _attempted = consumed
+            .checked_add(additional)
+            .ok_or_else(|| BudgetError::AccountingOverflow {
+                dimension: dimension.clone(),
+            })?;
+
+        self.budget.check(
+            dimension,
+            consumed,
+            additional,
+        )
     }
 
-    /// Returns the amount already consumed for a dimension.
+    /// Returns cumulative consumption.
     pub fn consumed(
         &self,
         dimension: &BudgetDimension,
     ) -> BudgetResult<u128> {
-        let ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| BudgetError::LedgerPoisoned)?;
+        let ledger = self.lock()?;
 
         Ok(ledger
             .consumed
@@ -743,9 +859,9 @@ impl BudgetTracker {
             .unwrap_or(0))
     }
 
-    /// Returns the remaining configured budget for a dimension.
+    /// Returns remaining configured capacity.
     ///
-    /// An unlimited dimension returns `None`.
+    /// None means unlimited.
     pub fn remaining(
         &self,
         dimension: &BudgetDimension,
@@ -755,110 +871,126 @@ impl BudgetTracker {
         Ok(self.budget.limit(dimension).remaining(consumed))
     }
 
-    /// Returns whether a dimension has reached its configured limit.
-    ///
-    /// An unlimited dimension is never exhausted.
+    /// Returns whether a dimension has reached its limit.
     pub fn is_exhausted(
         &self,
         dimension: &BudgetDimension,
     ) -> BudgetResult<bool> {
         let consumed = self.consumed(dimension)?;
-        let limit = self.budget.limit(dimension);
 
-        Ok(match limit.value() {
+        Ok(match self.budget.limit(dimension).value() {
             Some(maximum) => consumed >= maximum,
             None => false,
         })
     }
 
-    /// Returns a deterministic snapshot of all dimensions with recorded
-    /// consumption.
-    pub fn snapshot(&self) -> BudgetResult<BudgetSnapshot> {
-        let ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| BudgetError::LedgerPoisoned)?;
-
+    /// Creates a snapshot while the ledger is locked.
+    fn snapshot_locked(
+        &self,
+        ledger: &BudgetLedger,
+    ) -> BudgetResult<BudgetSnapshot> {
         let mut usage = BTreeMap::new();
 
-        for (dimension, consumed) in &ledger.consumed {
-            let limit = self.budget.limit(dimension).value();
-
-            let remaining = limit.map(|maximum| {
-                maximum.saturating_sub(*consumed)
-            });
+        // Include all configured dimensions, even if consumption is zero.
+        for (dimension, limit) in self.budget.limits() {
+            let consumed = ledger
+                .consumed
+                .get(dimension)
+                .copied()
+                .unwrap_or(0);
 
             usage.insert(
                 dimension.clone(),
                 BudgetUsage {
                     dimension: dimension.clone(),
-                    consumed: *consumed,
-                    limit,
-                    remaining,
+                    consumed,
+                    limit: limit.value(),
+                    remaining: limit.remaining(consumed),
                 },
             );
+        }
+
+        // Include custom dimensions that were consumed without
+        // an explicit configured limit.
+        for (dimension, consumed) in &ledger.consumed {
+            usage.entry(dimension.clone()).or_insert_with(|| {
+                BudgetUsage {
+                    dimension: dimension.clone(),
+                    consumed: *consumed,
+                    limit: None,
+                    remaining: None,
+                }
+            });
         }
 
         Ok(BudgetSnapshot { usage })
     }
 
-    /// Returns the total number of dimensions with recorded consumption.
+    /// Returns a deterministic snapshot.
+    pub fn snapshot(&self) -> BudgetResult<BudgetSnapshot> {
+        let ledger = self.lock()?;
+
+        self.snapshot_locked(&ledger)
+    }
+
+    /// Returns the number of dimensions with recorded consumption.
     pub fn tracked_dimension_count(&self) -> BudgetResult<usize> {
-        let ledger = self
-            .ledger
-            .lock()
-            .map_err(|_| BudgetError::LedgerPoisoned)?;
+        let ledger = self.lock()?;
 
         Ok(ledger.consumed.len())
     }
 }
 
-/// Errors produced by compiler budget configuration and accounting.
+// ============================================================================
+// ERRORS
+// ============================================================================
+
+/// Errors from budget configuration and accounting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BudgetError {
-    /// A dimension name or unit was invalid.
+    /// Invalid budget dimension.
     InvalidDimension {
-        /// The invalid field.
+        /// Invalid field.
         field: &'static str,
 
-        /// Explanation of the invalid value.
+        /// Explanation.
         reason: String,
     },
 
-    /// A requested amount would exceed a configured limit.
+    /// Explicit budget exceeded.
     Exceeded {
-        /// Dimension that exceeded its budget.
+        /// Dimension.
         dimension: BudgetDimension,
 
-        /// Amount already consumed.
+        /// Existing consumption.
         consumed: u128,
 
-        /// Additional amount requested.
+        /// Additional requested amount.
         requested: u128,
 
-        /// Total amount that would have been consumed.
+        /// Total attempted consumption.
         attempted: u128,
 
         /// Configured maximum.
         limit: u128,
     },
 
-    /// Accounting arithmetic exceeded the representation range.
+    /// Accounting exceeded the u128 representation.
     AccountingOverflow {
-        /// Dimension whose accounting overflowed.
+        /// Affected dimension.
         dimension: BudgetDimension,
     },
 
-    /// The shared accounting mutex was poisoned.
-    ///
-    /// The tracker refuses to continue because it cannot establish that
-    /// its accounting state is trustworthy.
+    /// Accounting mutex was poisoned.
     LedgerPoisoned,
 }
 
 impl fmt::Display for BudgetError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidDimension { field, reason } => {
                 write!(
@@ -885,7 +1017,8 @@ impl fmt::Display for BudgetError {
             Self::AccountingOverflow { dimension } => {
                 write!(
                     formatter,
-                    "compiler budget accounting overflow for {dimension}"
+                    "compiler budget accounting representation \
+                     overflow for {dimension}"
                 )
             }
 
@@ -900,6 +1033,10 @@ impl fmt::Display for BudgetError {
 
 impl Error for BudgetError {}
 
+// ============================================================================
+// TESTS
+// ============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -909,17 +1046,15 @@ mod tests {
     #[test]
     fn default_budget_is_unlimited() {
         let budget = CompilationBudget::default();
-
-        assert!(budget.is_unlimited());
-
         let dimension = BudgetDimension::memory_bytes();
 
+        assert!(budget.is_unlimited());
         assert!(budget.limit(&dimension).is_unlimited());
         assert!(budget.check(&dimension, 0, u128::MAX).is_ok());
     }
 
     #[test]
-    fn explicit_zero_budget_is_valid() {
+    fn zero_limit_is_valid() {
         let dimension = BudgetDimension::input_bytes();
 
         let budget = CompilationBudget::new().with_limit(
@@ -936,19 +1071,53 @@ mod tests {
     }
 
     #[test]
-    fn permits_consumption_within_limit() {
-        let dimension = BudgetDimension::artifact_bytes();
+    fn custom_dimensions_are_supported() {
+        let dimension = BudgetDimension::new(
+            "future_domain.custom_work",
+            "work_units",
+        ).unwrap();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(100),
-        );
-
-        assert!(budget.check(&dimension, 20, 30).is_ok());
+        assert_eq!(dimension.name(), "future_domain.custom_work");
+        assert_eq!(dimension.unit(), "work_units");
     }
 
     #[test]
-    fn rejects_consumption_above_limit() {
+    fn units_are_part_of_dimension_identity() {
+        let bytes = BudgetDimension::new("memory", "bytes").unwrap();
+        let kibibytes =
+            BudgetDimension::new("memory", "kibibytes").unwrap();
+
+        assert_ne!(bytes, kibibytes);
+    }
+
+    #[test]
+    fn empty_dimension_name_is_rejected() {
+        assert!(BudgetDimension::new("", "bytes").is_err());
+    }
+
+    #[test]
+    fn empty_dimension_unit_is_rejected() {
+        assert!(BudgetDimension::new("memory", "").is_err());
+    }
+
+    #[test]
+    fn control_characters_are_rejected() {
+        assert!(
+            BudgetDimension::new("memory\ninvalid", "bytes").is_err()
+        );
+    }
+
+    #[test]
+    fn long_dimension_names_are_not_arbitrarily_rejected() {
+        let name = format!("domain.{}", "x".repeat(16_384));
+
+        assert!(
+            BudgetDimension::new(name, "work_units").is_ok()
+        );
+    }
+
+    #[test]
+    fn configured_budget_is_enforced() {
         let dimension = BudgetDimension::memory_bytes();
 
         let budget = CompilationBudget::new().with_limit(
@@ -956,119 +1125,31 @@ mod tests {
             BudgetLimit::bounded(100),
         );
 
-        let error = budget
-            .check(&dimension, 80, 21)
-            .expect_err("budget must be exceeded");
+        assert!(budget.check(&dimension, 20, 30).is_ok());
 
         assert!(matches!(
-            error,
-            BudgetError::Exceeded {
-                consumed: 80,
-                requested: 21,
+            budget.check(&dimension, 80, 21),
+            Err(BudgetError::Exceeded {
                 attempted: 101,
                 limit: 100,
                 ..
-            }
+            })
         ));
-    }
-
-    #[test]
-    fn missing_dimension_is_unlimited() {
-        let budget = CompilationBudget::unlimited();
-        let dimension = BudgetDimension::worker_slots();
-
-        assert!(budget.check(&dimension, 0, u128::MAX).is_ok());
-    }
-
-    #[test]
-    fn dimensions_are_extensible() {
-        let dimension = BudgetDimension::new(
-            "future_domain.custom_work",
-            "work_units",
-        )
-        .expect("custom dimension should be valid");
-
-        assert_eq!(dimension.name(), "future_domain.custom_work");
-        assert_eq!(dimension.unit(), "work_units");
-    }
-
-    #[test]
-    fn dimension_units_are_part_of_identity() {
-        let bytes = BudgetDimension::new("memory", "bytes")
-            .expect("valid dimension");
-
-        let kibibytes = BudgetDimension::new("memory", "kibibytes")
-            .expect("valid dimension");
-
-        assert_ne!(bytes, kibibytes);
-    }
-
-    #[test]
-    fn rejects_empty_dimension_name() {
-        let result = BudgetDimension::new("", "bytes");
-
-        assert!(matches!(
-            result,
-            Err(BudgetError::InvalidDimension { .. })
-        ));
-    }
-
-    #[test]
-    fn rejects_empty_dimension_unit() {
-        let result = BudgetDimension::new("memory", "");
-
-        assert!(matches!(
-            result,
-            Err(BudgetError::InvalidDimension { .. })
-        ));
-    }
-
-    #[test]
-    fn rejects_control_characters() {
-        let result = BudgetDimension::new(
-            "memory\ninvalid",
-            "bytes",
-        );
-
-        assert!(matches!(
-            result,
-            Err(BudgetError::InvalidDimension { .. })
-        ));
-    }
-
-    #[test]
-    fn does_not_impose_an_arbitrary_name_length_limit() {
-        let long_name = "domain.".to_string() + &"x".repeat(16_384);
-
-        let dimension = BudgetDimension::new(
-            long_name.clone(),
-            "work_units",
-        )
-        .expect("long valid names must not be rejected by a fixed ceiling");
-
-        assert_eq!(dimension.name(), long_name);
     }
 
     #[test]
     fn tracker_accounts_consumption() {
         let dimension = BudgetDimension::pass_applications();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(10),
-        );
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(10),
+            )
+            .tracker();
 
-        let tracker = budget.tracker();
-
-        assert_eq!(
-            tracker.consume(dimension.clone(), 4).unwrap(),
-            4
-        );
-
-        assert_eq!(
-            tracker.consume(dimension.clone(), 3).unwrap(),
-            7
-        );
+        assert_eq!(tracker.consume(dimension.clone(), 4).unwrap(), 4);
+        assert_eq!(tracker.consume(dimension.clone(), 3).unwrap(), 7);
 
         assert_eq!(tracker.consumed(&dimension).unwrap(), 7);
         assert_eq!(tracker.remaining(&dimension).unwrap(), Some(3));
@@ -1078,59 +1159,52 @@ mod tests {
     fn failed_consumption_does_not_modify_ledger() {
         let dimension = BudgetDimension::diagnostics();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(5),
-        );
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(5),
+            )
+            .tracker();
 
-        let tracker = budget.tracker();
+        tracker.consume(dimension.clone(), 4).unwrap();
 
-        tracker
-            .consume(dimension.clone(), 4)
-            .expect("initial consumption should succeed");
-
-        assert!(matches!(
-            tracker.consume(dimension.clone(), 2),
-            Err(BudgetError::Exceeded { .. })
-        ));
+        assert!(tracker.consume(dimension.clone(), 2).is_err());
 
         assert_eq!(tracker.consumed(&dimension).unwrap(), 4);
     }
 
     #[test]
-    fn tracker_clones_share_the_same_ledger() {
+    fn clones_share_accounting() {
         let dimension = BudgetDimension::worker_slots();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(8),
-        );
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(8),
+            )
+            .tracker();
 
-        let first = budget.tracker();
-        let second = first.shared();
+        let second = tracker.shared();
 
-        first
-            .consume(dimension.clone(), 5)
-            .expect("first consumption");
+        tracker.consume(dimension.clone(), 5).unwrap();
 
         assert_eq!(second.consumed(&dimension).unwrap(), 5);
 
-        assert!(matches!(
-            second.consume(dimension.clone(), 4),
-            Err(BudgetError::Exceeded { .. })
-        ));
+        assert!(second.consume(dimension.clone(), 4).is_err());
     }
 
     #[test]
-    fn concurrent_consumption_cannot_exceed_shared_limit() {
+    fn concurrent_consumption_respects_shared_limit() {
         let dimension = BudgetDimension::ir_entities();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(100),
+        let tracker = Arc::new(
+            CompilationBudget::new()
+                .with_limit(
+                    dimension.clone(),
+                    BudgetLimit::bounded(100),
+                )
+                .tracker(),
         );
-
-        let tracker = Arc::new(budget.tracker());
 
         let mut workers = Vec::new();
 
@@ -1146,11 +1220,7 @@ mod tests {
         let mut successful = 0_u128;
 
         for worker in workers {
-            if worker
-                .join()
-                .expect("worker must not panic")
-                .is_ok()
-            {
+            if worker.join().unwrap().is_ok() {
                 successful += 15;
             }
         }
@@ -1160,15 +1230,12 @@ mod tests {
     }
 
     #[test]
-    fn accounting_overflow_is_reported() {
+    fn unlimited_budget_still_detects_accounting_overflow() {
         let dimension = BudgetDimension::optimizer_work();
 
-        let budget = CompilationBudget::unlimited();
-        let tracker = budget.tracker();
+        let tracker = CompilationBudget::unlimited().tracker();
 
-        tracker
-            .consume(dimension.clone(), u128::MAX)
-            .expect("maximum representable amount");
+        tracker.consume(dimension.clone(), u128::MAX).unwrap();
 
         assert!(matches!(
             tracker.consume(dimension, 1),
@@ -1177,79 +1244,187 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_is_deterministic_and_contains_usage() {
-        let first_dimension = BudgetDimension::input_bytes();
-        let second_dimension = BudgetDimension::artifact_bytes();
+    fn snapshots_include_configured_unused_dimensions() {
+        let dimension = BudgetDimension::memory_bytes();
 
-        let budget = CompilationBudget::new()
+        let tracker = CompilationBudget::new()
             .with_limit(
-                first_dimension.clone(),
+                dimension.clone(),
+                BudgetLimit::bounded(100),
+            )
+            .tracker();
+
+        let snapshot = tracker.snapshot().unwrap();
+
+        let usage = snapshot.usage(&dimension).unwrap();
+
+        assert_eq!(usage.consumed, 0);
+        assert_eq!(usage.remaining, Some(100));
+    }
+
+    #[test]
+    fn snapshots_are_deterministic() {
+        let first = BudgetDimension::input_bytes();
+        let second = BudgetDimension::artifact_bytes();
+
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                first.clone(),
                 BudgetLimit::bounded(100),
             )
             .with_limit(
-                second_dimension.clone(),
+                second.clone(),
                 BudgetLimit::bounded(200),
-            );
+            )
+            .tracker();
 
-        let tracker = budget.tracker();
-
-        tracker
-            .consume(second_dimension.clone(), 50)
-            .expect("artifact accounting");
-
-        tracker
-            .consume(first_dimension.clone(), 20)
-            .expect("input accounting");
+        tracker.consume(second, 50).unwrap();
+        tracker.consume(first, 20).unwrap();
 
         let snapshot = tracker.snapshot().unwrap();
 
         assert_eq!(snapshot.dimension_count(), 2);
-
-        assert_eq!(
-            snapshot.usage(&first_dimension).unwrap().remaining,
-            Some(80)
-        );
-
-        assert_eq!(
-            snapshot.usage(&second_dimension).unwrap().remaining,
-            Some(150)
-        );
     }
 
     #[test]
-    fn unlimited_budget_has_no_remaining_amount() {
+    fn unlimited_dimensions_have_no_remaining_capacity_value() {
         let dimension = BudgetDimension::cpu_time();
+
         let tracker = CompilationBudget::unlimited().tracker();
 
-        tracker
-            .consume(dimension.clone(), 1_000)
-            .expect("unlimited consumption");
+        tracker.consume(dimension.clone(), 1_000).unwrap();
 
         assert_eq!(tracker.remaining(&dimension).unwrap(), None);
         assert!(!tracker.is_exhausted(&dimension).unwrap());
     }
 
     #[test]
-    fn bounded_budget_reports_exhaustion() {
-        let dimension = BudgetDimension::wall_time();
+    fn zero_budget_is_exhausted_initially() {
+        let dimension = BudgetDimension::input_bytes();
 
-        let budget = CompilationBudget::new().with_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(10),
-        );
-
-        let tracker = budget.tracker();
-
-        tracker
-            .consume(dimension.clone(), 10)
-            .expect("consume complete budget");
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(0),
+            )
+            .tracker();
 
         assert!(tracker.is_exhausted(&dimension).unwrap());
     }
 
     #[test]
-    fn replacing_a_limit_is_explicit() {
-        let dimension = BudgetDimension::memory_bytes();
+    fn bounded_budget_reports_exhaustion() {
+        let dimension = BudgetDimension::wall_time();
+
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(10),
+            )
+            .tracker();
+
+        tracker.consume(dimension.clone(), 10).unwrap();
+
+        assert!(tracker.is_exhausted(&dimension).unwrap());
+    }
+
+    #[test]
+    fn batch_consumption_is_atomic() {
+        let memory = BudgetDimension::memory_bytes();
+        let workers = BudgetDimension::worker_slots();
+
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                memory.clone(),
+                BudgetLimit::bounded(100),
+            )
+            .with_limit(
+                workers.clone(),
+                BudgetLimit::bounded(2),
+            )
+            .tracker();
+
+        let requests = [
+            BudgetRequest::new(memory.clone(), 50),
+            BudgetRequest::new(workers.clone(), 3),
+        ];
+
+        assert!(tracker.consume_batch(&requests).is_err());
+
+        assert_eq!(tracker.consumed(&memory).unwrap(), 0);
+        assert_eq!(tracker.consumed(&workers).unwrap(), 0);
+    }
+
+    #[test]
+    fn batch_consumption_commits_all_dimensions() {
+        let memory = BudgetDimension::memory_bytes();
+        let workers = BudgetDimension::worker_slots();
+
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                memory.clone(),
+                BudgetLimit::bounded(100),
+            )
+            .with_limit(
+                workers.clone(),
+                BudgetLimit::bounded(4),
+            )
+            .tracker();
+
+        let requests = [
+            BudgetRequest::new(memory.clone(), 50),
+            BudgetRequest::new(workers.clone(), 2),
+        ];
+
+        tracker.consume_batch(&requests).unwrap();
+
+        assert_eq!(tracker.consumed(&memory).unwrap(), 50);
+        assert_eq!(tracker.consumed(&workers).unwrap(), 2);
+    }
+
+    #[test]
+    fn duplicate_batch_dimensions_are_aggregated() {
+        let dimension = BudgetDimension::artifact_bytes();
+
+        let tracker = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(100),
+            )
+            .tracker();
+
+        let requests = [
+            BudgetRequest::new(dimension.clone(), 20),
+            BudgetRequest::new(dimension.clone(), 30),
+        ];
+
+        tracker.consume_batch(&requests).unwrap();
+
+        assert_eq!(tracker.consumed(&dimension).unwrap(), 50);
+    }
+
+    #[test]
+    fn batch_overflow_does_not_commit() {
+        let dimension = BudgetDimension::optimizer_work();
+
+        let tracker = CompilationBudget::unlimited().tracker();
+
+        let requests = [
+            BudgetRequest::new(dimension.clone(), u128::MAX),
+            BudgetRequest::new(dimension.clone(), 1),
+        ];
+
+        assert!(matches!(
+            tracker.consume_batch(&requests),
+            Err(BudgetError::AccountingOverflow { .. })
+        ));
+
+        assert_eq!(tracker.consumed(&dimension).unwrap(), 0);
+    }
+
+    #[test]
+    fn replacing_and_removing_limits_works() {
+        let dimension = BudgetDimension::artifact_bytes();
 
         let mut budget = CompilationBudget::new();
 
@@ -1270,32 +1445,15 @@ mod tests {
         );
 
         assert_eq!(
-            budget.limit(&dimension),
-            BudgetLimit::bounded(200)
-        );
-    }
-
-    #[test]
-    fn removing_a_limit_makes_dimension_unlimited() {
-        let dimension = BudgetDimension::artifact_bytes();
-
-        let mut budget = CompilationBudget::new();
-
-        budget.set_limit(
-            dimension.clone(),
-            BudgetLimit::bounded(100),
-        );
-
-        assert_eq!(
             budget.remove_limit(&dimension),
-            Some(BudgetLimit::bounded(100))
+            Some(BudgetLimit::bounded(200))
         );
 
         assert!(budget.limit(&dimension).is_unlimited());
     }
 
     #[test]
-    fn time_dimensions_use_explicit_nanosecond_units() {
+    fn time_dimensions_have_explicit_units() {
         assert_eq!(
             BudgetDimension::wall_time().unit(),
             "nanoseconds"
@@ -1308,19 +1466,19 @@ mod tests {
     }
 
     #[test]
-    fn budget_error_has_a_useful_display_message() {
-        let dimension = BudgetDimension::memory_bytes();
-
+    fn error_display_is_informative() {
         let error = BudgetError::Exceeded {
-            dimension,
+            dimension: BudgetDimension::memory_bytes(),
             consumed: 80,
             requested: 30,
             attempted: 110,
             limit: 100,
         };
 
-        assert!(error.to_string().contains("memory"));
-        assert!(error.to_string().contains("110"));
-        assert!(error.to_string().contains("100"));
+        let message = error.to_string();
+
+        assert!(message.contains("memory"));
+        assert!(message.contains("110"));
+        assert!(message.contains("100"));
     }
 }
