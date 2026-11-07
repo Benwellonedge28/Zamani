@@ -3,141 +3,79 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
-//! Zamani Universal Meta-Compiler — Target Descriptors
+//! Zamani Universal Meta-Compiler — Target Configuration Contracts.
 //!
-//! Path:
-//!     src/compiler/configuration/target.rs
+//! Path: src/compiler/configuration/target.rs
+//! Edition: 2021
+//! Minimum Rust version: 1.97.
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum version 1.97
+//! # Purpose
 //!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
+//! Defines extensible compiler-facing target descriptors.
 //!
-//! ================================================================
-//! PURPOSE
-//! ================================================================
+//! These descriptors represent compilation target intent and metadata.
+//! They do not establish physical hardware availability or backend support.
 //!
-//! Defines the target-independent description of compilation targets.
+//! # Architectural ownership
 //!
-//! A target descriptor describes an execution or artifact environment
-//! without making assumptions about the resources physically available.
-//!
-//! It provides:
-//!
-//! - Stable target identity.
-//! - Architecture identification.
-//! - Vendor identification.
-//! - Operating-system identification.
-//! - Execution-environment identification.
-//! - ABI metadata.
-//! - Data-layout metadata.
-//! - Target triple metadata.
-//! - Artifact-format declarations.
-//! - Extensible target properties.
-//! - Validation.
+//! This module owns:
+//! - Target identifiers.
+//! - Target roles.
+//! - Artifact-format identifiers.
+//! - Extensible target metadata.
+//! - Target descriptor construction.
+//! - Structural descriptor validation.
 //! - Legacy CompilationTarget adaptation.
 //!
-//! ================================================================
-//! OWNERSHIP
-//! ================================================================
+//! Other authorities:
+//! - Source target syntax: grammar/compile/target.g4.
+//! - Target-selection policy: grammar/compile/target-selection.g4.
+//! - Source semantics: grammar/specification/semantic-model.md.
+//! - Legacy target identity: crate::compiler_types.
+//! - Actual backend target descriptions: crate::backend::target.
+//! - Backend capabilities: crate::backend::capabilities.
+//! - Compatibility: crate::backend::compatibility.
+//! - Resource planning: crate::compiler::planning.
+//! - Physical execution: crate::runtime.
 //!
-//! This module owns target descriptors and their structural validation.
+//! # POCO-REAF
 //!
-//! It does not own:
+//! Target identities are open-world.
 //!
-//! - Hardware discovery.
-//! - Hardware capability measurement.
-//! - Physical resource allocation.
-//! - Backend selection.
-//! - Backend implementation.
-//! - Runtime scheduling.
-//! - Device placement.
-//! - Quantum routing.
-//! - Quantum error correction.
-//! - HDL synthesis.
-//! - Semantic analysis.
-//! - Program requirements.
-//! - Program preferences.
-//! - IR definitions.
+//! This module imposes no universal maximum on:
+//! CPUs, cores, GPUs, FPGAs, QPUs, nodes, devices, memory,
+//! register widths, tensor dimensions, or computational domains.
 //!
-//! ================================================================
-//! POCO-REAF
-//! ================================================================
+//! Unknown information remains unknown.
 //!
-//! Target descriptions are open-ended.
+//! A valid descriptor does not imply feasibility.
 //!
-//! No universal maximum is imposed on:
+//! # Determinism
 //!
-//! - CPUs.
-//! - Cores.
-//! - Threads.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Registers.
-//! - Register width.
-//! - Tensor rank.
-//! - Vector width.
-//! - Quantum resources.
-//! - Hardware resources.
+//! Metadata maps use BTreeMap.
+//! Artifact formats are deduplicated deterministically.
+//! Duplicate property definitions are rejected.
 //!
-//! Actual feasibility belongs to capability negotiation and resource
-//! planning.
+//! # Security
 //!
-//! An absent property means unknown or unspecified, not unlimited.
-//!
-//! ================================================================
-//! INTEGRATION
-//! ================================================================
-//!
-//! Existing:
-//!     crate::compiler_types::CompilationTarget
-//!
-//! Future:
-//!     configuration/registry.rs
-//!     configuration/capabilities.rs
-//!     configuration/requirements.rs
-//!     backends/registry.rs
-//!     backends/selection.rs
-//!     planning/target_discovery.rs
-//!     planning/capability_matching.rs
-//!     artifacts/artifact.rs
-//!
-//! The target descriptor is deliberately independent of these future
-//! modules so its contract can be frozen first.
+//! All externally supplied metadata is validated.
+//! No filesystem, network, environment, or hardware access occurs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
 use crate::compiler_types::CompilationTarget;
 
-// ============================================================================
-// VERSION
-// ============================================================================
-
-/// Public target-descriptor API version.
+/// Version of the compiler-facing target descriptor API.
 ///
-/// This is independent of the Zamani language, compiler, IR and backend
-/// versions.
-pub const TARGET_DESCRIPTOR_API_VERSION: u16 = 1;
+/// Independent of language, grammar, IR, compiler and backend versions.
+pub const TARGET_DESCRIPTOR_API_VERSION: u16 = 2;
 
 // ============================================================================
 // VALIDATION
 // ============================================================================
 
-/// Validates free-form descriptor text.
-///
-/// Empty values and control characters are rejected.
-///
-/// No arbitrary string-length limit is imposed.
 fn validate_text(
     field: &'static str,
     value: &str,
@@ -153,22 +91,6 @@ fn validate_text(
     Ok(())
 }
 
-/// Validates a stable target identifier.
-///
-/// Identifiers use a portable, case-sensitive ASCII representation.
-///
-/// Allowed characters:
-///
-/// - Lowercase ASCII letters.
-/// - Digits.
-/// - Hyphens.
-/// - Underscores.
-/// - Periods.
-/// - Colons.
-/// - Forward slashes.
-/// - Plus signs.
-///
-/// This supports vendor-qualified and extension-qualified identifiers.
 fn validate_identifier(value: &str) -> Result<(), TargetError> {
     if value.is_empty() {
         return Err(TargetError::InvalidIdentifier {
@@ -180,7 +102,7 @@ fn validate_identifier(value: &str) -> Result<(), TargetError> {
     if value.trim() != value {
         return Err(TargetError::InvalidIdentifier {
             value: value.to_owned(),
-            reason: "leading or trailing whitespace is forbidden".to_owned(),
+            reason: "surrounding whitespace is not permitted".to_owned(),
         });
     }
 
@@ -194,12 +116,58 @@ fn validate_identifier(value: &str) -> Result<(), TargetError> {
     }) {
         return Err(TargetError::InvalidIdentifier {
             value: value.to_owned(),
-            reason:
-                "identifier contains unsupported characters; \
-                 use lowercase ASCII letters, digits, \
-                 hyphens, underscores, periods, colons, \
-                 slashes or plus signs"
-                    .to_owned(),
+            reason: "identifier contains unsupported characters".to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+fn validate_optional_text(
+    field: &'static str,
+    value: Option<&str>,
+) -> Result<(), TargetError> {
+    if let Some(value) = value {
+        validate_text(field, value)?;
+    }
+
+    Ok(())
+}
+
+/// Validates a decimal numeric representation without imposing
+/// a machine-integer width.
+fn validate_decimal(value: &str) -> Result<(), TargetError> {
+    if value.is_empty() {
+        return Err(TargetError::InvalidDecimal {
+            value: value.to_owned(),
+        });
+    }
+
+    let unsigned = value
+        .strip_prefix('-')
+        .or_else(|| value.strip_prefix('+'))
+        .unwrap_or(value);
+
+    let mut parts = unsigned.split('.');
+
+    let integer = parts.next().unwrap_or_default();
+    let fraction = parts.next();
+
+    let valid_integer =
+        !integer.is_empty()
+            && integer.bytes().all(|b| b.is_ascii_digit());
+
+    let valid_fraction = fraction.is_none_or(|fraction| {
+        !fraction.is_empty()
+            && fraction.bytes().all(|b| b.is_ascii_digit())
+    });
+
+    if parts.next().is_some()
+        || !valid_integer
+        || !valid_fraction
+    {
+        return Err(TargetError::InvalidDecimal {
+            value: value.to_owned(),
         });
     }
 
@@ -207,33 +175,27 @@ fn validate_identifier(value: &str) -> Result<(), TargetError> {
 }
 
 // ============================================================================
-// TARGET ID
+// TARGET IDENTITY
 // ============================================================================
 
-/// Stable, open-ended target identifier.
+/// Stable, extensible target identifier.
 ///
 /// Examples:
 ///
-/// - `x86_64-unknown-linux-gnu`
-/// - `aarch64-unknown-linux-gnu`
-/// - `wasm32-unknown-unknown`
-/// - `riscv64-unknown-linux-gnu`
-/// - `vendor:accelerator:model`
-/// - `quantum:provider:processor`
-/// - `photonic:provider:device`
+/// x86_64-linux
+/// aarch64
+/// wasm32
+/// riscv64
+/// quantum:provider:processor
+/// photonic:provider:device
+/// vendor:accelerator:model
 ///
-/// Identifiers are not interpreted as hardware capabilities.
-///
-/// Two descriptors with the same identifier refer to the same logical
-/// target identity and must not silently overwrite each other in a registry.
+/// The examples are not a closed target catalogue.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TargetId(String);
 
 impl TargetId {
-    /// Creates a validated target identifier.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> Result<Self, TargetError> {
+    pub fn new(value: impl Into<String>) -> Result<Self, TargetError> {
         let value = value.into();
 
         validate_identifier(&value)?;
@@ -241,13 +203,11 @@ impl TargetId {
         Ok(Self(value))
     }
 
-    /// Returns the identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Consumes the identifier and returns its string representation.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -255,8 +215,8 @@ impl TargetId {
 }
 
 impl fmt::Display for TargetId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
@@ -280,29 +240,24 @@ impl TryFrom<&str> for TargetId {
 // TARGET ROLE
 // ============================================================================
 
-/// Describes the role of a target.
-///
-/// The string representation is intentionally extensible.
+/// Open-world descriptive target role.
 ///
 /// Examples:
 ///
-/// - `execution`
-/// - `portable-ir`
-/// - `intermediate-representation`
-/// - `hardware-description`
-/// - `simulation`
-/// - `emulation`
-/// - `deployment-package`
+/// execution
+/// simulation
+/// emulation
+/// hardware-description
+/// intermediate-representation
+/// portable-ir
+/// deployment-package
 ///
-/// This is descriptive metadata, not proof that an execution backend exists.
+/// Roles are descriptive metadata, not capabilities.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TargetRole(String);
 
 impl TargetRole {
-    /// Creates a target role.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> Result<Self, TargetError> {
+    pub fn new(value: impl Into<String>) -> Result<Self, TargetError> {
         let value = value.into();
 
         validate_text("target role", &value)?;
@@ -322,35 +277,36 @@ impl Default for TargetRole {
     }
 }
 
+impl fmt::Display for TargetRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 // ============================================================================
 // ARTIFACT FORMAT
 // ============================================================================
 
-/// Identifies an output artifact format.
+/// Extensible artifact-format identifier.
 ///
-/// Examples:
+/// Examples include:
 ///
-/// - `elf`
-/// - `macho`
-/// - `coff`
-/// - `wasm`
-/// - `llvm-ir`
-/// - `qasm`
-/// - `verilog`
-/// - `systemverilog`
-/// - `bitstream`
-/// - `portable-ir`
-/// - `deployment-bundle`
+/// elf
+/// wasm
+/// llvm-ir
+/// qasm
+/// verilog
+/// systemverilog
+/// bitstream
+/// portable-ir
+/// deployment-bundle
 ///
-/// Artifact formats are open-ended.
+/// Declaring a format does not establish backend availability.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ArtifactFormat(String);
 
 impl ArtifactFormat {
-    /// Creates a validated artifact format identifier.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> Result<Self, TargetError> {
+    pub fn new(value: impl Into<String>) -> Result<Self, TargetError> {
         let value = value.into();
 
         validate_identifier(&value)?;
@@ -365,23 +321,20 @@ impl ArtifactFormat {
 }
 
 impl fmt::Display for ArtifactFormat {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
 }
 
 // ============================================================================
-// TARGET PROPERTY
+// EXTENSIBLE PROPERTY VALUES
 // ============================================================================
 
-/// An extensible target metadata value.
+/// Extensible metadata values.
 ///
-/// Properties describe target metadata.
-///
-/// They do not independently establish hardware capability or guarantee
-/// physical availability.
-///
-/// Structured capability contracts belong to the capability subsystem.
+/// Numeric values are represented without imposing a universal
+/// fixed-width numeric representation where a textual decimal
+/// representation is appropriate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetProperty {
     Text(String),
@@ -395,20 +348,27 @@ pub enum TargetProperty {
 }
 
 impl TargetProperty {
-    /// Validates the property recursively.
     pub fn validate(&self) -> Result<(), TargetError> {
         match self {
-            Self::Text(value) | Self::Decimal(value) => {
-                validate_text("property value", value)
+            Self::Text(value) => {
+                if value.chars().any(char::is_control) {
+                    return Err(TargetError::ControlCharacter {
+                        field: "property value",
+                    });
+                }
+
+                Ok(())
             }
+
+            Self::Decimal(value) => validate_decimal(value),
 
             Self::Identifier(value) => {
                 validate_identifier(value)
             }
 
-            Self::Boolean(_) | Self::Integer(_) | Self::Unsigned(_) => {
-                Ok(())
-            }
+            Self::Boolean(_)
+            | Self::Integer(_)
+            | Self::Unsigned(_) => Ok(()),
 
             Self::List(values) => {
                 for value in values {
@@ -420,7 +380,7 @@ impl TargetProperty {
 
             Self::Map(values) => {
                 for (key, value) in values {
-                    validate_text("property key", key)?;
+                    validate_identifier(key)?;
                     value.validate()?;
                 }
 
@@ -434,56 +394,45 @@ impl TargetProperty {
 // TARGET DESCRIPTOR
 // ============================================================================
 
-/// Immutable description of a compilation target.
+/// Immutable compiler-facing target descriptor.
 ///
-/// The descriptor separates:
+/// This is a description of compilation target intent.
 ///
-/// - Logical target identity.
-/// - CPU or accelerator architecture.
-/// - Vendor.
-/// - Operating system.
-/// - ABI.
-/// - Execution environment.
-/// - Target triple.
-/// - Data layout.
-/// - Artifact formats.
-/// - Extensible metadata.
+/// It is NOT:
 ///
-/// Optional values represent information that is unknown or unspecified.
+/// - A physical hardware inventory.
+/// - A capability profile.
+/// - A backend implementation.
+/// - A compatibility result.
+/// - A resource allocation.
+/// - A runtime execution plan.
 ///
-/// An unknown field must never be interpreted as a wildcard or as proof
-/// of compatibility.
+/// Architecture and platform metadata are descriptive only.
+///
+/// Actual target evidence belongs to crate::backend::target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TargetDescriptor {
     id: TargetId,
-
     display_name: String,
-
     role: TargetRole,
 
     architecture: Option<String>,
-
     vendor: Option<String>,
-
     operating_system: Option<String>,
-
     environment: Option<String>,
-
     abi: Option<String>,
 
     target_triple: Option<String>,
-
     data_layout: Option<String>,
 
     artifact_formats: Vec<ArtifactFormat>,
 
     properties: BTreeMap<String, TargetProperty>,
-
     extensions: BTreeMap<String, TargetProperty>,
 }
 
 impl TargetDescriptor {
-    /// Creates a descriptor builder.
+    /// Starts construction of an immutable target descriptor.
     pub fn builder(
         id: TargetId,
         display_name: impl Into<String>,
@@ -491,108 +440,81 @@ impl TargetDescriptor {
         TargetDescriptorBuilder::new(id, display_name)
     }
 
-    /// Returns the stable target identifier.
     #[must_use]
     pub fn id(&self) -> &TargetId {
         &self.id
     }
 
-    /// Returns the display name.
     #[must_use]
     pub fn display_name(&self) -> &str {
         &self.display_name
     }
 
-    /// Returns the target role.
     #[must_use]
     pub fn role(&self) -> &TargetRole {
         &self.role
     }
 
-    /// Returns the architecture identifier, if known.
     #[must_use]
     pub fn architecture(&self) -> Option<&str> {
         self.architecture.as_deref()
     }
 
-    /// Returns the vendor identifier, if known.
     #[must_use]
     pub fn vendor(&self) -> Option<&str> {
         self.vendor.as_deref()
     }
 
-    /// Returns the operating-system identifier, if known.
     #[must_use]
     pub fn operating_system(&self) -> Option<&str> {
         self.operating_system.as_deref()
     }
 
-    /// Returns the execution environment, if known.
     #[must_use]
     pub fn environment(&self) -> Option<&str> {
         self.environment.as_deref()
     }
 
-    /// Returns the ABI identifier, if known.
     #[must_use]
     pub fn abi(&self) -> Option<&str> {
         self.abi.as_deref()
     }
 
-    /// Returns the target triple, if supplied.
-    ///
-    /// The triple is opaque metadata.
-    ///
-    /// This module deliberately does not parse triples using a closed
-    /// architecture or operating-system inventory.
     #[must_use]
     pub fn target_triple(&self) -> Option<&str> {
         self.target_triple.as_deref()
     }
 
-    /// Returns the target data-layout description, if supplied.
-    ///
-    /// Data-layout syntax is interpreted by the appropriate IR/backend
-    /// integration layer.
     #[must_use]
     pub fn data_layout(&self) -> Option<&str> {
         self.data_layout.as_deref()
     }
 
-    /// Returns supported declared artifact formats.
     #[must_use]
     pub fn artifact_formats(&self) -> &[ArtifactFormat] {
         &self.artifact_formats
     }
 
-    /// Returns target properties.
     #[must_use]
     pub fn properties(&self) -> &BTreeMap<String, TargetProperty> {
         &self.properties
     }
 
-    /// Returns extension properties.
     #[must_use]
     pub fn extensions(&self) -> &BTreeMap<String, TargetProperty> {
         &self.extensions
     }
 
-    /// Retrieves a property by name.
     #[must_use]
     pub fn property(&self, key: &str) -> Option<&TargetProperty> {
         self.properties.get(key)
     }
 
-    /// Retrieves an extension property.
     #[must_use]
     pub fn extension(&self, key: &str) -> Option<&TargetProperty> {
         self.extensions.get(key)
     }
 
-    /// Checks whether an artifact format is declared.
-    ///
-    /// This checks descriptor metadata only. It does not prove that a
-    /// registered backend can generate that artifact.
     #[must_use]
     pub fn declares_artifact_format(
         &self,
@@ -601,147 +523,135 @@ impl TargetDescriptor {
         self.artifact_formats.contains(format)
     }
 
-    /// Validates the complete descriptor.
+    /// Validates all descriptor metadata.
     pub fn validate(&self) -> Result<(), TargetError> {
         validate_identifier(self.id.as_str())?;
-
         validate_text("display name", &self.display_name)?;
-
         validate_text("target role", self.role.as_str())?;
 
-        validate_optional_text(
-            "architecture",
-            self.architecture.as_deref(),
-        )?;
+        for (field, value) in [
+            ("architecture", self.architecture.as_deref()),
+            ("vendor", self.vendor.as_deref()),
+            ("operating system", self.operating_system.as_deref()),
+            ("environment", self.environment.as_deref()),
+            ("ABI", self.abi.as_deref()),
+            ("target triple", self.target_triple.as_deref()),
+            ("data layout", self.data_layout.as_deref()),
+        ] {
+            validate_optional_text(field, value)?;
+        }
 
-        validate_optional_text(
-            "vendor",
-            self.vendor.as_deref(),
-        )?;
-
-        validate_optional_text(
-            "operating system",
-            self.operating_system.as_deref(),
-        )?;
-
-        validate_optional_text(
-            "execution environment",
-            self.environment.as_deref(),
-        )?;
-
-        validate_optional_text(
-            "ABI",
-            self.abi.as_deref(),
-        )?;
-
-        validate_optional_text(
-            "target triple",
-            self.target_triple.as_deref(),
-        )?;
-
-        validate_optional_text(
-            "data layout",
-            self.data_layout.as_deref(),
-        )?;
+        if let Some(triple) = &self.target_triple {
+            if triple.chars().any(char::is_whitespace) {
+                return Err(TargetError::InvalidTargetTriple {
+                    value: triple.clone(),
+                });
+            }
+        }
 
         for format in &self.artifact_formats {
             validate_identifier(format.as_str())?;
         }
 
         for (key, value) in &self.properties {
-            validate_text("property key", key)?;
+            validate_identifier(key)?;
             value.validate()?;
         }
 
         for (key, value) in &self.extensions {
             validate_identifier(key)?;
+
+            if !key.contains(':') {
+                return Err(TargetError::UnqualifiedExtension {
+                    key: key.clone(),
+                });
+            }
+
             value.validate()?;
         }
 
         Ok(())
     }
 
-    /// Converts an existing legacy compilation target into a descriptor.
+    /// Adapts the existing legacy CompilationTarget.
     ///
-    /// This adapter preserves the distinction between hardware targets
-    /// and non-hardware artifact targets.
-    ///
-    /// Unknown ABI, vendor, OS, environment and data-layout values remain
-    /// unknown rather than being fabricated.
+    /// This is a compatibility adapter, not an authoritative target
+    /// registry or backend capability declaration.
     pub fn from_legacy(
         target: &CompilationTarget,
     ) -> Result<Self, TargetError> {
-        let mut builder = match target {
+        let builder = match target {
             CompilationTarget::X86_64Linux => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("x86_64-linux")?,
                     "x86-64 Linux",
                 )
                 .architecture("x86_64")
                 .operating_system("linux")
-                .role(TargetRole::new("execution")?)
             }
 
             CompilationTarget::Arm64 => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("aarch64")?,
                     "AArch64",
                 )
                 .architecture("aarch64")
-                .role(TargetRole::new("execution")?)
             }
 
             CompilationTarget::Wasm32 => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("wasm32")?,
                     "WebAssembly 32-bit",
                 )
                 .architecture("wasm32")
-                .role(TargetRole::new("execution")?)
                 .artifact_format(ArtifactFormat::new("wasm")?)
             }
 
             CompilationTarget::RiscV => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("riscv")?,
                     "RISC-V",
                 )
                 .architecture("riscv")
-                .role(TargetRole::new("execution")?)
             }
 
             CompilationTarget::QASM => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("qasm")?,
                     "OpenQASM",
                 )
-                .role(TargetRole::new("hardware-description")?)
+                .role(TargetRole::new("quantum")?)
                 .artifact_format(ArtifactFormat::new("qasm")?)
             }
 
             CompilationTarget::NanoControl => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("nano-control")?,
-                    "Nano Control",
+                    "NanoControl",
                 )
-                .role(TargetRole::new("execution")?)
             }
 
             CompilationTarget::MTSBytecode => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("mts-bytecode")?,
                     "MTS Bytecode",
                 )
-                .role(TargetRole::new("intermediate-representation")?)
-                .artifact_format(ArtifactFormat::new("mts-bytecode")?)
+                .role(
+                    TargetRole::new("intermediate-representation")?,
+                )
+                .artifact_format(
+                    ArtifactFormat::new("mts-bytecode")?,
+                )
             }
 
             CompilationTarget::LLVMIR => {
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new("llvm-ir")?,
                     "LLVM Intermediate Representation",
                 )
-                .role(TargetRole::new("intermediate-representation")?)
+                .role(
+                    TargetRole::new("intermediate-representation")?,
+                )
                 .artifact_format(ArtifactFormat::new("llvm-ir")?)
             }
 
@@ -750,80 +660,56 @@ impl TargetDescriptor {
 
                 if normalized.is_empty() {
                     return Err(TargetError::InvalidLegacyTarget {
-                        reason: "universal IR export name cannot be empty"
-                            .to_owned(),
+                        reason: "universal IR export name is empty".to_owned(),
                     });
                 }
 
-                TargetDescriptor::builder(
+                Self::builder(
                     TargetId::new(format!("ir-export:{normalized}"))?,
                     format!("Universal IR Export: {name}"),
                 )
-                .role(TargetRole::new("intermediate-representation")?)
-                .artifact_format(ArtifactFormat::new(&normalized)?)
+                .role(
+                    TargetRole::new("intermediate-representation")?,
+                )
+                .artifact_format(
+                    ArtifactFormat::new(&normalized)?,
+                )
             }
         };
-
-        // Legacy targets do not provide reliable information about
-        // every ABI, environment, data-layout or capability.
-        //
-        // Do not invent these values.
-
-        builder.api_version(TARGET_DESCRIPTOR_API_VERSION);
 
         builder.build()
     }
 }
 
-fn validate_optional_text(
-    field: &'static str,
-    value: Option<&str>,
-) -> Result<(), TargetError> {
-    if let Some(value) = value {
-        validate_text(field, value)?;
-    }
-
-    Ok(())
-}
-
 // ============================================================================
-// TARGET DESCRIPTOR BUILDER
+// BUILDER
 // ============================================================================
 
-/// Builder for immutable target descriptors.
+/// Builder for validated immutable target descriptors.
 #[derive(Debug, Clone)]
 pub struct TargetDescriptorBuilder {
     id: TargetId,
-
     display_name: String,
-
     role: TargetRole,
 
     architecture: Option<String>,
-
     vendor: Option<String>,
-
     operating_system: Option<String>,
-
     environment: Option<String>,
-
     abi: Option<String>,
 
     target_triple: Option<String>,
-
     data_layout: Option<String>,
 
     artifact_formats: Vec<ArtifactFormat>,
 
-    properties: BTreeMap<String, TargetProperty>,
-
-    extensions: BTreeMap<String, TargetProperty>,
+    properties: Vec<(String, TargetProperty)>,
+    extensions: Vec<(String, TargetProperty)>,
 
     api_version: u16,
 }
 
 impl TargetDescriptorBuilder {
-    /// Creates a new descriptor builder.
     pub fn new(
         id: TargetId,
         display_name: impl Into<String>,
@@ -832,33 +718,35 @@ impl TargetDescriptorBuilder {
             id,
             display_name: display_name.into(),
             role: TargetRole::default(),
+
             architecture: None,
             vendor: None,
             operating_system: None,
             environment: None,
             abi: None,
+
             target_triple: None,
             data_layout: None,
+
             artifact_formats: Vec::new(),
-            properties: BTreeMap::new(),
-            extensions: BTreeMap::new(),
+
+            properties: Vec::new(),
+            extensions: Vec::new(),
+
             api_version: TARGET_DESCRIPTOR_API_VERSION,
         }
     }
 
-    /// Sets the descriptor API version.
     pub fn api_version(mut self, version: u16) -> Self {
         self.api_version = version;
         self
     }
 
-    /// Sets the target role.
     pub fn role(mut self, role: TargetRole) -> Self {
         self.role = role;
         self
     }
 
-    /// Sets the architecture.
     pub fn architecture(
         mut self,
         value: impl Into<String>,
@@ -867,7 +755,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the vendor.
     pub fn vendor(
         mut self,
         value: impl Into<String>,
@@ -876,7 +763,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the operating system.
     pub fn operating_system(
         mut self,
         value: impl Into<String>,
@@ -885,7 +771,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the execution environment.
     pub fn environment(
         mut self,
         value: impl Into<String>,
@@ -894,7 +779,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the ABI.
     pub fn abi(
         mut self,
         value: impl Into<String>,
@@ -903,7 +787,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the target triple.
     pub fn target_triple(
         mut self,
         value: impl Into<String>,
@@ -912,7 +795,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Sets the target data layout.
     pub fn data_layout(
         mut self,
         value: impl Into<String>,
@@ -921,7 +803,6 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Adds a declared artifact format.
     pub fn artifact_format(
         mut self,
         format: ArtifactFormat,
@@ -930,30 +811,24 @@ impl TargetDescriptorBuilder {
         self
     }
 
-    /// Adds a target property.
     pub fn property(
         mut self,
         key: impl Into<String>,
         value: TargetProperty,
     ) -> Self {
-        self.properties.insert(key.into(), value);
+        self.properties.push((key.into(), value));
         self
     }
 
-    /// Adds an extension property.
-    ///
-    /// Extension identifiers are namespaced to prevent accidental
-    /// collisions with future standard properties.
     pub fn extension(
         mut self,
         key: impl Into<String>,
         value: TargetProperty,
     ) -> Self {
-        self.extensions.insert(key.into(), value);
+        self.extensions.push((key.into(), value));
         self
     }
 
-    /// Builds and validates an immutable descriptor.
     pub fn build(self) -> Result<TargetDescriptor, TargetError> {
         if self.api_version != TARGET_DESCRIPTOR_API_VERSION {
             return Err(TargetError::UnsupportedApiVersion {
@@ -962,22 +837,35 @@ impl TargetDescriptorBuilder {
             });
         }
 
+        let properties = collect_unique_properties(self.properties)?;
+        let extensions = collect_unique_properties(self.extensions)?;
+
+        let mut seen_formats = BTreeSet::new();
+
+        let artifact_formats = self
+            .artifact_formats
+            .into_iter()
+            .filter(|format| seen_formats.insert(format.clone()))
+            .collect();
+
         let descriptor = TargetDescriptor {
             id: self.id,
             display_name: self.display_name,
             role: self.role,
+
             architecture: self.architecture,
             vendor: self.vendor,
             operating_system: self.operating_system,
             environment: self.environment,
             abi: self.abi,
+
             target_triple: self.target_triple,
             data_layout: self.data_layout,
-            artifact_formats: deduplicate_formats(
-                self.artifact_formats,
-            ),
-            properties: self.properties,
-            extensions: self.extensions,
+
+            artifact_formats,
+
+            properties,
+            extensions,
         };
 
         descriptor.validate()?;
@@ -986,28 +874,27 @@ impl TargetDescriptorBuilder {
     }
 }
 
-/// Removes duplicate artifact declarations while preserving deterministic
-/// order.
-fn deduplicate_formats(
-    formats: Vec<ArtifactFormat>,
-) -> Vec<ArtifactFormat> {
-    let mut seen = std::collections::BTreeSet::new();
-    let mut result = Vec::new();
+fn collect_unique_properties(
+    entries: Vec<(String, TargetProperty)>,
+) -> Result<BTreeMap<String, TargetProperty>, TargetError> {
+    let mut result = BTreeMap::new();
 
-    for format in formats {
-        if seen.insert(format.clone()) {
-            result.push(format);
+    for (key, value) in entries {
+        validate_identifier(&key)?;
+        value.validate()?;
+
+        if result.insert(key.clone(), value).is_some() {
+            return Err(TargetError::DuplicateProperty { key });
         }
     }
 
-    result
+    Ok(result)
 }
 
 // ============================================================================
 // ERRORS
 // ============================================================================
 
-/// Target descriptor validation and construction errors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TargetError {
     EmptyField {
@@ -1023,6 +910,22 @@ pub enum TargetError {
         reason: String,
     },
 
+    InvalidDecimal {
+        value: String,
+    },
+
+    InvalidTargetTriple {
+        value: String,
+    },
+
+    DuplicateProperty {
+        key: String,
+    },
+
+    UnqualifiedExtension {
+        key: String,
+    },
+
     UnsupportedApiVersion {
         supplied: u16,
         supported: u16,
@@ -1034,23 +937,36 @@ pub enum TargetError {
 }
 
 impl fmt::Display for TargetError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyField { field } => {
-                write!(formatter, "{field} cannot be empty")
+                write!(f, "{field} cannot be empty")
             }
 
             Self::ControlCharacter { field } => {
-                write!(
-                    formatter,
-                    "{field} cannot contain control characters"
-                )
+                write!(f, "{field} cannot contain control characters")
             }
 
             Self::InvalidIdentifier { value, reason } => {
+                write!(f, "invalid identifier `{value}`: {reason}")
+            }
+
+            Self::InvalidDecimal { value } => {
+                write!(f, "invalid decimal representation `{value}`")
+            }
+
+            Self::InvalidTargetTriple { value } => {
+                write!(f, "invalid target triple `{value}`")
+            }
+
+            Self::DuplicateProperty { key } => {
+                write!(f, "duplicate target property `{key}`")
+            }
+
+            Self::UnqualifiedExtension { key } => {
                 write!(
-                    formatter,
-                    "invalid identifier `{value}`: {reason}"
+                    f,
+                    "extension property `{key}` must use a qualified namespace"
                 )
             }
 
@@ -1059,17 +975,14 @@ impl fmt::Display for TargetError {
                 supported,
             } => {
                 write!(
-                    formatter,
+                    f,
                     "unsupported target descriptor API version \
                      {supplied}; supported version is {supported}"
                 )
             }
 
             Self::InvalidLegacyTarget { reason } => {
-                write!(
-                    formatter,
-                    "invalid legacy compilation target: {reason}"
-                )
+                write!(f, "invalid legacy target: {reason}")
             }
         }
     }
@@ -1086,79 +999,45 @@ mod tests {
     use super::*;
 
     #[test]
-    fn target_id_accepts_extension_identifiers() {
-        let id = TargetId::new("vendor:photonic:processor").unwrap();
-
-        assert_eq!(
-            id.as_str(),
-            "vendor:photonic:processor"
-        );
+    fn accepts_open_world_target_identifiers() {
+        for value in [
+            "x86_64-linux",
+            "aarch64",
+            "quantum:provider:processor",
+            "photonic:provider:device",
+            "future:architecture:model",
+        ] {
+            assert!(TargetId::new(value).is_ok());
+        }
     }
 
     #[test]
-    fn target_id_rejects_empty_identifiers() {
+    fn rejects_invalid_target_identifiers() {
         assert!(TargetId::new("").is_err());
-    }
-
-    #[test]
-    fn target_id_rejects_uppercase_identifiers() {
         assert!(TargetId::new("ARM64").is_err());
-    }
-
-    #[test]
-    fn target_id_rejects_control_characters() {
+        assert!(TargetId::new(" invalid").is_err());
         assert!(TargetId::new("target\nname").is_err());
     }
 
     #[test]
-    fn target_id_does_not_impose_arbitrary_length_limits() {
-        let value = format!("target-{}", "x".repeat(10_000));
+    fn identifiers_have_no_arbitrary_length_ceiling() {
+        let identifier = format!("future-{}", "x".repeat(10_000));
 
-        assert!(TargetId::new(value).is_ok());
+        assert!(TargetId::new(identifier).is_ok());
     }
 
     #[test]
-    fn target_descriptor_preserves_architecture() {
-        let descriptor = TargetDescriptor::builder(
-            TargetId::new("aarch64").unwrap(),
-            "AArch64",
-        )
-        .architecture("aarch64")
-        .build()
-        .unwrap();
+    fn target_role_is_extensible() {
+        let role = TargetRole::new("future-computation-model")
+            .expect("valid role");
 
-        assert_eq!(
-            descriptor.architecture(),
-            Some("aarch64")
-        );
+        assert_eq!(role.as_str(), "future-computation-model");
     }
 
     #[test]
-    fn target_descriptor_separates_os_and_architecture() {
+    fn descriptor_preserves_unknown_information() {
         let descriptor = TargetDescriptor::builder(
-            TargetId::new("example-target").unwrap(),
-            "Example",
-        )
-        .architecture("example-arch")
-        .operating_system("example-os")
-        .build()
-        .unwrap();
-
-        assert_eq!(
-            descriptor.architecture(),
-            Some("example-arch")
-        );
-
-        assert_eq!(
-            descriptor.operating_system(),
-            Some("example-os")
-        );
-    }
-
-    #[test]
-    fn unknown_target_properties_remain_unknown() {
-        let descriptor = TargetDescriptor::builder(
-            TargetId::new("future-target").unwrap(),
+            TargetId::new("future:target").unwrap(),
             "Future Target",
         )
         .build()
@@ -1166,57 +1045,34 @@ mod tests {
 
         assert_eq!(descriptor.architecture(), None);
         assert_eq!(descriptor.vendor(), None);
+        assert_eq!(descriptor.operating_system(), None);
         assert_eq!(descriptor.abi(), None);
-        assert_eq!(descriptor.data_layout(), None);
+        assert_eq!(descriptor.target_triple(), None);
     }
 
     #[test]
-    fn target_descriptor_supports_future_architectures() {
+    fn descriptor_separates_architecture_and_operating_system() {
         let descriptor = TargetDescriptor::builder(
-            TargetId::new("future:optical:processor").unwrap(),
-            "Optical Processor",
+            TargetId::new("aarch64-linux").unwrap(),
+            "AArch64 Linux",
         )
-        .architecture("optical-computing")
-        .vendor("future-vendor")
-        .role(TargetRole::new("execution").unwrap())
+        .architecture("aarch64")
+        .operating_system("linux")
         .build()
         .unwrap();
 
-        assert_eq!(
-            descriptor.architecture(),
-            Some("optical-computing")
-        );
+        assert_eq!(descriptor.architecture(), Some("aarch64"));
+        assert_eq!(descriptor.operating_system(), Some("linux"));
     }
 
     #[test]
-    fn artifact_formats_are_extensible() {
+    fn descriptor_supports_future_artifact_formats() {
         let descriptor = TargetDescriptor::builder(
-            TargetId::new("custom-target").unwrap(),
-            "Custom Target",
+            TargetId::new("future-target").unwrap(),
+            "Future Target",
         )
         .artifact_format(
-            ArtifactFormat::new("custom-bitstream").unwrap(),
-        )
-        .build()
-        .unwrap();
-
-        assert_eq!(
-            descriptor.artifact_formats()[0].as_str(),
-            "custom-bitstream"
-        );
-    }
-
-    #[test]
-    fn duplicate_artifact_formats_are_removed() {
-        let descriptor = TargetDescriptor::builder(
-            TargetId::new("custom-target").unwrap(),
-            "Custom Target",
-        )
-        .artifact_format(
-            ArtifactFormat::new("wasm").unwrap(),
-        )
-        .artifact_format(
-            ArtifactFormat::new("wasm").unwrap(),
+            ArtifactFormat::new("future:artifact").unwrap(),
         )
         .build()
         .unwrap();
@@ -1225,130 +1081,84 @@ mod tests {
     }
 
     #[test]
-    fn target_properties_support_extensions() {
+    fn duplicate_artifact_formats_are_deduplicated() {
+        let format = ArtifactFormat::new("wasm").unwrap();
+
         let descriptor = TargetDescriptor::builder(
-            TargetId::new("custom-target").unwrap(),
-            "Custom Target",
+            TargetId::new("wasm-target").unwrap(),
+            "WebAssembly",
         )
-        .extension(
-            "vendor:revision",
-            TargetProperty::Text("revision-1".to_owned()),
-        )
+        .artifact_format(format.clone())
+        .artifact_format(format)
         .build()
         .unwrap();
 
-        assert_eq!(
-            descriptor.extension("vendor:revision"),
-            Some(&TargetProperty::Text(
-                "revision-1".to_owned()
-            ))
-        );
+        assert_eq!(descriptor.artifact_formats().len(), 1);
     }
 
     #[test]
-    fn invalid_extension_names_are_rejected() {
+    fn duplicate_properties_are_rejected() {
         let result = TargetDescriptor::builder(
-            TargetId::new("custom-target").unwrap(),
-            "Custom Target",
+            TargetId::new("test-target").unwrap(),
+            "Test",
         )
-        .extension(
-            "INVALID NAME",
-            TargetProperty::Boolean(true),
-        )
+        .property("architecture", TargetProperty::Text("a".into()))
+        .property("architecture", TargetProperty::Text("b".into()))
         .build();
 
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(TargetError::DuplicateProperty { .. })
+        ));
     }
 
     #[test]
-    fn legacy_x86_target_preserves_x86_architecture() {
-        let descriptor = TargetDescriptor::from_legacy(
-            &CompilationTarget::X86_64Linux,
-        )
-        .unwrap();
-
-        assert_eq!(
-            descriptor.architecture(),
-            Some("x86_64")
-        );
-
-        assert_eq!(
-            descriptor.operating_system(),
-            Some("linux")
-        );
-    }
-
-    #[test]
-    fn legacy_arm_target_never_becomes_x86() {
-        let descriptor = TargetDescriptor::from_legacy(
-            &CompilationTarget::Arm64,
-        )
-        .unwrap();
-
-        assert_eq!(
-            descriptor.architecture(),
-            Some("aarch64")
-        );
-
-        assert_ne!(
-            descriptor.architecture(),
-            Some("x86_64")
-        );
-    }
-
-    #[test]
-    fn legacy_wasm_target_declares_wasm_artifact() {
-        let descriptor = TargetDescriptor::from_legacy(
-            &CompilationTarget::Wasm32,
-        )
-        .unwrap();
-
-        assert!(
-            descriptor.artifact_formats().iter().any(
-                |format| format.as_str() == "wasm"
-            )
-        );
-    }
-
-    #[test]
-    fn legacy_qasm_is_not_misrepresented_as_cpu_architecture() {
-        let descriptor = TargetDescriptor::from_legacy(
-            &CompilationTarget::QASM,
-        )
-        .unwrap();
-
-        assert_eq!(descriptor.architecture(), None);
-
-        assert_eq!(
-            descriptor.role().as_str(),
-            "hardware-description"
-        );
-    }
-
-    #[test]
-    fn target_descriptor_is_deterministically_comparable() {
-        let first = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "Example",
-        )
-        .build()
-        .unwrap();
-
-        let second = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "Example",
-        )
-        .build()
-        .unwrap();
-
-        assert_eq!(first, second);
-    }
-
-    #[test]
-    fn unsupported_api_versions_are_rejected() {
+    fn extension_properties_require_namespaces() {
         let result = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "Example",
+            TargetId::new("test-target").unwrap(),
+            "Test",
+        )
+        .extension("revision", TargetProperty::Text("1".into()))
+        .build();
+
+        assert!(matches!(
+            result,
+            Err(TargetError::UnqualifiedExtension { .. })
+        ));
+    }
+
+    #[test]
+    fn arbitrary_precision_decimal_metadata_is_validated() {
+        assert!(TargetProperty::Decimal(
+            "999999999999999999999999999999999999999999".into()
+        )
+        .validate()
+        .is_ok());
+
+        assert!(TargetProperty::Decimal("12.75".into()).validate().is_ok());
+
+        assert!(TargetProperty::Decimal("12.invalid".into()).validate().is_err());
+    }
+
+    #[test]
+    fn nested_properties_are_validated() {
+        let mut values = BTreeMap::new();
+
+        values.insert(
+            "capacity".to_owned(),
+            TargetProperty::Decimal("999999999999999999999".into()),
+        );
+
+        let property = TargetProperty::Map(values);
+
+        assert!(property.validate().is_ok());
+    }
+
+    #[test]
+    fn invalid_api_versions_are_rejected() {
+        let result = TargetDescriptor::builder(
+            TargetId::new("test-target").unwrap(),
+            "Test",
         )
         .api_version(999)
         .build();
@@ -1360,58 +1170,31 @@ mod tests {
     }
 
     #[test]
-    fn invalid_display_names_are_rejected() {
+    fn target_triples_reject_whitespace() {
         let result = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "",
+            TargetId::new("test-target").unwrap(),
+            "Test",
         )
+        .target_triple("invalid target triple")
         .build();
 
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(TargetError::InvalidTargetTriple { .. })
+        ));
     }
 
     #[test]
-    fn data_layout_is_not_interpreted_as_architecture() {
+    fn descriptor_does_not_claim_physical_feasibility() {
         let descriptor = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "Example",
+            TargetId::new("quantum:future:processor").unwrap(),
+            "Future Quantum Processor",
         )
-        .architecture("example-architecture")
-        .data_layout("e-p:64:64")
+        .role(TargetRole::new("quantum").unwrap())
         .build()
         .unwrap();
 
-        assert_eq!(
-            descriptor.architecture(),
-            Some("example-architecture")
-        );
-
-        assert_eq!(
-            descriptor.data_layout(),
-            Some("e-p:64:64")
-        );
-    }
-
-    #[test]
-    fn target_descriptor_supports_nested_properties() {
-        let mut nested = BTreeMap::new();
-
-        nested.insert(
-            "revision".to_owned(),
-            TargetProperty::Unsigned(1),
-        );
-
-        let descriptor = TargetDescriptor::builder(
-            TargetId::new("example").unwrap(),
-            "Example",
-        )
-        .property(
-            "metadata",
-            TargetProperty::Map(nested),
-        )
-        .build()
-        .unwrap();
-
-        assert!(descriptor.property("metadata").is_some());
+        // Structural validity is not capability evidence.
+        assert_eq!(descriptor.role().as_str(), "quantum");
     }
 }
