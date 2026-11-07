@@ -1,89 +1,116 @@
 
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
-//! # Compiler Ownership Analysis
+//! Zamani Compiler — Ownership and Borrow-Flow Analysis.
 //!
-//! Path: `src/compiler/analysis/ownership.rs`
-//! Rust edition: 2021
-//! Minimum Rust version: 1.97
+//! Path: src/compiler/analysis/ownership.rs
+//! Edition: Rust 2021
+//! Minimum Rust: 1.97
+//!
+//! ARCHITECTURAL AUTHORITY
+//!
+//! Source ownership semantics:
+//!     grammar/memory/ownership.g4
+//!
+//! Source lifetime semantics:
+//!     grammar/memory/lifetimes.g4
+//!
+//! Normative semantics:
+//!     grammar/specification/semantic-model.md
+//!
+//! Canonical ownership contracts:
+//!     src/zuir/ir/ownership.rs
+//!
+//! Canonical control-flow graph:
+//!     src/zuir/analysis/cfg.rs
+//!
+//! Canonical structural ownership verifier:
+//!     src/zuir/verify/ownership.rs
+//!
+//! Canonical definition-use index:
+//!     src/zuir/ir/use_def.rs
 //!
 //! PURPOSE
 //!
-//! Perform compiler-level, CFG-aware ownership dataflow analysis over
-//! canonical ZUIR ownership contracts and recorded ownership events.
+//! Perform deterministic, iterative, CFG-aware ownership analysis.
 //!
-//! This module complements, rather than replaces:
+//! This module validates:
 //!
-//! - `src/zuir/ir/ownership.rs`:
-//!   canonical ownership contracts and recorded ownership events;
-//! - `src/zuir/analysis/cfg.rs`:
-//!   canonical control-flow graph construction;
-//! - `src/zuir/verify/ownership.rs`:
-//!   structural ownership-index and region-capture verification;
-//! - `src/zuir/ir/use_def.rs`:
-//!   canonical SSA definition/use indexing;
-//! - `src/compiler/borrow_checker.rs`:
-//!   legacy lexical-scope ownership operations.
+//! - Value availability.
+//! - Definitions.
+//! - Moves.
+//! - Copies.
+//! - Drops.
+//! - Shared borrows.
+//! - Exclusive borrows.
+//! - Borrow termination.
+//! - Borrow conflicts.
+//! - Use after move.
+//! - Use before definition.
+//! - Conditional availability.
+//! - Linear consumption.
+//! - Mandatory consumption.
+//! - Ownership event consistency.
+//! - Control-flow exit conditions.
 //!
-//! OWNS
-//!
-//! - Compiler ownership-flow event adapters.
-//! - Ownership-flow input and result contracts.
-//! - CFG-aware forward dataflow.
-//! - Conservative control-flow joins.
-//! - Path-sensitive move, drop, borrow and linearity diagnostics.
-//! - Analysis completeness reporting.
+//! This module consumes canonical semantic information.
+//! It does not invent source-level ownership rules.
 //!
 //! DOES NOT OWN
 //!
-//! - Ownership kinds or ownership capabilities.
-//! - Ownership contract storage.
-//! - Canonical value, block or operation identifiers.
+//! - Source syntax.
+//! - Semantic type definitions.
+//! - Ownership contract definitions.
+//! - Lifetime inference.
 //! - CFG construction.
-//! - SSA definition or use indexing.
-//! - Source syntax or AST interpretation.
-//! - Type inference or lifetime inference.
-//! - Dialect-specific ownership semantics.
-//! - Physical memory allocation or device ownership.
+//! - SSA definition indexing.
+//! - Physical memory allocation.
+//! - Hardware ownership.
+//! - Quantum allocation.
 //! - Runtime resource management.
-//!
-//! IMPORTANT INTEGRATION CONTRACT
-//!
-//! The caller must supply:
-//!
-//! 1. A validated canonical CFG.
-//! 2. The canonical ownership index.
-//! 3. The set of values tracked by this CFG.
-//! 4. Values available at CFG entry.
-//! 5. Events in actual operation execution order within each block.
-//! 6. Explicit definition events for values defined in this CFG.
-//! 7. Explicit borrow-ending events.
-//!
-//! `OwnershipUseKind::BorrowShared` and `BorrowExclusive` describe ownership
-//! events, but the canonical event itself does not encode a borrow-ending
-//! point. This module therefore does not invent lexical or operation lifetime
-//! boundaries. The frontend/IR adapter must supply `EndBorrow` events from
-//! authoritative lifetime information.
-//!
-//! An unsupported extension event is never silently treated as unrestricted.
+//! - Scheduling or routing.
 //!
 //! SCALABILITY
 //!
-//! There are no fixed limits on blocks, edges, values, operations, borrows,
-//! or hardware resources. Worklist processing is iterative and converges over
-//! the finite input state space. Actual memory, address-space, time and
-//! identifier limits remain properties of the host and caller's resource
-//! policy. Literal infinity cannot be guaranteed.
+//! No arbitrary universal limits on:
 //!
-//! SAFETY
+//! - Values.
+//! - Blocks.
+//! - Operations.
+//! - Borrow relationships.
+//! - Control-flow edges.
+//! - Ownership events.
+//! - Computing domains.
+//! - Hardware resources.
 //!
-//! Unsafe Rust is prohibited.
+//! The analysis uses dynamically sized collections and iterative
+//! worklist processing.
+//!
+//! Actual execution is bounded by available resources.
+//! Literal infinity is not physically achievable.
+//!
+//! UNKNOWN SEMANTICS
+//!
+//! Unknown ownership semantics never imply unrestricted ownership.
+//!
+//! Incomplete analysis never implies successful verification.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
+    VecDeque,
+};
 
 use crate::zuir::analysis::cfg::ControlFlowGraph;
-use crate::zuir::ids::{BlockId, OperationId, ValueId};
+
+use crate::zuir::ids::{
+    BlockId,
+    OperationId,
+    ValueId,
+};
+
 use crate::zuir::ir::{
     BlockTerminator,
     BorrowMutability,
@@ -94,42 +121,43 @@ use crate::zuir::ir::{
     ZuirBlock,
 };
 
-// =============================================================================
-// Public input contracts
-// =============================================================================
+// ============================================================================
+// API VERSION
+// ============================================================================
 
-/// One additional ownership-flow event needed by compiler dataflow.
+/// Independent version of the compiler ownership-analysis interface.
+pub const OWNERSHIP_ANALYSIS_API_VERSION: u16 = 2;
+
+// ============================================================================
+// INPUT
+// ============================================================================
+
+/// Additional ownership-flow information required by CFG analysis.
 ///
-/// Canonical recorded ownership events remain represented by
-/// `OwnershipUse`. The additional variants provide information that the
-/// canonical ownership-use index does not currently encode.
+/// The canonical ownership index remains the authority for recorded
+/// ownership-use events.
 ///
-/// `Define` must be supplied for every tracked value defined inside this
-/// CFG. Values already available at entry belong in `initial_values`.
-///
-/// `Duplicate` represents an actual duplication/copy operation. A normal
-/// `Read` is not a copy.
-///
-/// `EndBorrow` identifies the operation that originally created the borrow.
-/// Its `operation` is the operation at which the borrow ends.
+/// Additional events represent information not currently represented
+/// directly by OwnershipUse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnershipFlowEvent {
-    /// An event recorded in the canonical ownership index.
+
+    /// Canonical ownership event.
     Recorded(OwnershipUse),
 
-    /// A value definition becomes available at this operation.
+    /// A value becomes available at an operation.
     Define {
         value: ValueId,
         operation: OperationId,
     },
 
-    /// An operation duplicates a value.
+    /// Explicit duplication of a value.
     Duplicate {
         value: ValueId,
         operation: OperationId,
     },
 
-    /// End a borrow created by `borrow_operation`.
+    /// Terminate a previously established borrow.
     EndBorrow {
         value: ValueId,
         operation: OperationId,
@@ -138,22 +166,25 @@ pub enum OwnershipFlowEvent {
 }
 
 impl OwnershipFlowEvent {
-    /// Return the value affected by this event.
+
+    /// Return the affected value.
     #[must_use]
     pub const fn value(&self) -> ValueId {
         match self {
             Self::Recorded(event) => event.value,
+
             Self::Define { value, .. }
             | Self::Duplicate { value, .. }
             | Self::EndBorrow { value, .. } => *value,
         }
     }
 
-    /// Return the operation at which this event occurs.
+    /// Return the operation associated with the event.
     #[must_use]
     pub const fn operation(&self) -> OperationId {
         match self {
             Self::Recorded(event) => event.operation,
+
             Self::Define { operation, .. }
             | Self::Duplicate { operation, .. }
             | Self::EndBorrow { operation, .. } => *operation,
@@ -161,61 +192,55 @@ impl OwnershipFlowEvent {
     }
 }
 
-/// Complete input to compiler ownership analysis.
+/// Complete input to ownership analysis.
 ///
-/// `events` is keyed by block. Each block's event vector must be in actual
-/// operation order, not identifier order or insertion order.
+/// Events must follow actual canonical block operation order.
 ///
-/// The event sequence must contain every canonical ownership event belonging
-/// to a tracked value and a block in this CFG, exactly once.
-///
-/// The caller must build this sequence using canonical block operation order.
-/// Do not sort operations by their numeric IDs.
-///
-/// `tracked_values` limits this analysis to values belonging to the current
-/// ownership-analysis scope. Nested regions should be analyzed using their
-/// own CFG and corresponding value scope.
-///
-/// `initial_values` represents values already available on entry, including
-/// function parameters and explicitly available captures.
+/// Numeric operation-ID sorting must never be used to reconstruct
+/// execution order.
 pub struct OwnershipAnalysisInput<'a> {
-    /// Canonical ownership contracts and recorded ownership events.
+
+    /// Canonical ownership contracts and recorded events.
     pub ownership: &'a OwnershipIndex,
 
-    /// Canonical, already-constructed control-flow graph.
+    /// Canonical CFG.
     pub cfg: &'a ControlFlowGraph,
 
-    /// Canonical blocks used to establish operation ordering and exits.
+    /// Canonical ZUIR blocks.
     pub blocks: &'a [ZuirBlock],
 
-    /// Ordered ownership events for each block.
-    pub events: &'a BTreeMap<BlockId, Vec<OwnershipFlowEvent>>,
+    /// Ordered ownership-flow events.
+    pub events:
+        &'a BTreeMap<BlockId, Vec<OwnershipFlowEvent>>,
 
-    /// Values whose ownership is checked by this analysis.
+    /// Values included in the current analysis scope.
     pub tracked_values: &'a BTreeSet<ValueId>,
 
-    /// Values available when entering the CFG.
+    /// Values available at CFG entry.
     pub initial_values: &'a BTreeSet<ValueId>,
 }
 
-// =============================================================================
-// Public diagnostics and reports
-// =============================================================================
+// ============================================================================
+// DIAGNOSTICS
+// ============================================================================
 
-/// One deterministic ownership-analysis diagnostic.
-///
-/// Diagnostic codes are the stable machine-readable interface.
-/// Human-readable messages may evolve.
+/// One deterministic ownership diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OwnershipAnalysisIssue {
+
     code: &'static str,
+
     value: Option<ValueId>,
+
     block: Option<BlockId>,
+
     operation: Option<OperationId>,
+
     message: String,
 }
 
 impl OwnershipAnalysisIssue {
+
     fn new(
         code: &'static str,
         value: Option<ValueId>,
@@ -223,6 +248,7 @@ impl OwnershipAnalysisIssue {
         operation: Option<OperationId>,
         message: impl Into<String>,
     ) -> Self {
+
         Self {
             code,
             value,
@@ -232,49 +258,55 @@ impl OwnershipAnalysisIssue {
         }
     }
 
-    /// Return the stable diagnostic code.
     #[must_use]
     pub const fn code(&self) -> &'static str {
         self.code
     }
 
-    /// Return the affected value, if known.
     #[must_use]
     pub const fn value(&self) -> Option<ValueId> {
         self.value
     }
 
-    /// Return the affected block, if known.
     #[must_use]
     pub const fn block(&self) -> Option<BlockId> {
         self.block
     }
 
-    /// Return the affected operation, if known.
     #[must_use]
     pub const fn operation(&self) -> Option<OperationId> {
         self.operation
     }
 
-    /// Return the human-readable explanation.
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }
 }
 
-/// Result of one compiler ownership-analysis run.
+// ============================================================================
+// REPORT
+// ============================================================================
+
+/// Result of ownership-flow analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OwnershipAnalysisReport {
+
     issues: Vec<OwnershipAnalysisIssue>,
+
     complete: bool,
+
     reachable_blocks: usize,
+
     events_analyzed: usize,
+
     values_analyzed: usize,
 }
 
 impl OwnershipAnalysisReport {
+
     fn new() -> Self {
+
         Self {
             issues: Vec::new(),
             complete: true,
@@ -284,140 +316,165 @@ impl OwnershipAnalysisReport {
         }
     }
 
-    /// Return diagnostics in deterministic order.
     #[must_use]
     pub fn issues(&self) -> &[OwnershipAnalysisIssue] {
         &self.issues
     }
 
-    /// Whether the analysis completed without encountering unknown semantics
-    /// or missing information required by its contract.
+    /// Whether all required analysis information was available.
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.complete
     }
 
-    /// Whether the analysis is complete and found no violations.
-    ///
-    /// An incomplete analysis is never reported as valid.
+    /// True only when analysis is complete and violation-free.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.complete && self.issues.is_empty()
     }
 
-    /// Number of diagnostics.
     #[must_use]
     pub fn issue_count(&self) -> usize {
         self.issues.len()
     }
 
-    /// Number of reachable CFG blocks processed.
     #[must_use]
     pub const fn reachable_blocks(&self) -> usize {
         self.reachable_blocks
     }
 
-    /// Number of ownership events processed.
     #[must_use]
     pub const fn events_analyzed(&self) -> usize {
         self.events_analyzed
     }
 
-    /// Number of tracked values.
     #[must_use]
     pub const fn values_analyzed(&self) -> usize {
         self.values_analyzed
     }
 }
 
-// =============================================================================
-// Internal dataflow lattice
-// =============================================================================
+// ============================================================================
+// OWNERSHIP LATTICE
+// ============================================================================
 
-/// Abstract availability of a value at a program point.
-///
-/// `Maybe` means that different incoming paths disagree about whether the
-/// value is available. A later read, move, or borrow must therefore be
-/// treated conservatively.
+/// Abstract availability of one value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Availability {
-    /// The value has not been defined or made available on this path.
+
+    /// No valid definition has reached this point.
     Uninitialized,
 
     /// The value is available.
     Available,
 
-    /// Ownership has been transferred or the value has been dropped.
+    /// The value has been moved or consumed.
     Moved,
 
-    /// Incoming paths disagree about availability.
+    /// Incoming paths disagree.
     Maybe,
 }
 
 impl Availability {
-    /// Join two path states.
-    ///
-    /// The join is conservative: disagreement never becomes proof that a
-    /// value is available.
+
+    /// Conservative control-flow join.
     fn join(self, other: Self) -> Self {
+
         if self == other {
-            self
-        } else {
-            Self::Maybe
+            return self;
+        }
+
+        Self::Maybe
+    }
+}
+
+/// Abstract borrow state.
+///
+/// If the same borrow origin reaches a join with conflicting
+/// mutability information, exclusive access is retained
+/// conservatively.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BorrowFact {
+    mutability: BorrowMutability,
+}
+
+impl BorrowFact {
+
+    fn join(self, other: Self) -> Self {
+
+        if self.mutability == other.mutability {
+            return self;
+        }
+
+        Self {
+            mutability: BorrowMutability::Exclusive,
         }
     }
 }
 
-/// Abstract state for one value.
+/// State for one value.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct ValueState {
+
     availability: Option<Availability>,
-    active_borrows: BTreeMap<OperationId, BorrowMutability>,
+
+    active_borrows: BTreeMap<OperationId, BorrowFact>,
 }
 
 impl ValueState {
+
     fn availability(&self) -> Availability {
+
         self.availability
             .unwrap_or(Availability::Uninitialized)
     }
 
     fn join_from(&mut self, other: &Self) -> bool {
+
         let previous = self.clone();
 
         self.availability = Some(
-            self.availability()
-                .join(other.availability()),
+            self.availability().join(other.availability())
         );
 
-        for (origin, mutability) in &other.active_borrows {
+        for (origin, incoming) in &other.active_borrows {
+
             self.active_borrows
                 .entry(*origin)
-                .or_insert(*mutability);
+                .and_modify(|existing| {
+                    *existing = existing.join(*incoming);
+                })
+                .or_insert(*incoming);
         }
 
         *self != previous
     }
 }
 
-/// State for all values tracked in one CFG.
+/// State of all values in the analyzed scope.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct FlowState {
+
     values: BTreeMap<ValueId, ValueState>,
 }
 
 impl FlowState {
+
     fn new(
-        tracked_values: &BTreeSet<ValueId>,
-        initial_values: &BTreeSet<ValueId>,
+        tracked: &BTreeSet<ValueId>,
+        initial: &BTreeSet<ValueId>,
     ) -> Self {
+
         let mut state = Self::default();
 
-        for value in tracked_values {
-            let availability = if initial_values.contains(value) {
-                Availability::Available
-            } else {
-                Availability::Uninitialized
-            };
+        for value in tracked {
+
+            let availability =
+                if initial.contains(value) {
+                    Availability::Available
+                } else {
+                    Availability::Uninitialized
+                };
 
             state.values.insert(
                 *value,
@@ -431,31 +488,41 @@ impl FlowState {
         state
     }
 
-    fn value(&self, value: ValueId) -> ValueState {
+    fn value_mut(
+        &mut self,
+        value: ValueId,
+    ) -> &mut ValueState {
+
+        self.values.entry(value).or_default()
+    }
+
+    fn value(
+        &self,
+        value: ValueId,
+    ) -> ValueState {
+
         self.values
             .get(&value)
             .cloned()
             .unwrap_or_default()
     }
 
-    fn value_mut(&mut self, value: ValueId) -> &mut ValueState {
-        self.values.entry(value).or_default()
-    }
-
     fn join_from(&mut self, other: &Self) -> bool {
+
         let previous = self.clone();
 
-        for (value, other_state) in &other.values {
-            self.value_mut(*value).join_from(other_state);
+        for (value, incoming) in &other.values {
+
+            self.value_mut(*value).join_from(incoming);
         }
 
         *self != previous
     }
 }
 
-// =============================================================================
-// Event indexing and validation
-// =============================================================================
+// ============================================================================
+// EVENT INDEXING
+// ============================================================================
 
 type RecordedEventKey = (
     ValueId,
@@ -464,7 +531,10 @@ type RecordedEventKey = (
     String,
 );
 
-fn recorded_event_key(event: &OwnershipUse) -> RecordedEventKey {
+fn recorded_event_key(
+    event: &OwnershipUse,
+) -> RecordedEventKey {
+
     (
         event.value,
         event.block,
@@ -473,108 +543,210 @@ fn recorded_event_key(event: &OwnershipUse) -> RecordedEventKey {
     )
 }
 
-fn insert_event_count(
+fn increment_event_count(
     counts: &mut BTreeMap<RecordedEventKey, usize>,
     event: &OwnershipUse,
 ) {
+
     let count = counts
         .entry(recorded_event_key(event))
         .or_insert(0);
 
-    *count += 1;
+    *count = count.saturating_add(1);
 }
 
-fn validate_recorded_event_coverage(
+// ============================================================================
+// DIAGNOSTIC HELPERS
+// ============================================================================
+
+fn issue(
+    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
+    code: &'static str,
+    value: Option<ValueId>,
+    block: Option<BlockId>,
+    operation: Option<OperationId>,
+    message: impl Into<String>,
+) {
+
+    issues.insert(
+        OwnershipAnalysisIssue::new(
+            code,
+            value,
+            block,
+            operation,
+            message,
+        )
+    );
+}
+
+fn value_issue(
+    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
+    code: &'static str,
+    value: ValueId,
+    block: BlockId,
+    operation: OperationId,
+    message: impl Into<String>,
+) {
+
+    issue(
+        issues,
+        code,
+        Some(value),
+        Some(block),
+        Some(operation),
+        message,
+    );
+}
+
+// ============================================================================
+// VALIDATION
+// ============================================================================
+
+fn validate_event_coverage(
     input: &OwnershipAnalysisInput<'_>,
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     complete: &mut bool,
 ) {
-    let mut expected = BTreeMap::<RecordedEventKey, usize>::new();
-    let mut actual = BTreeMap::<RecordedEventKey, usize>::new();
 
+    let mut expected =
+        BTreeMap::<RecordedEventKey, usize>::new();
+
+    let mut actual =
+        BTreeMap::<RecordedEventKey, usize>::new();
+
+    // Collect canonical events for this analysis scope.
     for value in input.tracked_values {
+
         for event in input.ownership.uses_of(*value) {
+
             if input.cfg.contains_block(event.block) {
-                insert_event_count(&mut expected, event);
+
+                increment_event_count(
+                    &mut expected,
+                    event,
+                );
             }
         }
     }
 
-    for (block_id, events) in input.events {
-        if !input.cfg.contains_block(*block_id) {
-            issues.insert(OwnershipAnalysisIssue::new(
+    // Validate the supplied ordered event stream.
+    for (block, events) in input.events {
+
+        if !input.cfg.contains_block(*block) {
+
+            issue(
+                issues,
                 "COMP-OWN-EVENT-BLOCK-OUTSIDE-CFG",
                 None,
-                Some(*block_id),
+                Some(*block),
                 None,
-                format!(
-                    "ownership events were supplied for block {block_id}, \
-                     which is not part of the analyzed CFG"
-                ),
-            ));
+                "ownership events refer to a block outside the analyzed CFG",
+            );
+
             *complete = false;
             continue;
         }
 
         for event in events {
-            if let OwnershipFlowEvent::Recorded(recorded) = event {
-                if !input.tracked_values.contains(&recorded.value) {
-                    continue;
+
+            match event {
+
+                OwnershipFlowEvent::Recorded(recorded) => {
+
+                    if !input.tracked_values.contains(&recorded.value) {
+
+                        value_issue(
+                            issues,
+                            "COMP-OWN-EVENT-VALUE-UNTRACKED",
+                            recorded.value,
+                            *block,
+                            recorded.operation,
+                            "ownership event references a value outside the analyzed scope",
+                        );
+
+                        *complete = false;
+                        continue;
+                    }
+
+                    if recorded.block != *block {
+
+                        value_issue(
+                            issues,
+                            "COMP-OWN-EVENT-BLOCK-MISMATCH",
+                            recorded.value,
+                            *block,
+                            recorded.operation,
+                            "event block differs from its canonical block identity",
+                        );
+
+                        *complete = false;
+                        continue;
+                    }
+
+                    increment_event_count(
+                        &mut actual,
+                        recorded,
+                    );
                 }
 
-                if recorded.block != *block_id {
-                    issues.insert(OwnershipAnalysisIssue::new(
-                        "COMP-OWN-EVENT-BLOCK-MISMATCH",
-                        Some(recorded.value),
-                        Some(*block_id),
-                        Some(recorded.operation),
-                        "recorded ownership event is stored under a \
-                         different block than its canonical block ID",
-                    ));
-                    *complete = false;
-                    continue;
-                }
+                _ => {
 
-                insert_event_count(&mut actual, recorded);
+                    if !input.tracked_values.contains(&event.value()) {
+
+                        issue(
+                            issues,
+                            "COMP-OWN-EVENT-VALUE-UNTRACKED",
+                            Some(event.value()),
+                            Some(*block),
+                            Some(event.operation()),
+                            "additional event references an untracked value",
+                        );
+
+                        *complete = false;
+                    }
+                }
             }
         }
     }
 
     for (key, expected_count) in &expected {
-        let actual_count = actual.get(key).copied().unwrap_or(0);
+
+        let actual_count =
+            actual.get(key).copied().unwrap_or(0);
 
         if actual_count != *expected_count {
-            let (value, block, operation, _) = key;
 
-            issues.insert(OwnershipAnalysisIssue::new(
+            issue(
+                issues,
                 "COMP-OWN-EVENT-COVERAGE",
-                Some(*value),
-                Some(*block),
-                Some(*operation),
+                Some(key.0),
+                Some(key.1),
+                Some(key.2),
                 format!(
-                    "canonical ownership event occurs {expected_count} \
-                     time(s), but the ordered flow input contains \
-                     {actual_count} matching event(s)"
+                    "expected {expected_count} canonical events, received {actual_count}"
                 ),
-            ));
+            );
+
             *complete = false;
         }
     }
 
     for (key, actual_count) in &actual {
-        let expected_count = expected.get(key).copied().unwrap_or(0);
 
-        if actual_count > &expected_count {
-            let (value, block, operation, _) = key;
+        let expected_count =
+            expected.get(key).copied().unwrap_or(0);
 
-            issues.insert(OwnershipAnalysisIssue::new(
+        if actual_count > expected_count {
+
+            issue(
+                issues,
                 "COMP-OWN-UNREGISTERED-EVENT",
-                Some(*value),
-                Some(*block),
-                Some(*operation),
-                "the flow input contains an ownership event that is not \
-                 represented by the canonical ownership index",
-            ));
+                Some(key.0),
+                Some(key.1),
+                Some(key.2),
+                "flow input contains an event absent from the canonical ownership index",
+            );
+
             *complete = false;
         }
     }
@@ -585,193 +757,256 @@ fn validate_input(
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     complete: &mut bool,
 ) {
+
     if let Err(error) = input.ownership.validate() {
-        issues.insert(OwnershipAnalysisIssue::new(
+
+        issue(
+            issues,
             "COMP-OWN-INVALID-INDEX",
             None,
             None,
             None,
             format!("canonical ownership index is invalid: {error}"),
-        ));
-        *complete = false;
-    }
+        );
 
-    if input.cfg.entry().is_none() {
-        issues.insert(OwnershipAnalysisIssue::new(
-            "COMP-OWN-MISSING-CFG-ENTRY",
-            None,
-            None,
-            None,
-            "ownership dataflow requires an explicitly supplied CFG entry",
-        ));
         *complete = false;
     }
 
     if input.cfg.is_empty() {
-        issues.insert(OwnershipAnalysisIssue::new(
+
+        issue(
+            issues,
             "COMP-OWN-EMPTY-CFG",
             None,
             None,
             None,
-            "ownership dataflow cannot analyze an empty CFG",
-        ));
+            "ownership analysis requires a nonempty CFG",
+        );
+
+        *complete = false;
+    }
+
+    if input.cfg.entry().is_none() {
+
+        issue(
+            issues,
+            "COMP-OWN-MISSING-CFG-ENTRY",
+            None,
+            None,
+            None,
+            "ownership analysis requires an explicit CFG entry",
+        );
+
         *complete = false;
     }
 
     for value in input.initial_values {
+
         if !input.tracked_values.contains(value) {
-            issues.insert(OwnershipAnalysisIssue::new(
+
+            issue(
+                issues,
                 "COMP-OWN-INITIAL-VALUE-UNTRACKED",
                 Some(*value),
                 None,
                 None,
-                "an entry value is not included in the tracked-value set",
-            ));
+                "initial value is not part of the tracked-value set",
+            );
+
             *complete = false;
         }
     }
 
     for value in input.tracked_values {
+
         match input.ownership.contract(*value) {
+
             Some(contract) => {
+
                 if let Err(error) = contract.validate() {
-                    issues.insert(OwnershipAnalysisIssue::new(
+
+                    issue(
+                        issues,
                         "COMP-OWN-INVALID-CONTRACT",
                         Some(*value),
                         None,
                         None,
-                        format!("ownership contract is invalid: {error}"),
-                    ));
+                        format!("invalid ownership contract: {error}"),
+                    );
+
                     *complete = false;
                 }
 
-                if matches!(contract.kind, OwnershipKind::Extension(_)) {
-                    issues.insert(OwnershipAnalysisIssue::new(
+                if matches!(
+                    contract.kind,
+                    OwnershipKind::Extension(_)
+                ) {
+
+                    issue(
+                        issues,
                         "COMP-OWN-UNKNOWN-CONTRACT-SEMANTICS",
                         Some(*value),
                         None,
                         None,
-                        "the value uses an extension-defined ownership kind; \
-                         its dialect-specific ownership semantics are not \
-                         implemented by this generic analysis",
-                    ));
+                        "extension ownership semantics are not registered with this analysis",
+                    );
+
                     *complete = false;
                 }
             }
+
             None => {
-                issues.insert(OwnershipAnalysisIssue::new(
+
+                issue(
+                    issues,
                     "COMP-OWN-MISSING-CONTRACT",
                     Some(*value),
                     None,
                     None,
                     "tracked value has no canonical ownership contract",
-                ));
+                );
+
                 *complete = false;
             }
         }
     }
 
-    validate_recorded_event_coverage(input, issues, complete);
+    validate_event_coverage(
+        input,
+        issues,
+        complete,
+    );
 }
 
-// =============================================================================
-// Block and event ordering
-// =============================================================================
+// ============================================================================
+// BLOCK INDEXING
+// ============================================================================
 
 fn index_blocks<'a>(
     blocks: &'a [ZuirBlock],
+    cfg: &ControlFlowGraph,
+    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
+    complete: &mut bool,
 ) -> BTreeMap<BlockId, &'a ZuirBlock> {
-    let mut result = BTreeMap::new();
+
+    let mut index = BTreeMap::new();
 
     for block in blocks {
-        result.entry(block.id()).or_insert(block);
+
+        if index.insert(block.id(), block).is_some() {
+
+            issue(
+                issues,
+                "COMP-OWN-DUPLICATE-BLOCK",
+                None,
+                Some(block.id()),
+                None,
+                "block identity occurs more than once",
+            );
+
+            *complete = false;
+        }
     }
 
-    result
+    for block_id in cfg.block_order() {
+
+        if !index.contains_key(block_id) {
+
+            issue(
+                issues,
+                "COMP-OWN-CFG-BLOCK-MISSING",
+                None,
+                Some(*block_id),
+                None,
+                "CFG block does not exist in the supplied canonical block collection",
+            );
+
+            *complete = false;
+        }
+    }
+
+    index
 }
 
+// ============================================================================
+// EVENT ORDER
+// ============================================================================
+
 fn validate_event_order(
-    input: &OwnershipAnalysisInput<'_>,
     block: &ZuirBlock,
     events: &[OwnershipFlowEvent],
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     complete: &mut bool,
 ) {
-    let mut operation_positions = BTreeMap::<OperationId, usize>::new();
 
-    for (position, operation) in block.operations().iter().enumerate() {
-        if operation_positions
-            .insert(*operation, position)
-            .is_some()
-        {
-            issues.insert(OwnershipAnalysisIssue::new(
+    let mut positions =
+        BTreeMap::<OperationId, usize>::new();
+
+    for (position, operation) in
+        block.operations().iter().enumerate()
+    {
+
+        if positions.insert(*operation, position).is_some() {
+
+            issue(
+                issues,
                 "COMP-OWN-DUPLICATE-OPERATION-IN-BLOCK",
                 None,
                 Some(block.id()),
                 Some(*operation),
-                "the block contains the same operation identity more than once",
-            ));
+                "operation identity occurs more than once in a block",
+            );
+
             *complete = false;
         }
     }
 
-    let mut previous_position = None;
+    let mut previous = None;
 
     for event in events {
+
         let operation = event.operation();
 
-        let Some(position) = operation_positions.get(&operation).copied() else {
-            issues.insert(OwnershipAnalysisIssue::new(
+        let Some(position) = positions.get(&operation).copied()
+        else {
+
+            issue(
+                issues,
                 "COMP-OWN-EVENT-OPERATION-NOT-IN-BLOCK",
                 Some(event.value()),
                 Some(block.id()),
                 Some(operation),
-                "ownership event refers to an operation that is not listed \
-                 in its containing block",
-            ));
+                "ownership event refers to an operation absent from its block",
+            );
+
             *complete = false;
             continue;
         };
 
-        if let Some(previous) = previous_position {
-            if position < previous {
-                issues.insert(OwnershipAnalysisIssue::new(
+        if let Some(previous_position) = previous {
+
+            if position < previous_position {
+
+                issue(
+                    issues,
                     "COMP-OWN-EVENT-ORDER",
                     Some(event.value()),
                     Some(block.id()),
                     Some(operation),
-                    "ownership events are not in canonical block operation order",
-                ));
+                    "ownership events do not follow canonical operation order",
+                );
+
                 *complete = false;
             }
         }
 
-        previous_position = Some(position);
+        previous = Some(position);
     }
-
-    let _ = input;
 }
 
-// =============================================================================
-// Diagnostics and transfer helpers
-// =============================================================================
-
-fn push_issue(
-    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
-    code: &'static str,
-    value: ValueId,
-    block: BlockId,
-    operation: OperationId,
-    message: impl Into<String>,
-) {
-    issues.insert(OwnershipAnalysisIssue::new(
-        code,
-        Some(value),
-        Some(block),
-        Some(operation),
-        message,
-    ));
-}
+// ============================================================================
+// AVAILABILITY
+// ============================================================================
 
 fn check_available(
     state: &ValueState,
@@ -780,56 +1015,80 @@ fn check_available(
     operation: OperationId,
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
 ) -> bool {
+
     match state.availability() {
+
         Availability::Available => true,
 
-        Availability::Moved => {
-            push_issue(
-                issues,
-                "COMP-OWN-USE-AFTER-MOVE",
-                value,
-                block,
-                operation,
-                "value is used after ownership was transferred or dropped",
-            );
-            false
-        }
-
         Availability::Uninitialized => {
-            push_issue(
+
+            value_issue(
                 issues,
                 "COMP-OWN-USE-BEFORE-DEFINITION",
                 value,
                 block,
                 operation,
-                "value is used before it is available on this control-flow path",
+                "value is not initialized on this control-flow path",
             );
+
+            false
+        }
+
+        Availability::Moved => {
+
+            value_issue(
+                issues,
+                "COMP-OWN-USE-AFTER-MOVE",
+                value,
+                block,
+                operation,
+                "value was previously moved or consumed",
+            );
+
             false
         }
 
         Availability::Maybe => {
-            push_issue(
+
+            value_issue(
                 issues,
-                "COMP-OWN-POSSIBLE-USE-AFTER-MOVE",
+                "COMP-OWN-CONDITIONAL-AVAILABILITY",
                 value,
                 block,
                 operation,
                 "value is not available on every incoming control-flow path",
             );
+
             false
         }
     }
 }
 
-fn active_borrow_conflict(
+// ============================================================================
+// BORROW VALIDATION
+// ============================================================================
+
+fn has_exclusive_borrow(
+    state: &ValueState,
+) -> bool {
+
+    state.active_borrows
+        .values()
+        .any(|borrow| {
+            borrow.mutability == BorrowMutability::Exclusive
+        })
+}
+
+fn borrow_conflict(
     state: &ValueState,
     requested: BorrowMutability,
 ) -> bool {
+
     match requested {
-        BorrowMutability::Shared => state
-            .active_borrows
-            .values()
-            .any(|kind| *kind == BorrowMutability::Exclusive),
+
+        BorrowMutability::Shared => {
+            has_exclusive_borrow(state)
+        }
 
         BorrowMutability::Exclusive => {
             !state.active_borrows.is_empty()
@@ -837,34 +1096,69 @@ fn active_borrow_conflict(
     }
 }
 
-fn check_capability(
-    input: &OwnershipAnalysisInput<'_>,
+fn begin_borrow(
+    state: &mut ValueState,
     value: ValueId,
-    operation: OperationId,
     block: BlockId,
+    operation: OperationId,
+    requested: BorrowMutability,
     allowed: bool,
-    action: &'static str,
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
 ) {
+
     if !allowed {
-        push_issue(
+
+        value_issue(
             issues,
-            "COMP-OWN-CAPABILITY-VIOLATION",
+            "COMP-OWN-BORROW-CAPABILITY",
             value,
             block,
             operation,
-            format!(
-                "ownership contract does not permit this {action} operation"
-            ),
+            "ownership contract prohibits the requested borrow",
         );
+
+        return;
     }
 
-    let _ = input;
+    if borrow_conflict(state, requested) {
+
+        value_issue(
+            issues,
+            "COMP-OWN-BORROW-CONFLICT",
+            value,
+            block,
+            operation,
+            "requested borrow conflicts with an active borrow",
+        );
+
+        return;
+    }
+
+    if state.active_borrows.contains_key(&operation) {
+
+        value_issue(
+            issues,
+            "COMP-OWN-DUPLICATE-BORROW-ORIGIN",
+            value,
+            block,
+            operation,
+            "borrow origin already exists for this value",
+        );
+
+        return;
+    }
+
+    state.active_borrows.insert(
+        operation,
+        BorrowFact {
+            mutability: requested,
+        },
+    );
 }
 
-// =============================================================================
-// Transfer function
-// =============================================================================
+// ============================================================================
+// TRANSFER
+// ============================================================================
 
 fn transfer_event(
     input: &OwnershipAnalysisInput<'_>,
@@ -874,6 +1168,7 @@ fn transfer_event(
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     complete: &mut bool,
 ) {
+
     let value = event.value();
     let operation = event.operation();
 
@@ -881,33 +1176,38 @@ fn transfer_event(
         return;
     }
 
-    let Some(contract) = input.ownership.contract(value) else {
+    let Some(contract) =
+        input.ownership.contract(value)
+    else {
         return;
     };
 
-    let value_state = state.value_mut(value);
     let capabilities = contract.capabilities;
 
+    let value_state = state.value_mut(value);
+
     match event {
+
         OwnershipFlowEvent::Define { .. } => {
-            // A definition generates a new available SSA value.
-            // Borrow state is retained conservatively; a valid SSA producer
-            // must not redefine an identity that is still borrowed.
+
             if !value_state.active_borrows.is_empty() {
-                push_issue(
+
+                value_issue(
                     issues,
                     "COMP-OWN-REDEFINITION-WHILE-BORROWED",
                     value,
                     block,
                     operation,
-                    "value is defined while a borrow of the same value is active",
+                    "cannot redefine a value while a borrow remains active",
                 );
             }
 
-            value_state.availability = Some(Availability::Available);
+            value_state.availability =
+                Some(Availability::Available);
         }
 
         OwnershipFlowEvent::Duplicate { .. } => {
+
             if check_available(
                 value_state,
                 value,
@@ -915,15 +1215,30 @@ fn transfer_event(
                 operation,
                 issues,
             ) {
-                check_capability(
-                    input,
-                    value,
-                    operation,
-                    block,
-                    capabilities.may_copy,
-                    "copy",
-                    issues,
-                );
+
+                if !capabilities.may_copy {
+
+                    value_issue(
+                        issues,
+                        "COMP-OWN-COPY-PROHIBITED",
+                        value,
+                        block,
+                        operation,
+                        "ownership contract prohibits copying",
+                    );
+                }
+
+                if has_exclusive_borrow(value_state) {
+
+                    value_issue(
+                        issues,
+                        "COMP-OWN-COPY-DURING-EXCLUSIVE-BORROW",
+                        value,
+                        block,
+                        operation,
+                        "cannot copy through the owner while an exclusive borrow is active",
+                    );
+                }
             }
         }
 
@@ -931,75 +1246,74 @@ fn transfer_event(
             borrow_operation,
             ..
         } => {
+
             if value_state
                 .active_borrows
                 .remove(borrow_operation)
                 .is_none()
             {
-                push_issue(
+
+                value_issue(
                     issues,
                     "COMP-OWN-END-UNKNOWN-BORROW",
                     value,
                     block,
                     operation,
                     format!(
-                        "borrow ending operation refers to unknown or \
-                         already-ended borrow created by operation \
-                         {borrow_operation}"
+                        "borrow origin {borrow_operation} is unknown or already ended"
                     ),
                 );
             }
         }
 
         OwnershipFlowEvent::Recorded(recorded) => {
+
             match &recorded.kind {
+
                 OwnershipUseKind::Read => {
+
                     if check_available(
                         value_state,
                         value,
                         block,
                         operation,
                         issues,
-                    ) && value_state
-                        .active_borrows
-                        .values()
-                        .any(|kind| *kind == BorrowMutability::Exclusive)
-                    {
-                        push_issue(
+                    ) && has_exclusive_borrow(value_state) {
+
+                        value_issue(
                             issues,
                             "COMP-OWN-READ-DURING-EXCLUSIVE-BORROW",
                             value,
                             block,
                             operation,
-                            "cannot read a value while an exclusive borrow is active",
+                            "cannot access the owner while an exclusive borrow is active",
                         );
                     }
                 }
 
                 OwnershipUseKind::Write => {
+
                     if check_available(
                         value_state,
                         value,
                         block,
                         operation,
                         issues,
-                    ) && value_state
-                        .active_borrows
-                        .values()
-                        .any(|kind| *kind == BorrowMutability::Shared)
-                    {
-                        push_issue(
+                    ) && !value_state.active_borrows.is_empty() {
+
+                        value_issue(
                             issues,
-                            "COMP-OWN-WRITE-DURING-SHARED-BORROW",
+                            "COMP-OWN-WRITE-WHILE-BORROWED",
                             value,
                             block,
                             operation,
-                            "cannot mutate a value while a shared borrow is active",
+                            "cannot mutate the owner while a borrow is active",
                         );
                     }
                 }
 
                 OwnershipUseKind::Move => {
+
                     if check_available(
                         value_state,
                         value,
@@ -1007,26 +1321,29 @@ fn transfer_event(
                         operation,
                         issues,
                     ) {
-                        check_capability(
-                            input,
-                            value,
-                            operation,
-                            block,
-                            capabilities.may_move,
-                            "move",
-                            issues,
-                        );
 
-                        if !value_state.active_borrows.is_empty() {
-                            push_issue(
+                        if !capabilities.may_move {
+
+                            value_issue(
+                                issues,
+                                "COMP-OWN-MOVE-PROHIBITED",
+                                value,
+                                block,
+                                operation,
+                                "ownership contract prohibits moving",
+                            );
+                        } else if !value_state.active_borrows.is_empty() {
+
+                            value_issue(
                                 issues,
                                 "COMP-OWN-MOVE-WHILE-BORROWED",
                                 value,
                                 block,
                                 operation,
-                                "cannot move a value while any borrow is active",
+                                "cannot move a value while a borrow is active",
                             );
-                        } else if capabilities.may_move {
+                        } else {
+
                             value_state.availability =
                                 Some(Availability::Moved);
                         }
@@ -1034,6 +1351,7 @@ fn transfer_event(
                 }
 
                 OwnershipUseKind::Drop => {
+
                     if check_available(
                         value_state,
                         value,
@@ -1041,26 +1359,29 @@ fn transfer_event(
                         operation,
                         issues,
                     ) {
-                        check_capability(
-                            input,
-                            value,
-                            operation,
-                            block,
-                            capabilities.may_drop,
-                            "drop",
-                            issues,
-                        );
 
-                        if !value_state.active_borrows.is_empty() {
-                            push_issue(
+                        if !capabilities.may_drop {
+
+                            value_issue(
+                                issues,
+                                "COMP-OWN-DROP-PROHIBITED",
+                                value,
+                                block,
+                                operation,
+                                "ownership contract prohibits implicit dropping",
+                            );
+                        } else if !value_state.active_borrows.is_empty() {
+
+                            value_issue(
                                 issues,
                                 "COMP-OWN-DROP-WHILE-BORROWED",
                                 value,
                                 block,
                                 operation,
-                                "cannot drop a value while any borrow is active",
+                                "cannot drop a value while a borrow remains active",
                             );
-                        } else if capabilities.may_drop {
+                        } else {
+
                             value_state.availability =
                                 Some(Availability::Moved);
                         }
@@ -1069,6 +1390,7 @@ fn transfer_event(
 
                 OwnershipUseKind::BorrowShared
                 | OwnershipUseKind::CaptureShared => {
+
                     if check_available(
                         value_state,
                         value,
@@ -1076,40 +1398,22 @@ fn transfer_event(
                         operation,
                         issues,
                     ) {
-                        check_capability(
-                            input,
+
+                        begin_borrow(
+                            value_state,
                             value,
-                            operation,
                             block,
+                            operation,
+                            BorrowMutability::Shared,
                             capabilities.may_borrow_shared,
-                            "shared borrow",
                             issues,
                         );
-
-                        if active_borrow_conflict(
-                            value_state,
-                            BorrowMutability::Shared,
-                        ) {
-                            push_issue(
-                                issues,
-                                "COMP-OWN-SHARED-BORROW-CONFLICT",
-                                value,
-                                block,
-                                operation,
-                                "cannot create a shared borrow while an \
-                                 exclusive borrow is active",
-                            );
-                        } else if capabilities.may_borrow_shared {
-                            value_state.active_borrows.insert(
-                                operation,
-                                BorrowMutability::Shared,
-                            );
-                        }
                     }
                 }
 
                 OwnershipUseKind::BorrowExclusive
                 | OwnershipUseKind::CaptureExclusive => {
+
                     if check_available(
                         value_state,
                         value,
@@ -1117,48 +1421,30 @@ fn transfer_event(
                         operation,
                         issues,
                     ) {
-                        check_capability(
-                            input,
+
+                        begin_borrow(
+                            value_state,
                             value,
-                            operation,
                             block,
+                            operation,
+                            BorrowMutability::Exclusive,
                             capabilities.may_borrow_exclusive,
-                            "exclusive borrow",
                             issues,
                         );
-
-                        if active_borrow_conflict(
-                            value_state,
-                            BorrowMutability::Exclusive,
-                        ) {
-                            push_issue(
-                                issues,
-                                "COMP-OWN-EXCLUSIVE-BORROW-CONFLICT",
-                                value,
-                                block,
-                                operation,
-                                "cannot create an exclusive borrow while \
-                                 another borrow is active",
-                            );
-                        } else if capabilities.may_borrow_exclusive {
-                            value_state.active_borrows.insert(
-                                operation,
-                                BorrowMutability::Exclusive,
-                            );
-                        }
                     }
                 }
 
                 OwnershipUseKind::Extension(_) => {
-                    push_issue(
+
+                    value_issue(
                         issues,
                         "COMP-OWN-UNKNOWN-EVENT-SEMANTICS",
                         value,
                         block,
                         operation,
-                        "ownership event belongs to an extension whose \
-                         ownership semantics are not registered with this analysis",
+                        "extension ownership event has no registered transfer semantics",
                     );
+
                     *complete = false;
                 }
             }
@@ -1166,96 +1452,188 @@ fn transfer_event(
     }
 }
 
-// =============================================================================
-// CFG dataflow
-// =============================================================================
+// ============================================================================
+// EXIT ANALYSIS
+// ============================================================================
 
 fn is_normal_exit(block: &ZuirBlock) -> bool {
-    matches!(block.terminator(), BlockTerminator::Return { .. })
+
+    matches!(
+        block.terminator(),
+        BlockTerminator::Return { .. }
+    )
 }
 
 fn is_unreachable_exit(block: &ZuirBlock) -> bool {
-    matches!(block.terminator(), BlockTerminator::Unreachable)
+
+    matches!(
+        block.terminator(),
+        BlockTerminator::Unreachable
+    )
 }
+
+fn validate_exit(
+    input: &OwnershipAnalysisInput<'_>,
+    block: BlockId,
+    state: &FlowState,
+    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
+) {
+
+    for value in input.tracked_values {
+
+        let Some(contract) =
+            input.ownership.contract(*value)
+        else {
+            continue;
+        };
+
+        let value_state = state.value(*value);
+
+        if !value_state.active_borrows.is_empty() {
+
+            issue(
+                issues,
+                "COMP-OWN-BORROW-ESCAPES-EXIT",
+                Some(*value),
+                Some(block),
+                None,
+                "borrow remains active at a normal function exit",
+            );
+        }
+
+        if !contract.capabilities.must_consume {
+            continue;
+        }
+
+        match value_state.availability() {
+
+            Availability::Moved => {}
+
+            Availability::Available => {
+
+                issue(
+                    issues,
+                    "COMP-OWN-MUST-CONSUME",
+                    Some(*value),
+                    Some(block),
+                    None,
+                    "value requiring consumption remains available at function exit",
+                );
+            }
+
+            Availability::Maybe => {
+
+                issue(
+                    issues,
+                    "COMP-OWN-MUST-CONSUME-PATH",
+                    Some(*value),
+                    Some(block),
+                    None,
+                    "mandatory consumption is not established on every incoming path",
+                );
+            }
+
+            Availability::Uninitialized => {
+
+                issue(
+                    issues,
+                    "COMP-OWN-MUST-CONSUME-UNAVAILABLE",
+                    Some(*value),
+                    Some(block),
+                    None,
+                    "mandatory-consumption value is unavailable at function exit",
+                );
+            }
+        }
+    }
+}
+
+// ============================================================================
+// DATAFLOW
+// ============================================================================
 
 fn analyze_dataflow(
     input: &OwnershipAnalysisInput<'_>,
-    block_index: &BTreeMap<BlockId, &ZuirBlock>,
+    blocks: &BTreeMap<BlockId, &ZuirBlock>,
+    issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     report: &mut OwnershipAnalysisReport,
 ) {
+
     let Some(entry) = input.cfg.entry() else {
         return;
     };
 
-    let mut issues = BTreeSet::<OwnershipAnalysisIssue>::new();
+    let mut incoming =
+        BTreeMap::<BlockId, FlowState>::new();
 
-    let mut in_states = BTreeMap::<BlockId, FlowState>::new();
-    let mut out_states = BTreeMap::<BlockId, FlowState>::new();
+    let mut outgoing =
+        BTreeMap::<BlockId, FlowState>::new();
 
-    let initial = FlowState::new(
-        input.tracked_values,
-        input.initial_values,
+    incoming.insert(
+        entry,
+        FlowState::new(
+            input.tracked_values,
+            input.initial_values,
+        ),
     );
 
-    in_states.insert(entry, initial);
+    let mut pending = VecDeque::new();
 
-    let mut pending = VecDeque::<BlockId>::new();
-    let mut queued = BTreeSet::<BlockId>::new();
+    let mut queued = BTreeSet::new();
 
     pending.push_back(entry);
     queued.insert(entry);
 
     while let Some(block_id) = pending.pop_front() {
+
         queued.remove(&block_id);
 
-        let Some(block) = block_index.get(&block_id).copied() else {
-            issues.insert(OwnershipAnalysisIssue::new(
-                "COMP-OWN-CFG-BLOCK-MISSING",
-                None,
-                Some(block_id),
-                None,
-                "CFG references a block absent from the supplied block collection",
-            ));
-            report.complete = false;
+        let Some(block) = blocks.get(&block_id).copied()
+        else {
             continue;
         };
 
-        let Some(input_state) = in_states.get(&block_id).cloned() else {
+        let Some(mut state) =
+            incoming.get(&block_id).cloned()
+        else {
             continue;
         };
 
-        let mut output_state = input_state;
+        if let Some(events) =
+            input.events.get(&block_id)
+        {
 
-        if let Some(events) = input.events.get(&block_id) {
             for event in events {
-                report.events_analyzed += 1;
 
                 transfer_event(
                     input,
-                    &mut output_state,
+                    &mut state,
                     block_id,
                     event,
-                    &mut issues,
+                    issues,
                     &mut report.complete,
                 );
             }
         }
 
-        let output_changed = out_states
+        let changed = outgoing
             .get(&block_id)
-            .map_or(true, |previous| previous != &output_state);
+            .map_or(true, |previous| previous != &state);
 
-        if !output_changed {
+        if !changed {
             continue;
         }
 
-        out_states.insert(block_id, output_state.clone());
+        outgoing.insert(block_id, state.clone());
 
         for edge in input.cfg.successors(block_id) {
+
             let successor = edge.target();
 
             if !input.cfg.contains_block(successor) {
-                issues.insert(OwnershipAnalysisIssue::new(
+
+                issue(
+                    issues,
                     "COMP-OWN-CFG-INVALID-SUCCESSOR",
                     None,
                     Some(block_id),
@@ -1263,31 +1641,73 @@ fn analyze_dataflow(
                     format!(
                         "CFG successor {successor} is not present in the graph"
                     ),
-                ));
+                );
+
                 report.complete = false;
                 continue;
             }
 
-            let changed = match in_states.get_mut(&successor) {
-                Some(existing) => existing.join_from(&output_state),
+            // Block-argument ownership transfer is not represented by
+            // OwnershipUse, which currently associates events with
+            // OperationId rather than CFG edges.
+            //
+            // Never silently claim completeness for an edge that carries
+            // SSA arguments.
+            if !edge.arguments().is_empty() {
+
+                issue(
+                    issues,
+                    "COMP-OWN-EDGE-TRANSFER-UNMODELED",
+                    None,
+                    Some(block_id),
+                    None,
+                    "CFG edge carries SSA block arguments, but explicit edge ownership transfer facts are not available",
+                );
+
+                report.complete = false;
+            }
+
+            let changed = match incoming.get_mut(&successor) {
+
+                Some(existing) => {
+                    existing.join_from(&state)
+                }
+
                 None => {
-                    in_states.insert(successor, output_state.clone());
+                    incoming.insert(
+                        successor,
+                        state.clone(),
+                    );
+
                     true
                 }
             };
 
             if changed && queued.insert(successor) {
+
                 pending.push_back(successor);
             }
         }
     }
 
-    report.reachable_blocks = in_states.len();
+    report.reachable_blocks = incoming.len();
 
-    // Validate normal exits only after the dataflow fixed point is reached.
-    // Unreachable terminators do not impose normal-return consumption rules.
-    for (block_id, state) in &out_states {
-        let Some(block) = block_index.get(block_id).copied() else {
+    // Count events once per reachable block rather than once per
+    // worklist iteration.
+    for block in incoming.keys() {
+
+        if let Some(events) = input.events.get(block) {
+
+            report.events_analyzed =
+                report.events_analyzed.saturating_add(events.len());
+        }
+    }
+
+    // Check normal exits after reaching the fixed point.
+    for (block_id, state) in &outgoing {
+
+        let Some(block) = blocks.get(block_id).copied()
+        else {
             continue;
         };
 
@@ -1295,182 +1715,165 @@ fn analyze_dataflow(
             continue;
         }
 
-        if !input.cfg.successors(*block_id).next().is_none() {
+        if input.cfg.successors(*block_id).next().is_some() {
             continue;
         }
 
-        if !is_normal_exit(block) {
-            issues.insert(OwnershipAnalysisIssue::new(
+        if is_normal_exit(block) {
+
+            validate_exit(
+                input,
+                *block_id,
+                state,
+                issues,
+            );
+
+        } else {
+
+            issue(
+                issues,
                 "COMP-OWN-UNCLASSIFIED-EXIT",
                 None,
                 Some(*block_id),
                 None,
-                "reachable terminal block is neither a return nor an \
-                 explicitly unreachable terminator; exit semantics are unknown",
-            ));
+                "reachable terminal block has no recognized normal-return or unreachable semantics",
+            );
+
             report.complete = false;
-            continue;
-        }
-
-        for value in input.tracked_values {
-            let Some(contract) = input.ownership.contract(*value) else {
-                continue;
-            };
-
-            let value_state = state.value(*value);
-
-            if !value_state.active_borrows.is_empty() {
-                issues.insert(OwnershipAnalysisIssue::new(
-                    "COMP-OWN-BORROW-ESCAPES-EXIT",
-                    Some(*value),
-                    Some(*block_id),
-                    None,
-                    "a borrow remains active at a normal function exit",
-                ));
-            }
-
-            if matches!(contract.kind, OwnershipKind::Linear) {
-                match value_state.availability() {
-                    Availability::Available => {
-                        issues.insert(OwnershipAnalysisIssue::new(
-                            "COMP-OWN-LINEAR-NOT-CONSUMED",
-                            Some(*value),
-                            Some(*block_id),
-                            None,
-                            "linear value remains available at a normal exit; \
-                             it must be consumed or transferred on this path",
-                        ));
-                    }
-
-                    Availability::Maybe => {
-                        issues.insert(OwnershipAnalysisIssue::new(
-                            "COMP-OWN-LINEAR-NOT-CONSUMED-ON-EVERY-PATH",
-                            Some(*value),
-                            Some(*block_id),
-                            None,
-                            "linear value is not consumed on every path \
-                             reaching this normal exit",
-                        ));
-                    }
-
-                    Availability::Uninitialized => {
-                        issues.insert(OwnershipAnalysisIssue::new(
-                            "COMP-OWN-LINEAR-NOT-AVAILABLE-AT-EXIT",
-                            Some(*value),
-                            Some(*block_id),
-                            None,
-                            "linear value is not available on every path \
-                             reaching this normal exit",
-                        ));
-                    }
-
-                    Availability::Moved => {}
-                }
-            }
         }
     }
-
-    report.issues = issues.into_iter().collect();
 }
 
-// =============================================================================
-// Static definition validation
-// =============================================================================
+// ============================================================================
+// STATIC DEFINITION VALIDATION
+// ============================================================================
 
 fn validate_definitions(
     input: &OwnershipAnalysisInput<'_>,
     issues: &mut BTreeSet<OwnershipAnalysisIssue>,
     complete: &mut bool,
 ) {
-    let mut definitions = BTreeMap::<ValueId, usize>::new();
+
+    let mut definitions =
+        BTreeMap::<ValueId, usize>::new();
 
     for (block, events) in input.events {
+
         if !input.cfg.contains_block(*block) {
             continue;
         }
 
         for event in events {
+
             if let OwnershipFlowEvent::Define { value, .. } = event {
+
                 if input.tracked_values.contains(value) {
-                    *definitions.entry(*value).or_insert(0) += 1;
+
+                    let count =
+                        definitions.entry(*value).or_insert(0);
+
+                    *count = count.saturating_add(1);
                 }
             }
         }
     }
 
     for value in input.tracked_values {
+
+        let count =
+            definitions.get(value).copied().unwrap_or(0);
+
         if input.initial_values.contains(value) {
-            if definitions.get(value).copied().unwrap_or(0) > 0 {
-                issues.insert(OwnershipAnalysisIssue::new(
+
+            if count > 0 {
+
+                issue(
+                    issues,
                     "COMP-OWN-ENTRY-VALUE-REDEFINED",
                     Some(*value),
                     None,
                     None,
-                    "a value declared available at CFG entry also has a \
-                     definition event inside the analyzed CFG",
-                ));
+                    "entry value also has a definition inside the analyzed CFG",
+                );
             }
 
             continue;
         }
 
-        match definitions.get(value).copied().unwrap_or(0) {
+        match count {
+
             0 => {
-                issues.insert(OwnershipAnalysisIssue::new(
+
+                issue(
+                    issues,
                     "COMP-OWN-MISSING-DEFINITION",
                     Some(*value),
                     None,
                     None,
-                    "tracked non-entry value has no definition event in this CFG",
-                ));
+                    "tracked non-entry value has no definition event",
+                );
+
                 *complete = false;
             }
 
             1 => {}
 
-            count => {
-                issues.insert(OwnershipAnalysisIssue::new(
+            _ => {
+
+                issue(
+                    issues,
                     "COMP-OWN-MULTIPLE-DEFINITIONS",
                     Some(*value),
                     None,
                     None,
-                    format!(
-                        "tracked SSA value has {count} definition events; \
-                         canonical SSA identity must have one definition"
-                    ),
-                ));
+                    "tracked SSA value has multiple static definitions",
+                );
+
+                *complete = false;
             }
         }
     }
 }
 
-// =============================================================================
-// Public entry point
-// =============================================================================
+// ============================================================================
+// PUBLIC ENTRY POINT
+// ============================================================================
 
-/// Analyze ownership over a canonical control-flow graph.
+/// Analyze ownership across a validated canonical CFG.
 ///
-/// This analysis requires a CFG built and validated by
-/// `crate::zuir::analysis::cfg::ControlFlowGraph::build`.
+/// The caller must supply:
 ///
-/// The function is deterministic for the same CFG, ownership index, tracked
-/// value set, and ordered event input.
+/// - A validated OwnershipIndex.
+/// - A canonical CFG.
+/// - The canonical blocks used by the CFG.
+/// - Complete ordered ownership events.
+/// - Tracked values.
+/// - Entry values.
+/// - Authoritative borrow-ending information.
 ///
-/// It uses an iterative worklist. Cycles and loops are handled by fixed-point
-/// propagation; no recursion or arbitrary iteration limit is used.
+/// The analysis is iterative and deterministic.
 ///
-/// This analysis does not claim complete source-level lifetime inference.
-/// Borrow-ending events must be supplied by the authoritative frontend or IR
-/// adapter.
+/// No arbitrary iteration ceiling is imposed.
+///
+/// Unknown ownership semantics or missing information prevent a
+/// successful completeness result.
+///
+/// IMPORTANT:
+///
+/// This analysis does not independently infer source-level lifetimes.
+/// Lifetime information belongs to frontend semantic analysis.
 #[must_use]
 pub fn analyze_ownership(
     input: &OwnershipAnalysisInput<'_>,
 ) -> OwnershipAnalysisReport {
+
     let mut report = OwnershipAnalysisReport::new();
 
-    report.values_analyzed = input.tracked_values.len();
+    report.values_analyzed =
+        input.tracked_values.len();
 
-    let mut issues = BTreeSet::<OwnershipAnalysisIssue>::new();
+    let mut issues =
+        BTreeSet::<OwnershipAnalysisIssue>::new();
 
     validate_input(
         input,
@@ -1478,24 +1881,25 @@ pub fn analyze_ownership(
         &mut report.complete,
     );
 
-    let block_index = index_blocks(input.blocks);
+    let blocks = index_blocks(
+        input.blocks,
+        input.cfg,
+        &mut issues,
+        &mut report.complete,
+    );
 
     for block_id in input.cfg.block_order() {
-        let Some(block) = block_index.get(block_id).copied() else {
-            issues.insert(OwnershipAnalysisIssue::new(
-                "COMP-OWN-CFG-BLOCK-MISSING",
-                None,
-                Some(*block_id),
-                None,
-                "CFG block is missing from the supplied canonical block collection",
-            ));
-            report.complete = false;
+
+        let Some(block) = blocks.get(block_id).copied()
+        else {
             continue;
         };
 
-        if let Some(events) = input.events.get(block_id) {
+        if let Some(events) =
+            input.events.get(block_id)
+        {
+
             validate_event_order(
-                input,
                 block,
                 events,
                 &mut issues,
@@ -1510,47 +1914,58 @@ pub fn analyze_ownership(
         &mut report.complete,
     );
 
-    report.issues = issues.into_iter().collect();
+    if input.cfg.entry().is_some()
+        && !input.cfg.is_empty()
+    {
 
-    if input.cfg.entry().is_some() && !input.cfg.is_empty() {
-        analyze_dataflow(input, &block_index, &mut report);
+        analyze_dataflow(
+            input,
+            &blocks,
+            &mut issues,
+            &mut report,
+        );
     }
+
+    // Preserve diagnostics from every analysis phase.
+    report.issues = issues.into_iter().collect();
 
     report
 }
 
-// =============================================================================
-// Unit tests
-// =============================================================================
+// ============================================================================
+// TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn availability_join_preserves_equal_states() {
+
         assert_eq!(
-            Availability::Available.join(Availability::Available),
+            Availability::Available.join(
+                Availability::Available
+            ),
             Availability::Available
         );
 
         assert_eq!(
-            Availability::Moved.join(Availability::Moved),
-            Availability::Moved
-        );
-
-        assert_eq!(
-            Availability::Uninitialized.join(
-                Availability::Uninitialized
+            Availability::Moved.join(
+                Availability::Moved
             ),
-            Availability::Uninitialized
+            Availability::Moved
         );
     }
 
     #[test]
     fn availability_join_is_conservative() {
+
         assert_eq!(
-            Availability::Available.join(Availability::Moved),
+            Availability::Available.join(
+                Availability::Moved
+            ),
             Availability::Maybe
         );
 
@@ -1560,69 +1975,156 @@ mod tests {
             ),
             Availability::Maybe
         );
+    }
 
-        assert_eq!(
-            Availability::Maybe.join(Availability::Available),
-            Availability::Maybe
+    #[test]
+    fn exclusive_borrow_conflicts_with_shared_borrow() {
+
+        let mut state = ValueState::default();
+
+        let origin = OperationId::new(1)
+            .expect("valid operation ID");
+
+        state.active_borrows.insert(
+            origin,
+            BorrowFact {
+                mutability: BorrowMutability::Exclusive,
+            },
+        );
+
+        assert!(
+            borrow_conflict(
+                &state,
+                BorrowMutability::Shared
+            )
         );
     }
 
     #[test]
-    fn shared_borrows_conflict_with_exclusive_borrows() {
+    fn shared_borrows_can_coexist() {
+
         let mut state = ValueState::default();
 
-        let first = OperationId::new(1).expect("nonzero operation ID");
-        let second = OperationId::new(2).expect("nonzero operation ID");
+        let first = OperationId::new(1)
+            .expect("valid operation ID");
+
+        let second = OperationId::new(2)
+            .expect("valid operation ID");
 
         state.active_borrows.insert(
             first,
-            BorrowMutability::Shared,
+            BorrowFact {
+                mutability: BorrowMutability::Shared,
+            },
         );
-
-        assert!(active_borrow_conflict(
-            &state,
-            BorrowMutability::Exclusive
-        ));
-
-        assert!(!active_borrow_conflict(
-            &state,
-            BorrowMutability::Shared
-        ));
 
         state.active_borrows.insert(
             second,
-            BorrowMutability::Exclusive,
+            BorrowFact {
+                mutability: BorrowMutability::Shared,
+            },
         );
 
-        assert!(active_borrow_conflict(
-            &state,
-            BorrowMutability::Shared
-        ));
+        assert!(
+            !borrow_conflict(
+                &state,
+                BorrowMutability::Shared
+            )
+        );
+
+        assert!(
+            borrow_conflict(
+                &state,
+                BorrowMutability::Exclusive
+            )
+        );
     }
 
     #[test]
-    fn flow_state_join_unions_borrow_information() {
-        let value = ValueId::new(1).expect("nonzero value ID");
-        let first = OperationId::new(1).expect("nonzero operation ID");
-        let second = OperationId::new(2).expect("nonzero operation ID");
+    fn conflicting_borrow_facts_join_conservatively() {
+
+        let shared = BorrowFact {
+            mutability: BorrowMutability::Shared,
+        };
+
+        let exclusive = BorrowFact {
+            mutability: BorrowMutability::Exclusive,
+        };
+
+        assert_eq!(
+            shared.join(exclusive).mutability,
+            BorrowMutability::Exclusive
+        );
+    }
+
+    #[test]
+    fn joining_flow_states_preserves_all_borrow_origins() {
+
+        let value = ValueId::new(1)
+            .expect("valid value ID");
+
+        let first = OperationId::new(1)
+            .expect("valid operation ID");
+
+        let second = OperationId::new(2)
+            .expect("valid operation ID");
 
         let mut left = FlowState::default();
         let mut right = FlowState::default();
 
-        left.value_mut(value)
-            .active_borrows
-            .insert(first, BorrowMutability::Shared);
+        left.value_mut(value).active_borrows.insert(
+            first,
+            BorrowFact {
+                mutability: BorrowMutability::Shared,
+            },
+        );
 
-        right.value_mut(value)
-            .active_borrows
-            .insert(second, BorrowMutability::Exclusive);
+        right.value_mut(value).active_borrows.insert(
+            second,
+            BorrowFact {
+                mutability: BorrowMutability::Exclusive,
+            },
+        );
 
         assert!(left.join_from(&right));
 
         let joined = left.value(value);
 
-        assert_eq!(joined.active_borrows.len(), 2);
-        assert!(joined.active_borrows.contains_key(&first));
-        assert!(joined.active_borrows.contains_key(&second));
+        assert_eq!(
+            joined.active_borrows.len(),
+            2
+        );
+    }
+
+    #[test]
+    fn ending_a_borrow_removes_only_its_origin() {
+
+        let first = OperationId::new(1)
+            .expect("valid operation ID");
+
+        let second = OperationId::new(2)
+            .expect("valid operation ID");
+
+        let mut state = ValueState::default();
+
+        state.active_borrows.insert(
+            first,
+            BorrowFact {
+                mutability: BorrowMutability::Shared,
+            },
+        );
+
+        state.active_borrows.insert(
+            second,
+            BorrowFact {
+                mutability: BorrowMutability::Shared,
+            },
+        );
+
+        assert!(state.active_borrows.remove(&first).is_some());
+
+        assert!(
+            state.active_borrows.contains_key(&second)
+        );
     }
 }
