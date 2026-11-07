@@ -1,2575 +1,1868 @@
-Zamani Universal Meta-Compiler Architecture
+Zamani Universal Meta-Compiler (UMC)
+
+Production Architecture and Repository Integration Specification
 
 Canonical path: "src/compiler/documentation/ARCHITECTURE.md"
 
-Repository: "github.com/Benwellonedge28/Zamani" (https://github.com/Benwellonedge28/Zamani)
+Repository: "Benwellonedge28/Zamani" (https://github.com/Benwellonedge28/Zamani)
 
-Subsystem: Universal Meta-Compiler (UMC)
+Branch inspected: "main"
+
+Inspection date: 7 November 2026
+
+Language: Zamani
 
 Rust edition: 2021
 
-Minimum Rust version: Rust 1.97 or later
+Minimum supported Rust version: Rust 1.97
 
-Memory safety: Safe Rust only. "unsafe" is forbidden.
+Memory safety: Safe Rust exclusively. "unsafe" is prohibited.
 
 Primary architectural objective:
 
 "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)"
 
-Scalability objective: From the smallest meaningful computation to arbitrarily large computations, subject to program semantics, available resources, implementation capabilities, representation limits, policies, and physical reality.
+Scalability objective: Support the smallest meaningful computation and arbitrarily large finite computations, subject to program semantics, available resources, implementation capabilities, representation limits, security policies and physical reality.
 
-Document classification: Normative compiler architecture and integration contract.
+Document classification: Normative compiler architecture and repository integration specification.
 
-Scope: Compiler architecture, ownership, compilation pipeline, intermediate representation integration, transformations, optimization, hybrid computing, hardware planning, target realization, backends, artifacts, portability, scalability, security, compatibility, testing, and implementation governance.
+Implementation status: Architectural requirements. This document does not certify that every existing subsystem or end-to-end compilation path is production-ready.
 
 ---
 
 1. Purpose
 
-This document defines the production architecture of the Zamani Universal Meta-Compiler.
+This document establishes the authoritative architecture for Zamani's Universal Meta-Compiler.
 
-The compiler must enable developers to write a Zamani program once, preserve its meaning, compile it into portable representations, and realize it across compatible computing environments without requiring source-code modifications merely because the underlying hardware changes.
+The compiler must enable developers to write a Zamani program once, preserve its specified meaning, compile it into appropriately portable representations and realize it across compatible computing environments without requiring developers to rewrite their applications merely because the available hardware changes.
 
-The compiler must support the complete intended Zamani computing ecosystem, including:
+The compiler must coordinate the entire Zamani computational ecosystem.
 
-- Classical and systems computing.
-- Embedded and resource-constrained computing.
-- Parallel and concurrent computing.
-- Scientific and numerical computing.
-- High-performance computing.
-- Distributed computing.
-- Quantum computing.
-- Quantum-classical hybrid computing.
-- Quantum simulation.
-- Quantum error-correction integration.
-- Hardware description and hardware/software co-design.
-- AI, machine learning, deep learning, and neural networks.
-- Tensor and data computation.
-- Symbolic and probabilistic computation.
-- Autonomous and multi-agent computation.
-- Neuromorphic computing.
-- Photonic computing.
-- Cryptographic and secure computation.
-- Networking and communication.
-- Accelerators and specialized processors.
-- Future computational architectures.
+This includes:
 
-These capabilities must operate as domains of one programming language.
+1. Classical computing.
+2. Systems programming.
+3. Embedded computing.
+4. Parallel computing.
+5. Concurrent computing.
+6. Distributed computing.
+7. High-performance computing.
+8. Scientific and numerical computing.
+9. Quantum computing.
+10. Quantum simulation.
+11. Quantum-classical hybrid computing.
+12. Quantum error-correction integration.
+13. Hardware description languages.
+14. Hardware/software co-design.
+15. FPGA and ASIC realization.
+16. GPU and accelerator computing.
+17. AI and machine learning.
+18. Deep learning and neural networks.
+19. Tensor computation.
+20. Symbolic and probabilistic computation.
+21. Bayesian and causal computation.
+22. Autonomous agents and multi-agent systems.
+23. Neuro-symbolic computation.
+24. Neuromorphic computing.
+25. Photonic computing.
+26. Networking and communication.
+27. Cryptographic and secure computation.
+28. Data-intensive computation.
+29. Future computational architectures.
 
-The compiler must not become a collection of unrelated compilers that happen to accept the same source file.
+These are computational domains within one programming language and one coordinated compiler architecture.
 
-It must coordinate the repository's existing authoritative subsystems through stable, explicit interfaces.
+The compiler MUST expand the existing repository's capabilities rather than introduce competing implementations of existing subsystems.
 
-1.1 Core objective
+1.1 Fundamental POCO-REAF objective
 
 The intended architecture is:
 
-                    ZAMANI SOURCE
-                          |
-                          v
-                  LANGUAGE FRONTEND
-                          |
-                          v
-                  CANONICAL AST
-                          |
-                          v
-                 SEMANTIC VALIDATION
-                          |
-                          v
-                VALIDATED PROGRAM MODEL
-                          |
-                          v
-                 CANONICAL IR SYSTEMS
-                          |
-                          v
+                 ONE ZAMANI PROGRAM
+                         |
+                         v
+                 CANONICAL FRONTEND
+                         |
+                         v
+                   CANONICAL AST
+                         |
+                         v
+                SEMANTIC VALIDATION
+                         |
+                         v
+               VALIDATED PROGRAM MODEL
+                         |
+                         v
+               CANONICAL IR ECOSYSTEM
+                         |
+                         v
                VERIFICATION AND ANALYSIS
-                          |
-                          v
-               SEMANTICS-PRESERVING PASSES
-                          |
-                          v
+                         |
+                         v
+              SEMANTICS-PRESERVING PASSES
+                         |
+                         v
                  OPTIMIZATION PLANNING
-                          |
-                          v
-             CAPABILITY AND FEASIBILITY ANALYSIS
-                          |
-                          v
-                HETEROGENEOUS PLANNING
-                          |
-                          v
-                 DOMAIN-SPECIFIC LOWERING
-                          |
-                          v
-                   BACKEND REALIZATION
-                          |
-                          v
-                 PORTABLE/TARGET ARTIFACTS
-                          |
-                          v
-                 LINKING AND PACKAGING
-                          |
-                          v
-                 DEPLOYMENT AND RUNTIME
+                         |
+                         v
+             CAPABILITY AND FEASIBILITY
+                         |
+                         v
+               HETEROGENEOUS PLANNING
+                         |
+                         v
+                DOMAIN-SPECIFIC LOWERING
+                         |
+                         v
+                 BACKEND REALIZATION
+                         |
+                         v
+                VALIDATED ARTIFACTS
+                         |
+                         v
+                LINKING AND PACKAGING
+                         |
+                         v
+                  RUNTIME HANDOFF
+                         |
+                         v
+                  ACTUAL EXECUTION
 
-The architecture must allow different valid compilation routes depending on the program's computational domains and the requested output.
+Different programs may follow different valid routes through this architecture.
 
-For example, a purely classical program should not be forced through quantum processing.
+A classical program does not need quantum lowering.
 
-A hybrid quantum-classical program must preserve the relationships between classical operations, quantum operations, measurements, control flow, synchronization, and data movement.
+A quantum program must preserve quantum semantics.
 
-An HDL program must preserve hardware-intent semantics rather than treating hardware descriptions as ordinary CPU instructions.
+An HDL program must preserve hardware-description semantics.
+
+A hybrid program must preserve cross-domain dependencies.
+
+A distributed program must preserve communication and consistency semantics.
+
+A program using several computational domains must preserve the relationships between them.
+
+The compiler must not force every program through every computational domain.
 
 1.2 Meaning of infinity
 
-The phrase "scale to infinity" describes the absence of arbitrary universal capacity ceilings.
+The architectural expression "scale to infinity" means that Zamani must not impose arbitrary universal capacity ceilings.
 
-It does not mean that physical memory, computation time, storage, processors, or devices are infinite.
+It does not promise infinite physical memory, storage, computation time, processors or hardware.
 
-The compiler must:
+The compiler MUST:
 
-1. Avoid artificial language-wide hardware limits.
-2. Support dynamically sized and resource-parametric computations.
-3. Use available resources efficiently.
-4. Support configurable operational budgets.
-5. Report actual resource exhaustion.
-6. Preserve program meaning when changing execution strategies.
-7. Avoid silent truncation and artificial success.
-8. Support extensible hardware and backend registration.
+- Avoid arbitrary language-wide resource ceilings.
+- Support dynamically sized and resource-parametric computations.
+- Support symbolic resource requirements where necessary.
+- Use available resources according to explicit policies.
+- Support configurable operational budgets.
+- Scale its internal algorithms according to available capacity.
+- Report resource exhaustion explicitly.
+- Preserve semantics when changing compilation strategies.
+- Avoid silent truncation.
+- Avoid pretending that an unsupported computation succeeded.
+- Support extensible targets and computing domains.
+
+Actual limits must originate from real implementation constraints, target capabilities, available resources, representation formats or explicit policies.
 
 ---
 
-2. Architectural authority
+2. Normative authority and precedence
 
-The compiler must respect the existing repository's ownership boundaries.
+The compiler must follow the existing repository's authority hierarchy.
 
-It is an orchestration and transformation subsystem, not the owner of every computing concept.
+The following sources have different responsibilities.
 
-The following ownership model is mandatory.
+Authority| Responsibility
+"grammar/DESIGN.md"| Overall grammar architecture
+"grammar/OWNERSHIP.yaml"| Grammar ownership
+"grammar/MANIFEST.yaml"| Grammar composition inventory
+"grammar/Zamani.g4"| Root grammar composition
+"grammar/antlr/ZamaniLexer.g4"| Public lexer boundary
+"grammar/antlr/ZamaniParser.g4"| Public parser boundary
+"grammar/lexer/"| Lexical vocabulary and components
+"grammar/specification/"| Normative language specifications
+"grammar/validation/"| Language and semantic boundaries
+"src/frontend/"| Canonical frontend implementation
+"src/frontend/semantic/"| Source-level semantic authority
+"src/zuir/"| Universal intermediate representation
+"src/classical/"| Classical computation and classical IR
+"src/quantum/ir/"| Canonical quantum IR
+"src/hdl/hdlir/"| Hardware-domain IR
+"src/ai/"| AI computation subsystem
+"src/hybrid/"| Hybrid computation
+"src/distributed/"| Distributed computation
+"src/optimizer/"| Existing optimization infrastructure
+"src/backend/"| Canonical backend implementation and registry
+"src/runtime/"| Runtime execution and physical resource management
+"src/toolchain/"| Toolchain and project integration
+"src/compiler/"| Compiler orchestration and integration
 
-Responsibility| Canonical owner
-Language syntax| "grammar/"
-Lexical implementation| "src/lexer.rs" and canonical frontend integration
-Parsing| Canonical frontend parser
-AST| "src/frontend/ast/"
-Semantic meaning| "src/frontend/semantic/"
-Legacy semantic compatibility| "src/semantic.rs"
-Universal IR| "src/zuir/"
-Classical computation| "src/classical/"
-Quantum computation| "src/quantum/"
-Quantum IR| "src/quantum/ir/"
-HDL and hardware representation| "src/hdl/"
-AI computation| "src/ai/"
-Hybrid composition| "src/hybrid/"
-Distributed computation| "src/distributed/"
-Optimization implementation| "src/optimizer/" and domain optimization owners
-Target-specific backend implementation| "src/backend/"
-Compiler orchestration| "src/compiler/"
-Physical execution| "src/runtime/"
-Project and build integration| "src/toolchain/"
-Source locations| "src/source_map/"
+The compiler must conform to the normative grammar and semantic specifications.
 
-The compiler may define adapters, registries, orchestration contracts, and transformation coordination.
+If a compiler implementation conflicts with the language specification, the implementation must be corrected.
 
-It must not create competing definitions of these responsibilities.
+If an architecture document conflicts with an authoritative specification, the architecture document must be corrected.
+
+The compiler MUST NOT silently redefine language semantics to accommodate an incomplete backend.
 
 2.1 Semantic authority
 
-"src/frontend/semantic/" owns validated source-level meaning.
+"src/frontend/semantic/" is the canonical source-level semantic authority.
 
-The compiler must consume semantic results including, where applicable:
+It owns:
 
-- Resolved names.
-- Types and type relationships.
+- Name resolution.
+- Semantic types.
+- Type relationships.
 - Effects.
-- Ownership and borrowing information.
+- Ownership and borrowing semantics.
 - Capabilities.
 - Requirements.
 - Constraints.
 - Preferences.
 - Hints.
-- Resources.
+- Semantic resource descriptions.
 - Contracts.
 - Policies.
 - Provenance.
-- Domain-specific validation results.
+- Domain-specific semantic validation.
 
-The compiler must not implement a second semantic type system.
+The compiler consumes these results.
 
-It must not independently reinterpret source-level meaning.
+"src/compiler/analysis/" may coordinate, aggregate and derive compiler-specific analysis evidence.
 
-The legacy "src/semantic.rs" remains a migration compatibility concern until its consumers are reconciled with the native semantic implementation.
+It MUST NOT implement a competing semantic analyzer or independent semantic type system.
 
-2.2 IR authority
+"src/semantic.rs" remains a legacy migration concern until its consumers have been reconciled with the native frontend semantic implementation.
 
-The compiler must integrate existing representations:
+2.2 ZUIR authority
 
-- ZUIR.
-- Classical IR and ZCIR.
-- "quantum::ir".
-- HDLIR.
-- Tensor and AI representations.
-- Other explicitly registered domain representations.
+"src/zuir/" owns the universal intermediate representation.
 
-The compiler must not create another universal IR to avoid integrating ZUIR.
+ZUIR is not the semantic authority.
 
-It must not redefine quantum operations or hardware semantics.
+The frontend semantic subsystem establishes program meaning.
 
-It must establish explicit, verified adapters between representations.
+ZUIR represents validated computation for subsequent compilation.
 
-2.3 Runtime authority
-
-The compiler may produce abstract resource plans, execution dependencies, scheduling constraints, and deployment artifacts.
-
-It must not take ownership of:
-
-- Physical device allocation.
-- Device leases.
-- Runtime resource reservations.
-- Actual execution.
-- Runtime task scheduling.
-- Resource release.
-- Physical quantum execution.
-- Runtime recovery.
-
-Those responsibilities remain with the appropriate runtime and hardware subsystems.
-
----
-
-3. Language and grammar integration
-
-The compiler must conform to the language authority established in "grammar/".
-
-The following documents are essential:
-
-File| Authority
-"grammar/DESIGN.md"| Grammar architecture and ownership
-"grammar/specification/grammar-authority.md"| Language authority and conflict resolution
-"grammar/specification/semantic-model.md"| Source-language meaning
-"grammar/specification/compilation-model.md"| Compilation semantics
-"grammar/specification/scalability-model.md"| Scalability requirements
-"grammar/specification/poco-reaf.md"| POCO-REAF requirements
-"grammar/specification/execution-model.md"| Execution and realization semantics
-"grammar/specification/compatibility.md"| Compatibility requirements
-"grammar/grammar.md"| Implementation-conformance reference
-"grammar/Zamani-Grammar.md"| Historical and extended design reference
-"grammar/Zamani.g4"| Canonical grammar composition root
-"grammar/antlr/ZamaniLexer.g4"| Public ANTLR lexer boundary
-"grammar/antlr/ZamaniParser.g4"| Public ANTLR parser boundary
-"grammar/lexer/tokens.g4"| Token registry
-
-The exact implementation status of individual grammar productions must be established through conformance testing.
-
-3.1 Mandatory processing order
-
-The conceptual frontend sequence is:
-
-Zamani source
-    |
-    v
-Grammar and language-version validation
-    |
-    v
-Lexical analysis
-    |
-    v
-Parsing
-    |
-    v
-Canonical AST construction
-    |
-    v
-Structural validation
-    |
-    v
-Name and module resolution
-    |
-    v
-Semantic analysis
-    |
-    v
-Validated semantic program
-
-The compiler must preserve source spans, source identity, diagnostics, and provenance through the pipeline.
-
-3.2 Grammar must not determine hardware
-
-The grammar describes computational intent.
-
-It must not encode accidental properties of the host machine.
-
-The compiler must distinguish:
-
-- A semantic requirement.
-- A target capability.
-- An available resource.
-- A resource budget.
-- A target constraint.
-- An optimization preference.
-- A non-binding implementation hint.
-
-A grammar production must not silently allocate hardware or select a physical device.
-
-3.3 Grammar conformance
-
-Every supported source construct must have a traceable path:
-
-Grammar production
-       |
-       v
-Lexer/parser representation
-       |
-       v
-Canonical AST node
-       |
-       v
-Semantic validation
-       |
-       v
-Canonical semantic fact
-       |
-       v
-Domain IR representation
-       |
-       v
-Compiler transformation
-       |
-       v
-Backend or explicit unsupported result
-
-A grammar feature is not considered implemented merely because it can be parsed.
-
----
-
-4. Compiler directory architecture
-
-The existing compiler subdirectories must be retained and integrated rather than replaced with a competing architecture.
-
-The canonical architectural structure is:
-
-src/compiler/
-│
-├── mod.rs
-│
-├── api/
-│   ├── mod.rs
-│   ├── compiler.rs
-│   ├── request.rs
-│   ├── response.rs
-│   └── compatibility.rs
-│
-├── configuration/
-│   ├── mod.rs
-│   ├── config.rs
-│   ├── budget.rs
-│   ├── policy.rs
-│   ├── profile.rs
-│   ├── target.rs
-│   └── validation.rs
-│
-├── context/
-│   ├── mod.rs
-│   ├── compilation_context.rs
-│   ├── compilation_state.rs
-│   ├── dependency_context.rs
-│   └── provenance_context.rs
-│
-├── pipeline/
-│   ├── mod.rs
-│   ├── stage.rs
-│   ├── stages.rs
-│   ├── ordering.rs
-│   ├── execution.rs
-│   ├── failure.rs
-│   ├── recovery.rs
-│   └── orchestration.rs
-│
-├── analysis/
-│   ├── mod.rs
-│   ├── program.rs
-│   ├── dependency.rs
-│   ├── effects.rs
-│   ├── ownership.rs
-│   ├── capabilities.rs
-│   ├── requirements.rs
-│   ├── feasibility.rs
-│   ├── cost.rs
-│   └── provenance.rs
-│
-├── ir/
-│   ├── mod.rs
-│   ├── input.rs
-│   ├── adapters.rs
-│   ├── verification.rs
-│   ├── translation.rs
-│   ├── lowering.rs
-│   └── compatibility.rs
-│
-├── passes/
-│   ├── mod.rs
-│   ├── registry.rs
-│   ├── manager.rs
-│   ├── pipeline.rs
-│   ├── ordering.rs
-│   ├── preservation.rs
-│   ├── legality.rs
-│   └── analysis_manager.rs
-│
-├── optimization/
-│   ├── mod.rs
-│   ├── planning.rs
-│   ├── cost_model.rs
-│   ├── policies.rs
-│   ├── decisions.rs
-│   ├── profitability.rs
-│   └── validation.rs
-│
-├── planning/
-│   ├── mod.rs
-│   ├── target_discovery.rs
-│   ├── capability_matching.rs
-│   ├── resource_planning.rs
-│   ├── partitioning.rs
-│   ├── scheduling.rs
-│   ├── routing.rs
-│   ├── data_movement.rs
-│   └── feasibility.rs
-│
-├── lowering/
-│   ├── mod.rs
-│   ├── legalization.rs
-│   ├── conversion.rs
-│   ├── decomposition.rs
-│   ├── outlining.rs
-│   └── target_lowering.rs
-│
-├── backends/
-│   ├── mod.rs
-│   ├── registry.rs
-│   ├── discovery.rs
-│   ├── selection.rs
-│   ├── capabilities.rs
-│   ├── compatibility.rs
-│   └── invocation.rs
-│
-├── artifacts/
-│   ├── mod.rs
-│   ├── artifact.rs
-│   ├── manifest.rs
-│   ├── metadata.rs
-│   ├── portability.rs
-│   ├── validation.rs
-│   └── serialization.rs
-│
-├── linking/
-│   ├── mod.rs
-│   ├── symbols.rs
-│   ├── relocation.rs
-│   ├── composition.rs
-│   └── validation.rs
-│
-├── incremental/
-│   ├── mod.rs
-│   ├── cache.rs
-│   ├── fingerprints.rs
-│   ├── invalidation.rs
-│   └── persistence.rs
-│
-├── parallel/
-│   ├── mod.rs
-│   ├── build.rs
-│   ├── scheduler.rs
-│   ├── workers.rs
-│   ├── dependencies.rs
-│   └── determinism.rs
-│
-├── security/
-│   ├── mod.rs
-│   ├── policy.rs
-│   ├── verification.rs
-│   ├── supply_chain.rs
-│   └── audit.rs
-│
-├── profiling/
-│   ├── mod.rs
-│   ├── events.rs
-│   ├── measurements.rs
-│   └── aggregation.rs
-│
-├── testing/
-│   ├── mod.rs
-│   ├── fixtures.rs
-│   ├── conformance.rs
-│   ├── differential.rs
-│   ├── determinism.rs
-│   ├── scalability.rs
-│   └── regression.rs
-│
-└── documentation/
-    ├── ARCHITECTURE.md
-    ├── PIPELINE_CONTRACT.md
-    ├── INTEGRATION_CONTRACT.md
-    └── PORTABILITY_CONTRACT.md
-
-This is the intended integrated architecture.
-
-It is not a claim that every listed file already exists or that every implementation is complete.
-
-Existing files must be reused when they already own the required responsibility.
-
-No duplicate implementation may be introduced merely to match this directory layout.
-
----
-
-5. Compiler root: "src/compiler/mod.rs"
-
-The compiler root is the central integration point.
-
-It must be a composition facade, not a place where every compiler algorithm is implemented.
-
-The current repository snapshot returns empty content for this file. This is a critical integration issue.
-
-The root must declare and expose the actual implemented compiler modules.
-
-Its responsibilities are:
-
-1. Declare compiler subsystem modules.
-2. Expose the stable compiler API.
-3. Preserve compatibility exports.
-4. Define the canonical compilation entry points.
-5. Coordinate compilation sessions.
-6. Invoke the canonical pipeline.
-7. Coordinate error propagation.
-8. Return complete compilation outcomes.
-9. Enforce compiler-wide invariants.
-10. Expose version information.
-
-The root must not:
-
-- Implement semantic analysis.
-- Define another AST.
-- Define another universal IR.
-- Implement another optimizer.
-- Implement hardware discovery.
-- Allocate physical resources.
-- Implement target-specific code generation.
-- Execute generated programs.
-
-5.1 Root module integration
-
-The root must register the existing submodules:
-
-pub mod api;
-pub mod configuration;
-pub mod context;
-pub mod pipeline;
-pub mod analysis;
-pub mod ir;
-pub mod passes;
-pub mod optimization;
-pub mod planning;
-pub mod lowering;
-pub mod backends;
-pub mod artifacts;
-pub mod linking;
-pub mod incremental;
-pub mod parallel;
-pub mod security;
-pub mod profiling;
-pub mod testing;
-
-Additional legacy modules must only be declared when their files actually exist and their compatibility responsibilities have been established.
-
-All declarations must be checked against the real filesystem before integration.
-
-The root must expose the public interfaces deliberately. Avoid wildcard exports that create ambiguous ownership.
-
-5.2 Compiler entry points
-
-The existing compatibility API must be preserved until all consumers have been migrated.
-
-Relevant interfaces include:
-
-- "compile()".
-- "compile_source()".
-- "compile_with_config()".
-- "production_config()".
-
-Their signatures and semantics must be audited before changing them.
-
-The new API under "api/" must delegate to the canonical compiler driver.
-
-There must be exactly one authoritative compilation orchestration path.
-
----
-
-6. Configuration architecture
-
-Existing owner:
-
-"src/compiler/configuration/"
-
-This directory provides the foundational configuration contracts.
-
-6.1 "configuration/config.rs"
-
-Owns:
-
-- Construction of the existing "CompilerConfig".
-- Configuration validation.
-- Compatibility adapters.
-- Configuration validation modes.
-- Structured configuration errors.
-
-It must integrate with "src/compiler_types.rs" without defining competing configuration or target types.
-
-6.2 "configuration/budget.rs"
-
-Owns compiler operational budgets.
-
-Budgets may cover:
-
-- Source processing.
-- IR processing.
-- Memory accounting.
-- Worker usage.
-- Optimization work.
-- Constant evaluation.
-- Diagnostics.
-- Generated artifact size.
-- Compilation duration.
-- Extension-defined work dimensions.
-
-Budgets must be configurable and optional.
-
-An absent budget does not mean physically unlimited resources.
-
-Budget exhaustion must be explicit.
-
-A stage must never silently truncate a program and return successful compilation.
-
-6.3 "configuration/policy.rs"
-
-Owns compiler-side policy representation and evaluation contracts.
-
-It must distinguish:
-
-- Mandatory requirements.
-- Constraints.
-- Preferences.
-- Hints.
-- Optimization policies.
-- Fallback policies.
-- Security policies.
-
-Policy evaluation must be deterministic where required.
-
-6.4 "configuration/profile.rs"
-
-Owns named compilation profiles.
-
-Profiles may define:
-
-- Optimization policies.
-- Verification requirements.
-- Debugging configuration.
-- Artifact preferences.
-- Compilation behavior.
-- Operational budgets.
-
-Profiles must be extensible.
-
-A profile must not silently override mandatory semantic requirements.
-
-6.5 "configuration/target.rs"
-
-Owns structural target descriptors.
-
-A descriptor may include:
-
-- Target identity.
-- Architecture.
-- Vendor.
-- Operating system.
-- Execution environment.
-- ABI.
-- Data layout.
-- Target triple.
-- Artifact formats.
-- Extensible properties.
-
-It does not own physical hardware discovery or allocation.
-
-An absent target property means unknown or unspecified, not unlimited.
-
-6.6 "configuration/validation.rs"
-
-Performs aggregate configuration validation.
-
-It must validate compatibility between configuration, policies, profiles, budgets, and target descriptions.
-
-It must not independently implement hardware feasibility.
-
----
-
-7. API architecture
-
-Existing owner:
-
-"src/compiler/api/"
-
-7.1 "api/request.rs"
-
-Owns the compilation request contract.
-
-It must support:
-
-- In-memory source.
-- Filesystem source.
-- Explicit configuration.
-- Source identity.
-- Optional compilation metadata.
-- Cancellation and budget integration through established session/context contracts.
-
-7.2 "api/response.rs"
-
-Owns the public compilation response.
-
-It must distinguish:
-
-- Successful compilation.
-- Portable artifact production.
-- Target-specific artifact production.
-- Partial diagnostic results.
-- Unsupported target realization.
-- Failed compilation.
-
-It must not claim successful execution merely because an artifact was generated.
-
-7.3 "api/compiler.rs"
-
-Owns the compiler service interface.
-
-It must delegate to a canonical compilation driver.
-
-The existing compatibility adapter must preserve "compile_source()" and other established entry points.
-
-7.4 "api/compatibility.rs"
-
-Owns compatibility adapters between existing callers and the new compiler service.
-
-It must not introduce a second compiler pipeline.
-
----
-
-8. Compilation context
-
-Existing owner:
-
-"src/compiler/context/"
-
-This directory must establish all shared information required by compilation stages.
-
-8.1 "compilation_context.rs"
-
-Must provide:
-
-- Compilation identity.
-- Source identity.
-- Configuration snapshot.
-- Pipeline identity.
-- Diagnostic access.
-- Budget access.
-- Cancellation access.
-- Provenance access.
-- Immutable shared compilation information.
-
-8.2 "compilation_state.rs"
-
-Must define compilation lifecycle states and legal transitions.
-
-Possible states include:
-
-- Created.
-- Configured.
-- FrontendValidated.
-- SemanticallyValidated.
-- IRVerified.
-- Optimized.
-- Planned.
-- Lowered.
-- BackendRealized.
-- ArtifactValidated.
-- Completed.
-- Failed.
-- Cancelled.
-
-These are lifecycle classifications, not a closed list of computational domains.
-
-Incomplete compilation must never be represented as completed compilation.
-
-8.3 "dependency_context.rs"
-
-Must provide immutable dependency information to stages.
-
-It integrates with:
-
-- Incremental compilation.
-- Module dependency resolution.
-- IR dependencies.
-- Backend dependencies.
-- Artifact dependencies.
-
-It must not duplicate the incremental fingerprinting implementation.
-
-8.4 "provenance_context.rs"
-
-Must maintain compilation provenance.
-
-It should identify:
-
-- Original source.
-- Language version.
-- Semantic version.
-- IR version.
-- Transformations.
-- Optimization decisions.
-- Backend identity.
-- Artifact lineage.
-- Verification evidence.
-
-Provenance is not a substitute for artifact hashing or signature verification.
-
----
-
-9. Compilation pipeline
-
-Existing owner:
-
-"src/compiler/pipeline/"
-
-The pipeline coordinates independently implemented compilation stages.
-
-9.1 "stage.rs"
-
-Defines the common stage contract.
-
-Each stage must specify:
-
-- Stable stage identity.
-- Inputs.
-- Outputs.
-- Preconditions.
-- Postconditions.
-- Dependencies.
-- Required analyses.
-- Resource requirements.
-- Budget consumption.
-- Failure categories.
-- Cancellation behavior.
-- Determinism properties.
-
-9.2 "stages.rs"
-
-Defines standard compiler stage identities and extension points.
-
-It must support domain-specific stages without requiring modifications to a universal enum every time a new computational domain is added.
-
-9.3 "ordering.rs"
-
-Validates stage dependencies and establishes legal execution ordering.
-
-It must detect dependency cycles.
-
-It must not reorder transformations when ordering changes program meaning.
-
-9.4 "execution.rs"
-
-Executes pipeline stages.
-
-It must provide:
-
-- Structured results.
-- Error propagation.
-- Cancellation.
-- Budget enforcement.
-- Stage records.
-- Diagnostic preservation.
-- Provenance updates.
-
-9.5 "failure.rs"
-
-Defines structured pipeline failures.
-
-It must distinguish:
-
-- Source errors.
-- Semantic errors.
-- Invalid IR.
-- Unsupported operations.
-- Infeasible requirements.
-- Resource exhaustion.
-- Backend errors.
-- Artifact errors.
-- Infrastructure failures.
-- Cancellation.
-
-9.6 "recovery.rs"
-
-Defines permitted retry and fallback evaluation.
-
-Recovery must never silently change semantics.
-
-A fallback is valid only if the program's declared requirements and semantic contracts remain satisfied.
-
-9.7 "orchestration.rs"
-
-Owns the complete pipeline lifecycle.
-
-It must coordinate:
-
-1. Frontend integration.
-2. Semantic validation.
-3. Ownership validation.
-4. IR construction and verification.
-5. Analysis.
-6. Optimization.
-7. Capability and feasibility planning.
-8. Lowering.
-9. Backend realization.
-10. Artifact validation.
-11. Linking and packaging where requested.
-
-Stages must be conditional.
-
-A computation must not pass through irrelevant domain stages.
-
----
-
-10. Analysis architecture
-
-Existing owner:
-
-"src/compiler/analysis/"
-
-The compiler analysis subsystem consumes authoritative semantic and IR information.
-
-It must not become a second semantic analyzer.
-
-10.1 "program.rs"
-
-Provides program-level compilation analysis.
-
-10.2 "dependency.rs"
-
-Analyzes computational dependencies.
-
-It must support:
-
-- Data dependencies.
-- Control dependencies.
-- Effect dependencies.
-- Synchronization dependencies.
-- Cross-domain dependencies.
-- Communication dependencies.
-
-10.3 "effects.rs"
-
-Consumes semantic effect information and provides it to transformation and optimization stages.
-
-It must not redefine the semantic effect system.
-
-10.4 "ownership.rs"
-
-Coordinates ownership and aliasing information with semantic analysis.
-
-A compiler ownership check must never return success simply because the integration is not implemented.
-
-The native semantic ownership authority must be used where available.
-
-An incomplete ownership analysis must be reported as incomplete or unsupported.
-
-10.5 "capabilities.rs"
-
-Consumes canonical capability descriptions.
-
-It must not create a second hardware capability registry.
-
-10.6 "requirements.rs"
-
-Consumes semantic requirements and provides them to planning.
-
-It must preserve the difference between requirements, constraints, preferences, and hints.
-
-10.7 "feasibility.rs"
-
-Coordinates feasibility analysis.
-
-It must distinguish:
-
-- Semantic validity.
-- Capability compatibility.
-- Resource feasibility.
-- Backend availability.
-- Lowering feasibility.
-- Execution feasibility.
-
-10.8 "cost.rs"
-
-Coordinates cost estimates.
-
-Cost estimates may include:
-
-- Execution time.
-- Energy.
-- Communication.
-- Memory movement.
-- Compilation time.
-- Resource utilization.
-- Reliability.
-
-Unknown cost must not be represented as zero.
-
-10.9 "provenance.rs"
-
-Tracks analysis evidence and decisions.
-
----
-
-11. IR integration
-
-Existing owner:
+The compiler integrates ZUIR through:
 
 "src/compiler/ir/"
 
-The compiler IR subsystem is an integration boundary, not another IR authority.
+It MUST NOT introduce another universal IR.
 
-11.1 "ir/input.rs"
+2.3 Domain IR authorities
 
-Accepts validated canonical representations.
+The canonical ownership boundaries are:
 
-It must identify the representation type and version.
+Domain| Authority
+Universal computation| "src/zuir/"
+Classical computation| "src/classical/"
+Classical ZCIR integration| "src/classical/" and its existing ZUIR integration
+Quantum computation| "src/quantum/ir/"
+Hardware description| "src/hdl/hdlir/"
+AI computation| "src/ai/"
+Tensor storage| Existing canonical tensor subsystem
+Hybrid computation| "src/hybrid/"
+Distributed computation| "src/distributed/"
+Networking| Existing networking subsystem
+Cryptographic computation| Existing cryptographic subsystem
 
-11.2 "ir/adapters.rs"
+The compiler may coordinate adapters between these representations.
 
-Owns explicit adapters between supported IR representations.
+It must not recreate their identities, types, operation definitions or verification authorities.
 
-Required integrations include:
+A conversion must be explicitly implemented and verified by the appropriate domain owner.
 
-- ZUIR.
-- Classical IR/ZCIR.
-- Quantum IR.
-- HDLIR.
-- Tensor and AI representations.
+Similar-looking structures do not establish semantic compatibility.
 
-Adapters must preserve semantic properties.
+2.4 Backend authority
 
-A conversion that cannot preserve a required property must fail explicitly.
+"src/backend/" owns the canonical backend interfaces, registration and implementation.
 
-11.3 "ir/verification.rs"
+"src/compiler/backends/" provides compiler-facing integration.
 
-Coordinates authoritative IR verification.
+The compiler MUST NOT create a competing authoritative backend registry.
 
-Verification must happen:
+The compiler-facing registry must continue delegating to the canonical backend registry.
 
-- Before transformations.
-- After transformations where required.
-- Before lowering.
-- Before backend emission.
-- After artifact generation where applicable.
+2.5 Runtime authority
 
-The compiler must not accept invalid IR merely because a backend can process it.
+"src/runtime/" owns actual execution and physical resource management.
 
-11.4 "ir/translation.rs"
+The compiler may produce:
 
-Coordinates explicit representation translations.
-
-Each translation must identify:
-
-- Source representation and version.
-- Destination representation and version.
-- Mapping rules.
-- Preserved properties.
-- Unsupported constructs.
-- Verification evidence.
-- Provenance.
-
-11.5 "ir/lowering.rs"
-
-Integrates with established ZUIR lowering.
-
-The canonical lowering implementation must remain in its designated owner.
-
-11.6 "ir/compatibility.rs"
-
-Maintains legacy IR compatibility during migration.
-
-It must not make "crate::ir_gen::IrModule" a permanent competing universal representation.
-
----
-
-12. Compiler pass management
-
-Existing owner:
-
-"src/compiler/passes/"
-
-The pass manager must provide extensible, verifiable transformation execution.
-
-12.1 "passes/registry.rs"
-
-Registers available passes.
-
-Each pass must have a stable identifier, version, input/output contracts, and declared requirements.
-
-12.2 "passes/manager.rs"
-
-Coordinates pass execution.
-
-12.3 "passes/pipeline.rs"
-
-Defines configurable transformation sequences.
-
-12.4 "passes/ordering.rs"
-
-Validates transformation dependencies and ordering constraints.
-
-12.5 "passes/preservation.rs"
-
-Tracks semantic properties and analyses preserved by transformations.
-
-12.6 "passes/legality.rs"
-
-Determines whether a transformation is permitted.
-
-12.7 "passes/analysis_manager.rs"
-
-Caches analysis results and invalidates them when required.
-
-12.8 Transformation contract
-
-Every transformation must declare:
-
-1. Input IR.
-2. Output IR.
-3. Preconditions.
-4. Postconditions.
-5. Semantic-preservation obligations.
-6. Required analyses.
-7. Invalidated analyses.
-8. Effects.
-9. Resource requirements.
-10. Determinism guarantees.
-11. Failure behavior.
-12. Verification strategy.
-
-No transformation may silently discard a semantic requirement.
-
----
-
-13. Optimization architecture
-
-Existing owner:
-
-"src/compiler/optimization/"
-
-Integration:
-
-"src/optimizer/"
-
-The compiler optimization directory coordinates optimization decisions. It must not duplicate the existing optimizer.
-
-13.1 "planning.rs"
-
-Builds legal optimization plans.
-
-13.2 "cost_model.rs"
-
-Provides extensible cost-model interfaces.
-
-13.3 "policies.rs"
-
-Defines configurable optimization policies.
-
-13.4 "decisions.rs"
-
-Records optimization decisions and their justification.
-
-13.5 "profitability.rs"
-
-Evaluates whether an optimization is beneficial under the selected objective.
-
-13.6 "validation.rs"
-
-Validates semantic preservation and transformation correctness.
-
-13.7 Optimization domains
-
-The architecture must support optimization across:
-
-- Classical IR.
-- Quantum IR.
-- HDL IR.
-- Tensor and AI computation.
-- Hybrid computation.
-- Distributed computation.
-- Networking.
-- Cryptographic computation.
-- Future domains.
-
-Optimization algorithms remain owned by their appropriate subsystems.
-
-Cross-domain optimization must use explicit contracts and verified transformations.
-
----
-
-14. Heterogeneous planning
-
-Existing owner:
-
-"src/compiler/planning/"
-
-This subsystem determines how validated computation may be realized.
-
-It does not allocate physical hardware.
-
-14.1 "target_discovery.rs"
-
-Discovers registered target descriptions and available providers.
-
-Actual hardware discovery may be delegated to backend, runtime, or hardware providers.
-
-14.2 "capability_matching.rs"
-
-Matches program operations and requirements against target capabilities.
-
-Matching must consider:
-
-- Required operations.
-- Supported types.
-- Numerical semantics.
-- Memory models.
-- Effects.
-- Synchronization.
-- Communication.
-- Precision.
-- Timing.
-- Domain compatibility.
-- Required interfaces.
-
-14.3 "resource_planning.rs"
-
-Produces abstract resource requirements and plans.
-
-It must not reserve or allocate physical devices.
-
-14.4 "partitioning.rs"
-
-Partitions workloads across compatible execution providers.
-
-It must support:
-
-- Classical and quantum partitioning.
-- AI and tensor partitioning.
-- HDL and hardware boundaries.
-- Distributed partitions.
-- Cross-domain dependencies.
-- Data locality.
-- Communication cost.
-- Synchronization.
-- Explicit infeasibility.
-
-Partitioning must preserve observable program behavior.
-
-14.5 "scheduling.rs"
-
-Produces abstract dependency-aware execution schedules.
-
-Physical scheduling remains with the appropriate runtime and hardware authorities.
-
-14.6 "routing.rs"
-
-Coordinates abstract routing requirements.
-
-Quantum physical routing, networking routes, and hardware placement must be delegated to their authoritative systems.
-
-The compiler must not duplicate quantum topology, QEC, or runtime routing algorithms.
-
-14.7 "data_movement.rs"
-
-Plans data movement between computational domains and execution environments.
-
-It must account for:
-
-- Data representation.
-- Conversion.
-- Copying.
-- Transfer cost.
-- Memory locality.
-- Synchronization.
-- Ownership.
-- Data lifetime.
-
-14.8 "feasibility.rs"
-
-Produces structured feasibility outcomes.
-
-A result must distinguish:
-
-- Feasible.
-- Conditionally feasible.
-- Infeasible.
-- Unknown.
-- Unsupported.
-- Incomplete.
-
-Unknown is not equivalent to feasible.
-
----
-
-15. Lowering architecture
-
-Existing owner:
-
-"src/compiler/lowering/"
-
-Lowering converts validated representations into forms accepted by subsequent stages.
-
-15.1 "legalization.rs"
-
-Validates and resolves representation-level legality requirements.
-
-15.2 "conversion.rs"
-
-Coordinates representation conversion.
-
-It must use canonical IR adapters.
-
-15.3 "decomposition.rs"
-
-Coordinates decomposition of operations that cannot be represented directly by a destination.
-
-Decomposition must preserve the required semantics.
-
-15.4 "outlining.rs"
-
-Coordinates extraction of independent kernels, functions, or computational regions.
-
-15.5 "target_lowering.rs"
-
-Coordinates target-specific lowering.
-
-It must delegate to registered backend providers.
-
-Target-specific lowering must not contaminate portable semantic representations.
-
----
-
-16. Backend integration
-
-Existing owner:
-
-"src/compiler/backends/"
-
-Authoritative implementation:
-
-"src/backend/"
-
-The compiler backend directory is an integration facade.
-
-It must not become a competing backend implementation.
-
-16.1 "backends/registry.rs"
-
-Coordinates registered backend providers.
-
-A provider must declare:
-
-- Provider identity.
-- Version.
-- Supported IR representations.
-- Target compatibility.
-- Supported capabilities.
-- Artifact formats.
-- Toolchain dependencies.
-- Required configuration.
-- Security requirements.
-- Failure behavior.
-
-16.2 "backends/discovery.rs"
-
-Discovers providers.
-
-Discovery must not assume that every backend is installed.
-
-16.3 "backends/selection.rs"
-
-Selects compatible providers using verified capability and feasibility information.
-
-It must not silently substitute a different target.
-
-16.4 "backends/capabilities.rs"
-
-Adapts canonical backend capability contracts.
-
-16.5 "backends/compatibility.rs"
-
-Validates:
-
-- IR compatibility.
-- Target compatibility.
-- ABI compatibility.
-- Artifact format compatibility.
-- Backend version compatibility.
-
-16.6 "backends/invocation.rs"
-
-Invokes the authoritative backend implementation.
-
-It must validate inputs and preserve structured failures.
-
-16.7 Backend extensibility
-
-The architecture must allow additional providers without requiring central compiler rewrites.
-
-Examples include:
-
-- LLVM.
-- WebAssembly.
-- Native CPU backends.
-- GPU backends.
-- FPGA backends.
-- ASIC synthesis backends.
-- Quantum execution backends.
-- Quantum simulators.
-- Neuromorphic backends.
-- Future accelerators.
-
-These are extension possibilities, not claims of existing production support.
-
----
-
-17. Artifact architecture
-
-Existing owner:
-
-"src/compiler/artifacts/"
-
-This subsystem owns compilation artifact contracts.
-
-It must distinguish portable artifacts from target-specific realizations.
-
-17.1 "artifact.rs"
-
-Defines common artifact identity and representation.
-
-17.2 "manifest.rs"
-
-Defines artifact contents, dependencies, requirements, and compatibility metadata.
-
-17.3 "metadata.rs"
-
-Defines:
-
-- Compiler identity.
-- Language identity.
-- Semantic version.
-- IR identity.
-- Backend identity.
-- Provenance.
-- Build information.
-
-17.4 "portability.rs"
-
-Defines artifact portability classifications.
-
-Examples:
-
-- Target-independent semantic artifact.
-- Portable IR artifact.
-- Domain-specific portable artifact.
-- Target-specific artifact.
-- Deployment bundle.
-
-Portability must not be inferred merely from a file extension.
-
-17.5 "validation.rs"
-
-Validates artifact integrity, required metadata, representation compatibility, and verification status.
-
-17.6 "serialization.rs"
-
-Defines stable serialization contracts.
-
-Serialization must be versioned.
-
-Deserialization must validate the format before interpreting the content.
-
-17.7 Portable artifact
-
-A portable artifact should preserve:
-
-- Program identity.
-- Semantic contracts.
-- Canonical IR.
-- Domain modules.
-- Required capabilities.
-- Requirements and constraints.
-- Effects.
-- Provenance.
-- Language version.
-- IR versions.
-- Dependency information.
-- Compatibility information.
-
-It must not depend unnecessarily on physical device identifiers.
-
-17.8 Realized artifact
-
-A target-specific artifact may include:
-
-- Native executable.
-- Native library.
-- GPU binary.
-- FPGA bitstream.
-- ASIC implementation package.
-- Quantum execution package.
-- WebAssembly module.
-- Hybrid deployment bundle.
-
-The artifact must be validated before being represented as successfully generated.
-
-A portable IR package must not be falsely described as a native executable.
-
----
-
-18. Linking
-
-Existing owner:
-
-"src/compiler/linking/"
-
-This is the canonical compiler linking subsystem.
-
-18.1 "symbols.rs"
-
-Owns symbol resolution and symbol compatibility.
-
-18.2 "relocation.rs"
-
-Owns relocation contracts and validated relocation application.
-
-18.3 "composition.rs"
-
-Owns composition of compatible compilation units and artifacts.
-
-18.4 "validation.rs"
-
-Owns link-time validation.
-
-18.5 Linking requirements
-
-Linking must support:
-
-- Multiple modules.
-- Cross-domain references.
-- External symbols.
-- Versioned dependencies.
-- Portable artifacts.
-- Target-specific artifacts.
-- Hybrid bundles.
-- Explicit unresolved dependencies.
-
-It must integrate with "src/backend/" and "src/toolchain/".
-
-It must not create a second linker elsewhere.
-
----
-
-19. Incremental compilation
-
-Existing owner:
-
-"src/compiler/incremental/"
-
-The incremental compiler must support sound dependency tracking and invalidation.
-
-Its contracts must cover:
-
-- Compilation fingerprints.
-- Semantic dependencies.
-- IR dependencies.
-- Transformation dependencies.
-- Backend dependencies.
-- Artifact dependencies.
-- Cache compatibility.
-- Persistent cache metadata.
-- Cache invalidation.
-
-Cache keys must incorporate every relevant input that can change the compilation result.
-
-These include configuration, language version, semantic version, IR version, pass configuration, backend identity, and relevant dependencies.
-
-A cache hit must never bypass required verification or reuse an incompatible artifact.
-
-Incremental compilation must integrate with "parallel/" without duplicating job execution.
-
----
-
-20. Parallel compilation
-
-Existing owner:
-
-"src/compiler/parallel/"
-
-The parallel subsystem must support:
-
-- Dependency-aware compilation.
-- Configurable concurrency.
-- Independent compilation units.
-- Cancellation.
-- Failure propagation.
-- Deterministic result collection.
-- Resource-budget accounting.
-- Incremental build integration.
-
-Parallel execution must not introduce arbitrary worker-count ceilings.
-
-Available worker capacity must be discovered or explicitly configured.
-
-Parallel and sequential compilation must produce equivalent results wherever deterministic compilation is required.
-
-The compiler must not assume that a larger worker count is always beneficial.
-
----
-
-21. Security architecture
-
-Existing owner:
-
-"src/compiler/security/"
-
-The existing security subsystem must integrate with:
-
-- "src/compiler/ir/verification.rs".
-- "src/compiler/backends/".
-- "src/compiler/artifacts/".
-- "src/compiler/analysis/".
-- "src/backend/".
-- Existing "src/compiler/safety_guard.rs", where retained.
-
-Security verification must examine more than function names.
-
-It must address applicable:
-
-- IR operations.
-- Effects.
-- Data flows.
-- Memory accesses.
-- External calls.
-- Toolchain invocations.
-- Backend output.
-- Artifact integrity.
-- Dependency provenance.
-- Signing and attestation.
-- Authorization policies.
-- Untrusted extensions.
-
-Security verification must produce structured evidence.
-
-An unavailable security check must not be represented as a successful check.
-
-The compiler must not execute arbitrary generated backend source merely because it was successfully generated.
-
----
-
-22. Profiling and observability
-
-Existing owner:
-
-"src/compiler/profiling/"
-
-The profiling subsystem must record:
-
-- Compilation-stage durations.
-- Stage outcomes.
-- Resource-accounting measurements.
-- Optimization decisions.
-- Backend invocation measurements.
-- Artifact-generation measurements.
-- Failure and cancellation information.
-
-Profiling must not alter program semantics.
-
-Measurements must include their source and reliability information.
-
-An unavailable measurement must not be interpreted as zero.
-
-Existing hybrid profiling functionality must be integrated without creating competing telemetry systems.
-
----
-
-23. Hybrid computing
-
-Hybrid computing is a central requirement of the Zamani compiler.
-
-The compiler must support composition of multiple computational domains in one program.
-
-Examples:
-
-Classical → Quantum
-Quantum → Classical
-Classical → HDL
-AI → Quantum
-Quantum → AI
-AI → GPU
-Classical → FPGA
-Quantum → Distributed
-Classical → Quantum → Distributed
-Classical → AI → Quantum → Hardware
-
-The compiler must preserve the meaning of transitions between domains.
-
-23.1 Hybrid integration
-
-The compiler must integrate:
-
-- "src/hybrid/".
-- "src/frontend/semantic/domains/".
-- "src/quantum/ir/".
-- Classical IR.
-- HDLIR.
-- AI representations.
-- Distributed representations.
-- "src/runtime/hybrid_kernel.rs".
-- Existing hybrid compiler compatibility interfaces where they remain present.
-
-23.2 Domain boundaries
-
-Every cross-domain transition must specify:
-
-- Source domain.
-- Destination domain.
-- Input representation.
-- Output representation.
-- Type compatibility.
-- Data conversion.
-- Ownership and lifetime.
-- Effects.
-- Synchronization.
 - Resource requirements.
-- Error behavior.
-- Provenance.
+- Feasibility reports.
+- Abstract partitioning plans.
+- Data movement plans.
+- Scheduling constraints.
+- Routing constraints.
+- Target realization descriptions.
+- Deployment artifacts.
 
-23.3 Hybrid synchronization
+The compiler does not own:
 
-The compiler must preserve:
-
-- Dependency ordering.
-- Measurement dependencies.
-- Classical control dependencies.
-- Completion conditions.
-- Cancellation semantics.
-- Failure propagation.
-- Data availability.
-- Synchronization requirements.
-
-Actual synchronization execution remains a runtime responsibility.
-
-23.4 Quantum integration
-
-The compiler must consume "quantum::ir" as the canonical quantum IR.
-
-It must integrate with quantum optimization, scheduling, routing, hardware, QEC, and ZQN authorities.
-
-It must not introduce a second quantum semantic representation.
-
-The compiler may establish abstract requirements and legal transformation plans.
-
-Physical qubit allocation, topology mapping, calibration, pulse generation, and QEC execution belong to their designated subsystems.
-
-23.5 HDL integration
-
-The compiler must integrate with the canonical HDLIR and hardware subsystem.
-
-It must preserve distinctions between:
-
-- Software execution.
-- Hardware description.
-- Hardware synthesis.
-- Hardware/software co-design.
-- Physical implementation.
-
-An HDL artifact must not be presented as a synthesized physical device unless the actual synthesis and validation stages have completed.
-
----
-
-24. AI and tensor integration
-
-The compiler must support AI and tensor computation as first-class computational domains.
-
-Integration must use:
-
-- "src/ai/".
-- Existing tensor representations.
-- ZUIR AI dialects.
-- Existing classical tensor facilities.
-- Domain semantic validators.
-- Appropriate backend providers.
-
-Supported computational categories should include:
-
-- Machine learning.
-- Deep learning.
-- Neural networks.
-- Transformers.
-- Generative computation.
-- Symbolic reasoning.
-- Probabilistic computation.
-- Bayesian inference.
-- Causal computation.
-- Reinforcement learning.
-- Federated learning.
-- Distributed training.
-- Agents and multi-agent systems.
-- Differentiation and autodiff.
-- Neuro-symbolic computation.
-- Quantum machine learning.
-- Neuromorphic computation.
-
-The compiler owns coordination, not AI algorithm implementation.
-
-Tensor shapes must support symbolic and dynamic dimensions where defined by the authoritative tensor model.
-
-No arbitrary universal tensor-rank or accelerator-count ceiling may be introduced.
-
----
-
-25. Distributed and networking integration
-
-The compiler must integrate distributed computation through:
-
-- "src/distributed/".
-- Existing networking interfaces.
-- Canonical semantic requirements.
-- ZUIR distributed dialects.
-- Runtime deployment and execution.
-
-Compiler responsibilities include:
-
-- Distributed dependency analysis.
-- Communication requirements.
-- Partition compatibility.
-- Data movement planning.
-- Failure-contract validation.
-- Artifact composition.
-- Deployment metadata.
-
-Runtime responsibilities include:
-
-- Actual node allocation.
-- Communication execution.
-- Distributed scheduling.
-- Resource leases.
-- Failure detection.
-- Recovery.
+- Actual device allocation.
+- Physical device reservations.
+- Runtime resource leases.
+- Physical scheduling.
+- Device communication.
+- Execution.
 - Resource release.
+- Runtime recovery.
 
-The compiler must not duplicate the distributed runtime.
+A compilation plan does not guarantee that a physical resource will remain available.
 
----
-
-26. Scalability and hard-coding policy
-
-This is a mandatory compiler-wide invariant.
-
-No arbitrary hardware-capacity ceilings may be embedded in the compiler.
-
-The prohibition includes fixed universal maximums for:
-
-- CPUs.
-- Cores.
-- Threads.
-- Workers.
-- GPUs.
-- FPGAs.
-- ASICs.
-- QPUs.
-- Qubits.
-- Logical qubits.
-- Distributed nodes.
-- Devices.
-- Memory.
-- Storage.
-- Registers.
-- Register width.
-- Tensor dimensions.
-- Tensor rank.
-- Hardware topology.
-- Network size.
-- IR operation count.
-- Compilation-unit count.
-- Domain count.
-
-26.1 Acceptable limits
-
-A finite operational limit is acceptable when it is:
-
-1. Explicitly configured.
-2. Justified by an operational or security requirement.
-3. Associated with a defined unit.
-4. Enforced consistently.
-5. Reported through structured errors.
-6. Distinct from source-language semantics.
-7. Not presented as a universal hardware maximum.
-
-For example, a user may configure a maximum compilation duration.
-
-That must not become a language-wide maximum execution duration.
-
-26.2 Integer representation
-
-Use appropriate checked numeric representations.
-
-Do not assume that "usize" represents every possible semantic resource quantity.
-
-Where wider accounting is required, use an appropriate fixed-width or extensible representation and report overflow.
-
-A numeric representation limit is an implementation constraint, not a claim that the language itself has the same semantic limit.
-
-26.3 Scalability behavior
-
-When resources become unavailable:
-
-- Stop the affected operation safely.
-- Preserve completed work where valid.
-- Report the resource failure.
-- Do not claim complete compilation.
-- Do not silently discard required computation.
-- Offer a valid alternative only when the semantic contract permits it.
-
-26.4 Streaming
-
-Large workloads should use streaming interfaces where practical.
-
-Avoid unnecessary materialization of:
-
-- Entire source collections.
-- Complete IR graphs.
-- Full diagnostic histories.
-- All optimization candidates.
-- All compilation jobs.
-- Complete artifact contents.
-
-The implementation must use memory proportionally to the work actually required, subject to its algorithms and representation.
+The runtime must validate availability when execution is requested.
 
 ---
 
-27. Portability and POCO-REAF
+3. Grammar and frontend integration
 
-The compiler must preserve the following invariant:
+The compiler MUST integrate the actual grammar architecture.
 
-One source program → one semantic meaning → multiple valid realizations.
+It must not create another parser, lexer, AST or language specification.
 
-Portability must be based on semantic preservation, not identical machine instructions.
+3.1 Canonical grammar composition
 
-27.1 Program Once
+The current grammar architecture is:
 
-Developers express computation and its requirements without unnecessary target-specific assumptions.
+grammar/
+    DESIGN.md
+    OWNERSHIP.yaml
+    MANIFEST.yaml
+    CONFORMANCE.md
+    FREEZE.md
+    Zamani.g4
 
-27.2 Compile Once
+    antlr/
+        ZamaniLexer.g4
+        ZamaniParser.g4
 
-The compiler produces portable, verified representations and artifacts.
+    lexer/
+        tokens.g4
+        lexer.g4
+        lexical component grammars
 
-Target-specific compilation may occur later when a particular realization is required.
+    core/
+    types/
+    expressions/
+    declarations/
+    statements/
+    functions/
+    modules/
 
-This distinction is important: a portable compilation artifact is not necessarily a native executable.
+    classical/
+    quantum/
+    hdl/
+    hardware/
+    hybrid/
+    distributed/
+    ai/
+    data/
+    networking/
+    security/
+    resources/
+    concurrency/
+    execution/
+    interoperability/
+    compile/
+    policies/
+    validation/
 
-27.3 Run Everywhere
+    specification/
+    validation/
+    tests/
 
-A program can be realized on compatible targets without rewriting its source.
+This represents the existing modular grammar organization, not a proposal to recreate it.
 
-27.4 Run Anywhere
+3.2 Root grammar responsibilities
 
-The compiler and deployment architecture support different execution environments, provided their capabilities and policies satisfy the program contract.
+"grammar/Zamani.g4" owns the root grammar composition boundary.
 
-27.5 Forever
+It must not duplicate the grammar of individual domains.
 
-Compatibility must be governed through explicit versioning.
+"grammar/antlr/ZamaniLexer.g4" owns the public ANTLR lexer boundary.
 
-The compiler must preserve:
+"grammar/lexer/tokens.g4" coordinates the lexical token vocabulary.
 
-- Language identity.
-- Semantic identity.
-- IR compatibility.
-- Artifact compatibility.
-- Backend compatibility.
-- Dependency compatibility.
-- Provenance.
+"grammar/antlr/ZamaniParser.g4" owns the public parser composition boundary.
 
-Future compiler versions must not silently reinterpret existing portable artifacts.
+The domain grammar files own their respective syntactic productions.
 
-27.6 Explicit feasibility
+The compiler consumes the resulting frontend structures.
 
-POCO-REAF does not guarantee that every computation can run on every machine.
+3.3 Normative grammar specifications
 
-If a target cannot satisfy a required capability or resource requirement, the compiler must report that fact.
+The compiler must conform to:
 
-It must not silently remove the requirement or substitute different semantics.
+- "grammar/DESIGN.md"
+- "grammar/specification/grammar-authority.md"
+- "grammar/specification/semantic-model.md"
+- "grammar/validation/semantic-boundaries.md"
+- "grammar/specification/compilation-model.md"
+- "grammar/specification/portability.md"
+- "grammar/specification/extensibility.md"
+- "grammar/specification/scalability-model.md"
+- "grammar/specification/poco-reaf.md"
 
----
+The applicable domain specifications under "grammar/spec/" and "grammar/specification/" must also be consulted when implementing domain-specific compilation.
 
-28. Error and diagnostic architecture
+These specifications have distinct ownership responsibilities.
 
-All compiler stages must use structured diagnostics.
+The compiler MUST NOT reinterpret source syntax independently.
 
-Diagnostics must identify:
+3.4 Frontend integration
 
-- Stable error code.
-- Severity.
-- Compilation stage.
-- Source location.
-- Affected representation.
-- Explanation.
-- Related locations.
-- Suggested correction where available.
-- Provenance.
-- Recovery status.
+The compiler consumes the canonical frontend APIs:
 
-The architecture must distinguish:
+src/frontend/
+    ast/
+    lexer/
+    parser/
+    semantic/
+    diagnostics/
 
-- Invalid source.
-- Invalid AST.
-- Semantic failure.
-- Invalid IR.
-- Illegal transformation.
-- Unsupported operation.
-- Capability mismatch.
-- Resource infeasibility.
-- Lowering failure.
-- Backend failure.
-- Linking failure.
-- Artifact validation failure.
-- Security failure.
-- Infrastructure failure.
-- Cancellation.
+The intended flow is:
 
-Errors must preserve their original classification through API and compatibility adapters.
+Source
+  |
+  v
+Frontend lexer
+  |
+  v
+Frontend parser
+  |
+  v
+Canonical AST
+  |
+  v
+Structural validation
+  |
+  v
+Semantic analysis
+  |
+  v
+Validated semantic results
+  |
+  v
+Compiler
 
-An incomplete stage must never be converted into a successful compilation result.
+The compiler must preserve source identity, source spans and diagnostics.
 
----
+Incomplete semantic analysis must never be interpreted as successful semantic validation.
 
-29. Determinism and reproducibility
-
-The compiler must define determinism at each applicable stage.
-
-For identical:
-
-- Source.
-- Language version.
-- Semantic configuration.
-- Compiler version.
-- Pass configuration.
-- Backend version.
-- Relevant dependency snapshots.
-
-the compiler should produce reproducible outputs wherever the applicable compilation contract requires determinism.
-
-Deterministic behavior must not depend on:
-
-- Hash-map iteration order.
-- Worker completion order.
-- Randomized optimization decisions.
-- Unstable plugin registration order.
-- Unrecorded environmental inputs.
-
-Nondeterministic operations must be explicitly identified and governed.
-
----
-
-30. Compatibility and migration
-
-The compiler must support controlled migration from existing implementations.
-
-The current repository contains both older and newer architectural surfaces.
-
-In particular:
-
-- "src/compiler_types.rs" remains an existing configuration authority.
-- "src/ir_gen.rs" remains a legacy IR integration point.
-- "src/semantic.rs" remains a legacy semantic integration point.
-- "src/backend/" retains compatibility with legacy backend implementations.
-- The newer frontend semantic and ZUIR subsystems must be integrated through explicit adapters.
-
-Migration must follow this order:
-
-1. Identify existing consumers.
-2. Identify the authoritative replacement.
-3. Define compatibility adapters.
-4. Add behavior-preservation tests.
-5. Migrate callers.
-6. Verify that the old implementation no longer has independent production ownership.
-7. Remove obsolete compatibility paths only after migration evidence exists.
-
-Do not delete functioning code merely because a new architecture has been proposed.
-
-Do not preserve two competing production authorities indefinitely.
+A budget-exhausted analysis cannot certify a program as valid.
 
 ---
 
-31. Integration with the repository root
+4. Compiler ownership and boundaries
 
-The compiler must be integrated through "src/lib.rs".
+The compiler owns the coordination of compilation.
 
-The current repository root must be reconciled with the newer subsystem architecture.
+It does not own all the implementations that participate in compilation.
 
-The existing "src/lib.rs" exposes legacy modules including:
+Its responsibilities are:
 
-pub mod backend;
-pub mod compiler;
-pub mod compiler_types;
-pub mod ir_gen;
-pub mod ir_verify;
-pub mod optimizer;
-pub mod parser;
-pub mod runtime;
-pub mod semantic;
+1. Compilation requests.
+2. Compilation configuration association.
+3. Compilation contexts.
+4. Compilation lifecycle.
+5. Pipeline composition.
+6. Stage registration and orchestration.
+7. Compiler-specific analysis integration.
+8. Pass coordination.
+9. Optimization coordination.
+10. IR integration.
+11. Target compatibility coordination.
+12. Feasibility aggregation.
+13. Abstract resource planning.
+14. Lowering coordination.
+15. Backend invocation.
+16. Artifact validation coordination.
+17. Linking coordination.
+18. Compilation diagnostics.
+19. Compilation provenance.
+20. Reproducibility coordination.
+21. Incremental compilation.
+22. Security enforcement at compiler boundaries.
+23. Testing and conformance.
 
-The newer architecture also requires appropriate integration of:
+The compiler MUST NOT own:
 
-- "frontend".
-- "zuir".
-- "classical".
-- "hdl".
-- "hybrid".
-
-These declarations must be added only after the actual module roots and child dependencies are verified.
-
-The compiler must not reference modules that are inaccessible through the crate module tree.
-
-The integration must be tested using the actual Rust compiler.
-
-31.1 Backend migration
-
-"src/backend/mod.rs" already identifies a transitional compatibility boundary.
-
-The migration must reconcile:
-
-- "src/backend.rs".
-- "src/backend/mod.rs".
-- "src/backend/legacy.rs".
-- Existing target implementations.
-- Compiler backend adapters.
-
-The target-dispatch defect and misleading LLVM artifact behavior identified in the earlier COMPILER audit must be corrected in the owning backend implementation.
-
-The compiler must never report a successful executable artifact when the backend only produced descriptive text or an unvalidated intermediate representation.
-
----
-
-32. Testing architecture
-
-Existing owner:
-
-"src/compiler/testing/"
-
-The compiler must have a complete conformance and integration testing system.
-
-Required test categories:
-
-Test category| Purpose
-Unit| Verify individual contracts
-Integration| Verify subsystem composition
-Grammar conformance| Verify language implementation
-Semantic conformance| Verify program meaning
-IR verification| Reject invalid representations
-Transformation| Verify semantic preservation
-Differential| Compare equivalent realizations
-Portability| Test cross-target behavior
-Hybrid| Test cross-domain dependencies
-Incremental| Verify correct invalidation
-Parallel| Verify deterministic collection
-Security| Verify unsafe or unauthorized operations are rejected
-Artifact| Verify serialization and integrity
-Scalability| Test increasing workloads
-Resource exhaustion| Verify explicit failure
-Regression| Preserve previously verified behavior
-Compatibility| Verify old and new interfaces
-
-32.1 Required fixtures
-
-The compiler testing architecture must include representative fixtures:
-
-minimal.zm
-classical.zm
-quantum.zm
-hybrid.zm
-hdl.zm
-ai.zm
-distributed.zm
-networking.zm
-cryptographic.zm
-poco-reaf.zm
-
-Cross-domain fixtures must include:
-
-classical_quantum.zm
-classical_hdl.zm
-classical_ai.zm
-quantum_ai.zm
-quantum_distributed.zm
-ai_hardware.zm
-classical_quantum_hdl.zm
-multi_domain.zm
-
-32.2 Portability testing
-
-A successful compiler invocation alone does not establish portability.
-
-Tests must compare observable program behavior across compatible realizations.
-
-The testing system must distinguish:
-
-- Same semantics.
-- Target-specific numerical variation permitted by specification.
-- Nondeterministic behavior explicitly permitted by specification.
-- Unsupported capability.
-- Infeasible resource requirements.
-- Actual compilation defects.
-
-32.3 Scalability testing
-
-Tests must progressively increase workload sizes.
-
-They must test configurable budgets and actual exhaustion.
-
-A small fixed test maximum must not be presented as proof of universal scalability.
+- A second frontend.
+- A second AST.
+- A second semantic type system.
+- A second universal IR.
+- A second quantum IR.
+- A second HDLIR.
+- A second tensor storage system.
+- A second optimizer.
+- A second backend registry.
+- A second physical resource manager.
+- A second runtime scheduler.
+- Physical execution.
 
 ---
 
-33. Documentation architecture
+5. Current compiler directory
 
-The documentation directory owns compiler architectural documentation.
+The current compiler directory already contains the following architecture.
 
-33.1 "documentation/ARCHITECTURE.md"
+src/compiler/
+    mod.rs
 
-This document.
+    compiler_types.rs
 
-It owns:
+    audit_engine.rs
+    borrow_checker.rs
+    fuzzing_harness.rs
+    instruction_fusion.rs
+    macro_engine.rs
+    monomorphizer.rs
+    safety_guard.rs
+    sro.rs
+    ssbe.rs
 
-- Compiler architecture.
-- Architectural authorities.
-- Module responsibilities.
-- Pipeline boundaries.
-- Integration rules.
-- Scalability principles.
-- Portability principles.
-- Migration governance.
-- Production requirements.
+    api/
+    analysis/
+    artifacts/
+    backends/
+    configuration/
+    context/
+    diagnostics/
+    documentation/
+    incremental/
+    ir/
+    linking/
+    lowering/
+    optimization/
+    parallel/
+    passes/
+    pipeline/
+    planning/
+    profiling/
+    security/
+    testing/
 
-33.2 "documentation/PIPELINE_CONTRACT.md"
+The architecture must extend these existing modules.
 
-Must define the complete pipeline stage contract.
+It must not create duplicate generic subsystems simply to make the directory appear more complete.
 
-For every stage, document:
+No additional generic "core/", "engine/", "universal_ir/" or competing backend subsystem should be created.
 
-- Purpose.
-- Inputs.
-- Outputs.
-- Dependencies.
-- Preconditions.
-- Postconditions.
-- Error categories.
-- Resource budgets.
-- Cancellation.
-- Determinism.
-- Verification.
-- Completion criteria.
+New directories are justified only when an actual missing responsibility cannot be accommodated cleanly by the existing architecture.
 
-33.3 "documentation/INTEGRATION_CONTRACT.md"
+---
 
-Must define the integration contracts between compiler and:
+6. File-by-file architectural responsibilities
 
+The following table establishes the responsibility and integration contract of every existing compiler component.
+
+The descriptions define the required production responsibility. They do not certify the current implementation as complete.
+
+6.1 Composition root
+
+"src/compiler/mod.rs"
+
+Owns:
+
+- Compiler module composition.
+- Public compiler exports.
+- Architectural invariants.
+- Compiler API version association.
+- Compiler subsystem integration.
+
+Integrates:
+
+- All compiler child modules.
 - Frontend.
-- Semantic layer.
+- Semantic subsystem.
 - ZUIR.
-- Classical IR.
-- Quantum IR.
-- HDLIR.
-- AI.
-- Hybrid.
-- Distributed.
+- Domain IRs.
 - Backend.
 - Runtime.
 - Toolchain.
 
-33.4 "documentation/PORTABILITY_CONTRACT.md"
+Must not implement:
 
-Must define:
+- Parsing.
+- Semantic analysis.
+- IR construction algorithms.
+- Backend code generation.
+- Runtime execution.
 
-- Portable artifact semantics.
-- Target-independent representations.
-- Capability requirements.
-- Target realization.
-- Backend compatibility.
-- Artifact versioning.
-- Cross-target conformance.
-- POCO-REAF guarantees and limitations.
+The existing module already contains a substantial architectural contract.
 
-These documents must not create competing normative language or semantic specifications.
+Preserve its valid content.
 
----
+Any changes must reflect the actual public module tree and must compile.
 
-34. Every-file completion and freeze contract
+It must not claim that a declared pipeline stage has a completed implementation merely because its module exists.
 
-Every production compiler file must have a complete implementation contract before implementation begins.
+6.2 Shared compiler types
 
-The contract must identify:
+"src/compiler/compiler_types.rs"
 
-1. Purpose.
-2. Ownership.
-3. Non-responsibilities.
-4. Public types.
-5. Public functions.
-6. Public traits.
-7. Dependencies.
-8. Upstream interfaces.
-9. Downstream consumers.
-10. Integration paths.
-11. Invariants.
-12. Error behavior.
-13. Configuration.
-14. Resource-budget behavior.
-15. Scalability.
-16. Determinism.
-17. Security.
-18. Compatibility.
-19. Unit tests.
-20. Integration tests.
-21. Acceptance criteria.
-22. Freeze criteria.
+Owns transitional compiler-wide compatibility types.
 
-34.1 Freeze requirements
+Its existing responsibilities include legacy compiler targets, optimization-level compatibility and shared compiler configuration types.
 
-A file may be declared frozen only when:
+It must:
 
-- Its complete implementation exists.
-- Its dependencies are established.
-- Its public API is complete.
-- Its integration contracts are verified.
-- Its tests pass.
-- Its error behavior is complete.
-- Its scalability requirements are satisfied.
-- Its security boundaries are established.
-- No unresolved production placeholder remains.
-- Its completion criteria are objectively satisfied.
+- Preserve required public compatibility.
+- Identify legacy types explicitly.
+- Avoid becoming a second semantic type system.
+- Avoid becoming the canonical target-capability registry.
+- Avoid introducing universal hardware ceilings.
+- Avoid duplicate diagnostic ownership.
+- Provide documented conversion boundaries to newer canonical types.
 
-A frozen file may still change when a legitimate language or interface evolution requires it.
+Canonical integration:
 
-Such changes must be explicit, reviewed, versioned, and tested.
+- "configuration/target.rs"
+- "configuration/config.rs"
+- "frontend/semantic/"
+- "backend/target"
+- "backend/capabilities"
+- "backend/compatibility"
 
-Freezing is not permission to preserve an incorrect implementation.
+The legacy "CompilationTarget" must not become the authority for all future targets.
 
----
+New target identities must remain extensible.
 
-35. Implementation order
+6.3 API
 
-Implementation must follow dependency order.
+Directory: "src/compiler/api/"
 
-The following sequence is mandatory unless a verified dependency requires an adjustment.
+File| Responsibility and integration
+"mod.rs"| Public compiler API composition and exports.
+"compiler.rs"| Compiler service and driver contract. Must connect to the actual production driver.
+"request.rs"| Validated compilation requests, source identity and configuration association.
+"response.rs"| Structured compilation results, artifacts, diagnostics and provenance.
+"session.rs"| Compilation session lifecycle, cancellation and concurrent invocation.
+"compatibility.rs"| Public API version and compatibility guarantees.
 
-Phase 0 — Repository reconciliation
+The public service must not expose a fake success merely because an older compiler returned a string.
 
-Before implementation:
+The production driver must connect to the canonical frontend and actual compilation pipeline.
 
-1. Recursively inventory "src/compiler/".
-2. Identify every existing file and nested directory.
-3. Inspect every module declaration.
-4. Inspect direct callers and dependencies.
-5. Identify duplicate implementations.
-6. Verify the current compiler root.
-7. Reconcile "src/lib.rs".
-8. Reconcile the legacy backend.
-9. Read the grammar authority and specifications.
-10. Identify current compilation failures.
-11. Produce an authoritative dependency graph.
+6.4 Analysis
 
-Deliverable: verified repository inventory and defect register.
+Directory: "src/compiler/analysis/"
 
-Phase 1 — Independent contracts
+File| Responsibility
+"mod.rs"| Analysis subsystem composition.
+"program.rs"| Compiler-facing structural program analysis.
+"dependency.rs"| Data, control, effect, communication and cross-domain dependency analysis.
+"effects.rs"| Consume authoritative semantic effects and derive compiler-specific evidence.
+"ownership.rs"| Integrate canonical ownership and borrowing information.
+"capabilities.rs"| Capability evidence integration.
+"requirements.rs"| Requirement collection and normalization.
+"feasibility.rs"| Aggregate feasibility evidence without replacing its canonical authorities.
+"cost.rs"| Cost estimation and comparison.
+"provenance.rs"| Analysis evidence and source-to-artifact relationships.
 
-Implement and freeze:
+Mandatory distinction:
 
-1. "configuration/budget.rs"
-2. "configuration/target.rs"
-3. "configuration/policy.rs"
-4. "configuration/profile.rs"
-5. "configuration/config.rs"
-6. "configuration/validation.rs"
-7. "configuration/mod.rs"
+Analysis must not redefine source semantics.
 
-Also establish independent artifact metadata, diagnostic, provenance, and requirement/capability contracts using the existing authoritative owners.
+The compiler may derive new implementation evidence, but it must retain the source semantic authority.
 
-Do not introduce duplicate semantic types.
+6.5 Artifacts
 
-Phase 2 — API and context
+Directory: "src/compiler/artifacts/"
 
-Implement and freeze:
+File| Responsibility
+"mod.rs"| Artifact subsystem composition.
+"artifact.rs"| Artifact identity, representation and lifecycle.
+"manifest.rs"| Dependencies, target information and artifact relationships.
+"metadata.rs"| Language, compiler, IR and backend metadata.
+"portability.rs"| Explicit portability classification and evidence.
+"serialization.rs"| Versioned artifact serialization and validation.
+"validation.rs"| Artifact integrity, structure, trust and compatibility validation.
 
-1. "api/request.rs"
-2. "api/response.rs"
-3. "context/compilation_state.rs"
-4. "context/compilation_context.rs"
-5. "context/dependency_context.rs"
-6. "context/provenance_context.rs"
-7. "api/compiler.rs"
-8. "api/compatibility.rs"
-9. "api/mod.rs"
-10. "context/mod.rs"
+Generated text must not automatically be represented as an executable artifact.
 
-Phase 3 — Pipeline
+Artifacts must distinguish:
 
-Implement:
+- Generated output.
+- Structurally validated output.
+- Semantically verified output.
+- Target-compatible output.
+- Linked output.
+- Executable or deployable output.
 
-1. "pipeline/stage.rs"
-2. "pipeline/stages.rs"
-3. "pipeline/ordering.rs"
-4. "pipeline/failure.rs"
-5. "pipeline/recovery.rs"
-6. "pipeline/execution.rs"
-7. "pipeline/orchestration.rs"
-8. "pipeline/mod.rs"
+These are different states.
 
-Phase 4 — IR integration
+6.6 Backends
 
-Implement:
+Directory: "src/compiler/backends/"
 
-1. "ir/input.rs"
-2. "ir/adapters.rs"
-3. "ir/verification.rs"
-4. "ir/translation.rs"
-5. "ir/lowering.rs"
-6. "ir/compatibility.rs"
-7. "ir/mod.rs"
+File| Responsibility
+"mod.rs"| Compiler-facing backend composition.
+"registry.rs"| Adapter to canonical "src/backend/registry.rs".
+"capabilities.rs"| Compiler-facing capability evidence.
+"discovery.rs"| Backend and provider discovery integration.
+"compatibility.rs"| Compatibility evaluation integration.
+"selection.rs"| Deterministic backend selection.
+"invocation.rs"| Validated backend construction and invocation.
 
-Verify the integration against the actual ZUIR and domain IR implementations.
+Important:
 
-Phase 5 — Analysis and pass management
+"backends/registry.rs" MUST NOT become a second backend registry.
 
-Complete:
+Backend selection must not rely on vendor-specific hard-coded matching.
 
-- Analysis integration.
-- Ownership integration.
-- Effect integration.
-- Capability matching interfaces.
-- Requirement integration.
-- Dependency analysis.
-- Pass registry.
-- Pass manager.
-- Pass legality.
-- Analysis preservation.
-- Pass ordering.
+Registration does not prove capability.
 
-Phase 6 — Optimization
+Capability does not prove feasibility.
 
-Integrate the canonical optimizer and domain optimization providers.
+Feasibility does not prove physical availability.
 
-Complete:
+Selection does not execute a program.
 
-- Optimization planning.
-- Cost models.
-- Policies.
-- Decisions.
-- Profitability.
-- Validation.
+The actual backend implementations remain under "src/backend/".
 
-Phase 7 — Heterogeneous planning
+6.7 Configuration
 
-Complete:
+Directory: "src/compiler/configuration/"
 
-- Target discovery.
-- Capability matching.
-- Resource planning.
-- Workload partitioning.
-- Scheduling plans.
-- Routing plans.
-- Data movement.
-- Feasibility reporting.
+File| Responsibility
+"mod.rs"| Configuration composition.
+"budget.rs"| Operational work budgets and accounting.
+"config.rs"| Canonical compiler configuration.
+"policy.rs"| Compilation, security and transformation policies.
+"profile.rs"| Reusable compilation profiles and preferences.
+"target.rs"| Extensible target descriptors and metadata.
+"validation.rs"| Structural and cross-field configuration validation.
 
-Verify classical, quantum, AI, HDL, and distributed integration.
+Configuration must distinguish:
 
-Phase 8 — Lowering and backend integration
+- Semantic requirements.
+- Capabilities.
+- Preferences.
+- Constraints.
+- Hints.
+- Operational budgets.
+- Security policies.
 
-Complete:
+Operational budgets must never become semantic hardware ceilings.
 
-- Legalization.
-- Conversion.
-- Decomposition.
-- Outlining.
-- Target lowering.
-- Backend discovery.
-- Backend registry integration.
-- Backend selection.
+A target descriptor must not imply that a device exists or is available.
+
+6.8 Context
+
+Directory: "src/compiler/context/"
+
+File| Responsibility
+"mod.rs"| Context composition.
+"compilation_context.rs"| Shared immutable compilation inputs and services.
+"compilation_state.rs"| Compilation lifecycle and valid state transitions.
+"dependency_context.rs"| Compilation dependency evidence.
+"provenance_context.rs"| Source, toolchain and transformation provenance.
+
+All context contracts must agree on:
+
+- Ownership.
+- Thread safety.
+- Cancellation.
+- Lifetimes.
+- Error propagation.
+- Configuration immutability.
+- Provenance.
+- Shared budget accounting.
+
+No hidden global mutable compiler state should be introduced.
+
+6.9 Diagnostics
+
+Directory: "src/compiler/diagnostics/"
+
+File| Responsibility
+"mod.rs"| Diagnostics composition.
+"aggregation.rs"| Collection, grouping and deterministic ordering.
+"rendering.rs"| Human-readable and machine-readable rendering.
+"reporting.rs"| Structured compiler diagnostic reports.
+
+Integrate with the canonical frontend diagnostics and source spans.
+
+Do not create an incompatible source-location system.
+
+Distinguish:
+
+- Source errors.
+- Semantic errors.
+- Unsupported operations.
+- Infeasible targets.
+- Backend errors.
+- Infrastructure errors.
+- Security failures.
+- Cancellation.
+- Resource exhaustion.
+- Incomplete analysis.
+
+6.10 Incremental compilation
+
+Directory: "src/compiler/incremental/"
+
+File| Responsibility
+"mod.rs"| Incremental subsystem composition.
+"cache.rs"| Validated content-addressed compilation cache.
+"fingerprints.rs"| Deterministic input and dependency fingerprints.
+"invalidation.rs"| Precise dependency-driven invalidation.
+"persistence.rs"| Versioned persistence and corruption handling.
+
+Cache identity must account for every input capable of changing compilation results.
+
+This includes:
+
+- Source contents.
+- Imported dependencies.
+- Language version.
+- Grammar and semantic specification versions.
+- Compiler implementation version.
+- Compiler configuration.
+- Optimization policies.
+- Pass implementations.
+- Relevant extension manifests.
+- Backend versions.
+- IR schema versions.
+- Target descriptors.
+- Toolchain identities.
+- Relevant security policies.
+
+A cache hit must never bypass required verification or security validation.
+
+6.11 IR integration
+
+Directory: "src/compiler/ir/"
+
+File| Responsibility
+"mod.rs"| Compiler-facing IR integration.
+"input.rs"| Validated canonical IR inputs.
+"adapters.rs"| Integration with existing authoritative adapters.
+"compatibility.rs"| Representation and schema compatibility.
+"translation.rs"| Verified translation coordination.
+"lowering.rs"| Compiler-facing lowering coordination.
+"verification.rs"| Canonical verification coordination.
+
+This directory must not implement another IR.
+
+Existing "adapters.rs" supports the existing ZCIR/ZUIR identity boundary.
+
+It must not advertise unsupported quantum, HDL, AI or tensor conversions as completed.
+
+For every future conversion, the responsible domain owner must establish:
+
+1. Source representation.
+2. Destination representation.
+3. Version compatibility.
+4. Identity mapping.
+5. Type mapping.
+6. Value mapping.
+7. Control-flow preservation.
+8. Effect preservation.
+9. Ownership preservation.
+10. Resource-requirement preservation.
+11. Provenance preservation.
+12. Unsupported constructs.
+13. Verification requirements.
+14. Semantic-preservation evidence.
+
+An unsupported conversion must fail explicitly.
+
+6.12 Linking
+
+Directory: "src/compiler/linking/"
+
+File| Responsibility
+"mod.rs"| Linking integration.
+"symbols.rs"| Symbol resolution and identity.
+"composition.rs"| Compatible module and artifact composition.
+"relocation.rs"| Relocation integration with target-specific authorities.
+"validation.rs"| Symbol, ABI, dependency and artifact compatibility.
+
+The compiler must preserve domain-specific information during linking.
+
+It must not treat incompatible quantum, HDL and classical artifacts as interchangeable object files.
+
+6.13 Lowering
+
+Directory: "src/compiler/lowering/"
+
+File| Responsibility
+"mod.rs"| Lowering coordination.
+"conversion.rs"| Validated representation conversions.
+"decomposition.rs"| Decomposition of operations using authoritative domain implementations.
+"legalization.rs"| Target legality and legalization coordination.
+"outlining.rs"| Extraction of independently compilable regions.
+"target_lowering.rs"| Target-specific lowering integration.
+
+Domain-specific conversion and decomposition algorithms must remain with their domain owners.
+
+Examples:
+
+- Classical lowering: classical IR and backend authorities.
+- Quantum lowering: quantum IR and quantum lowering authorities.
+- HDL lowering: HDLIR and synthesis authorities.
+- AI lowering: AI and tensor authorities.
+- Distributed lowering: distributed computation authorities.
+
+The compiler coordinates these systems.
+
+6.14 Optimization
+
+Directory: "src/compiler/optimization/"
+
+File| Responsibility
+"mod.rs"| Optimization integration.
+"cost_model.rs"| Extensible domain-aware cost models.
+"decisions.rs"| Recorded decisions and supporting evidence.
+"planning.rs"| Optimization planning.
+"policies.rs"| Transformation permissions and semantic-preservation policies.
+"profitability.rs"| Profitability assessment.
+"validation.rs"| Transformation verification coordination.
+
+Existing optimization implementations under "src/optimizer/", "src/zuir/" and domain-owned subsystems must be reused.
+
+Do not create another optimizer.
+
+A classical transformation must not automatically be considered valid for quantum or HDL computations.
+
+Every transformation must establish its applicable semantic-preservation contract.
+
+6.15 Parallel compilation
+
+Directory: "src/compiler/parallel/"
+
+File| Responsibility
+"mod.rs"| Parallel compilation composition.
+"build.rs"| Parallel build orchestration.
+"dependencies.rs"| Dependency-aware task relationships.
+"determinism.rs"| Deterministic result collection and ordering.
+"scheduler.rs"| Compiler-work scheduling.
+"workers.rs"| Worker execution and lifecycle.
+
+This subsystem schedules compiler work.
+
+It does not replace the runtime scheduler.
+
+It must use available parallelism, configured budgets and operating-system capabilities.
+
+No arbitrary fixed worker ceiling may be introduced.
+
+Parallel execution must not silently change program semantics.
+
+6.16 Pass management
+
+Directory: "src/compiler/passes/"
+
+File| Responsibility
+"mod.rs"| Pass subsystem composition.
+"analysis_manager.rs"| Analysis caching and invalidation.
+"legality.rs"| Transformation legality.
+"manager.rs"| Pass lifecycle and coordination.
+"ordering.rs"| Pass dependency ordering.
+"pipeline.rs"| Pass pipeline composition.
+"preservation.rs"| Analysis preservation contracts.
+"registry.rs"| Extensible pass registration.
+
+Pass registration must be extensible.
+
+A domain must not be required to modify a universal closed list of operations or transformations.
+
+The pass manager must not replace the authoritative pass implementations under ZUIR or other domains.
+
+6.17 Pipeline
+
+Directory: "src/compiler/pipeline/"
+
+File| Responsibility
+"mod.rs"| Pipeline composition.
+"stage.rs"| Stage interface and input/output contracts.
+"stages.rs"| Standard stage identities and dependencies.
+"ordering.rs"| Dependency validation and ordering.
+"execution.rs"| Stage execution and output delivery.
+"orchestration.rs"| Compilation lifecycle orchestration.
+"failure.rs"| Structured failure classification.
+"recovery.rs"| Explicit recovery policy.
+
+The pipeline must support conditional domain-specific routes.
+
+A skipped stage must never be represented as successfully completed.
+
+A required stage must never be silently bypassed.
+
+Stage declarations must be matched to actual implementations.
+
+The production pipeline must establish a demonstrable connection between:
+
+- Canonical frontend.
+- Semantic validation.
+- Canonical IR.
+- Verification.
+- Analysis.
+- Pass management.
+- Optimization.
+- Planning.
+- Lowering.
 - Backend invocation.
-
-Verify real backend output.
-
-Phase 9 — Artifacts and linking
-
-Complete:
-
-- Artifact contracts.
-- Manifest.
-- Metadata.
-- Portability classification.
-- Validation.
-- Serialization.
+- Artifact validation.
 - Linking.
-- Relocation.
-- Composition.
+- Runtime handoff.
 
-Phase 10 — Incremental and parallel compilation
+6.18 Planning
 
-Complete:
+Directory: "src/compiler/planning/"
 
-- Fingerprinting.
-- Invalidation.
-- Persistence.
-- Dependency snapshots.
-- Parallel scheduling.
-- Worker execution.
-- Deterministic result collection.
+File| Responsibility
+"mod.rs"| Planning subsystem composition.
+"target_discovery.rs"| Target descriptor discovery.
+"capability_matching.rs"| Requirement-to-capability matching.
+"feasibility.rs"| Evidence-based feasibility assessment.
+"resource_planning.rs"| Abstract resource demand and capacity assessment.
+"partitioning.rs"| Computation partitioning.
+"data_movement.rs"| Abstract data transfer planning.
+"routing.rs"| Abstract routing constraints and plans.
+"scheduling.rs"| Abstract scheduling plans.
 
-Phase 11 — Security and production validation
+The resource planner must distinguish resource demand from physical allocation.
 
-Complete:
+The planning subsystem must not:
 
-- IR security verification.
-- Backend security.
-- Supply-chain verification.
+- Reserve hardware.
+- Allocate physical qubits.
+- Acquire devices.
+- Perform physical scheduling.
+- Claim guaranteed availability.
+- Replace quantum routing.
+- Replace distributed execution.
+- Replace runtime resource management.
+
+A feasibility result is evidence about a proposed realization, not an execution guarantee.
+
+6.19 Profiling
+
+Directory: "src/compiler/profiling/"
+
+File| Responsibility
+"mod.rs"| Profiling composition.
+"events.rs"| Structured profiling events.
+"measurements.rs"| Measurement contracts and provenance.
+"aggregation.rs"| Measurement aggregation.
+
+Profiling evidence may inform optimization.
+
+It must not silently make reproducible builds depend on uncontrolled environmental measurements.
+
+6.20 Security
+
+Directory: "src/compiler/security/"
+
+File| Responsibility
+"mod.rs"| Security subsystem composition.
+"policy.rs"| Compiler security policy integration.
+"verification.rs"| Trust and verification evidence.
+"audit.rs"| Auditable compiler operations.
+"supply_chain.rs"| Dependency, provider and artifact supply-chain verification.
+
+Security requirements include:
+
+- Malformed source handling.
+- Untrusted IR validation.
+- Extension validation.
+- Backend process isolation.
 - Artifact integrity.
-- Security audit.
+- Dependency integrity.
+- Cryptographic provenance.
+- Secure deserialization.
+- Resource exhaustion protection.
+- Reproducible build verification.
+- Explicit authorization boundaries.
+
+Security must not be disabled merely because an optimization or compilation budget has been exhausted.
+
+6.21 Testing
+
+Directory: "src/compiler/testing/"
+
+The existing testing subsystem must progressively cover:
+
+- Unit tests.
+- Integration tests.
+- Pipeline tests.
+- IR conformance.
+- Backend conformance.
+- Cross-domain conformance.
+- Semantic preservation.
+- Regression tests.
+- Determinism.
 - Differential testing.
-- Portability testing.
-- Scalability testing.
-- Regression testing.
-- Fuzzing.
+- Incremental compilation.
+- Scalability.
+- Security.
+- Portability.
+- Reproducibility.
 
-Phase 12 — Release qualification
+Tests must exercise actual behavior, not just module imports or documentation claims.
 
-The entire repository must pass the production quality gates.
+6.22 Standalone compiler files
+
+File| Responsibility
+"audit_engine.rs"| Compiler audit coordination and evidence.
+"borrow_checker.rs"| Integration with canonical ownership and borrowing semantics.
+"fuzzing_harness.rs"| Fuzzing source input, IR, transformations, artifacts and extensions.
+"instruction_fusion.rs"| Semantics-preserving instruction fusion through applicable domain contracts.
+"macro_engine.rs"| Macro expansion, hygiene and canonical AST integration.
+"monomorphizer.rs"| Generic specialization and polymorphic lowering.
+"safety_guard.rs"| Compiler safety policy enforcement.
+"sro.rs"| Existing specialized optimization responsibility; audit for overlap with canonical optimization owners.
+"ssbe.rs"| Existing specialized backend-emission integration; audit for overlap with canonical backend implementations.
+
+No standalone file should become a second owner of an existing repository subsystem.
 
 ---
 
-36. Production quality gates
+7. Compilation pipeline
 
-The compiler must use the repository's Rust baseline:
+The compiler must establish one coordinated, verifiable compilation pipeline.
 
-- Rust 1.97 or later.
-- Rust 2021 edition.
-- No unsafe Rust.
+The pipeline is conditional and domain-aware.
 
-Required commands:
+The following is the canonical conceptual sequence.
+
+Order| Responsibility| Authority
+1| Source acquisition| Compiler API and frontend
+2| Lexing| Frontend lexer
+3| Parsing| Frontend parser
+4| AST construction| Frontend AST
+5| Structural validation| Frontend
+6| Name and module resolution| Frontend semantic
+7| Type validation| Frontend semantic
+8| Effect validation| Frontend semantic
+9| Ownership validation| Frontend semantic
+10| Capability and requirement validation| Frontend semantic
+11| Validated program model| Frontend semantic
+12| Canonical IR construction| ZUIR and domain owners
+13| IR verification| Canonical IR authorities
+14| Compiler dependency analysis| Compiler analysis
+15| Transformation planning| Pass management
+16| Semantics-preserving optimization| Existing optimization authorities
+17| Target discovery| Planning and providers
+18| Capability matching| Planning
+19| Feasibility assessment| Planning
+20| Resource planning| Planning
+21| Computation partitioning| Domain planning authorities
+22| Data movement planning| Relevant domain authorities
+23| Routing and scheduling planning| Relevant domain authorities
+24| Domain-specific lowering| Domain owners and compiler adapters
+25| Target legalization| Lowering and backend contracts
+26| Backend selection| Canonical backend integration
+27| Backend realization| "src/backend/"
+28| Artifact validation| Compiler artifacts and security
+29| Linking| Canonical linking integration
+30| Packaging| Toolchain and artifact authorities
+31| Runtime handoff| Runtime
+32| Physical execution| Runtime and actual providers
+
+These stages are logical responsibilities, not an instruction to create one source file per stage.
+
+Existing implementations should be reused.
+
+7.1 Conditional compilation routes
+
+A classical program may follow:
+
+Frontend
+  -> Semantic validation
+  -> Classical representation
+  -> Verification
+  -> Classical optimization
+  -> Classical lowering
+  -> Backend
+  -> Artifact
+
+A quantum program may follow:
+
+Frontend
+  -> Semantic validation
+  -> Quantum IR
+  -> Verification
+  -> Quantum analysis
+  -> Quantum transformations
+  -> Quantum planning
+  -> Quantum lowering
+  -> Compatible backend
+  -> Artifact
+
+A hybrid program may follow:
+
+Frontend
+  -> Semantic validation
+  -> Canonical IR integration
+  -> Domain dependency analysis
+  -> Hybrid partitioning
+  -> Cross-domain data movement planning
+  -> Domain-specific lowering
+  -> Backend realization
+  -> Validated artifacts
+
+An HDL program must follow the applicable hardware-description and synthesis authorities.
+
+A distributed program must preserve distributed communication, consistency and failure semantics.
+
+No program may silently skip a mandatory semantic or verification stage.
+
+---
+
+8. Capability, requirement and target model
+
+The compiler must use an open-world architecture.
+
+It must not assume that every future computing technology can be predicted and added to a closed enumeration.
+
+The following concepts must remain distinct.
+
+Concept| Meaning
+Requirement| What the program needs.
+Capability| What an implementation supports.
+Preference| What the developer prefers.
+Constraint| What is permitted or prohibited.
+Hint| Optional implementation guidance.
+Feasibility| Whether available evidence supports a proposed realization.
+Availability| Whether a required resource is actually available.
+Authorization| Whether its use is permitted.
+
+8.1 Requirements
+
+Requirements originate from canonical semantic information.
+
+They are mandatory conditions for preserving the declared computation.
+
+An unsatisfied requirement must result in an explicit incompatibility.
+
+8.2 Capabilities
+
+Capabilities must be discoverable and extensible.
+
+They must not be inferred from a vendor name or architecture string.
+
+An unknown capability is not evidence of support.
+
+8.3 Preferences
+
+Preferences guide selection and optimization.
+
+An unmet preference must not automatically invalidate an otherwise correct compilation.
+
+8.4 Constraints
+
+Constraints restrict valid realizations.
+
+The compiler must never silently violate them.
+
+8.5 Hints
+
+Hints may improve planning.
+
+They must never redefine program meaning.
+
+8.6 Feasibility
+
+Feasibility must be based on explicit evidence.
+
+Possible outcomes must distinguish:
+
+- Feasible.
+- Infeasible.
+- Unknown.
+- Incomplete.
+- Unsupported.
+- Blocked by policy.
+
+An incomplete discovery operation must not be presented as complete proof of infeasibility or feasibility.
+
+---
+
+9. Scalability and resource independence
+
+POCO-REAF requires the compiler to avoid arbitrary universal resource ceilings.
+
+The following must not be encoded as universal architectural limits:
+
+- Maximum CPU count.
+- Maximum core count.
+- Maximum worker count.
+- Maximum GPU count.
+- Maximum FPGA count.
+- Maximum QPU count.
+- Maximum qubits.
+- Maximum memory.
+- Maximum VRAM.
+- Maximum register width.
+- Maximum tensor rank.
+- Maximum distributed nodes.
+- Maximum network participants.
+- Maximum functions.
+- Maximum modules.
+- Maximum operations.
+- Maximum computational domains.
+- Maximum backend providers.
+- Maximum optimization passes.
+
+9.1 Real target limitations
+
+A concrete target may have finite limitations.
+
+For example:
+
+- An instruction encoding may have a defined operand width.
+- A processor may have a finite address space.
+- An FPGA may have finite logic resources.
+- A QPU may expose a finite number of physical qubits.
+- A file format may define a bounded field.
+- An operating system may impose process or thread limits.
+
+These are real implementation constraints.
+
+They must be represented as target capabilities, representation limits, resource evidence or explicit operational policies.
+
+They must not become universal language limitations.
+
+9.2 Operational budgets
+
+Budgets are permitted.
+
+Examples:
+
+- Maximum compilation time.
+- Maximum compiler memory consumption.
+- Maximum analysis work.
+- Maximum parallel workers.
+- Maximum artifact output.
+- Maximum cache consumption.
+- Maximum external-tool execution time.
+
+These must be configurable.
+
+An omitted budget must not be interpreted as an infinite-resource guarantee.
+
+Budget exhaustion must produce an explicit incomplete, aborted or failed outcome.
+
+Incomplete analysis must never certify correctness.
+
+9.3 Data structures and algorithms
+
+Scalability is not achieved merely by removing constants.
+
+The compiler must also avoid algorithms that become impractical as program size grows.
+
+Implementations should prefer:
+
+- Incremental analysis.
+- Dependency-driven invalidation.
+- Streaming where appropriate.
+- Lazy evaluation where semantically valid.
+- Sparse representations.
+- Hierarchical data structures.
+- Chunked processing.
+- Bounded working sets when explicitly configured.
+- Parallelizable independent operations.
+- Efficient graph algorithms.
+- Content-addressed storage.
+- Reusable analysis results.
+
+Algorithms must document their time and space complexity where material.
+
+No optimization may sacrifice correctness merely to process larger inputs.
+
+9.4 Numeric representation
+
+Resource quantities must not be prematurely restricted to machine-sized integers.
+
+Symbolic and arbitrary-precision quantities should be retained where the semantic and resource contracts require them.
+
+Where a concrete representation has finite precision, overflow or loss of precision must be reported explicitly.
+
+A wide integer type is not mathematical infinity.
+
+---
+
+10. Heterogeneous computing
+
+The compiler must support programs containing multiple computational domains.
+
+It must preserve their dependencies and semantics.
+
+10.1 Classical computing
+
+Integrate:
+
+- "src/classical/"
+- Existing classical IR.
+- Existing ZCIR integration.
+- "src/backend/"
+- "src/runtime/"
+
+Do not recreate classical IR or classical runtime scheduling.
+
+10.2 Quantum computing
+
+Integrate:
+
+- "src/quantum/ir/"
+- Existing quantum analysis and optimization.
+- Existing quantum routing.
+- Existing scheduling.
+- Existing QEC.
+- Existing ZQN.
+- Existing hardware abstractions.
+- Existing quantum backends.
+
+"quantum::ir" remains the canonical semantic quantum IR.
+
+The compiler must not introduce its own physical qubit identities, gate semantics, coupling maps or quantum execution models.
+
+10.3 HDL and hardware
+
+Integrate:
+
+- "src/hdl/"
+- "src/hdl/hdlir/"
+- Existing hardware abstractions.
+- Existing synthesis and backend authorities.
+
+The compiler must preserve the distinction between logical hardware descriptions and physical realization.
+
+It must not create a second HDLIR or place vendor-specific pin and placement semantics into universal compiler types.
+
+10.4 AI and tensor computing
+
+Integrate:
+
+- "src/ai/"
+- Existing tensor storage and operations.
+- "src/classical/" tensor infrastructure where applicable.
+- ZUIR AI and tensor dialects.
+- Existing differentiation and optimization authorities.
+- Existing accelerator providers.
+
+The compiler must not introduce a competing tensor storage implementation or semantic type system.
+
+Symbolic and dynamic tensor dimensions must remain representable where supported.
+
+10.5 Hybrid computing
+
+Integrate:
+
+- "src/hybrid/"
+- ZUIR.
+- Classical IR.
+- Quantum IR.
+- HDLIR where applicable.
+- AI and tensor subsystems.
+- Distributed computation.
+- Existing runtime interfaces.
+
+Hybrid compilation must preserve:
+
+- Cross-domain dependencies.
+- Data types.
+- Effects.
+- Control dependencies.
+- Synchronization.
+- Communication.
+- Ownership.
+- Resource requirements.
+- Failure semantics.
+- Provenance.
+
+A hybrid program is not merely a sequence of independent classical and quantum binaries.
+
+10.6 Distributed computing
+
+Integrate:
+
+- "src/distributed/"
+- Existing networking.
+- Existing communication contracts.
+- Existing distributed runtime.
+- Relevant domain IRs.
+
+The compiler may plan partitioning and communication.
+
+It must not claim that an abstract partitioning plan constitutes successful physical deployment.
+
+---
+
+11. Backend realization and artifact integrity
+
+The canonical backend authority is "src/backend/".
+
+The compiler-facing backend modules must coordinate it.
+
+The backend migration must be completed without creating a permanent duplicate backend architecture.
+
+The current "src/backend/mod.rs" documents a transitional relationship with the legacy backend implementation.
+
+That migration must be resolved deliberately.
+
+11.1 Backend correctness
+
+Every backend must establish:
+
+1. Accepted input representation.
+2. Supported operations.
+3. Target capabilities.
+4. Compatibility requirements.
+5. Lowering behavior.
+6. Generated output format.
+7. Error behavior.
+8. Toolchain dependencies.
+9. Artifact validation.
+10. Reproducibility behavior.
+11. Security boundaries.
+12. Conformance tests.
+
+A backend registration is not proof of production readiness.
+
+11.2 Target dispatch
+
+Target dispatch must be verified against the actual requested target.
+
+The existing backend documentation identifies unresolved target-dispatch concerns.
+
+The architecture must prohibit:
+
+- Selecting an incompatible backend.
+- Silently substituting another target.
+- Returning successful output for an unimplemented target.
+- Claiming executable output when only textual IR was produced.
+
+11.3 Artifact lifecycle
+
+The compiler must distinguish:
+
+Requested
+   |
+   v
+Generated
+   |
+   v
+Structurally validated
+   |
+   v
+Semantically verified
+   |
+   v
+Target compatible
+   |
+   v
+Linked
+   |
+   v
+Packaged
+   |
+   v
+Deployment eligible
+
+Not every artifact follows every state.
+
+Every state transition must have explicit validation evidence.
+
+---
+
+12. Portability and POCO-REAF guarantees
+
+Portability must be represented explicitly.
+
+The following levels are required.
+
+Level| Guarantee
+Source portability| The same source can be accepted by compatible implementations.
+Semantic portability| The defined computation meaning is preserved.
+IR portability| Compatible canonical representations can be transferred and validated.
+Artifact portability| An artifact can be consumed by compatible environments.
+Execution portability| A compatible environment can actually execute the computation.
+
+These are different guarantees.
+
+A program requiring quantum semantics cannot automatically execute on an ordinary CPU without a compatible simulator or an explicitly permitted alternative implementation.
+
+An HDL artifact cannot automatically be treated as a CPU executable.
+
+A program with hardware-specific timing requirements cannot be assumed to preserve those requirements on every target.
+
+The compiler must report the exact portability guarantee established by its evidence.
+
+12.1 Meaning of Compile Once
+
+A single compilation request must be able to produce appropriately reusable and portable artifacts.
+
+Target-specific artifacts may require separate lowering and backend realization.
+
+The compiler must distinguish:
+
+- Source compilation.
+- Target-independent compilation.
+- Target-specific lowering.
+- Backend emission.
+- Linking.
+- Deployment.
+
+The term Compile Once must not be used to hide necessary target-specific realization.
+
+12.2 Future compatibility
+
+Future targets must be accommodated through extensible descriptors, capabilities, providers, dialects and versioned interfaces.
+
+Adding a new hardware architecture should not require redesigning the source language or replacing the compiler composition root.
+
+---
+
+13. Determinism and reproducibility
+
+Equivalent compilation inputs must produce equivalent results wherever deterministic behavior is required by the contract.
+
+Reproducibility inputs include:
+
+- Source content.
+- Dependencies.
+- Language and grammar versions.
+- Semantic specification version.
+- Compiler version.
+- Compiler configuration.
+- Optimization policies.
+- Pass implementations.
+- Extension identities and versions.
+- IR versions.
+- Backend versions.
+- Target descriptors.
+- Toolchain identities.
+- Relevant environment inputs.
+
+The compiler must record the inputs that influence an artifact.
+
+Nondeterministic optimization and profiling must be controlled through explicit policy.
+
+A reproducibility failure must not be hidden by a successful compilation status.
+
+---
+
+14. Security and trust
+
+The compiler is a processing boundary for potentially untrusted source, dependencies, IR, extensions and backend output.
+
+It must:
+
+- Validate inputs.
+- Validate IR before transformations.
+- Revalidate after transformations where required.
+- Reject malformed serialized data.
+- Authenticate trusted dependencies and providers.
+- Preserve provenance.
+- Avoid shell-command injection.
+- Isolate untrusted external tools.
+- Enforce configured operational budgets.
+- Protect artifact integrity.
+- Validate backend outputs.
+- Prevent untrusted extensions from bypassing required verification.
+
+Compiler extensions must not gain unrestricted authority merely because they are registered.
+
+No unsafe Rust is permitted in the compiler hierarchy.
+
+The crate must enforce this requirement through source-level linting and CI checks.
+
+---
+
+15. Error and failure model
+
+Failures must be structured and distinguishable.
+
+At minimum, compiler interfaces must preserve the distinction between:
+
+- Invalid source.
+- Lexical failure.
+- Parsing failure.
+- Semantic failure.
+- Invalid IR.
+- Unsupported representation conversion.
+- Unsupported operation.
+- Capability mismatch.
+- Constraint violation.
+- Target infeasibility.
+- Incomplete discovery.
+- Backend incompatibility.
+- Backend execution failure.
+- Artifact validation failure.
+- Linking failure.
+- Security violation.
+- Budget exhaustion.
+- Cancellation.
+- Internal compiler failure.
+
+A failure in one stage must not be converted into success by a downstream stage.
+
+Recovery must be explicit and permitted by policy.
+
+A fallback is valid only when it preserves the required semantics and all relevant constraints.
+
+---
+
+16. Public API and legacy migration
+
+The compiler must expose one canonical production compilation entry point.
+
+The existing legacy entry point in "src/lib.rs" must be treated as a migration concern.
+
+The current library exposes:
+
+"compile(source: &str) -> Result<ir_gen::IrModule, Vec<String>>"
+
+This route uses the older lexer, parser, semantic analyzer and IR generator.
+
+It must not remain an independent production compiler architecture.
+
+Migration must be staged:
+
+1. Identify every existing consumer.
+2. Define the new canonical compiler service contract.
+3. Establish compatibility adapters.
+4. Integrate the canonical frontend.
+5. Integrate canonical semantic analysis.
+6. Integrate ZUIR and domain IRs.
+7. Establish verified pipeline execution.
+8. Migrate callers.
+9. Deprecate obsolete interfaces.
+10. Remove obsolete implementations only after their consumers have been migrated and tested.
+
+Do not break public APIs prematurely.
+
+Do not maintain two independent semantic authorities indefinitely.
+
+16.1 Lint policy
+
+The current "src/lib.rs" contains broad lint allowances, including:
+
+- "unused_imports"
+- "unused_variables"
+- "unused_mut"
+- "dead_code"
+- "clippy::all"
+
+These weaken production quality enforcement.
+
+They must be progressively removed.
+
+The compiler must enforce strict local lint policies and must not rely on broad crate-wide allowances to conceal incomplete implementations.
+
+---
+
+17. Versioning and compatibility
+
+The following versions must remain distinct:
+
+- Zamani language version.
+- Grammar version.
+- Semantic specification version.
+- Compiler API version.
+- Compiler implementation version.
+- ZUIR version.
+- Classical IR version.
+- Quantum IR version.
+- HDLIR version.
+- Artifact format version.
+- Backend API version.
+- Provider version.
+- External toolchain version.
+
+A change to one version must not silently imply compatibility with every other version.
+
+Every serialized artifact must identify the representation versions it depends on.
+
+Incompatible versions must be rejected or handled through explicitly validated migration adapters.
+
+---
+
+18. Testing and production qualification
+
+Production readiness requires executable evidence.
+
+The compiler must be tested as an integrated system.
+
+18.1 Required language fixtures
+
+The canonical cross-domain conformance suite must progressively include:
+
+minimal.zm
+classical.zm
+quantum.zm
+hdl.zm
+hybrid.zm
+distributed.zm
+ai.zm
+tensor.zm
+networking.zm
+crypto.zm
+embedded.zm
+multi_target.zm
+
+Each fixture must exercise actual parsing, semantic validation, canonical IR construction, verification and the applicable compilation route.
+
+A fixture that merely imports a module is insufficient.
+
+18.2 Required correctness tests
+
+Test| Required evidence
+Frontend integration| Canonical AST and source information preserved.
+Semantic conformance| Normative semantic rules enforced.
+IR verification| Invalid representations rejected.
+IR translation| Explicit conversions preserve required semantics.
+Optimization| Transformations preserve specified behavior.
+Quantum conformance| Quantum semantics preserved.
+HDL conformance| Hardware intent preserved.
+Hybrid conformance| Cross-domain dependencies preserved.
+Distributed conformance| Communication and consistency semantics preserved.
+Backend conformance| Generated output valid for its declared target.
+Linking| Symbol and ABI compatibility validated.
+Artifact integrity| Invalid or corrupted artifacts rejected.
+Incremental compilation| Correct invalidation demonstrated.
+Determinism| Defined reproducibility guarantees satisfied.
+Security| Untrusted inputs cannot bypass verification.
+Scalability| No arbitrary universal architectural ceilings.
+Cancellation| Cancellation cannot produce false success.
+Recovery| Recovery obeys semantic and security policies.
+Portability| Appropriate portability claims supported by evidence.
+
+18.3 Scaling tests
+
+Scaling tests must cover progressively larger workloads, subject to the test environment.
+
+They must measure:
+
+- Compilation time.
+- Peak memory consumption.
+- IR construction cost.
+- Verification cost.
+- Dependency analysis cost.
+- Optimization cost.
+- Lowering cost.
+- Cache efficiency.
+- Parallel execution efficiency.
+- Artifact generation cost.
+
+The objective is to establish scalability behavior, identify algorithmic bottlenecks and detect accidental fixed limits.
+
+No finite benchmark establishes literal infinite scalability.
+
+18.4 Rust quality gates
+
+The required project quality gates are:
 
 cargo fmt --all -- --check
 
@@ -2579,197 +1872,554 @@ cargo test --all-targets
 
 cargo clippy --all-targets -- -D warnings
 
-Additional requirements:
+Additionally:
 
-1. No arbitrary universal hardware ceilings.
-2. No duplicate semantic authority.
-3. No duplicate canonical IR.
-4. No competing optimizer.
-5. No competing backend registry.
-6. No competing runtime.
-7. No fake backend output.
-8. No silent semantic fallback.
-9. No successful compilation after a required stage was skipped.
-10. No unverified portability claims.
-11. No ignored production errors.
-12. No unresolved production placeholders.
-13. No invalid artifact presented as executable.
-14. No unverified generated code.
-15. No unsafe Rust.
-
-The compiler root must also be tested through actual external crate consumers to verify its public API.
+- Test the minimum supported Rust version.
+- Test supported feature combinations.
+- Verify no unsafe code exists.
+- Verify all declared modules compile.
+- Verify generated grammar integrations.
+- Verify actual backend outputs.
+- Verify cross-domain fixtures.
+- Verify artifact serialization compatibility.
 
 ---
 
-37. Production-readiness definition
+19. Dependency direction
 
-The compiler is production-ready only when all of the following are demonstrated.
+The compiler architecture must avoid circular ownership.
 
-Area| Acceptance condition
-Language integration| Grammar, parser, AST and semantic conformance
-Semantic correctness| One authoritative validated program meaning
-Ownership| Real ownership and borrowing integration
-IR| Verified canonical representations
-Transformations| Explicit legality and semantic preservation
-Optimization| Validated optimization decisions
-Hybrid computing| Correct cross-domain composition
-Hardware planning| Capability and feasibility analysis
-Backends| Real, validated artifact generation
-Portability| Cross-target semantic conformance
-Linking| Correct dependency and symbol resolution
-Incremental| Sound cache invalidation
-Parallel| Correct and deterministic execution where required
-Security| Complete verification and evidence
-Scalability| Resource-parametric processing
-Diagnostics| Structured and actionable failures
-Compatibility| Versioned public contracts
-Testing| Unit, integration, differential and regression coverage
-Build| All production quality gates pass
+The intended dependency direction is:
 
-A directory structure, architecture document, or large number of source files is not proof of production readiness.
+Grammar
+   |
+   v
+Frontend
+   |
+   v
+Semantic authority
+   |
+   v
+Canonical IR authorities
+   |
+   v
+Compiler analysis and orchestration
+   |
+   v
+Passes and optimization coordination
+   |
+   v
+Planning and lowering
+   |
+   v
+Canonical backend
+   |
+   v
+Artifacts and linking
+   |
+   v
+Runtime and deployment
 
-Evidence must come from working implementations, successful builds, tests, and actual target integrations.
+This is a conceptual authority and data-flow model.
 
----
+Some integration interfaces may be implemented through stable shared contracts or adapters.
 
-38. Final architectural principles
+No low-level subsystem should depend on the compiler composition root merely to access its own sibling implementation.
 
-The Zamani Universal Meta-Compiler must obey these permanent rules.
+The compiler must not introduce circular dependencies between:
 
-Rule 1 — One program meaning
+- Frontend and compiler.
+- Semantic analysis and compiler.
+- ZUIR and compiler.
+- Domain IRs and compiler.
+- Backend and compiler.
+- Runtime and compiler.
 
-The compiler must preserve one validated semantic meaning across different target realizations.
-
-Rule 2 — No duplicate authority
-
-The compiler integrates semantic, IR, optimization, backend, hardware, and runtime authorities rather than replacing them.
-
-Rule 3 — No artificial universal capacity limits
-
-Operational budgets are configurable and separate from language semantics and physical capabilities.
-
-Rule 4 — Explicit feasibility
-
-An impossible or unsupported realization must be reported honestly.
-
-Rule 5 — Extensible architecture
-
-New computational domains, target descriptions, passes, and backend providers must integrate through stable contracts.
-
-Rule 6 — Verified transformations
-
-Every transformation must preserve the required semantic properties.
-
-Rule 7 — Portable artifacts
-
-Portable representations must not be confused with target-specific executables.
-
-Rule 8 — Runtime separation
-
-The compiler plans and generates; the runtime allocates and executes.
-
-Rule 9 — Safe Rust
-
-No unsafe Rust is permitted.
-
-Rule 10 — Integration before claims
-
-A feature is not production-ready until its complete integration has been demonstrated.
+Where existing Rust module dependencies violate the intended direction, the implementation must be refactored through appropriately owned interfaces.
 
 ---
 
-39. Ultimate POCO-REAF architecture
+20. Compiler documentation integration
 
-The intended final system is:
+The existing documentation directory contains:
 
-                    ONE ZAMANI PROGRAM
-                            |
-                            v
-                  ONE CANONICAL MEANING
-                            |
-                            v
-                  VERIFIED PORTABLE IR
-                            |
-                            v
-                 OPTIMIZED REPRESENTATIONS
-                            |
-                            v
-               CAPABILITY-AWARE REALIZATION
-                            |
-             +--------------+--------------+
-             |              |              |
-             v              v              v
-          CLASSICAL       QUANTUM          HDL
-             |              |              |
-             +--------------+--------------+
-                            |
-             +--------------+--------------+
-             |              |              |
-             v              v              v
-             AI          DISTRIBUTED     ACCELERATORS
-             |              |              |
-             +--------------+--------------+
-                            |
-                            v
-                  HYBRID EXECUTION BUNDLE
-                            |
-                            v
-                  TARGET-SPECIFIC ARTIFACTS
-                            |
-                            v
-                    RUNTIME EXECUTION
-                            |
-                            v
-                 OBSERVABLE PROGRAM RESULTS
+src/compiler/documentation/
+    ARCHITECTURE.md
+    INTEGRATION_CONTRACT.md
+    PIPELINE_CONTRACT.md
+    PORTABILITY_CONTRACT.md
 
-The same source semantics must remain valid across:
+These documents have distinct responsibilities.
 
-Atom
-  |
-  v
-Embedded computing
-  |
-  v
-Single processor
-  |
-  v
-Multicore computing
-  |
-  v
-GPU and accelerators
-  |
-  v
-FPGA and ASIC
-  |
-  v
-Quantum computing
-  |
-  v
-Hybrid computing
-  |
-  v
-Clusters
-  |
-  v
-Supercomputers
-  |
-  v
-Distributed infrastructure
-  |
-  v
-Cloud and edge environments
-  |
-  v
-Future computing architectures
+Document| Authority
+"ARCHITECTURE.md"| Overall compiler architecture and ownership
+"INTEGRATION_CONTRACT.md"| Repository-wide component integration
+"PIPELINE_CONTRACT.md"| Compilation stage contracts and execution
+"PORTABILITY_CONTRACT.md"| POCO-REAF and portability guarantees
 
-These are different realization environments, not different programming languages.
+This document must not duplicate the complete detailed pipeline contract.
 
-The developer should not need to rewrite a program merely because the available hardware changes.
+The documents must remain consistent.
 
-The compiler must determine which valid realization is possible, preserve the program's semantic contracts, and explicitly report when no valid realization exists.
+When an interface changes, all affected contracts must be updated deliberately.
 
-The ultimate Zamani compiler principle is:
+No document may claim production readiness without corresponding implementation and test evidence.
 
-«One program. One semantic meaning. One portable compilation foundation. Multiple verified realizations. Any compatible hardware. Any scale supported by available resources. Forever, through controlled compatibility and evolution.»
+---
 
-Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+21. Implementation and integration governance
+
+The compiler must be implemented contract-first.
+
+The objective is to complete each file with its dependencies and integration details established in advance.
+
+A file must not be declared frozen merely because its source code compiles independently.
+
+Its consumers and dependencies must also be known.
+
+21.1 Required file completion contract
+
+Every compiler implementation file must document:
+
+1. Purpose.
+2. Ownership.
+3. Non-responsibilities.
+4. Canonical authorities.
+5. Public API.
+6. Public types.
+7. Function and trait contracts.
+8. Dependencies.
+9. Dependency direction.
+10. Data ownership.
+11. Lifetimes.
+12. Thread safety.
+13. Error model.
+14. Determinism.
+15. Scalability.
+16. Operational budgets.
+17. Security.
+18. Compatibility.
+19. Exact integration points.
+20. Tests.
+21. Completion criteria.
+
+21.2 Freeze requirements
+
+A file may be frozen only when:
+
+- Its responsibility is unambiguous.
+- Its canonical dependencies are established.
+- Its public API is complete.
+- Its errors are defined.
+- Its consumers are identified.
+- Its integration contracts are agreed upon.
+- Its tests pass.
+- Its documentation agrees with the implementation.
+- No duplicate subsystem has been introduced.
+
+A later change may still be necessary if a genuine defect is discovered.
+
+Such a change must be deliberate, reviewed and accompanied by updated compatibility and integration tests.
+
+The objective is to eliminate avoidable downstream redesign, not to prohibit necessary corrections.
+
+---
+
+22. Recommended implementation order
+
+The implementation order must follow actual dependencies rather than arbitrary file numbering.
+
+The following sequence is the intended progression.
+
+Phase 0: Repository and authority freeze
+
+Audit and reconcile:
+
+- "grammar/"
+- "src/frontend/"
+- "src/frontend/semantic/"
+- "src/zuir/"
+- "src/classical/"
+- "src/quantum/ir/"
+- "src/hdl/hdlir/"
+- "src/ai/"
+- "src/hybrid/"
+- "src/distributed/"
+- "src/backend/"
+- "src/runtime/"
+- "src/compiler/"
+
+Confirm every ownership boundary.
+
+Phase 1: Independent foundational contracts
+
+Begin with:
+
+src/compiler/configuration/
+    budget.rs
+    target.rs
+    config.rs
+    policy.rs
+    profile.rs
+    validation.rs
+
+src/compiler/compiler_types.rs
+
+src/compiler/diagnostics/
+    reporting.rs
+    rendering.rs
+    aggregation.rs
+
+The precise order must follow the actual type dependencies.
+
+These files establish stable inputs for downstream compiler components.
+
+Phase 2: Identity, provenance and evidence
+
+Complete:
+
+analysis/provenance.rs
+context/provenance_context.rs
+context/dependency_context.rs
+analysis/requirements.rs
+analysis/capabilities.rs
+analysis/cost.rs
+
+Phase 3: Context and analysis
+
+Complete:
+
+context/compilation_state.rs
+context/compilation_context.rs
+context/mod.rs
+
+analysis/program.rs
+analysis/dependency.rs
+analysis/effects.rs
+analysis/ownership.rs
+analysis/feasibility.rs
+analysis/mod.rs
+
+Phase 4: IR integration
+
+Complete:
+
+ir/compatibility.rs
+ir/input.rs
+ir/adapters.rs
+ir/verification.rs
+ir/translation.rs
+ir/lowering.rs
+ir/mod.rs
+
+Do not advertise unsupported conversions.
+
+Phase 5: Backend integration
+
+Complete:
+
+backends/registry.rs
+backends/capabilities.rs
+backends/discovery.rs
+backends/compatibility.rs
+backends/selection.rs
+backends/invocation.rs
+backends/mod.rs
+
+Resolve canonical backend migration and target-dispatch defects.
+
+Phase 6: Planning
+
+Complete:
+
+planning/target_discovery.rs
+planning/capability_matching.rs
+planning/resource_planning.rs
+planning/feasibility.rs
+planning/data_movement.rs
+planning/partitioning.rs
+planning/routing.rs
+planning/scheduling.rs
+planning/mod.rs
+
+Integrate domain-owned physical planning authorities.
+
+Phase 7: Pipeline
+
+Complete:
+
+pipeline/stage.rs
+pipeline/stages.rs
+pipeline/ordering.rs
+pipeline/failure.rs
+pipeline/execution.rs
+pipeline/recovery.rs
+pipeline/orchestration.rs
+pipeline/mod.rs
+
+Establish actual stage implementations and end-to-end registration.
+
+Phase 8: Passes, optimization and lowering
+
+Complete the existing:
+
+passes/
+optimization/
+lowering/
+
+Integrate canonical domain implementations.
+
+Phase 9: Parallel and incremental compilation
+
+Complete:
+
+parallel/
+incremental/
+
+Verify deterministic concurrency and dependency-driven cache invalidation.
+
+Phase 10: Artifacts and linking
+
+Complete:
+
+artifacts/
+linking/
+
+Verify artifact integrity, compatibility, provenance and reproducibility.
+
+Phase 11: Security
+
+Complete the existing security integration and verify all trust boundaries.
+
+Phase 12: Public compiler service
+
+Complete:
+
+api/
+
+Connect the production driver to the canonical frontend and verified pipeline.
+
+Migrate legacy entry points without breaking compatibility prematurely.
+
+Phase 13: Cross-domain qualification
+
+Demonstrate actual end-to-end compilation for the supported domains.
+
+Only capabilities with passing conformance tests may be advertised as production-supported.
+
+---
+
+23. Existing defects and outstanding repository obligations
+
+The following concerns must remain visible in the implementation backlog.
+
+Area| Required correction
+"src/lib.rs"| Migrate the legacy compile entry point to the canonical compiler service.
+"src/lib.rs"| Remove broad lint allowances progressively.
+"src/compiler/compiler_types.rs"| Reconcile legacy target and configuration types with extensible canonical descriptors.
+"src/compiler/ir/adapters.rs"| Keep unsupported domain conversions explicitly unsupported until implemented.
+"src/compiler/pipeline/stages.rs"| Prove actual stage implementation and registration.
+"src/compiler/pipeline/execution.rs"| Verify real stage output contracts and failure propagation.
+"src/compiler/pipeline/orchestration.rs"| Verify the complete production pipeline lifecycle.
+"src/compiler/backends/registry.rs"| Preserve delegation to the canonical backend registry.
+"src/compiler/backends/selection.rs"| Verify compatibility and feasibility evidence before selection.
+"src/compiler/planning/"| Verify complete domain-specific integration.
+"src/backend/"| Resolve legacy migration, target dispatch and output-validity concerns.
+"src/ai/"| Verify that domain integration is implemented rather than merely declared.
+"src/hybrid/"| Verify actual cross-domain compilation and composition.
+"src/distributed/"| Verify actual communication and execution integration.
+Grammar integration| Mechanically verify the complete grammar composition and generated parser compatibility.
+
+These are outstanding verification and implementation obligations, not permission to create replacement subsystems.
+
+The current repository must be audited recursively before any additional files are introduced.
+
+---
+
+24. Production acceptance criteria
+
+The compiler may be declared production-ready only when all applicable conditions below have demonstrable evidence.
+
+Architecture
+
+- One canonical frontend.
+- One semantic authority.
+- One canonical ZUIR.
+- Canonical domain IR ownership.
+- One authoritative backend registry.
+- No competing runtime or physical resource manager.
+- Explicit dependency direction.
+- Versioned public contracts.
+
+Correctness
+
+- Actual end-to-end compilation.
+- Semantic preservation.
+- Canonical IR verification.
+- Valid transformations.
+- Valid lowering.
+- Correct target dispatch.
+- Valid backend outputs.
+- Artifact validation.
+- Correct linking.
+- Explicit failure behavior.
+
+Portability
+
+- Source portability.
+- Semantic portability.
+- IR portability.
+- Artifact portability.
+- Execution compatibility evidence.
+- Future target extensibility.
+
+Scalability
+
+- No arbitrary universal hardware ceilings.
+- Configurable operational budgets.
+- Explicit resource exhaustion.
+- Efficient algorithms.
+- Incremental compilation.
+- Deterministic parallel compilation.
+- Large-workload testing.
+
+Security
+
+- No unsafe Rust.
+- Strict input validation.
+- Secure artifact handling.
+- Extension trust boundaries.
+- Dependency integrity.
+- Backend isolation.
+- Supply-chain verification.
+
+Quality
+
+- Minimum Rust version tested.
+- Formatting checks pass.
+- All targets compile.
+- All tests pass.
+- Clippy passes with warnings denied.
+- Cross-domain conformance passes.
+- Reproducibility guarantees are tested.
+- Documentation matches actual implementations.
+
+A compiler module existing in the repository is not evidence that the capability is production-ready.
+
+A successful build is not evidence that every backend is correct.
+
+A successful compilation is not evidence that a program can execute on every possible target.
+
+---
+
+25. Final architectural invariants
+
+The following invariants are mandatory for all future compiler development.
+
+Invariant 1 — One language
+
+Zamani remains one programming language across computational domains.
+
+Invariant 2 — One semantic authority
+
+"src/frontend/semantic/" owns source-level semantic meaning.
+
+Invariant 3 — One universal IR authority
+
+"src/zuir/" owns the universal intermediate representation.
+
+Invariant 4 — Domain ownership
+
+Classical, quantum, HDL, AI, hybrid and distributed subsystems retain their respective authoritative representations and implementations.
+
+Invariant 5 — No duplicate backend registry
+
+"src/backend/registry.rs" remains authoritative.
+
+Invariant 6 — No duplicate runtime
+
+Physical execution and resource acquisition belong to runtime and relevant providers.
+
+Invariant 7 — No arbitrary universal hardware ceilings
+
+Actual constraints must be discovered, represented or explicitly configured.
+
+Invariant 8 — Explicit feasibility
+
+Unknown evidence must never become proof of compatibility.
+
+Invariant 9 — Semantic preservation
+
+Optimization, transformation, lowering and backend realization must preserve all required program semantics.
+
+Invariant 10 — Extensibility
+
+New computational domains, providers and backends must integrate through versioned contracts rather than closed universal enumerations.
+
+Invariant 11 — Reproducibility
+
+Compilation inputs, transformations and artifact provenance must be recorded sufficiently to establish the applicable reproducibility guarantees.
+
+Invariant 12 — Safe Rust
+
+Unsafe Rust is prohibited.
+
+Invariant 13 — Explicit failure
+
+Unsupported, incomplete, infeasible and unsuccessful operations must never be silently converted into success.
+
+Invariant 14 — Evidence-based production readiness
+
+No subsystem may claim production support without implementation, integration and conformance evidence.
+
+---
+
+26. Final objective
+
+Zamani's compiler must make the following programming model possible:
+
+                 DEVELOPER
+                     |
+                     v
+             ONE ZAMANI PROGRAM
+                     |
+                     v
+            ONE SEMANTIC MEANING
+                     |
+                     v
+            CANONICAL REPRESENTATIONS
+                     |
+                     v
+          PORTABLE COMPILATION CONTRACT
+                     |
+                     v
+          CAPABILITY-DRIVEN REALIZATION
+                     |
+          +----------+-----------+
+          |          |           |
+          v          v           v
+        CPU/GPU     QPU       FPGA/ASIC
+          |          |           |
+          +----------+-----------+
+                     |
+                     v
+            HYBRID / DISTRIBUTED
+                     |
+                     v
+              FUTURE HARDWARE
+
+The developer should not have to rewrite the program merely because the available computational infrastructure changes.
+
+The implementation must select valid realizations based on semantic requirements, available capabilities, constraints, preferences, policies and actual resource availability.
+
+When a compatible realization exists, the compiler and runtime should make it possible.
+
+When no compatible realization exists, they must report the reason explicitly.
+
+The ultimate Zamani objective is:
+
+"Program Once → Compile Once → Run Everywhere → Anywhere → Forever."
+
+Not by pretending that all machines are identical, but by preserving the program's meaning while allowing its implementation to evolve across compatible computing technologies and generations of hardware.
+
+The compiler is the coordinating mechanism that makes this possible.
