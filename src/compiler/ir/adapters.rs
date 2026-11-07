@@ -4,203 +4,169 @@
 #![deny(unused_must_use)]
 #![deny(missing_docs)]
 
-//! # Zamani Universal Meta-Compiler — IR Adapters
+//! # Zamani Compiler — Canonical IR Adapters
 //!
 //! Path: `src/compiler/ir/adapters.rs`
 //! Edition: Rust 2021.
-//! Minimum Rust version: 1.97 or later.
+//! Minimum Rust version: 1.97.
 //! Safety: unsafe Rust is forbidden.
 //!
 //! ## Purpose
 //!
-//! Provide the compiler-facing integration boundary for adapting
-//! representations that are already owned by canonical Zamani IR
-//! subsystems.
+//! Provide the compiler-facing boundary for invoking representation
+//! adapters owned by the canonical Zamani IR subsystems.
 //!
-//! This module coordinates existing adapters. It does not create
-//! another IR, identity system, type system, semantic model,
-//! verifier, optimizer, or serialization format.
+//! This module coordinates existing adapters. It does not define
+//! another intermediate representation, semantic model, type system,
+//! identity system, verifier, optimizer, lowering engine, or backend.
 //!
-//! ## Currently supported conversion
+//! ## Canonical ownership
 //!
-//! The existing ZCIR interface exposes canonical ZUIR entities.
-//! Consequently, the ZCIR <-> ZUIR conversion is an identity
-//! conversion:
+//! The following modules remain authoritative:
 //!
-//!     ZCIR entity <-> canonical ZUIR entity
+//! - `crate::zuir`: universal intermediate representation.
+//! - `crate::classical::zcir`: classical IR integration.
+//! - `crate::quantum::ir`: quantum computational representation.
+//! - `crate::hdl::hdlir`: hardware-description representation.
+//! - `crate::ai`: AI computational domain.
+//! - `crate::hybrid`: hybrid computation integration.
+//! - `crate::distributed`: distributed computation integration.
 //!
-//! The existing implementation in:
+//! The frontend and semantic model remain authoritative for source
+//! syntax, names, types, effects, requirements, capabilities,
+//! constraints, preferences, and semantic provenance.
 //!
-//!     crate::classical::zcir::lowering::to_zuir
-//!     crate::classical::zcir::lowering::from_zuir
+//! ## Currently implemented conversion
 //!
-//! remains authoritative.
+//! The current ZCIR representation exposes canonical ZUIR entities.
+//! Therefore, the supported ZCIR/ZUIR conversion is an identity
+//! conversion.
 //!
-//! This module exposes those operations through the compiler namespace.
+//! The authoritative implementation remains:
 //!
-//! ## Deliberately unsupported conversions
+//! - `crate::classical::zcir::lowering::to_zuir`.
+//! - `crate::classical::zcir::lowering::from_zuir`.
 //!
-//! This module does not claim to implement:
+//! This module delegates to those implementations.
 //!
-//!     Quantum IR -> ZUIR
-//!     HDLIR       -> ZUIR
-//!     AI IR       -> ZUIR
-//!     Tensor IR   -> ZUIR
-//!     Legacy IR   -> ZUIR
+//! ## Unsupported conversions
 //!
-//! Such conversions require explicit, domain-owned semantic
-//! conversion contracts and implementations.
+//! This module does not currently implement:
 //!
-//! A representation is not convertible merely because its fields
-//! resemble fields in another representation.
+//! - Quantum IR to ZUIR.
+//! - HDLIR to ZUIR.
+//! - AI IR to ZUIR.
+//! - Tensor IR to ZUIR.
+//! - Hybrid IR to ZUIR.
+//! - Distributed IR to ZUIR.
+//! - Legacy IR to ZUIR.
 //!
-//! Unsupported conversions must be implemented by their canonical
-//! domain owners and registered here only after their contracts,
-//! verification, and semantic-preservation behavior are established.
+//! The existence of a representation does not prove that a conversion
+//! exists. A future conversion must be implemented by its authoritative
+//! domain subsystem and exposed here only after its contract is defined.
 //!
-//! ## Ownership
+//! ## Conversion and verification
 //!
-//! This module owns:
+//! Conversion success is not verification success.
 //!
-//! - Compiler-facing adapter entry points.
-//! - Conversion direction metadata.
-//! - Explicit identity-conversion guarantees.
-//! - Borrowed and mutable access through existing canonical adapters.
-//! - Compiler-facing adapter tests.
+//! Identity conversion preserves the supplied entity. It does not prove
+//! that the entity or its containing program is structurally valid,
+//! semantically valid, target-compatible, portable, or executable.
 //!
-//! This module does not own:
+//! Verification is delegated to the canonical verifier for the source
+//! and destination representation.
 //!
-//! - ZUIR entities or identifiers.
-//! - ZCIR entities or identifiers.
-//! - Quantum IR entities or identifiers.
-//! - HDLIR entities or identifiers.
-//! - AI or tensor representations.
-//! - Semantic analysis or type inference.
-//! - Domain-specific conversion algorithms.
-//! - Verification algorithms.
-//! - Optimization or transformation passes.
-//! - Hardware discovery or resource allocation.
-//! - Scheduling, routing, or physical placement.
-//! - Backend code generation or runtime execution.
+//! A mutation after verification invalidates any assumption that the
+//! earlier verification report describes the modified snapshot.
 //!
-//! ## Trust and verification
+//! ## Conversion guarantees
 //!
-//! Conversion success does not imply verification success.
+//! A descriptor records the guarantee declared by an adapter.
 //!
-//! Identity conversion preserves the supplied entity, but does not
-//! establish that its containing IR graph is valid.
+//! A descriptor is metadata, not cryptographic evidence or an
+//! independently verified proof of semantic preservation.
 //!
-//! Compiler consumers must use the canonical verification boundary
-//! in `crate::compiler::ir::input` and the appropriate domain
-//! verification APIs.
+//! Only the adapter implementation and its owning domain contract
+//! can establish whether a conversion actually preserves semantics.
 //!
-//! Any mutation after verification invalidates the assumption that
-//! the previous verification report describes the modified snapshot.
+//! Potentially lossy conversions must not be used as implicit
+//! portable translations.
 //!
-//! ## Semantic-preservation contract
+//! ## Scalability
 //!
-//! The currently supported ZCIR/ZUIR conversion is lossless because
-//! the two interfaces use the same canonical Rust representation.
+//! This module introduces no arbitrary universal ceiling on:
 //!
-//! No reconstruction, normalization, identifier remapping,
-//! operation dropping, type substitution, effect removal,
-//! control-flow rewriting, or metadata rewriting occurs.
-//!
-//! Future non-identity adapters must explicitly document:
-//!
-//! - Source and destination representation versions.
-//! - Supported source constructs.
-//! - Destination constructs.
-//! - Type and value mapping.
-//! - Identity preservation or remapping.
-//! - Control-flow preservation.
-//! - Effect preservation.
-//! - Ownership preservation.
-//! - Resource-requirement preservation.
-//! - Provenance and source-map preservation.
-//! - Unsupported constructs.
-//! - Lossy-conversion behavior.
-//! - Verification requirements.
-//! - Determinism guarantees.
-//!
-//! A conversion that cannot preserve required semantics must fail.
-//!
-//! ## Scalability and POCO-REAF
-//!
-//! This module imposes no fixed maximum on:
-//!
-//! - Modules.
-//! - Functions.
-//! - Regions.
-//! - Blocks.
-//! - Operations.
-//! - Values.
-//! - Types.
-//! - Qubits.
-//! - Signals.
-//! - Tensor dimensions.
-//! - Devices.
-//! - Processing units.
+//! - Programs, modules, functions, regions, or blocks.
+//! - Operations, values, types, or effects.
+//! - Qubits, signals, registers, or tensor dimensions.
+//! - Tensor rank.
+//! - Devices, processors, or accelerators.
 //! - Distributed participants.
 //! - Computing domains.
 //!
-//! The currently supported identity adapters perform constant
-//! adapter work and do not traverse or duplicate the represented IR.
+//! The currently implemented identity adapters do not traverse,
+//! reconstruct, or duplicate the represented IR.
 //!
-//! The actual representation and downstream processing remain
-//! subject to available memory, address space, identifier capacity,
-//! implementation support, and explicit operational budgets.
+//! Actual representation and conversion work remains subject to
+//! available memory, address space, identifier capacity, implementation
+//! support, target capabilities, and explicit operational budgets.
 //!
-//! No finite implementation can promise literal infinite resources.
+//! Literal infinite physical resources are not promised.
 //!
-//! ## Determinism
+//! ## Non-responsibilities
 //!
-//! The adapters:
+//! This module does not:
 //!
-//! - Introduce no random identifiers.
-//! - Use no process-global mutable state.
-//! - Perform no implicit hardware discovery.
-//! - Perform no filesystem or network operations.
-//! - Produce no console output.
-//! - Do not select a target.
-//! - Do not mutate the input.
+//! - Parse Zamani source or grammar.
+//! - Construct AST nodes.
+//! - Perform semantic analysis or type inference.
+//! - Allocate canonical IR identities.
+//! - Reimplement domain conversion algorithms.
+//! - Verify IR.
+//! - Select hardware or backend providers.
+//! - Allocate physical resources.
+//! - Schedule, route, or place computation.
+//! - Generate backend code.
+//! - Execute programs.
+//! - Serialize or deserialize IR.
 //!
 //! ## Integration
 //!
 //! Parent:
-//!     src/compiler/ir/mod.rs
+//!     `crate::compiler::ir`
 //!
-//! Compiler root:
-//!     src/compiler/mod.rs
+//! Canonical ZCIR adapters:
+//!     `crate::classical::zcir::lowering::to_zuir`
+//!     `crate::classical::zcir::lowering::from_zuir`
 //!
-//! Existing authoritative adapters:
-//!     src/classical/zcir/lowering/to_zuir.rs
-//!     src/classical/zcir/lowering/from_zuir.rs
+//! Verification:
+//!     `crate::compiler::ir::input`
+//!     `crate::compiler::ir::verification`
 //!
-//! Verification boundary:
-//!     src/compiler/ir/input.rs
-//!     src/compiler/ir/verification.rs
+//! Translation:
+//!     `crate::compiler::ir::translation`
 //!
-//! Downstream:
-//!     compiler analysis
-//!     compiler passes
-//!     compiler optimization
-//!     compiler planning
-//!     compiler lowering
-//!     compiler backend integration
+//! Lowering:
+//!     `crate::compiler::ir::lowering`
 //!
-//! The compiler must not register a domain conversion here until
-//! the domain's actual conversion API exists and is verified.
+//! Downstream consumers:
+//!     compiler analysis, passes, optimization, planning,
+//!     lowering, and backend integration.
 //!
 //! ## Freeze criteria
 //!
-//! - All adapter calls delegate to the canonical owning subsystem.
-//! - No duplicate representation or identity type is introduced.
-//! - Unsupported conversions are not reported as successful.
-//! - Conversion success is not confused with verification.
-//! - No unsafe code or arbitrary hardware ceiling is introduced.
-//! - Compiler module declarations resolve.
+//! - All implemented conversions delegate to their canonical owner.
+//! - No competing representation or identity system is introduced.
+//! - Unsupported conversions are never reported as available.
+//! - Conversion guarantees are not confused with verification evidence.
+//! - No arbitrary universal resource ceiling is introduced.
+//! - No unsafe Rust is introduced.
+//! - All public APIs and module declarations resolve.
 //! - Repository formatting, compilation, tests, and Clippy pass.
+
+// =============================================================================
+// CANONICAL ADAPTER IMPORTS
+// =============================================================================
 
 use crate::classical::zcir::lowering::from_zuir::{
     as_zcir,
@@ -216,28 +182,42 @@ use crate::classical::zcir::lowering::to_zuir::{
 };
 
 // =============================================================================
-// ADAPTER CONTRACT VERSION
+// API VERSION
 // =============================================================================
 
-/// Public API version of the compiler IR adapter contract.
+/// Version of the compiler-facing IR adapter contract.
 ///
-/// This version is independent of the Zamani language version,
-/// grammar version, semantic-model version, ZUIR version, and
-/// backend ABI version.
-pub const IR_ADAPTERS_API_VERSION: u16 = 1;
+/// This version is independent of the language, grammar, semantic
+/// model, ZUIR schema, domain IR, and backend ABI versions.
+pub const IR_ADAPTERS_API_VERSION: u16 = 2;
+
+/// Return the compiler IR adapter API version.
+#[must_use]
+pub const fn api_version() -> u16 {
+    IR_ADAPTERS_API_VERSION
+}
 
 // =============================================================================
 // REPRESENTATION IDENTIFIERS
 // =============================================================================
 
-/// Identifies a representation participating in a compiler adapter.
+/// Identifies a representation participating in an adapter contract.
 ///
-/// These identifiers describe representation ownership. They do
-/// not create or own the corresponding representation.
+/// These identifiers describe representation ownership. They do not
+/// define or own the corresponding representation.
 ///
-/// The enum is non-exhaustive so new representation families can
-/// be introduced without requiring callers to assume that the
-/// current list is complete.
+/// Known representations are named explicitly for compatibility
+/// and convenient compiler integration.
+///
+/// `Extension` provides an identifier for additional representation
+/// families without requiring this module to enumerate every future
+/// computing domain.
+///
+/// Extension identifiers are static diagnostic/API identifiers.
+/// They are not serialization schemas or globally unique provider IDs.
+///
+/// This type does not establish that an adapter exists for a pair
+/// of representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Representation {
@@ -246,13 +226,13 @@ pub enum Representation {
 
     /// Zamani Classical Intermediate Representation integration.
     ///
-    /// The current ZCIR interface uses canonical ZUIR entities.
+    /// The current ZCIR API exposes canonical ZUIR entities.
     Zcir,
 
-    /// Canonical Zamani quantum intermediate representation.
+    /// Canonical quantum intermediate representation.
     Quantum,
 
-    /// Canonical Zamani hardware-description intermediate representation.
+    /// Hardware-description intermediate representation.
     Hdl,
 
     /// AI computational representation.
@@ -261,15 +241,21 @@ pub enum Representation {
     /// Canonical tensor computational representation.
     Tensor,
 
-    /// Existing legacy IR generated by `crate::ir_gen`.
+    /// Existing legacy IR representation.
     Legacy,
+
+    /// Additional representation identified by an extension-owned name.
+    ///
+    /// The identifier should be stable, non-empty, and namespaced by
+    /// the subsystem that owns the representation.
+    Extension(&'static str),
 }
 
 impl Representation {
-    /// Returns the stable, human-readable representation identifier.
+    /// Return the human-readable representation identifier.
     ///
-    /// These identifiers are diagnostic labels. They are not
-    /// serialization schemas or persistent artifact identifiers.
+    /// The returned string is intended for diagnostics and API
+    /// descriptions. It is not a persistent serialization identity.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -280,7 +266,23 @@ impl Representation {
             Self::Ai => "ai-ir",
             Self::Tensor => "tensor-ir",
             Self::Legacy => "legacy-ir",
+            Self::Extension(identifier) => identifier,
         }
+    }
+
+    /// Return whether the representation identifier is non-empty.
+    ///
+    /// Built-in identifiers are always valid. Extension identifiers
+    /// must contain at least one character.
+    #[must_use]
+    pub const fn is_well_formed(self) -> bool {
+        !self.as_str().is_empty()
+    }
+
+    /// Return whether this is an extension-owned representation.
+    #[must_use]
+    pub const fn is_extension(self) -> bool {
+        matches!(self, Self::Extension(_))
     }
 }
 
@@ -288,42 +290,68 @@ impl Representation {
 // CONVERSION GUARANTEES
 // =============================================================================
 
-/// Describes the guarantee made by a compiler adapter.
+/// Describes the conversion guarantee declared by an adapter.
 ///
-/// A guarantee describes the adapter's conversion behavior.
-/// It does not assert that the input has passed verification.
+/// This describes the adapter contract. It does not independently
+/// prove that the adapter implementation satisfies the declaration.
+///
+/// Verification of the source and destination remains a separate
+/// responsibility of their canonical verification authorities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ConversionGuarantee {
-    /// The source and destination use the same canonical Rust
-    /// representation. No reconstruction or semantic transformation
-    /// occurs.
+    /// Source and destination use the same canonical representation.
+    ///
+    /// No reconstruction or semantic transformation occurs.
     Identity,
 
-    /// A separately implemented conversion establishes a documented
-    /// semantics-preserving mapping.
+    /// The adapter declares that its conversion preserves the
+    /// documented source semantics.
     ///
-    /// No adapter in this module currently claims this guarantee.
+    /// The owning domain must provide the actual conversion contract,
+    /// implementation, and tests that establish this guarantee.
     VerifiedSemanticPreservation,
 
-    /// The conversion may lose or approximate information.
+    /// The conversion may lose, approximate, or omit information.
     ///
-    /// This guarantee is not acceptable for an implicit portable
-    /// compiler conversion. It is provided as a descriptive contract
-    /// value for explicit future APIs.
+    /// This guarantee must not be accepted as an implicit portable
+    /// translation.
     PotentiallyLossy,
+}
+
+impl ConversionGuarantee {
+    /// Return whether this guarantee declares semantic preservation.
+    ///
+    /// This checks the declaration only. It does not prove the
+    /// implementation's correctness.
+    #[must_use]
+    pub const fn declares_semantic_preservation(self) -> bool {
+        matches!(
+            self,
+            Self::Identity | Self::VerifiedSemanticPreservation
+        )
+    }
+
+    /// Return whether this guarantee describes a potentially
+    /// information-losing conversion.
+    #[must_use]
+    pub const fn is_potentially_lossy(self) -> bool {
+        matches!(self, Self::PotentiallyLossy)
+    }
 }
 
 // =============================================================================
 // ADAPTER DESCRIPTOR
 // =============================================================================
 
-/// Immutable description of a compiler-facing representation adapter.
+/// Immutable metadata describing one representation conversion.
 ///
-/// Descriptors identify the source and destination representation
-/// and state the conversion guarantee.
+/// A descriptor records the direction and declared guarantee of an
+/// adapter. It does not implement the conversion and does not prove
+/// that the conversion exists or is correct.
 ///
-/// They do not prove that the input is valid, verified, portable,
-/// target-compatible, or executable.
+/// Actual conversion must be delegated to an implementation owned
+/// by the authoritative source or destination domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AdapterDescriptor {
     source: Representation,
@@ -332,11 +360,14 @@ pub struct AdapterDescriptor {
 }
 
 impl AdapterDescriptor {
-    /// Construct an adapter descriptor.
+    /// Construct adapter metadata.
     ///
-    /// This constructor is public so future domain-owned adapters
-    /// can describe their contracts without depending on a compiler
-    /// registry implementation.
+    /// This constructor does not register an adapter or implement
+    /// a conversion. Callers must only declare guarantees that are
+    /// established by the actual authoritative adapter implementation.
+    ///
+    /// In particular, declaring `VerifiedSemanticPreservation` is
+    /// not a substitute for semantic-preservation tests or verification.
     #[must_use]
     pub const fn new(
         source: Representation,
@@ -368,25 +399,40 @@ impl AdapterDescriptor {
         self.guarantee
     }
 
-    /// Return whether this adapter performs an identity conversion.
+    /// Return whether this descriptor declares an identity conversion.
     #[must_use]
     pub const fn is_identity(self) -> bool {
         matches!(self.guarantee, ConversionGuarantee::Identity)
     }
+
+    /// Return whether this descriptor declares semantic preservation.
+    ///
+    /// This reports the declaration, not independent proof.
+    #[must_use]
+    pub const fn declares_semantic_preservation(self) -> bool {
+        self.guarantee.declares_semantic_preservation()
+    }
+
+    /// Return whether both representation identifiers are well formed.
+    #[must_use]
+    pub const fn is_well_formed(self) -> bool {
+        self.source.is_well_formed()
+            && self.destination.is_well_formed()
+    }
 }
 
 // =============================================================================
-// CURRENTLY AVAILABLE ADAPTER DESCRIPTORS
+// IMPLEMENTED ADAPTER DESCRIPTORS
 // =============================================================================
 
-/// Descriptor for the existing ZCIR-to-ZUIR identity adapter.
+/// Descriptor for the implemented ZCIR-to-ZUIR identity adapter.
 pub const ZCIR_TO_ZUIR: AdapterDescriptor = AdapterDescriptor::new(
     Representation::Zcir,
     Representation::Zuir,
     ConversionGuarantee::Identity,
 );
 
-/// Descriptor for the existing ZUIR-to-ZCIR identity adapter.
+/// Descriptor for the implemented ZUIR-to-ZCIR identity adapter.
 pub const ZUIR_TO_ZCIR: AdapterDescriptor = AdapterDescriptor::new(
     Representation::Zuir,
     Representation::Zcir,
@@ -397,46 +443,44 @@ pub const ZUIR_TO_ZCIR: AdapterDescriptor = AdapterDescriptor::new(
 // ZCIR -> ZUIR
 // =============================================================================
 
-/// Compiler-facing adapter from the ZCIR integration boundary
-/// to canonical ZUIR.
+/// Adapt a canonical ZCIR-facing entity into the ZUIR-facing API.
 ///
 /// The current ZCIR API exposes canonical ZUIR entities. Therefore,
-/// the conversion delegates to the existing authoritative
-/// `classical::zcir::lowering::to_zuir::to_zuir` function.
+/// this operation delegates to the authoritative identity adapter.
 ///
-/// No entity is reconstructed, cloned, normalized, or remapped.
+/// No entity is reconstructed, cloned, normalized, traversed, or
+/// remapped.
 ///
-/// This function does not verify the containing IR graph.
+/// This function does not verify the entity or its containing graph.
 ///
-/// # Type requirement
+/// `T` must implement the canonical `ZuirCanonical` marker owned by
+/// `crate::classical::zcir::lowering::to_zuir`.
 ///
-/// `T` must implement the canonical `ZuirCanonical` marker.
+/// # Complexity
 ///
-/// The marker is defined and implemented by the existing ZCIR
-/// identity adapter. This module does not introduce another marker.
+/// O(1) adapter work, excluding normal Rust ownership transfer.
 #[must_use = "the canonical ZUIR entity must be used"]
 pub fn zcir_to_zuir<T: ZuirCanonical>(entity: T) -> T {
     to_zuir(entity)
 }
 
-/// Borrow a ZCIR-facing canonical entity as immutable ZUIR.
+/// Borrow a canonical ZCIR-facing entity through the ZUIR API.
 ///
-/// No cloning, allocation, or representation conversion occurs.
+/// No clone, allocation, graph traversal, or identity remapping occurs.
 ///
-/// The returned reference has the lifetime of the supplied entity.
+/// The returned reference has the same lifetime as the supplied entity.
 #[must_use]
 pub fn zcir_as_zuir<T: ZuirCanonical>(entity: &T) -> &T {
     as_zuir(entity)
 }
 
-/// Borrow a ZCIR-facing canonical entity mutably through the ZUIR
-/// identity boundary.
+/// Borrow a canonical ZCIR-facing entity mutably through the ZUIR API.
 ///
-/// This function does not bypass the canonical entity's own
-/// visibility, validation, or ownership rules.
+/// This delegates to the authoritative identity adapter and does not
+/// bypass the canonical entity's visibility or invariants.
 ///
-/// Any mutation that may invalidate previous verification results
-/// requires the affected IR to be verified again.
+/// Any mutation that can invalidate an earlier verification result
+/// requires the affected IR snapshot to be verified again.
 #[must_use]
 pub fn zcir_as_zuir_mut<T: ZuirCanonical>(entity: &mut T) -> &mut T {
     as_zuir_mut(entity)
@@ -446,15 +490,14 @@ pub fn zcir_as_zuir_mut<T: ZuirCanonical>(entity: &mut T) -> &mut T {
 // ZUIR -> ZCIR
 // =============================================================================
 
-/// Compiler-facing adapter from canonical ZUIR to the ZCIR
-/// integration boundary.
+/// Adapt a canonical ZUIR entity through the ZCIR-facing API.
 ///
-/// The current ZCIR API uses canonical ZUIR entities. The conversion
-/// therefore delegates to the existing authoritative
-/// `classical::zcir::lowering::from_zuir::from_zuir` function.
+/// The current ZCIR API exposes aliases and re-exports of canonical
+/// ZUIR entities. This operation therefore delegates to the existing
+/// authoritative identity adapter.
 ///
-/// This is an identity conversion, not a conversion into a second
-/// classical IR graph.
+/// It does not construct a second classical IR graph or verify the
+/// supplied entity.
 #[must_use = "the canonical ZCIR-facing entity must be used"]
 pub fn zuir_to_zcir<T: ZuirCanonical>(entity: T) -> T {
     from_zuir(entity)
@@ -470,8 +513,8 @@ pub fn zuir_as_zcir<T: ZuirCanonical>(entity: &T) -> &T {
 
 /// Borrow a canonical ZUIR entity mutably through the ZCIR-facing API.
 ///
-/// The caller remains responsible for re-verification after any
-/// mutation that could invalidate an earlier verification result.
+/// The caller remains responsible for re-verification after a mutation
+/// that could invalidate previously established verification evidence.
 #[must_use]
 pub fn zuir_as_zcir_mut<T: ZuirCanonical>(entity: &mut T) -> &mut T {
     as_zcir_mut(entity)
@@ -481,22 +524,21 @@ pub fn zuir_as_zcir_mut<T: ZuirCanonical>(entity: &mut T) -> &mut T {
 // ADAPTER AVAILABILITY
 // =============================================================================
 
-/// Describes whether a compiler-facing conversion is implemented.
+/// Describes whether this compiler adapter module implements a
+/// requested representation conversion.
 ///
-/// This is an explicit availability query, not an adapter registry.
-/// It prevents callers from interpreting a representation's existence
-/// as proof that a conversion between representations exists.
+/// `Available` means that this module exposes a concrete adapter entry
+/// point for the requested direction.
+///
+/// `NotProvided` means that this module does not expose that conversion.
+/// It does not prove that no domain-owned adapter exists elsewhere.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum AdapterAvailability {
-    /// The conversion is implemented and exposed by this module.
+    /// This module exposes the requested adapter.
     Available(AdapterDescriptor),
 
-    /// The representation exists, but this compiler adapter module
-    /// does not currently implement the requested conversion.
-    ///
-    /// A domain-owned conversion may exist elsewhere; callers must
-    /// consult that subsystem's documented API rather than assuming
-    /// that this module implements it.
+    /// This module does not expose the requested adapter.
     NotProvided {
         /// Requested source representation.
         source: Representation,
@@ -506,19 +548,46 @@ pub enum AdapterAvailability {
     },
 }
 
-/// Query the availability of a compiler-facing conversion.
+impl AdapterAvailability {
+    /// Return whether this module exposes an adapter for the request.
+    #[must_use]
+    pub const fn is_available(self) -> bool {
+        matches!(self, Self::Available(_))
+    }
+
+    /// Return the adapter descriptor when this module exposes one.
+    #[must_use]
+    pub const fn descriptor(self) -> Option<AdapterDescriptor> {
+        match self {
+            Self::Available(descriptor) => Some(descriptor),
+            Self::NotProvided { .. } => None,
+        }
+    }
+}
+
+/// Query adapter availability within this compiler integration module.
 ///
-/// Only the currently implemented ZCIR/ZUIR identity conversions
-/// return `Available`.
+/// Only the ZCIR/ZUIR identity conversions are currently available.
 ///
-/// In particular, this function does not claim that quantum,
-/// HDL, AI, tensor, or legacy IR can be converted to ZUIR through
-/// this module.
+/// Quantum, HDL, AI, tensor, hybrid, distributed, and legacy
+/// representations are not reported as convertible merely because
+/// their owning subsystems exist.
+///
+/// This query is deliberately not a universal adapter registry.
+/// Future domain adapters must be implemented by their owning
+/// subsystems and explicitly integrated when their contracts exist.
 #[must_use]
 pub const fn adapter_availability(
     source: Representation,
     destination: Representation,
 ) -> AdapterAvailability {
+    if !source.is_well_formed() || !destination.is_well_formed() {
+        return AdapterAvailability::NotProvided {
+            source,
+            destination,
+        };
+    }
+
     match (source, destination) {
         (Representation::Zcir, Representation::Zuir) => {
             AdapterAvailability::Available(ZCIR_TO_ZUIR)
@@ -533,16 +602,6 @@ pub const fn adapter_availability(
             destination,
         },
     }
-}
-
-// =============================================================================
-// API VERSION
-// =============================================================================
-
-/// Return the compiler IR adapter API version.
-#[must_use]
-pub const fn api_version() -> u16 {
-    IR_ADAPTERS_API_VERSION
 }
 
 // =============================================================================
@@ -563,7 +622,7 @@ mod tests {
     #[test]
     fn adapter_api_version_is_available() {
         assert_eq!(api_version(), IR_ADAPTERS_API_VERSION);
-        assert_eq!(IR_ADAPTERS_API_VERSION, 1);
+        assert_eq!(IR_ADAPTERS_API_VERSION, 2);
     }
 
     #[test]
@@ -575,6 +634,8 @@ mod tests {
             ConversionGuarantee::Identity
         );
         assert!(ZCIR_TO_ZUIR.is_identity());
+        assert!(ZCIR_TO_ZUIR.declares_semantic_preservation());
+        assert!(ZCIR_TO_ZUIR.is_well_formed());
     }
 
     #[test]
@@ -586,6 +647,7 @@ mod tests {
             ConversionGuarantee::Identity
         );
         assert!(ZUIR_TO_ZCIR.is_identity());
+        assert!(ZUIR_TO_ZCIR.is_well_formed());
     }
 
     #[test]
@@ -609,7 +671,7 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_zcir_to_zuir_does_not_replace_entity() {
+    fn borrowed_zcir_to_zuir_preserves_the_original_entity() {
         let id = block_id(3);
         let block = ZuirBlock::new(id);
 
@@ -620,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn borrowed_zuir_to_zcir_does_not_replace_entity() {
+    fn borrowed_zuir_to_zcir_preserves_the_original_entity() {
         let id = block_id(4);
         let block = ZuirBlock::new(id);
 
@@ -709,6 +771,19 @@ mod tests {
     }
 
     #[test]
+    fn hybrid_and_distributed_conversions_are_not_assumed() {
+        for source in [
+            Representation::Extension("zamani.hybrid"),
+            Representation::Extension("zamani.distributed"),
+        ] {
+            assert!(matches!(
+                adapter_availability(source, Representation::Zuir),
+                AdapterAvailability::NotProvided { .. }
+            ));
+        }
+    }
+
+    #[test]
     fn legacy_conversion_is_not_assumed() {
         assert!(matches!(
             adapter_availability(
@@ -720,7 +795,63 @@ mod tests {
     }
 
     #[test]
-    fn representation_identifiers_are_stable() {
+    fn extension_representations_have_extensible_identifiers() {
+        let representation = Representation::Extension("vendor.domain.ir");
+
+        assert_eq!(representation.as_str(), "vendor.domain.ir");
+        assert!(representation.is_extension());
+        assert!(representation.is_well_formed());
+    }
+
+    #[test]
+    fn empty_extension_identifiers_are_rejected_by_availability() {
+        let source = Representation::Extension("");
+
+        assert!(!source.is_well_formed());
+
+        assert!(matches!(
+            adapter_availability(source, Representation::Zuir),
+            AdapterAvailability::NotProvided { .. }
+        ));
+    }
+
+    #[test]
+    fn conversion_guarantees_remain_distinct() {
+        assert!(ConversionGuarantee::Identity
+            .declares_semantic_preservation());
+
+        assert!(ConversionGuarantee::VerifiedSemanticPreservation
+            .declares_semantic_preservation());
+
+        assert!(!ConversionGuarantee::PotentiallyLossy
+            .declares_semantic_preservation());
+
+        assert!(ConversionGuarantee::PotentiallyLossy
+            .is_potentially_lossy());
+    }
+
+    #[test]
+    fn descriptor_does_not_claim_a_conversion_exists() {
+        let descriptor = AdapterDescriptor::new(
+            Representation::Extension("future.domain"),
+            Representation::Zuir,
+            ConversionGuarantee::VerifiedSemanticPreservation,
+        );
+
+        assert!(descriptor.is_well_formed());
+
+        // Descriptive metadata alone does not register an adapter.
+        assert!(matches!(
+            adapter_availability(
+                descriptor.source(),
+                descriptor.destination()
+            ),
+            AdapterAvailability::NotProvided { .. }
+        ));
+    }
+
+    #[test]
+    fn representation_identifiers_remain_stable() {
         assert_eq!(Representation::Zuir.as_str(), "zuir");
         assert_eq!(Representation::Zcir.as_str(), "zcir");
         assert_eq!(Representation::Quantum.as_str(), "quantum-ir");
