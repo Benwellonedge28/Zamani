@@ -6,43 +6,42 @@
 
 //! # Zamani Compiler — Backend Discovery
 //!
-//! Path: src/compiler/backends/discovery.rs
+//! Path: `src/compiler/backends/discovery.rs`
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
 //!
-//! # Purpose
+//! ## Purpose
 //!
-//! Integrate the canonical backend registry with compiler-side backend
-//! inventory and the existing canonical target-discovery subsystem.
+//! Provides compiler-facing discovery of registered backend metadata and
+//! an adapter connecting the canonical backend registry to the canonical
+//! compiler target-discovery subsystem.
 //!
-//! This module provides:
+//! This module is an integration layer. It does not create or own another
+//! backend registry, target registry, capability registry, compatibility
+//! engine, or physical hardware inventory.
 //!
-//! 1. Discovery of registered backend descriptors.
-//! 2. Filtering of backend inventories using caller-supplied criteria.
-//! 3. Explicit backend implementation probing.
-//! 4. An adapter allowing registered backends to contribute target
-//!    descriptors to the canonical target-discovery subsystem.
+//! ## Canonical authorities
 //!
-//! # Architectural ownership
+//! Backend implementation:
+//!     crate::backend
 //!
-//! Canonical backend registration:
+//! Backend registration:
 //!     crate::backend::registry
 //!
-//! Compiler-facing backend registry:
-//!     crate::compiler::backends::registry
+//! Backend capability evidence:
+//!     crate::backend::capabilities
 //!
-//! Target descriptors:
+//! Backend compatibility:
+//!     crate::backend::compatibility
+//!
+//! Compiler target descriptors:
 //!     crate::compiler::configuration::target
 //!
 //! Target discovery:
 //!     crate::compiler::planning::target_discovery
 //!
-//! Capability analysis:
-//!     crate::compiler::planning::capability_matching
-//!
-//! Target selection:
-//!     crate::backend::selection
+//! Backend selection:
+//!     crate::compiler::backends::selection
 //!
 //! Resource feasibility:
 //!     crate::compiler::planning
@@ -50,103 +49,93 @@
 //! Runtime execution:
 //!     crate::runtime
 //!
-//! # Ownership
+//! ## Ownership
 //!
 //! This module owns:
 //!
 //! - Backend discovery requests.
 //! - Backend discovery reports.
-//! - Backend inventory filtering.
+//! - Backend descriptor filtering.
 //! - Explicit backend implementation probing.
 //! - Backend-to-target discovery adaptation.
 //! - Discovery integration errors.
 //!
 //! This module does not own:
 //!
-//! - Backend registration.
-//! - Backend factories.
+//! - Backend registration or factories.
+//! - Backend implementation traits.
 //! - Target descriptor definitions.
-//! - Target discovery provider registration.
-//! - Capability definitions.
-//! - Capability evidence.
-//! - Hardware inspection.
+//! - Target provider registration.
+//! - Capability definitions or evidence.
+//! - Compatibility evaluation.
+//! - Physical device discovery.
 //! - Physical resource allocation.
 //! - Resource feasibility.
 //! - Backend selection.
-//! - IR lowering.
-//! - Artifact generation.
+//! - IR construction or lowering.
+//! - Artifact generation or verification.
 //! - Runtime execution.
 //!
-//! # Important distinction
+//! ## Important distinctions
 //!
-//! A registered backend is not necessarily an available physical device.
+//! Registration is not implementation availability.
 //!
-//! A constructible backend is not necessarily an executable toolchain.
+//! Implementation construction is not physical device discovery.
 //!
-//! A discovered target is not necessarily compatible with a workload.
+//! Target discovery is not capability compatibility.
 //!
-//! A compatible target is not necessarily resource-feasible.
+//! Capability compatibility is not resource feasibility.
 //!
-//! A feasible plan is not proof that physical execution succeeded.
+//! Resource feasibility is not physical resource reservation.
 //!
-//! These distinctions must remain explicit throughout compilation.
+//! Successful code generation is not artifact verification.
 //!
-//! # Scalability
+//! Artifact verification is not successful execution.
 //!
-//! No fixed backend count, architecture count, accelerator count,
-//! provider count, or target count is introduced here.
+//! Discovery must never promote unknown evidence into positive evidence.
 //!
-//! Collections grow according to available resources.
+//! ## Scalability
 //!
-//! Operational budgets belong to the appropriate compilation and
-//! discovery orchestration contracts.
+//! No fixed maximum is imposed on:
+//!
+//! - Backends.
+//! - Providers.
+//! - Targets.
+//! - Architectures.
+//! - Computational domains.
+//! - Accelerators.
+//! - Devices.
+//! - Distributed participants.
+//! - Resource quantities.
+//!
+//! Operational budgets belong to compiler configuration and orchestration.
+//! Physical capacity belongs to the actual target and its providers.
 //!
 //! Literal infinite computation is not claimed.
 //!
-//! # Determinism
+//! ## Determinism
 //!
-//! Backend descriptors are obtained from the canonical registry,
-//! which provides deterministic identifier ordering.
+//! Backend descriptors are supplied by the canonical registry in canonical
+//! identifier order. Discovery filtering preserves that order.
 //!
-//! Filtering preserves that ordering.
+//! Target descriptor aggregation and conflict handling belong to the
+//! canonical target-discovery subsystem.
 //!
-//! # Thread safety
+//! ## Concurrency
 //!
-//! Canonical backend registry synchronization is inherited.
+//! Backend registry synchronization is inherited from BackendRegistry.
+//! Target provider registration is owned by TargetDiscoveryRegistry.
 //!
-//! This module introduces no global mutable registry.
+//! This module introduces no global mutable state.
 //!
-//! Target discovery remains instance-owned.
-//!
-//! # Failure behavior
+//! ## Failure behavior
 //!
 //! Registry failures are propagated.
-//!
-//! Factory construction failures are never interpreted as successful
-//! physical hardware discovery.
-//!
-//! Missing target metadata is never fabricated.
-//!
-//! Unknown capability information is never interpreted as support.
-//!
-//! Conflicting target identities are handled by the canonical
-//! target-discovery subsystem.
-//!
-//! # Integration
-//!
-//! Parent module:
-//!     src/compiler/backends/mod.rs
-//!
-//! Required declaration:
-//!     pub mod discovery;
-//!
-//! Required sibling:
-//!     pub mod registry;
-//!
-//! Existing planning module:
-//!     crate::compiler::planning::target_discovery
-//!
-//! No competing registry or discovery engine is introduced.
+//! Factory construction failures are propagated.
+//! Invalid mapped target descriptors are rejected.
+//! Mapper failures are reported with their backend identity.
+//! Missing metadata is never fabricated.
+//! A failed probe is never interpreted as successful availability.
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -159,16 +148,16 @@ use crate::backend::registry::{
     RegistryError,
 };
 
+use crate::compiler::configuration::target::{
+    TargetDescriptor,
+};
+
 use crate::compiler::planning::target_discovery::{
     DiscoveryError,
     DiscoveryProviderId,
     DiscoveryRequest,
     ProviderFailure,
     TargetDiscoveryProvider,
-};
-
-use crate::compiler::configuration::target::{
-    TargetDescriptor,
 };
 
 // ============================================================================
@@ -180,20 +169,23 @@ pub const BACKEND_DISCOVERY_MODULE_NAME: &str =
     "zamani.compiler.backends.discovery";
 
 /// Backend discovery API version.
-pub const BACKEND_DISCOVERY_API_VERSION: u16 = 1;
+pub const BACKEND_DISCOVERY_API_VERSION: u16 = 2;
 
 // ============================================================================
 // DISCOVERY REQUEST
 // ============================================================================
 
-/// Criteria used to discover registered backend implementations.
+/// Criteria for inspecting registered backend descriptors.
+///
+/// All configured filters are combined using logical AND.
+///
+/// Within an individual filter, matching uses exact, case-sensitive
+/// canonical identifiers or extension strings.
 ///
 /// An empty filter means unrestricted discovery for that dimension.
 ///
-/// When multiple filters are supplied, all filters must match.
-///
-/// Identifiers are compared using their canonical, case-sensitive
-/// representations.
+/// Backend identifiers in this request are canonical identifiers.
+/// Alias resolution is available through [`BackendDiscovery::discover_one`].
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackendDiscoveryRequest {
     backend_ids: BTreeSet<String>,
@@ -207,7 +199,9 @@ impl BackendDiscoveryRequest {
         Self::default()
     }
 
-    /// Restrict discovery to specified backend identifiers.
+    /// Restrict discovery to canonical backend identifiers.
+    ///
+    /// Duplicate identifiers are removed deterministically.
     pub fn with_backend_ids<I, S>(
         mut self,
         identifiers: I,
@@ -224,7 +218,9 @@ impl BackendDiscoveryRequest {
         self
     }
 
-    /// Restrict discovery to specified output extensions.
+    /// Restrict discovery to advertised output extensions.
+    ///
+    /// Extension matching is exact and case-sensitive.
     pub fn with_file_extensions<I, S>(
         mut self,
         extensions: I,
@@ -241,7 +237,7 @@ impl BackendDiscoveryRequest {
         self
     }
 
-    /// Return requested backend identifiers.
+    /// Return requested canonical backend identifiers.
     #[must_use]
     pub fn backend_ids(&self) -> &BTreeSet<String> {
         &self.backend_ids
@@ -253,7 +249,7 @@ impl BackendDiscoveryRequest {
         &self.file_extensions
     }
 
-    /// Determine whether a descriptor matches the request.
+    /// Determine whether a descriptor satisfies every configured filter.
     #[must_use]
     pub fn accepts(
         &self,
@@ -272,7 +268,7 @@ impl BackendDiscoveryRequest {
         identifier_matches && extension_matches
     }
 
-    /// Whether the request contains no restrictions.
+    /// Return whether the request has no restrictions.
     #[must_use]
     pub fn is_unrestricted(&self) -> bool {
         self.backend_ids.is_empty()
@@ -284,16 +280,16 @@ impl BackendDiscoveryRequest {
 // DISCOVERY REPORT
 // ============================================================================
 
-/// Immutable snapshot of discovered registered backend metadata.
+/// Immutable snapshot of discovered backend metadata.
 ///
-/// The snapshot contains cloned descriptors, not backend instances.
+/// Descriptors are cloned from the canonical registry.
 ///
-/// It therefore does not hold registry locks or backend implementation
-/// resources after discovery completes.
+/// The report does not retain backend instances or registry locks.
+///
+/// The descriptor collection is ordered by canonical backend identifier.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BackendDiscoveryReport {
     descriptors: Vec<BackendDescriptor>,
-
     scanned: usize,
 }
 
@@ -304,15 +300,16 @@ impl BackendDiscoveryReport {
         Self::default()
     }
 
-    /// Return discovered backend descriptors.
-    ///
-    /// Results are in canonical backend identifier order.
+    /// Return discovered descriptors in canonical identifier order.
     #[must_use]
     pub fn descriptors(&self) -> &[BackendDescriptor] {
         &self.descriptors
     }
 
-    /// Return a discovered descriptor by canonical identifier.
+    /// Find a descriptor by canonical identifier.
+    ///
+    /// Aliases are not searched here. Use the canonical registry for
+    /// alias resolution.
     #[must_use]
     pub fn find(
         &self,
@@ -332,13 +329,13 @@ impl BackendDiscoveryReport {
         self.scanned
     }
 
-    /// Return the number of matching backends.
+    /// Return the number of matching descriptors.
     #[must_use]
     pub fn matched_count(&self) -> usize {
         self.descriptors.len()
     }
 
-    /// Whether the discovery returned no matching backends.
+    /// Return whether no descriptors matched.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.descriptors.is_empty()
@@ -346,20 +343,25 @@ impl BackendDiscoveryReport {
 }
 
 // ============================================================================
-// DISCOVERY ERRORS
+// ERRORS
 // ============================================================================
 
-/// Errors produced by backend discovery and probing.
+/// Errors produced by backend discovery and implementation probing.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BackendDiscoveryError {
-    /// Canonical registry operation failed.
+    /// An operation on the canonical backend registry failed.
     Registry(RegistryError),
 
-    /// Backend factory output did not match its registered metadata.
+    /// The implementation's extension differs from registered metadata.
     ImplementationMetadataMismatch {
+        /// Canonical backend identifier.
         backend_id: String,
+
+        /// Extension recorded in the canonical registry.
         registered_extension: String,
+
+        /// Extension reported by the constructed implementation.
         implementation_extension: String,
     },
 }
@@ -414,9 +416,9 @@ impl From<RegistryError> for BackendDiscoveryError {
 
 /// Stateless service for inspecting the canonical backend registry.
 ///
-/// The service never creates another registry.
+/// The service never creates or owns another registry.
 ///
-/// All discovery operations use the registry supplied by the caller.
+/// Every operation receives the authoritative registry explicitly.
 pub struct BackendDiscovery;
 
 impl BackendDiscovery {
@@ -426,7 +428,7 @@ impl BackendDiscovery {
         BACKEND_DISCOVERY_MODULE_NAME
     }
 
-    /// Return the API version.
+    /// Return the backend discovery API version.
     #[must_use]
     pub const fn api_version() -> u16 {
         BACKEND_DISCOVERY_API_VERSION
@@ -434,15 +436,25 @@ impl BackendDiscovery {
 
     /// Discover registered backend descriptors.
     ///
-    /// This operation only inspects registered metadata.
+    /// This operation inspects registered metadata only.
     ///
-    /// It does not instantiate implementations, invoke toolchains,
-    /// inspect physical devices, or claim target availability.
+    /// It does not:
+    ///
+    /// - Construct backend implementations.
+    /// - Invoke external toolchains.
+    /// - Inspect physical devices.
+    /// - Query runtime availability.
+    /// - Evaluate capabilities.
+    /// - Evaluate compatibility.
+    /// - Allocate resources.
+    ///
+    /// The canonical registry supplies descriptors in deterministic
+    /// identifier order. Filtering preserves that ordering.
     ///
     /// # Errors
     ///
-    /// Returns the original canonical registry error if its state
-    /// cannot be inspected.
+    /// Returns the original canonical registry error if registry
+    /// inspection fails.
     pub fn discover(
         registry: &BackendRegistry,
         request: &BackendDiscoveryRequest,
@@ -465,9 +477,16 @@ impl BackendDiscovery {
         })
     }
 
-    /// Discover one backend by canonical identifier or alias.
+    /// Discover one backend by canonical identifier or registered alias.
     ///
     /// Alias resolution is delegated to the canonical registry.
+    ///
+    /// The returned descriptor always contains its canonical identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns the canonical registry error when the identifier cannot
+    /// be resolved or the registry cannot be inspected.
     pub fn discover_one(
         registry: &BackendRegistry,
         identifier: &str,
@@ -477,28 +496,41 @@ impl BackendDiscovery {
 
     /// Explicitly construct and inspect a registered backend.
     ///
-    /// This invokes the registered factory.
+    /// This invokes the registered backend factory.
     ///
-    /// Factory construction is not equivalent to:
+    /// The canonical registry verifies that the constructed implementation
+    /// reports the registered canonical backend identity.
     ///
-    /// - Physical device discovery.
-    /// - Toolchain availability verification.
+    /// This method additionally verifies output-extension agreement.
+    ///
+    /// Construction does not establish:
+    ///
+    /// - Physical device availability.
+    /// - Toolchain availability.
+    /// - Target compatibility.
+    /// - Resource feasibility.
     /// - Compilation success.
-    /// - Artifact verification.
+    /// - Artifact validity.
     /// - Execution availability.
     ///
-    /// The canonical registry verifies the backend identity.
-    /// This function additionally verifies output-extension agreement.
+    /// Callers must use this method only when backend construction is
+    /// appropriate. Factories should not perform unexpected external
+    /// side effects.
     ///
-    /// Callers must invoke this method only when factory construction
-    /// is an appropriate operation for the backend.
+    /// # Errors
+    ///
+    /// Returns registry errors or implementation metadata mismatches.
     pub fn probe(
         registry: &BackendRegistry,
         identifier: &str,
     ) -> Result<BackendProbeReport, BackendDiscoveryError> {
-        let descriptor = registry.descriptor(identifier)?;
+        // Resolve first so the report and subsequent operations use the
+        // same canonical backend identity.
+        let canonical_id = registry.resolve(identifier)?;
 
-        let implementation = registry.create(identifier)?;
+        let descriptor = registry.descriptor(&canonical_id)?;
+
+        let implementation = registry.create(&canonical_id)?;
 
         let implementation_extension =
             implementation.file_extension().to_owned();
@@ -517,13 +549,13 @@ impl BackendDiscovery {
         Ok(BackendProbeReport {
             backend_id: descriptor.id,
             target_name: implementation.target_name().to_owned(),
-            file_extension: implementation.file_extension().to_owned(),
+            file_extension: implementation_extension,
         })
     }
 }
 
 // ============================================================================
-// BACKEND PROBE RESULT
+// PROBE REPORT
 // ============================================================================
 
 /// Result of explicitly constructing a registered backend.
@@ -540,22 +572,30 @@ pub struct BackendProbeReport {
 }
 
 // ============================================================================
-// EXPLICIT BACKEND-TO-TARGET MAPPING
+// BACKEND-TO-TARGET MAPPING
 // ============================================================================
 
-/// Explicit metadata adapter for a registered backend.
+/// Callback that maps authoritative backend metadata into target metadata.
 ///
-/// Backend registry metadata does not contain enough information to
-/// manufacture a valid target descriptor.
+/// Backend registry descriptors do not contain enough information to
+/// manufacture a complete target descriptor.
 ///
-/// Consequently, target information must be supplied by an authoritative
-/// backend integration.
+/// Implementations must obtain target information from authoritative
+/// metadata such as:
 ///
-/// This callback must return only target descriptors supported by
-/// verifiable metadata from the backend, toolchain, hardware inventory,
-/// or another trusted source.
+/// - A backend target manifest.
+/// - A verified toolchain description.
+/// - A hardware inventory provider.
+/// - A deployment inventory.
+/// - A trusted remote target provider.
 ///
-/// It must not invent architecture, ABI, capabilities, or resources.
+/// A mapper must not infer architecture, ABI, capabilities, or resources
+/// from a backend name, alias, description, or output extension.
+///
+/// The callback receives the canonical backend descriptor and the
+/// canonical target discovery request.
+///
+/// It must return only target descriptors supported by evidence.
 pub type BackendTargetMapper = Arc<
     dyn Fn(
             &BackendDescriptor,
@@ -566,26 +606,40 @@ pub type BackendTargetMapper = Arc<
         + 'static,
 >;
 
-/// Discovery provider adapting registered backends into the canonical
-/// compiler target-discovery subsystem.
+// ============================================================================
+// REGISTERED BACKEND TARGET PROVIDER
+// ============================================================================
+
+/// Adapts the canonical backend registry into the canonical target
+/// discovery subsystem.
 ///
-/// This provider does not own or duplicate target discovery.
+/// This is a provider adapter, not a second target discovery engine.
 ///
-/// It implements the existing `TargetDiscoveryProvider` contract.
+/// It does not own target descriptor identity, target provider registration,
+/// target aggregation, duplicate detection, or target conflict resolution.
+///
+/// Those responsibilities remain with
+/// `crate::compiler::planning::target_discovery`.
 pub struct RegisteredBackendTargetProvider {
     id: DiscoveryProviderId,
-
     registry: BackendRegistry,
-
     mapper: BackendTargetMapper,
 }
 
 impl RegisteredBackendTargetProvider {
-    /// Construct an adapter using an explicit backend-to-target mapper.
+    /// Construct a backend-to-target discovery adapter.
     ///
-    /// The backend registry is shared with its original owner.
+    /// The supplied registry is cloned by shared ownership. No independent
+    /// registry is created.
     ///
-    /// No target descriptor is fabricated by this constructor.
+    /// The mapper is mandatory because backend registration metadata alone
+    /// cannot establish a target architecture, ABI, capability profile,
+    /// resource capacity, or physical device.
+    ///
+    /// # Errors
+    ///
+    /// Returns a target discovery error when the provider identity is
+    /// invalid.
     pub fn new<F>(
         provider_id: impl Into<String>,
         registry: BackendRegistry,
@@ -606,6 +660,12 @@ impl RegisteredBackendTargetProvider {
             mapper: Arc::new(mapper),
         })
     }
+
+    /// Return this provider's stable identity.
+    #[must_use]
+    pub fn provider_id(&self) -> &DiscoveryProviderId {
+        &self.id
+    }
 }
 
 impl TargetDiscoveryProvider for RegisteredBackendTargetProvider {
@@ -613,6 +673,20 @@ impl TargetDiscoveryProvider for RegisteredBackendTargetProvider {
         &self.id
     }
 
+    /// Discover targets described by registered backend integrations.
+    ///
+    /// The provider takes a snapshot of backend descriptors before invoking
+    /// mapper callbacks. No backend registry lock is held while callbacks
+    /// execute.
+    ///
+    /// The canonical target discovery subsystem remains responsible for
+    /// request filtering, descriptor validation, duplicate detection,
+    /// provenance aggregation, and conflict reporting.
+    ///
+    /// A mapper failure is returned as a provider failure. The existing
+    /// TargetDiscoveryProvider contract reports failure at provider scope;
+    /// per-backend partial failures require a future extension to that
+    /// canonical contract.
     fn discover(
         &self,
         request: &DiscoveryRequest,
@@ -624,7 +698,8 @@ impl TargetDiscoveryProvider for RegisteredBackendTargetProvider {
                 ProviderFailure::new(
                     self.id.clone(),
                     format!(
-                        "canonical backend registry inspection failed: {error}"
+                        "canonical backend registry inspection failed: \
+                         {error}"
                     ),
                 )
             })?;
@@ -637,14 +712,30 @@ impl TargetDiscoveryProvider for RegisteredBackendTargetProvider {
                     ProviderFailure::new(
                         self.id.clone(),
                         format!(
-                            "target metadata mapping failed for backend \
-                             `{}`: {error}",
+                            "target mapping failed for backend `{}`: {error}",
                             descriptor.id
                         ),
                     )
                 })?;
 
-            targets.extend(discovered);
+            // Validate here as well as in the canonical target discovery
+            // subsystem. This makes the adapter's output contract explicit
+            // and prevents invalid mapper results crossing this boundary.
+            for target in discovered {
+                target.validate().map_err(|error| {
+                    ProviderFailure::new(
+                        self.id.clone(),
+                        format!(
+                            "backend `{}` supplied invalid target `{}`: \
+                             {error}",
+                            descriptor.id,
+                            target.id()
+                        ),
+                    )
+                })?;
+
+                targets.push(target);
+            }
         }
 
         Ok(targets)
@@ -665,7 +756,10 @@ mod tests {
             BackendDiscovery::module_name(),
             BACKEND_DISCOVERY_MODULE_NAME,
         );
+    }
 
+    #[test]
+    fn api_version_is_nonzero() {
         assert_ne!(
             BackendDiscovery::api_version(),
             0,
@@ -673,10 +767,12 @@ mod tests {
     }
 
     #[test]
-    fn unrestricted_request_accepts_arbitrary_backend_metadata() {
+    fn unrestricted_request_has_no_filters() {
         let request = BackendDiscoveryRequest::all();
 
         assert!(request.is_unrestricted());
+        assert!(request.backend_ids().is_empty());
+        assert!(request.file_extensions().is_empty());
     }
 
     #[test]
@@ -718,7 +814,7 @@ mod tests {
     }
 
     #[test]
-    fn multiple_filters_are_combined() {
+    fn multiple_filters_are_combined_with_and() {
         let request = BackendDiscoveryRequest::all()
             .with_backend_ids(["vendor.custom"])
             .with_file_extensions([".custom"]);
@@ -741,6 +837,20 @@ mod tests {
         assert!(request.accepts(&matching));
         assert!(!request.accepts(&wrong_extension));
         assert!(!request.accepts(&wrong_identifier));
+    }
+
+    #[test]
+    fn duplicate_filters_are_deduplicated() {
+        let request = BackendDiscoveryRequest::all()
+            .with_backend_ids([
+                "vendor.custom",
+                "vendor.custom",
+            ]);
+
+        assert_eq!(
+            request.backend_ids().len(),
+            1,
+        );
     }
 
     #[test]
@@ -789,8 +899,8 @@ mod tests {
         )
         .expect("discovery should succeed");
 
-        // An empty backend inventory is a valid discovery result.
-        // It does not assert that no hardware exists.
+        // No registered backend is a valid empty inventory result.
+        // It does not prove that no physical hardware exists.
         assert!(report.is_empty());
     }
 }
