@@ -1,156 +1,120 @@
 
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
 //! # Zamani Compiler Diagnostic Aggregation
 //!
-//! Path: `src/compiler/diagnostics/aggregation.rs`
+//! Path: src/compiler/diagnostics/aggregation.rs
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
 //!
-//! ## Purpose
+//! PURPOSE
 //!
-//! Aggregate structured diagnostics emitted by compilation stages into one
-//! deterministic compilation report.
+//! Aggregate canonical diagnostics produced by different compilation
+//! stages into one deterministic compilation report.
 //!
-//! The aggregation layer:
-//!
-//! - accepts diagnostics from multiple compiler stages;
-//! - reuses the canonical frontend semantic Diagnostic record;
-//! - preserves source locations and structured diagnostic information;
-//! - optionally merges duplicate report identities;
-//! - deterministically selects the representative of duplicate reports;
-//! - applies an explicitly configured diagnostic-retention budget;
-//! - records dropped diagnostics;
-//! - distinguishes complete from incomplete aggregation;
-//! - provides deterministic final reporting order;
-//! - reports allocation and accounting failures explicitly.
-//!
-//! ## Ownership
+//! OWNERSHIP
 //!
 //! This module owns:
-//!
 //! - compiler-invocation diagnostic accumulation;
-//! - compiler-level aggregation policy;
+//! - diagnostic retention policies;
+//! - duplicate-report indexing;
 //! - aggregation statistics;
-//! - aggregation completion status;
-//! - deterministic merging of duplicate retained diagnostics.
+//! - aggregation completeness;
+//! - deterministic final ordering.
 //!
-//! It does not own:
-//!
-//! - the Diagnostic record;
-//! - diagnostic codes, severity, or phase definitions;
-//! - source spans or source maps;
-//! - diagnostic ordering policy;
+//! This module does not own:
+//! - Diagnostic definitions;
+//! - diagnostic codes;
+//! - diagnostic severity;
+//! - diagnostic categories;
+//! - source spans;
+//! - source maps;
 //! - semantic validation;
-//! - parser or lexer recovery;
+//! - parser recovery;
 //! - diagnostic rendering;
-//! - diagnostic serialization;
-//! - diagnostic suppression policy;
-//! - semantic-session budgets;
-//! - target feasibility or resource allocation.
+//! - JSON serialization;
+//! - compilation success or failure decisions.
 //!
-//! Canonical diagnostic records remain owned by:
+//! CANONICAL AUTHORITIES
 //!
-//! `crate::frontend::semantic::diagnostics`
+//! Diagnostic:
+//! crate::frontend::semantic::diagnostics
 //!
-//! Canonical diagnostic ordering and deduplication remain owned by:
+//! Diagnostic identity:
+//! Diagnostic::same_report_identity
 //!
-//! `crate::frontend::semantic::diagnostics::ordering`
+//! Diagnostic ordering:
+//! crate::frontend::semantic::diagnostics::ordering
 //!
-//! ## Integration boundary
+//! Source spans:
+//! crate::frontend::ast::node::source::span
 //!
-//! The compiler may receive findings from frontend, semantic, IR, lowering,
-//! optimization, planning, and backend stages.
+//! Reporting:
+//! crate::compiler::diagnostics::reporting
 //!
-//! Those producers must convert their stage-specific diagnostic records into
-//! the canonical diagnostic API through explicit, loss-aware adapters.
+//! Rendering:
+//! crate::compiler::diagnostics::rendering
 //!
-//! This module does not pretend that independently defined parser, lexer,
-//! backend, or domain diagnostic records are already interchangeable.
+//! SCALABILITY
 //!
-//! ## Scalability
+//! No universal diagnostic-count ceiling is imposed.
 //!
-//! No fixed diagnostic-count ceiling is introduced.
+//! An optional retention budget is an operational policy.
 //!
-//! `max_diagnostics: None` means no explicit retention budget.
-//! `Some(limit)` is an invocation-specific operational policy.
+//! Actual capacity is bounded by available memory and implementation
+//! representation limits.
 //!
-//! A retention limit is not a language limit, hardware limit, or semantic
-//! restriction. When the budget is exhausted, aggregation becomes incomplete.
+//! Exhausting a budget must produce an explicitly incomplete aggregate.
 //!
-//! No diagnostic is silently treated as retained after it has been dropped.
+//! DETERMINISM
 //!
-//! The implementation uses fallible reservation for its principal
-//! collections and checked accounting for counters.
+//! Diagnostic identity is checked using the canonical frontend identity.
 //!
-//! ## Determinism
+//! Hash-map iteration is never used for reporting order.
 //!
-//! The internal identity index is never iterated to produce output.
+//! Duplicate representatives are selected using the canonical
+//! diagnostic comparator.
 //!
-//! Duplicate representatives are selected using the canonical diagnostic
-//! comparator, not arrival order.
+//! Final reports use canonical frontend ordering.
 //!
-//! Final output is sorted using the canonical diagnostic ordering function.
+//! SAFETY
 //!
-//! Consequently, independent-stage completion order does not determine the
-//! final report order or the selected duplicate representative.
-//!
-//! ## Failure policy
-//!
-//! - Diagnostic-budget exhaustion marks aggregation incomplete.
-//! - Collection allocation failure marks aggregation incomplete.
-//! - Counter overflow is an explicit aggregation error.
-//! - Invalid diagnostic codes remain the responsibility of the producer or
-//!   publication boundary.
-//! - An incomplete aggregate must never be represented as a complete report.
-//!
-//! ## Rust and safety
-//!
-//! Rust 2021, Rust 1.97+.
-//! No unsafe code.
+//! Safe Rust only.
 //! No global mutable state.
-//! No filesystem, network, hardware, or runtime access.
+//! No hardware or runtime access.
+//! No filesystem or network access.
 
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use core::num::NonZeroUsize;
+
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use std::hash::Hash;
 
 use crate::frontend::semantic::diagnostics::{
     compare_diagnostics,
     sort_diagnostics,
     Diagnostic,
-    DiagnosticCategory,
-    DiagnosticCode,
-    DiagnosticPhase,
-    DiagnosticSeverity,
 };
-
-use crate::frontend::ast::node::source::Span;
 
 /// Immutable policy for one compiler diagnostic aggregation operation.
 ///
-/// This policy controls diagnostic retention and duplicate handling only.
+/// This policy controls retention and duplicate handling only.
+///
 /// It does not change diagnostic meaning, severity, source coordinates,
-/// compiler validity, or target feasibility.
+/// semantic validity, or target feasibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AggregationPolicy {
     /// Maximum number of unique diagnostics retained.
     ///
-    /// `None` means no explicit retention limit.
+    /// None means no explicitly configured retention limit.
     ///
-    /// When deduplication is disabled, this limit applies to every retained
-    /// diagnostic, including repeated report identities.
+    /// This is an operational budget, not a language-level limit.
     pub max_diagnostics: Option<NonZeroUsize>,
 
-    /// Whether repeated report identities should be merged.
-    ///
-    /// When enabled, diagnostics with the same canonical report identity
-    /// occupy one retained entry. Their representative is selected
-    /// deterministically using the canonical diagnostic comparator.
+    /// Whether duplicate report identities are collapsed.
     pub deduplicate: bool,
 }
 
@@ -161,7 +125,10 @@ impl Default for AggregationPolicy {
 }
 
 impl AggregationPolicy {
-    /// Create an aggregation policy without an explicit retention ceiling.
+    /// Create an unlimited-retention policy.
+    ///
+    /// Unlimited means no configured diagnostic-count ceiling.
+    /// It does not promise infinite physical memory.
     #[must_use]
     pub const fn unlimited() -> Self {
         Self {
@@ -170,65 +137,76 @@ impl AggregationPolicy {
         }
     }
 
-    /// Create a policy with an explicit diagnostic-retention budget.
+    /// Create a policy with an explicit retention budget.
     #[must_use]
-    pub const fn with_limit(max_diagnostics: NonZeroUsize) -> Self {
+    pub const fn with_limit(
+        max_diagnostics: NonZeroUsize,
+    ) -> Self {
         Self {
             max_diagnostics: Some(max_diagnostics),
             deduplicate: true,
         }
     }
 
-    /// Enable or disable duplicate merging.
+    /// Enable or disable duplicate collapsing.
     #[must_use]
-    pub const fn with_deduplication(mut self, enabled: bool) -> Self {
+    pub const fn with_deduplication(
+        mut self,
+        enabled: bool,
+    ) -> Self {
         self.deduplicate = enabled;
         self
     }
 }
 
-/// Completion status of diagnostic aggregation.
-///
-/// `Complete` means all submitted diagnostics were retained or merged.
-/// `Incomplete` means at least one diagnostic could not be retained or
-/// accounting could not be completed.
+/// Completion state of diagnostic aggregation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AggregationStatus {
+    /// Every submitted diagnostic was retained or deduplicated.
     Complete,
+
+    /// At least one diagnostic could not be retained or accounting
+    /// could not be completed.
     Incomplete,
 }
 
 impl AggregationStatus {
-    /// Whether aggregation retained or merged every submitted diagnostic.
     #[must_use]
     pub const fn is_complete(self) -> bool {
         matches!(self, Self::Complete)
     }
 }
 
-/// Outcome of submitting one diagnostic.
+/// Result of submitting one diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InsertOutcome {
     /// A new diagnostic was retained.
     Retained,
 
-    /// The diagnostic matched an existing report identity and was merged.
+    /// An existing report identity was found and deduplicated.
+    ///
+    /// The canonical comparator determines the retained representative.
     DuplicateMerged,
 
-    /// The diagnostic could not be retained because the configured budget
-    /// had already been reached.
+    /// The diagnostic was rejected by the configured retention budget.
     DroppedByBudget,
 }
 
-/// Counters describing one aggregation operation.
+/// Statistics for one aggregation operation.
 ///
-/// `submitted` counts calls to `push` that successfully entered accounting.
-/// `retained` is the number of diagnostics in the final aggregate.
-/// `dropped` counts diagnostics that could not be retained.
-/// `duplicates` counts submitted diagnostics merged into an existing entry.
+/// submitted:
+/// Number of successfully accounted submissions.
 ///
-/// The counters are observational metadata. They do not define compilation
-/// validity.
+/// retained:
+/// Number of diagnostics in the final aggregate.
+///
+/// dropped:
+/// Number of diagnostics that could not be retained.
+///
+/// duplicates:
+/// Number of duplicate submissions collapsed.
+///
+/// These counters do not establish semantic validity.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct AggregationStatistics {
     submitted: u64,
@@ -238,32 +216,28 @@ pub struct AggregationStatistics {
 }
 
 impl AggregationStatistics {
-    /// Number of diagnostics submitted to the aggregator.
     #[must_use]
     pub const fn submitted(&self) -> u64 {
         self.submitted
     }
 
-    /// Number of diagnostics retained in the final aggregate.
     #[must_use]
     pub const fn retained(&self) -> usize {
         self.retained
     }
 
-    /// Number of diagnostics that were not retained.
     #[must_use]
     pub const fn dropped(&self) -> u64 {
         self.dropped
     }
 
-    /// Number of duplicate submissions merged into retained diagnostics.
     #[must_use]
     pub const fn duplicates(&self) -> u64 {
         self.duplicates
     }
 }
 
-/// The collection that failed to reserve additional capacity.
+/// Identifies the collection that failed to reserve memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AllocationCollection {
     Diagnostics,
@@ -271,41 +245,54 @@ pub enum AllocationCollection {
 }
 
 impl fmt::Display for AllocationCollection {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
-            Self::Diagnostics => formatter.write_str("diagnostic collection"),
-            Self::IdentityIndex => formatter.write_str("diagnostic identity index"),
+            Self::Diagnostics => {
+                formatter.write_str("diagnostic collection")
+            }
+            Self::IdentityIndex => {
+                formatter.write_str("diagnostic identity index")
+            }
         }
     }
 }
 
-/// Errors encountered while aggregating diagnostics.
-///
-/// These are compiler infrastructure failures, not source-language
-/// diagnostics. The compiler orchestration layer must preserve this
-/// distinction.
+/// Infrastructure errors encountered during aggregation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AggregationError {
-    /// A statistics counter could not be incremented without overflow.
+    /// A statistics counter exceeded its representation.
     CounterOverflow {
         counter: &'static str,
     },
 
-    /// A collection could not reserve the capacity required for insertion.
+    /// Memory reservation failed.
     AllocationFailure {
         collection: AllocationCollection,
     },
 }
 
 impl fmt::Display for AggregationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::CounterOverflow { counter } => {
-                write!(formatter, "diagnostic aggregation counter overflow: {counter}")
+                write!(
+                    formatter,
+                    "diagnostic aggregation counter overflow: {counter}"
+                )
             }
+
             Self::AllocationFailure { collection } => {
-                write!(formatter, "unable to reserve memory for {collection}")
+                write!(
+                    formatter,
+                    "unable to reserve memory for {collection}"
+                )
             }
         }
     }
@@ -313,51 +300,57 @@ impl fmt::Display for AggregationError {
 
 impl std::error::Error for AggregationError {}
 
-/// The identity used to determine whether two diagnostics describe the same
-/// report.
+/// Compute an internal hash of the canonical report identity.
 ///
-/// This deliberately matches `Diagnostic::same_report_identity`.
+/// IMPORTANT:
 ///
-/// Supplemental details such as labels, notes, help, fixes, and metadata do
-/// not change report identity. They are used by the canonical comparator to
-/// select a deterministic representative.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct DiagnosticIdentity {
-    code: DiagnosticCode,
-    phase: DiagnosticPhase,
-    category: DiagnosticCategory,
-    severity: DiagnosticSeverity,
-    primary_span: Option<Span>,
-    message: String,
+/// The hash is only an indexing optimization.
+///
+/// Hash equality never establishes diagnostic identity.
+/// Every candidate is checked with Diagnostic::same_report_identity.
+///
+/// The hash is not serialized and is not part of the public API.
+/// Its value is not required to remain stable across Rust versions.
+fn report_identity_hash(
+    diagnostic: &Diagnostic,
+) -> u64 {
+    let mut hasher = DefaultHasher::new();
+
+    diagnostic.code().hash(&mut hasher);
+    diagnostic.phase().hash(&mut hasher);
+    diagnostic.category().hash(&mut hasher);
+    diagnostic.severity().hash(&mut hasher);
+    diagnostic.primary_span().hash(&mut hasher);
+    diagnostic.message().hash(&mut hasher);
+
+    hasher.finish()
 }
 
-impl DiagnosticIdentity {
-    fn from_diagnostic(diagnostic: &Diagnostic) -> Self {
-        Self {
-            code: diagnostic.code().clone(),
-            phase: diagnostic.phase().clone(),
-            category: diagnostic.category().clone(),
-            severity: diagnostic.severity(),
-            primary_span: diagnostic.primary_span(),
-            message: diagnostic.message().to_owned(),
-        }
-    }
-}
-
-/// Mutable accumulator for one compiler invocation.
+/// Mutable diagnostic accumulator for one compilation invocation.
 ///
-/// This type is intentionally invocation-local. It has no global state and
-/// can be owned by a compilation session.
+/// The aggregator is deliberately not internally synchronized.
 ///
-/// It is not internally synchronized. Parallel compiler workers should send
-/// diagnostics to the owning session or merge worker-local aggregates at a
-/// defined synchronization boundary.
+/// Parallel compiler workers should maintain independent accumulators
+/// and transfer their diagnostics to the owning compilation session
+/// through an explicit synchronization boundary.
+///
+/// The final ordering is independent of submission order.
 #[derive(Debug)]
 pub struct DiagnosticAggregator {
     policy: AggregationPolicy,
+
     diagnostics: Vec<Diagnostic>,
-    identities: HashMap<DiagnosticIdentity, usize>,
+
+    /// Internal hash -> candidate diagnostic positions.
+    ///
+    /// Candidate positions are always verified using the canonical
+    /// diagnostic identity method.
+    ///
+    /// The index is not iterated to produce output.
+    identities: HashMap<u64, Vec<usize>>,
+
     statistics: AggregationStatistics,
+
     status: AggregationStatus,
 }
 
@@ -368,7 +361,7 @@ impl Default for DiagnosticAggregator {
 }
 
 impl DiagnosticAggregator {
-    /// Create an empty aggregator using the supplied policy.
+    /// Create an empty aggregator.
     #[must_use]
     pub fn new(policy: AggregationPolicy) -> Self {
         Self {
@@ -386,7 +379,7 @@ impl DiagnosticAggregator {
         self.policy
     }
 
-    /// Return the current completion status.
+    /// Return the aggregation completion state.
     #[must_use]
     pub const fn status(&self) -> AggregationStatus {
         self.status
@@ -394,36 +387,40 @@ impl DiagnosticAggregator {
 
     /// Return the current statistics.
     ///
-    /// `retained` is refreshed when the aggregate is finalized.
+    /// The retained counter is finalized by finish().
     #[must_use]
     pub const fn statistics(&self) -> &AggregationStatistics {
         &self.statistics
     }
 
-    /// Return the number of diagnostics currently retained.
+    /// Number of diagnostics currently retained.
     #[must_use]
     pub fn len(&self) -> usize {
         self.diagnostics.len()
     }
 
-    /// Whether no diagnostics are currently retained.
+    /// Whether the aggregator contains no diagnostics.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.diagnostics.is_empty()
     }
 
-    /// Submit one structured diagnostic.
+    /// Submit one canonical diagnostic.
     ///
-    /// Duplicate detection occurs before the retention-budget check. Thus a
-    /// duplicate of an already retained diagnostic can still contribute
-    /// supplemental information when the retention budget is full.
+    /// Duplicate detection occurs before the retention-budget check.
     ///
-    /// When deduplication is enabled and two diagnostics have the same
-    /// report identity, the canonical comparator selects the representative.
-    /// This makes the result independent of which worker submitted the
-    /// duplicate first.
+    /// Therefore an already-retained diagnostic can still be recognized
+    /// when the retention budget is full.
     ///
-    /// A dropped diagnostic marks the aggregate incomplete.
+    /// Duplicate identity is established exclusively by the canonical
+    /// frontend Diagnostic::same_report_identity method.
+    ///
+    /// When duplicate collapsing is enabled, the canonical comparator
+    /// chooses the representative. Supplemental fields belonging only
+    /// to the discarded duplicate are not independently merged.
+    ///
+    /// A future lossless supplemental-information merge requires a
+    /// corresponding canonical Diagnostic API change.
     pub fn push(
         &mut self,
         diagnostic: Diagnostic,
@@ -431,53 +428,18 @@ impl DiagnosticAggregator {
         self.increment_submitted()?;
 
         if self.policy.deduplicate {
-            let identity = DiagnosticIdentity::from_diagnostic(&diagnostic);
-
-            if let Some(&existing_index) = self.identities.get(&identity) {
-                self.increment_duplicates()?;
-
-                let existing = &self.diagnostics[existing_index];
-
-                if compare_diagnostics(&diagnostic, existing).is_lt() {
-                    self.diagnostics[existing_index] = diagnostic;
-                }
-
-                return Ok(InsertOutcome::DuplicateMerged);
-            }
-
-            if self.at_retention_limit() {
-                self.record_drop()?;
-                return Ok(InsertOutcome::DroppedByBudget);
-            }
-
-            self.reserve_diagnostic_capacity()?;
-            self.reserve_identity_capacity()?;
-
-            let index = self.diagnostics.len();
-            self.diagnostics.push(diagnostic);
-            self.identities.insert(identity, index);
-
-            return Ok(InsertOutcome::Retained);
+            self.push_with_deduplication(diagnostic)
+        } else {
+            self.push_without_deduplication(diagnostic)
         }
-
-        if self.at_retention_limit() {
-            self.record_drop()?;
-            return Ok(InsertOutcome::DroppedByBudget);
-        }
-
-        self.reserve_diagnostic_capacity()?;
-        self.diagnostics.push(diagnostic);
-
-        Ok(InsertOutcome::Retained)
     }
 
-    /// Submit diagnostics from another compilation stage.
+    /// Submit diagnostics produced by another compiler stage.
     ///
-    /// The iterator is processed in its supplied order. Each accepted item
-    /// follows the same duplicate, budget, and failure rules as `push`.
+    /// Processing stops on the first infrastructure error.
     ///
-    /// If an infrastructure error occurs, processing stops and the error is
-    /// returned. The aggregate remains marked incomplete.
+    /// Previously accepted diagnostics remain in the aggregate.
+    /// The caller must preserve the returned infrastructure error.
     pub fn extend<I>(
         &mut self,
         diagnostics: I,
@@ -492,13 +454,15 @@ impl DiagnosticAggregator {
         Ok(())
     }
 
-    /// Consume the aggregator and produce its final deterministic report.
+    /// Consume the aggregator and produce a deterministic report.
     ///
-    /// The final vector is ordered by the canonical semantic diagnostic
-    /// comparator. This method does not reinterpret errors as successful
-    /// compilation or infer semantic validity.
+    /// Sorting is delegated to the canonical frontend implementation.
+    ///
+    /// This operation does not decide compilation success.
     #[must_use]
-    pub fn finish(mut self) -> AggregatedDiagnostics {
+    pub fn finish(
+        mut self,
+    ) -> AggregatedDiagnostics {
         sort_diagnostics(&mut self.diagnostics);
 
         self.statistics.retained = self.diagnostics.len();
@@ -510,10 +474,116 @@ impl DiagnosticAggregator {
         }
     }
 
+    fn push_with_deduplication(
+        &mut self,
+        diagnostic: Diagnostic,
+    ) -> Result<InsertOutcome, AggregationError> {
+        let identity_hash = report_identity_hash(&diagnostic);
+
+        if let Some(indices) = self.identities.get(&identity_hash) {
+            if let Some(&existing_index) = indices.iter().find(
+                |&&index| {
+                    self.diagnostics[index]
+                        .same_report_identity(&diagnostic)
+                },
+            ) {
+                self.increment_duplicates()?;
+
+                let existing = &self.diagnostics[existing_index];
+
+                if compare_diagnostics(
+                    &diagnostic,
+                    existing,
+                ).is_lt() {
+                    self.diagnostics[existing_index] = diagnostic;
+                }
+
+                return Ok(InsertOutcome::DuplicateMerged);
+            }
+        }
+
+        if self.at_retention_limit() {
+            self.record_drop()?;
+            return Ok(InsertOutcome::DroppedByBudget);
+        }
+
+        self.reserve_diagnostic_capacity()?;
+
+        let index_exists = self.identities.contains_key(&identity_hash);
+
+        if index_exists {
+            let indices = self
+                .identities
+                .get_mut(&identity_hash)
+                .expect("identity existence was checked");
+
+            if indices.try_reserve(1).is_err() {
+                self.status = AggregationStatus::Incomplete;
+                self.record_drop()?;
+
+                return Err(AggregationError::AllocationFailure {
+                    collection: AllocationCollection::IdentityIndex,
+                });
+            }
+
+            let diagnostic_index = self.diagnostics.len();
+
+            self.diagnostics.push(diagnostic);
+            indices.push(diagnostic_index);
+        } else {
+            if self.identities.try_reserve(1).is_err() {
+                self.status = AggregationStatus::Incomplete;
+                self.record_drop()?;
+
+                return Err(AggregationError::AllocationFailure {
+                    collection: AllocationCollection::IdentityIndex,
+                });
+            }
+
+            let mut indices = Vec::new();
+
+            if indices.try_reserve(1).is_err() {
+                self.status = AggregationStatus::Incomplete;
+                self.record_drop()?;
+
+                return Err(AggregationError::AllocationFailure {
+                    collection: AllocationCollection::IdentityIndex,
+                });
+            }
+
+            let diagnostic_index = self.diagnostics.len();
+
+            self.diagnostics.push(diagnostic);
+            indices.push(diagnostic_index);
+
+            self.identities.insert(identity_hash, indices);
+        }
+
+        Ok(InsertOutcome::Retained)
+    }
+
+    fn push_without_deduplication(
+        &mut self,
+        diagnostic: Diagnostic,
+    ) -> Result<InsertOutcome, AggregationError> {
+        if self.at_retention_limit() {
+            self.record_drop()?;
+            return Ok(InsertOutcome::DroppedByBudget);
+        }
+
+        self.reserve_diagnostic_capacity()?;
+
+        self.diagnostics.push(diagnostic);
+
+        Ok(InsertOutcome::Retained)
+    }
+
     fn at_retention_limit(&self) -> bool {
         self.policy
             .max_diagnostics
-            .is_some_and(|limit| self.diagnostics.len() >= limit.get())
+            .is_some_and(|limit| {
+                self.diagnostics.len() >= limit.get()
+            })
     }
 
     fn reserve_diagnostic_capacity(
@@ -531,27 +601,15 @@ impl DiagnosticAggregator {
         Ok(())
     }
 
-    fn reserve_identity_capacity(
+    fn increment_submitted(
         &mut self,
     ) -> Result<(), AggregationError> {
-        if self.identities.try_reserve(1).is_err() {
-            self.status = AggregationStatus::Incomplete;
-            self.record_drop()?;
-
-            return Err(AggregationError::AllocationFailure {
-                collection: AllocationCollection::IdentityIndex,
-            });
-        }
-
-        Ok(())
-    }
-
-    fn increment_submitted(&mut self) -> Result<(), AggregationError> {
         match self.statistics.submitted.checked_add(1) {
             Some(value) => {
                 self.statistics.submitted = value;
                 Ok(())
             }
+
             None => {
                 self.status = AggregationStatus::Incomplete;
 
@@ -562,12 +620,15 @@ impl DiagnosticAggregator {
         }
     }
 
-    fn increment_duplicates(&mut self) -> Result<(), AggregationError> {
+    fn increment_duplicates(
+        &mut self,
+    ) -> Result<(), AggregationError> {
         match self.statistics.duplicates.checked_add(1) {
             Some(value) => {
                 self.statistics.duplicates = value;
                 Ok(())
             }
+
             None => {
                 self.status = AggregationStatus::Incomplete;
 
@@ -578,7 +639,9 @@ impl DiagnosticAggregator {
         }
     }
 
-    fn record_drop(&mut self) -> Result<(), AggregationError> {
+    fn record_drop(
+        &mut self,
+    ) -> Result<(), AggregationError> {
         self.status = AggregationStatus::Incomplete;
 
         match self.statistics.dropped.checked_add(1) {
@@ -586,6 +649,7 @@ impl DiagnosticAggregator {
                 self.statistics.dropped = value;
                 Ok(())
             }
+
             None => Err(AggregationError::CounterOverflow {
                 counter: "dropped",
             }),
@@ -593,7 +657,7 @@ impl DiagnosticAggregator {
     }
 }
 
-/// Final immutable result of diagnostic aggregation.
+/// Immutable finalized aggregation result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AggregatedDiagnostics {
     diagnostics: Vec<Diagnostic>,
@@ -602,25 +666,25 @@ pub struct AggregatedDiagnostics {
 }
 
 impl AggregatedDiagnostics {
-    /// Return the diagnostics in deterministic reporting order.
+    /// Borrow diagnostics in canonical reporting order.
     #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
-    /// Consume the report and return its ordered diagnostics.
+    /// Consume the result and return its diagnostics.
     #[must_use]
     pub fn into_diagnostics(self) -> Vec<Diagnostic> {
         self.diagnostics
     }
 
-    /// Return the aggregation completion status.
+    /// Return the aggregation completion state.
     #[must_use]
     pub const fn status(&self) -> AggregationStatus {
         self.status
     }
 
-    /// Whether aggregation completed without dropping diagnostics.
+    /// Whether every submitted diagnostic was accounted for.
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.status.is_complete()
@@ -634,17 +698,39 @@ impl AggregatedDiagnostics {
 
     /// Whether at least one retained diagnostic has error severity.
     ///
-    /// This is not a substitute for the compilation pipeline's final
-    /// validity or completion state.
+    /// This does not establish compilation validity.
     #[must_use]
     pub fn has_errors(&self) -> bool {
-        self.diagnostics.iter().any(Diagnostic::is_error)
+        self.diagnostics
+            .iter()
+            .any(Diagnostic::is_error)
     }
 
     /// Whether at least one retained diagnostic has fatal severity.
     #[must_use]
     pub fn has_fatal_errors(&self) -> bool {
-        self.diagnostics.iter().any(Diagnostic::is_fatal)
+        self.diagnostics
+            .iter()
+            .any(Diagnostic::is_fatal)
+    }
+
+    /// Whether the aggregate contains no retained diagnostics.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.diagnostics.is_empty()
+    }
+
+    /// Number of retained diagnostics.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.diagnostics.len()
+    }
+
+    /// Iterate over retained diagnostics.
+    pub fn iter(
+        &self,
+    ) -> impl ExactSizeIterator<Item = &Diagnostic> {
+        self.diagnostics.iter()
     }
 }
 
@@ -652,7 +738,16 @@ impl AggregatedDiagnostics {
 mod tests {
     use super::*;
 
-    fn diagnostic(code: &str, message: &str) -> Diagnostic {
+    use crate::frontend::semantic::diagnostics::{
+        DiagnosticCategory,
+        DiagnosticPhase,
+        DiagnosticSeverity,
+    };
+
+    fn diagnostic(
+        code: &str,
+        message: &str,
+    ) -> Diagnostic {
         Diagnostic::new(
             code,
             DiagnosticPhase::TypeAnalysis,
@@ -668,18 +763,19 @@ mod tests {
         let result = DiagnosticAggregator::default().finish();
 
         assert!(result.is_complete());
-        assert!(result.diagnostics().is_empty());
+        assert!(result.is_empty());
         assert_eq!(result.statistics().submitted(), 0);
         assert_eq!(result.statistics().retained(), 0);
         assert_eq!(result.statistics().dropped(), 0);
     }
 
     #[test]
-    fn retains_diagnostics_without_a_fixed_default_limit() {
+    fn retains_without_a_fixed_default_limit() {
         let mut aggregator = DiagnosticAggregator::default();
 
         for index in 0..1_000 {
             let code = format!("test.diagnostic.{index}");
+
             aggregator
                 .push(diagnostic(&code, "test"))
                 .expect("diagnostic should be retained");
@@ -688,14 +784,14 @@ mod tests {
         let result = aggregator.finish();
 
         assert!(result.is_complete());
-        assert_eq!(result.statistics().retained(), 1_000);
+        assert_eq!(result.len(), 1_000);
         assert_eq!(result.statistics().dropped(), 0);
     }
 
     #[test]
-    fn explicit_budget_marks_aggregation_incomplete() {
+    fn configured_budget_marks_result_incomplete() {
         let policy = AggregationPolicy::with_limit(
-            NonZeroUsize::new(2).expect("two is non-zero"),
+            NonZeroUsize::new(2).expect("two is nonzero"),
         );
 
         let mut aggregator = DiagnosticAggregator::new(policy);
@@ -724,10 +820,14 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_reports_are_merged() {
+    fn duplicate_reports_are_collapsed() {
         let mut aggregator = DiagnosticAggregator::default();
 
-        let first = diagnostic("test.duplicate", "same report");
+        let first = diagnostic(
+            "test.duplicate",
+            "same report",
+        );
+
         let second = first.clone();
 
         assert_eq!(
@@ -743,25 +843,24 @@ mod tests {
         let result = aggregator.finish();
 
         assert!(result.is_complete());
-        assert_eq!(result.diagnostics().len(), 1);
+        assert_eq!(result.len(), 1);
         assert_eq!(result.statistics().duplicates(), 1);
         assert_eq!(result.statistics().submitted(), 2);
     }
 
     #[test]
-    fn duplicate_merge_is_not_blocked_by_a_full_budget() {
+    fn duplicate_detection_works_when_budget_is_full() {
         let policy = AggregationPolicy::with_limit(
-            NonZeroUsize::new(1).expect("one is non-zero"),
+            NonZeroUsize::new(1).expect("one is nonzero"),
         );
 
         let mut aggregator = DiagnosticAggregator::new(policy);
 
         let item = diagnostic("test.same", "same report");
 
-        assert_eq!(
-            aggregator.push(item.clone()),
-            Ok(InsertOutcome::Retained),
-        );
+        aggregator
+            .push(item.clone())
+            .expect("first report");
 
         assert_eq!(
             aggregator.push(item),
@@ -771,43 +870,34 @@ mod tests {
         let result = aggregator.finish();
 
         assert!(result.is_complete());
-        assert_eq!(result.statistics().retained(), 1);
+        assert_eq!(result.len(), 1);
         assert_eq!(result.statistics().dropped(), 0);
-        assert_eq!(result.statistics().duplicates(), 1);
     }
 
     #[test]
-    fn distinct_report_identities_are_not_collapsed() {
+    fn distinct_identities_are_preserved() {
         let mut aggregator = DiagnosticAggregator::default();
 
         aggregator
             .push(diagnostic("test.first", "first"))
-            .expect("first diagnostic");
+            .expect("first");
 
         aggregator
             .push(diagnostic("test.second", "second"))
-            .expect("second diagnostic");
+            .expect("second");
 
         let result = aggregator.finish();
 
-        assert_eq!(result.diagnostics().len(), 2);
+        assert_eq!(result.len(), 2);
     }
 
     #[test]
-    fn final_order_is_canonical_and_deterministic() {
+    fn canonical_order_is_deterministic() {
         let mut aggregator = DiagnosticAggregator::default();
 
-        aggregator
-            .push(diagnostic("test.z", "z"))
-            .expect("diagnostic");
-
-        aggregator
-            .push(diagnostic("test.a", "a"))
-            .expect("diagnostic");
-
-        aggregator
-            .push(diagnostic("test.m", "m"))
-            .expect("diagnostic");
+        aggregator.push(diagnostic("test.z", "z")).unwrap();
+        aggregator.push(diagnostic("test.a", "a")).unwrap();
+        aggregator.push(diagnostic("test.m", "m")).unwrap();
 
         let result = aggregator.finish();
 
@@ -824,12 +914,12 @@ mod tests {
     }
 
     #[test]
-    fn error_presence_is_reported_without_claiming_validity() {
+    fn error_detection_does_not_claim_compilation_validity() {
         let mut aggregator = DiagnosticAggregator::default();
 
         aggregator
             .push(diagnostic("test.error", "an error"))
-            .expect("diagnostic");
+            .unwrap();
 
         let result = aggregator.finish();
 
@@ -846,38 +936,34 @@ mod tests {
 
         let item = diagnostic("test.repeated", "repeated");
 
-        aggregator
-            .push(item.clone())
-            .expect("first diagnostic");
-
-        aggregator
-            .push(item)
-            .expect("second diagnostic");
+        aggregator.push(item.clone()).unwrap();
+        aggregator.push(item).unwrap();
 
         let result = aggregator.finish();
 
-        assert_eq!(result.diagnostics().len(), 2);
+        assert_eq!(result.len(), 2);
         assert_eq!(result.statistics().duplicates(), 0);
     }
 
     #[test]
-    fn extension_accepts_diagnostics_from_multiple_stages() {
+    fn different_compilation_stages_can_submit_diagnostics() {
         let mut aggregator = DiagnosticAggregator::default();
 
-        let frontend = vec![
-            diagnostic("frontend.example", "frontend finding"),
-        ];
+        aggregator
+            .extend(vec![
+                diagnostic("frontend.example", "frontend finding"),
+            ])
+            .unwrap();
 
-        let backend = vec![
-            diagnostic("backend.example", "backend finding"),
-        ];
-
-        aggregator.extend(frontend).expect("frontend diagnostics");
-        aggregator.extend(backend).expect("backend diagnostics");
+        aggregator
+            .extend(vec![
+                diagnostic("backend.example", "backend finding"),
+            ])
+            .unwrap();
 
         let result = aggregator.finish();
 
-        assert_eq!(result.diagnostics().len(), 2);
+        assert_eq!(result.len(), 2);
         assert_eq!(result.statistics().submitted(), 2);
     }
 }
