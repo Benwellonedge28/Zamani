@@ -1,110 +1,99 @@
+
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 #![deny(missing_docs)]
 
 //! # Zamani Compiler — Feasibility Analysis
 //!
-//! Path: src/compiler/analysis/feasibility.rs
-//! Edition: Rust 2021
+//! Rust edition: 2021
 //! Minimum Rust version: 1.97
 //!
-//! This module determines whether a proposed compilation realization is
-//! supported by the available capability evidence, resource evidence,
-//! requirements, and constraints.
+//! This module evaluates compiler-facing feasibility evidence.
 //!
-//! It does not define source-language semantics, hardware capabilities,
-//! resource models, target discovery, backend compatibility, or runtime
-//! execution.
+//! It combines evidence supplied by authoritative compiler subsystems.
+//! It does not redefine semantic requirements, capabilities, resources,
+//! dependencies, backend compatibility, or physical execution.
 //!
-//! Those responsibilities remain with their canonical repository owners.
+//! # Architectural ownership
 //!
-//! ## Architecture
+//! Semantic authority:
+//!     crate::frontend::semantic
 //!
-//! ```text
-//! Zamani source
-//!      |
-//!      v
-//! Frontend semantic analysis
-//!      |
-//!      v
-//! Canonical requirements
-//!      |
-//!      +------------------------+
-//!      |                        |
-//!      v                        v
-//! Capability evidence     Resource evidence
-//!      |                        |
-//!      +------------+-----------+
-//!                   |
-//!                   v
-//!             Feasibility
-//!                   |
-//!          +--------+--------+
-//!          |        |        |
-//!          v        v        v
-//!        Feasible Infeasible Unknown
-//!                   |
-//!                   v
-//!         Compiler planning
-//!                   |
-//!                   v
-//!          Backend realization
-//! ```
+//! Requirement integration:
+//!     crate::compiler::analysis::requirements
 //!
-//! ## Important limitation
+//! Capability analysis:
+//!     crate::compiler::analysis::capabilities
 //!
-//! Literal infinity cannot be processed by a finite computer.
+//! Dependency analysis:
+//!     crate::compiler::analysis::dependency
 //!
-//! This module introduces no fixed semantic limit on the number of
-//! requirements, capabilities, resources, constraints, or alternatives.
-//! Actual processing is bounded by available memory, address space,
-//! allocator behavior, and explicit operational budgets.
+//! Cost analysis:
+//!     crate::compiler::analysis::cost
 //!
-//! ## Integration
+//! Resource feasibility:
+//!     crate::compiler::planning::resource_planning
 //!
-//! - Frontend semantic analysis owns semantic requirements.
-//! - Compiler capability analysis owns capability compatibility.
-//! - Resource authorities own resource descriptions and evidence.
-//! - Dependency analysis owns dependency relationships.
-//! - Backend compatibility owns backend-specific compatibility.
-//! - Runtime owns physical allocation and execution.
+//! Realization planning:
+//!     crate::compiler::planning::feasibility
 //!
-//! This module combines externally supplied evidence without redefining
-//! those authorities.
+//! Physical allocation and execution:
+//!     crate::runtime
+//!
+//! # Important invariants
+//!
+//! - Unknown evidence is never proof of feasibility.
+//! - Missing capacity is never unlimited capacity.
+//! - An unmet preference is not a mandatory failure.
+//! - A mandatory constraint violation establishes infeasibility.
+//! - An incomplete assessment is indeterminate.
+//! - Resource quantities are not restricted to machine integer widths.
+//! - No universal hardware population or capacity limits are introduced.
+//! - No physical resources are acquired or allocated.
+//! - No unsafe Rust is permitted.
+//!
+//! Literal infinity cannot be processed by finite hardware.
+//! Actual processing is bounded by available resources and explicit
+//! operational policies.
 
-use std::collections::BTreeMap;
+use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
 
-// =============================================================================
-// Module identity
-// =============================================================================
+// ============================================================================
+// MODULE IDENTITY
+// ============================================================================
 
-/// Stable architectural identity of this module.
+/// Stable module identity.
 pub const FEASIBILITY_ANALYSIS_MODULE_NAME: &str =
     "zamani.compiler.analysis.feasibility";
 
-/// Version of this module's in-memory report contract.
-///
-/// This is not the Zamani language version or artifact format version.
-pub const FEASIBILITY_ANALYSIS_SCHEMA_VERSION: u16 = 1;
+/// Version of the compiler-facing feasibility report contract.
+pub const FEASIBILITY_ANALYSIS_SCHEMA_VERSION: u16 = 2;
 
-// =============================================================================
-// Open identifiers
-// =============================================================================
+// ============================================================================
+// IDENTIFIERS
+// ============================================================================
 
 /// An open, namespaced identifier.
 ///
-/// This type deliberately does not use a closed enum of hardware,
-/// computing domains, or vendors.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// No closed list of domains, hardware, vendors, or resource types
+/// is imposed.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub struct Identifier(String);
 
 impl Identifier {
     /// Creates a validated identifier.
-    ///
-    /// Identifiers must be non-empty and must not contain control
-    /// characters.
     pub fn new(value: impl Into<String>) -> Result<Self, FeasibilityError> {
         let value = value.into();
 
@@ -121,13 +110,13 @@ impl Identifier {
         Ok(Self(value))
     }
 
-    /// Returns the identifier as a string slice.
+    /// Returns the identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Consumes the identifier and returns its owned string.
+    /// Consumes the identifier.
     #[must_use]
     pub fn into_string(self) -> String {
         self.0
@@ -135,78 +124,94 @@ impl Identifier {
 }
 
 impl fmt::Display for Identifier {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-// =============================================================================
-// Evidence
-// =============================================================================
+// ============================================================================
+// EVIDENCE
+// ============================================================================
 
-/// Evidence state.
-///
-/// `Unknown` means that the evidence is insufficient to establish either
-/// satisfaction or incompatibility.
-///
-/// It must never be treated as proof of feasibility.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// State of supplied evidence.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub enum EvidenceState {
-    /// Evidence establishes that the property is satisfied.
+    /// Evidence establishes satisfaction.
     Satisfied,
 
-    /// Evidence establishes that the property is not satisfied.
+    /// Evidence establishes non-satisfaction.
     Unsatisfied,
 
-    /// Evidence is incomplete or unavailable.
+    /// Evidence is missing, incomplete, or unresolved.
     Unknown,
 }
 
 impl EvidenceState {
-    /// Returns whether evidence establishes satisfaction.
+    /// Returns whether satisfaction is established.
     #[must_use]
     pub const fn is_satisfied(self) -> bool {
         matches!(self, Self::Satisfied)
     }
 
-    /// Returns whether evidence establishes incompatibility.
+    /// Returns whether incompatibility is established.
     #[must_use]
     pub const fn is_unsatisfied(self) -> bool {
         matches!(self, Self::Unsatisfied)
     }
 
-    /// Returns whether additional evidence is needed.
+    /// Returns whether evidence is unresolved.
     #[must_use]
     pub const fn is_unknown(self) -> bool {
         matches!(self, Self::Unknown)
     }
 }
 
-// =============================================================================
-// Requirement classification
-// =============================================================================
+// ============================================================================
+// REQUIREMENT CLASSIFICATION
+// ============================================================================
 
-/// Importance of a feasibility condition.
+/// Classification of a condition being evaluated.
 ///
-/// This type is a compiler-facing classification, not a replacement
-/// for the canonical semantic requirement model.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// This is a compiler-facing classification, not a replacement for
+/// canonical semantic requirement types.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub enum RequirementClass {
-    /// Must be satisfied for a valid realization.
+    /// Mandatory program requirement.
     HardRequirement,
 
-    /// Must be obeyed when applicable.
+    /// Mandatory realization constraint.
     Constraint,
 
-    /// Desirable but not mandatory.
+    /// Non-mandatory preference.
     Preference,
 
-    /// Advisory information that may guide planning.
+    /// Advisory implementation hint.
     Hint,
 }
 
 impl RequirementClass {
-    /// Returns whether failure of this condition prevents feasibility.
+    /// Whether failure prevents feasibility.
     #[must_use]
     pub const fn is_mandatory(self) -> bool {
         matches!(
@@ -216,31 +221,24 @@ impl RequirementClass {
     }
 }
 
-// =============================================================================
-// Requirement evidence
-// =============================================================================
-
-/// One requirement assessment.
-///
-/// The requirement's semantic meaning remains owned by its originating
-/// semantic authority.
+/// One evaluated requirement.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RequirementEvidence {
-    /// Stable requirement identifier.
+    /// Requirement identity.
     pub id: Identifier,
 
     /// Requirement classification.
     pub class: RequirementClass,
 
-    /// Evidence of satisfaction.
+    /// Evaluation result.
     pub state: EvidenceState,
 
-    /// Human-readable explanation.
+    /// Optional explanation.
     pub explanation: Option<String>,
 }
 
 impl RequirementEvidence {
-    /// Creates a requirement assessment.
+    /// Creates requirement evidence.
     #[must_use]
     pub fn new(
         id: Identifier,
@@ -266,29 +264,28 @@ impl RequirementEvidence {
     }
 }
 
-// =============================================================================
-// Resource quantities
-// =============================================================================
+// ============================================================================
+// ARBITRARY-LENGTH RESOURCE QUANTITIES
+// ============================================================================
 
-/// An exact non-negative integer quantity.
+/// An exact non-negative integer.
 ///
-/// A decimal string avoids introducing a fixed integer-width ceiling
-/// into resource quantities.
+/// Quantities use canonical decimal strings rather than u64, u128,
+/// usize, floating-point values, or hardware-specific integer widths.
 ///
-/// Resource arithmetic is performed using checked operations.
-/// Overflow is reported instead of silently wrapping.
+/// Actual representation size remains bounded by available memory.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ResourceQuantity(String);
 
 impl ResourceQuantity {
     /// Creates a canonical quantity.
-    ///
-    /// Leading zeroes are removed.
-    pub fn new(value: impl Into<String>) -> Result<Self, FeasibilityError> {
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, FeasibilityError> {
         let value = value.into();
 
         if value.is_empty()
-            || !value.chars().all(|c| c.is_ascii_digit())
+            || !value.bytes().all(|byte| byte.is_ascii_digit())
         {
             return Err(FeasibilityError::InvalidQuantity {
                 value,
@@ -306,7 +303,13 @@ impl ResourceQuantity {
         ))
     }
 
-    /// Returns the canonical quantity.
+    /// Creates zero.
+    #[must_use]
+    pub fn zero() -> Self {
+        Self("0".to_owned())
+    }
+
+    /// Returns the canonical representation.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -318,43 +321,109 @@ impl ResourceQuantity {
         self.0 == "0"
     }
 
-    /// Compares two quantities without converting them to a machine
-    /// integer.
+    /// Compares arbitrary-length quantities.
     #[must_use]
-    pub fn cmp_quantity(&self, other: &Self) -> std::cmp::Ordering {
+    pub fn cmp_quantity(
+        &self,
+        other: &Self,
+    ) -> Ordering {
         self.0
             .len()
             .cmp(&other.0.len())
             .then_with(|| self.0.cmp(&other.0))
     }
+
+    /// Adds two quantities without machine-integer conversion.
+    pub fn checked_add(
+        &self,
+        other: &Self,
+    ) -> Result<Self, FeasibilityError> {
+        let mut left = self.0.bytes().rev();
+        let mut right = other.0.bytes().rev();
+
+        let mut result = Vec::new();
+        let mut carry = 0_u8;
+
+        loop {
+            let a = left.next();
+            let b = right.next();
+
+            if a.is_none() && b.is_none() && carry == 0 {
+                break;
+            }
+
+            let a = a.map(|v| v - b'0').unwrap_or(0);
+            let b = b.map(|v| v - b'0').unwrap_or(0);
+
+            let sum = a + b + carry;
+
+            result.push(b'0' + sum % 10);
+            carry = sum / 10;
+        }
+
+        result.reverse();
+
+        let digits = String::from_utf8(result)
+            .map_err(|_| FeasibilityError::ArithmeticFailure)?;
+
+        Ok(Self(digits))
+    }
+}
+
+impl Ord for ResourceQuantity {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cmp_quantity(other)
+    }
+}
+
+impl PartialOrd for ResourceQuantity {
+    fn partial_cmp(
+        &self,
+        other: &Self,
+    ) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl fmt::Display for ResourceQuantity {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-// =============================================================================
-// Resource evidence
-// =============================================================================
+// ============================================================================
+// RESOURCE IDENTITIES
+// ============================================================================
 
-/// One abstract resource dimension.
+/// An open resource dimension.
 ///
-/// Examples include memory, processing capacity, storage, qubits,
-/// communication bandwidth, and domain-specific resource dimensions.
+/// Examples include memory.bytes, quantum.logical_qubits,
+/// ai.tensor_elements, networking.bandwidth, and future resources.
 ///
-/// This is an open identifier rather than a closed resource enum.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// These examples are not an exhaustive enumeration.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub struct ResourceId(Identifier);
 
 impl ResourceId {
-    /// Creates a resource identifier.
-    pub fn new(value: impl Into<String>) -> Result<Self, FeasibilityError> {
+    /// Creates a resource identity.
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, FeasibilityError> {
         Ok(Self(Identifier::new(value)?))
     }
 
-    /// Returns the resource identifier.
+    /// Returns the identity.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -362,12 +431,15 @@ impl ResourceId {
 }
 
 impl fmt::Display for ResourceId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         self.0.fmt(formatter)
     }
 }
 
-/// Demand for one abstract resource.
+/// Demand for an abstract resource.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceDemand {
     /// Resource dimension.
@@ -380,7 +452,7 @@ pub struct ResourceDemand {
     pub mandatory: bool,
 }
 
-/// Available capacity for one resource.
+/// Explicit available resource capacity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceCapacity {
     /// Resource dimension.
@@ -390,11 +462,10 @@ pub struct ResourceCapacity {
     pub available: ResourceQuantity,
 }
 
-// =============================================================================
-// Resource feasibility
-// =============================================================================
-
-/// Result of checking one resource dimension.
+/// Result of assessing one demand.
+///
+/// Each demand receives an independent finding. Multiple independent
+/// demands for one resource are never silently discarded.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResourceFinding {
     /// Resource dimension.
@@ -403,36 +474,41 @@ pub struct ResourceFinding {
     /// Required quantity.
     pub required: ResourceQuantity,
 
-    /// Available quantity, if known.
+    /// Known capacity.
     pub available: Option<ResourceQuantity>,
 
-    /// Evidence state.
+    /// Assessment state.
     pub state: EvidenceState,
 
     /// Explanation.
     pub explanation: String,
 }
 
-// =============================================================================
-// Target and realization
-// =============================================================================
+// ============================================================================
+// REALIZATION EVIDENCE
+// ============================================================================
 
-/// An opaque realization identifier.
-///
-/// This may refer to a backend, a logical target, a composite target,
-/// or a target-independent realization strategy.
-///
-/// It is not a physical device identifier.
-#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Opaque proposed realization identity.
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub struct RealizationId(Identifier);
 
 impl RealizationId {
-    /// Creates a realization identifier.
-    pub fn new(value: impl Into<String>) -> Result<Self, FeasibilityError> {
+    /// Creates a realization identity.
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, FeasibilityError> {
         Ok(Self(Identifier::new(value)?))
     }
 
-    /// Returns the realization identifier.
+    /// Returns the realization identity.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_str()
@@ -440,40 +516,40 @@ impl RealizationId {
 }
 
 impl fmt::Display for RealizationId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         self.0.fmt(formatter)
     }
 }
 
-/// Evidence describing one proposed realization.
+/// Evidence for one proposed realization.
 ///
-/// The compiler receives this information from capability analysis,
-/// resource analysis, and backend compatibility checks.
-///
-/// No hardware is discovered or allocated by this structure.
+/// This structure is not a hardware descriptor or device allocation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RealizationEvidence {
-    /// Realization identity.
+    /// Proposed realization.
     pub id: RealizationId,
 
-    /// Whether capability requirements are satisfied.
+    /// Capability compatibility.
     pub capabilities: EvidenceState,
 
-    /// Whether backend compatibility is established.
+    /// Backend compatibility.
     pub backend_compatibility: EvidenceState,
 
-    /// Whether required data movement is supported.
+    /// Data movement compatibility.
     pub data_movement: EvidenceState,
 
-    /// Whether required synchronization is supported.
+    /// Synchronization compatibility.
     pub synchronization: EvidenceState,
 
-    /// Whether the supplied evidence is complete.
+    /// Completeness of the supplied evidence.
     pub evidence_complete: bool,
 }
 
 impl RealizationEvidence {
-    /// Creates realization evidence.
+    /// Creates an unresolved realization.
     #[must_use]
     pub fn new(id: RealizationId) -> Self {
         Self {
@@ -486,11 +562,7 @@ impl RealizationEvidence {
         }
     }
 
-    /// Returns the combined compatibility state.
-    ///
-    /// An explicit incompatibility dominates.
-    ///
-    /// Unknown evidence prevents a positive conclusion.
+    /// Returns aggregate compatibility evidence.
     #[must_use]
     pub fn compatibility_state(&self) -> EvidenceState {
         let states = [
@@ -500,15 +572,14 @@ impl RealizationEvidence {
             self.synchronization,
         ];
 
-        if states
-            .iter()
-            .any(|state| state.is_unsatisfied())
-        {
+        if states.iter().any(|state| {
+            state.is_unsatisfied()
+        }) {
             EvidenceState::Unsatisfied
-        } else if states
-            .iter()
-            .all(|state| state.is_satisfied())
-            && self.evidence_complete
+        } else if self.evidence_complete
+            && states.iter().all(|state| {
+                state.is_satisfied()
+            })
         {
             EvidenceState::Satisfied
         } else {
@@ -517,75 +588,93 @@ impl RealizationEvidence {
     }
 }
 
-// =============================================================================
-// Dependency evidence
-// =============================================================================
+// ============================================================================
+// DEPENDENCIES
+// ============================================================================
 
-/// Dependency relationship relevant to feasibility.
+/// Evidence concerning an existing dependency.
 ///
-/// Dependency discovery and dependency ordering remain owned by
-/// `src/compiler/analysis/dependency.rs`.
+/// Dependency construction and ordering remain owned by
+/// analysis/dependency.rs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DependencyFinding {
-    /// Stable dependency identifier.
+    /// Dependency identity.
     pub id: Identifier,
 
-    /// Whether the dependency is satisfied.
+    /// Evidence state.
     pub state: EvidenceState,
 
-    /// Explanation.
+    /// Optional explanation.
     pub explanation: Option<String>,
 }
 
-// =============================================================================
-// Finding classification
-// =============================================================================
+// ============================================================================
+// FINDINGS
+// ============================================================================
 
-/// Category of a feasibility finding.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Classification of a feasibility finding.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub enum FindingKind {
-    /// A mandatory requirement is not satisfied.
+    /// Mandatory requirement violation.
     RequirementViolation,
 
-    /// A mandatory constraint is not satisfied.
+    /// Mandatory constraint violation.
     ConstraintViolation,
 
-    /// A preference is not satisfied.
+    /// Preference not satisfied.
     PreferenceNotMet,
 
-    /// A hint cannot be applied.
+    /// Hint unavailable.
     HintUnavailable,
 
-    /// A capability is unsupported.
+    /// Unsupported capability.
     UnsupportedCapability,
 
-    /// Backend compatibility is not established.
+    /// Backend incompatibility.
     BackendIncompatibility,
 
-    /// Resource capacity is insufficient.
+    /// Insufficient resource capacity.
     ResourceInsufficiency,
 
-    /// Required evidence is unavailable.
+    /// Evidence is missing.
     MissingEvidence,
 
-    /// A dependency is not satisfied.
+    /// Dependency violation.
     DependencyViolation,
 
-    /// Data movement cannot be realized.
+    /// Data movement incompatibility.
     DataMovementIncompatibility,
 
-    /// Synchronization cannot be realized.
+    /// Synchronization incompatibility.
     SynchronizationIncompatibility,
 
-    /// An operational budget has been exhausted.
+    /// Operational budget exhausted.
     BudgetExhaustion,
 
-    /// An internal feasibility evaluation failed.
+    /// Evaluation could not be completed.
     EvaluationFailure,
 }
 
-/// Severity of a feasibility finding.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Finding severity.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub enum FindingSeverity {
     /// Informational.
     Information,
@@ -593,11 +682,11 @@ pub enum FindingSeverity {
     /// Advisory.
     Warning,
 
-    /// Mandatory condition cannot be established.
+    /// Mandatory condition failed or cannot be established.
     Error,
 }
 
-/// One structured feasibility finding.
+/// Structured feasibility finding.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeasibilityFinding {
     /// Finding category.
@@ -606,15 +695,15 @@ pub struct FeasibilityFinding {
     /// Severity.
     pub severity: FindingSeverity,
 
-    /// Related identifier, when applicable.
+    /// Associated identity.
     pub related_id: Option<Identifier>,
 
-    /// Human-readable message.
+    /// Explanation.
     pub message: String,
 }
 
 impl FeasibilityFinding {
-    /// Creates a structured finding.
+    /// Creates a finding.
     #[must_use]
     pub fn new(
         kind: FindingKind,
@@ -629,31 +718,40 @@ impl FeasibilityFinding {
         }
     }
 
-    /// Associates the finding with an identifier.
+    /// Associates an identifier.
     #[must_use]
     pub fn with_related_id(
         mut self,
-        related_id: Identifier,
+        id: Identifier,
     ) -> Self {
-        self.related_id = Some(related_id);
+        self.related_id = Some(id);
         self
     }
 }
 
-// =============================================================================
-// Feasibility outcome
-// =============================================================================
+// ============================================================================
+// STATUS
+// ============================================================================
 
-/// Overall feasibility outcome.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Aggregate feasibility classification.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 pub enum FeasibilityStatus {
-    /// All mandatory conditions are established as satisfied.
+    /// All mandatory conditions have been established.
     Feasible,
 
-    /// At least one mandatory condition is explicitly unsatisfied.
+    /// At least one mandatory condition is explicitly violated.
     Infeasible,
 
-    /// No mandatory violation was established, but evidence is incomplete.
+    /// Evidence is incomplete or evaluation could not be completed.
     Indeterminate,
 }
 
@@ -670,76 +768,27 @@ impl FeasibilityStatus {
         matches!(self, Self::Infeasible)
     }
 
-    /// Returns whether further evidence is needed.
+    /// Returns whether the result is indeterminate.
     #[must_use]
     pub const fn is_indeterminate(self) -> bool {
         matches!(self, Self::Indeterminate)
     }
 }
 
-// =============================================================================
-// Feasibility report
-// =============================================================================
+// ============================================================================
+// INPUT
+// ============================================================================
 
-/// Complete feasibility report for one realization.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FeasibilityReport {
-    /// Realization identity.
-    pub realization: RealizationId,
-
-    /// Overall outcome.
-    pub status: FeasibilityStatus,
-
-    /// Structured findings.
-    pub findings: Vec<FeasibilityFinding>,
-
-    /// Resource assessments.
-    pub resources: Vec<ResourceFinding>,
-
-    /// Whether all relevant evidence was complete.
-    pub evidence_complete: bool,
-}
-
-impl FeasibilityReport {
-    /// Returns whether this realization is feasible.
-    #[must_use]
-    pub const fn is_feasible(&self) -> bool {
-        self.status.is_feasible()
-    }
-
-    /// Returns whether this realization is infeasible.
-    #[must_use]
-    pub const fn is_infeasible(&self) -> bool {
-        self.status.is_infeasible()
-    }
-
-    /// Returns whether the result is indeterminate.
-    #[must_use]
-    pub const fn is_indeterminate(&self) -> bool {
-        self.status.is_indeterminate()
-    }
-
-    /// Returns the number of findings.
-    #[must_use]
-    pub fn finding_count(&self) -> usize {
-        self.findings.len()
-    }
-}
-
-// =============================================================================
-// Input
-// =============================================================================
-
-/// All evidence required to assess one realization.
+/// Evidence supplied to the feasibility analyzer.
 ///
-/// This is a compiler-side aggregation structure. It does not own the
-/// canonical meaning of the supplied requirements or evidence.
+/// Evidence must already have been obtained and validated by its
+/// authoritative subsystem.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeasibilityInput {
     /// Proposed realization.
     pub realization: RealizationEvidence,
 
-    /// Requirement evidence.
+    /// Evaluated requirements.
     pub requirements: Vec<RequirementEvidence>,
 
     /// Resource demands.
@@ -748,15 +797,15 @@ pub struct FeasibilityInput {
     /// Resource capacity evidence.
     pub resource_capacities: Vec<ResourceCapacity>,
 
-    /// Dependency evidence.
+    /// Dependency findings.
     pub dependencies: Vec<DependencyFinding>,
 
-    /// Additional structured findings supplied by upstream analysis.
+    /// Findings supplied by upstream analysis.
     pub upstream_findings: Vec<FeasibilityFinding>,
 }
 
 impl FeasibilityInput {
-    /// Creates an input for a realization.
+    /// Creates an empty evidence collection for a realization.
     #[must_use]
     pub fn new(realization: RealizationEvidence) -> Self {
         Self {
@@ -770,26 +819,111 @@ impl FeasibilityInput {
     }
 }
 
-// =============================================================================
-// Engine
-// =============================================================================
+// ============================================================================
+// REPORT
+// ============================================================================
 
-/// Stateless feasibility-analysis engine.
+/// Complete feasibility report.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeasibilityReport {
+    /// Proposed realization.
+    pub realization: RealizationId,
+
+    /// Overall outcome.
+    pub status: FeasibilityStatus,
+
+    /// Structured findings.
+    pub findings: Vec<FeasibilityFinding>,
+
+    /// Individual resource assessments.
+    pub resources: Vec<ResourceFinding>,
+
+    /// Whether all required evidence is complete.
+    pub evidence_complete: bool,
+}
+
+impl FeasibilityReport {
+    /// Returns whether the realization is feasible.
+    #[must_use]
+    pub const fn is_feasible(&self) -> bool {
+        self.status.is_feasible()
+    }
+
+    /// Returns whether the realization is infeasible.
+    #[must_use]
+    pub const fn is_infeasible(&self) -> bool {
+        self.status.is_infeasible()
+    }
+
+    /// Returns whether more evidence is needed.
+    #[must_use]
+    pub const fn is_indeterminate(&self) -> bool {
+        self.status.is_indeterminate()
+    }
+
+    /// Returns the finding count.
+    #[must_use]
+    pub fn finding_count(&self) -> usize {
+        self.findings.len()
+    }
+
+    /// Returns whether any mandatory evidence is unresolved.
+    #[must_use]
+    pub fn has_missing_evidence(&self) -> bool {
+        self.findings.iter().any(|finding| {
+            finding.kind == FindingKind::MissingEvidence
+        })
+    }
+
+    /// Returns whether any preference was not satisfied.
+    #[must_use]
+    pub fn has_unmet_preferences(&self) -> bool {
+        self.findings.iter().any(|finding| {
+            finding.kind == FindingKind::PreferenceNotMet
+        })
+    }
+}
+
+// ============================================================================
+// ANALYZER
+// ============================================================================
+
+/// Stateless feasibility analyzer.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FeasibilityAnalyzer;
 
 impl FeasibilityAnalyzer {
-    /// Analyzes one realization.
+    /// Analyzes one proposed realization.
     ///
-    /// The analyzer does not allocate resources, discover hardware,
-    /// schedule execution, or generate backend code.
+    /// This function performs no hardware discovery, physical allocation,
+    /// backend invocation, scheduling, or execution.
     pub fn analyze(
         &self,
         input: &FeasibilityInput,
     ) -> Result<FeasibilityReport, FeasibilityError> {
         validate_input(input)?;
 
-        let mut findings = input.upstream_findings.clone();
+        let mut findings = Vec::new();
+
+        findings
+            .try_reserve(
+                input.upstream_findings.len()
+                    .saturating_add(
+                        input.requirements.len(),
+                    )
+                    .saturating_add(
+                        input.resource_demands.len(),
+                    )
+                    .saturating_add(
+                        input.dependencies.len(),
+                    )
+                    .saturating_add(4),
+            )
+            .map_err(|_| FeasibilityError::AllocationFailure)?;
+
+        findings.extend(
+            input.upstream_findings.iter().cloned(),
+        );
 
         let mut evidence_complete =
             input.realization.evidence_complete;
@@ -822,11 +956,15 @@ impl FeasibilityAnalyzer {
         findings.sort_by(|left, right| {
             left.kind
                 .cmp(&right.kind)
-                .then_with(|| left.severity.cmp(&right.severity))
+                .then_with(|| {
+                    left.severity.cmp(&right.severity)
+                })
                 .then_with(|| {
                     left.related_id.cmp(&right.related_id)
                 })
-                .then_with(|| left.message.cmp(&right.message))
+                .then_with(|| {
+                    left.message.cmp(&right.message)
+                })
         });
 
         let status = determine_status(
@@ -843,20 +981,24 @@ impl FeasibilityAnalyzer {
         })
     }
 
-    /// Analyzes multiple candidate realizations.
+    /// Analyzes multiple caller-supplied alternatives.
     ///
-    /// The caller supplies the candidates. This function does not
-    /// perform target discovery or manufacture alternatives.
+    /// No targets are discovered or invented.
     ///
-    /// Results are sorted by realization identity for deterministic output.
+    /// Reports are returned in deterministic realization identity order.
     pub fn analyze_alternatives(
         &self,
         inputs: &[FeasibilityInput],
     ) -> Result<Vec<FeasibilityReport>, FeasibilityError> {
-        let mut reports = inputs
-            .iter()
-            .map(|input| self.analyze(input))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut reports = Vec::new();
+
+        reports
+            .try_reserve(inputs.len())
+            .map_err(|_| FeasibilityError::AllocationFailure)?;
+
+        for input in inputs {
+            reports.push(self.analyze(input)?);
+        }
 
         reports.sort_by(|left, right| {
             left.realization.cmp(&right.realization)
@@ -866,27 +1008,48 @@ impl FeasibilityAnalyzer {
     }
 }
 
-// =============================================================================
-// Evaluation
-// =============================================================================
+// ============================================================================
+// REALIZATION EVALUATION
+// ============================================================================
 
 fn evaluate_realization(
     realization: &RealizationEvidence,
     findings: &mut Vec<FeasibilityFinding>,
     evidence_complete: &mut bool,
 ) {
-    let state = realization.compatibility_state();
+    let checks = [
+        (
+            realization.capabilities,
+            FindingKind::UnsupportedCapability,
+            "Required capabilities are unsupported",
+        ),
+        (
+            realization.backend_compatibility,
+            FindingKind::BackendIncompatibility,
+            "Backend compatibility is not established",
+        ),
+        (
+            realization.data_movement,
+            FindingKind::DataMovementIncompatibility,
+            "Required data movement is unsupported",
+        ),
+        (
+            realization.synchronization,
+            FindingKind::SynchronizationIncompatibility,
+            "Required synchronization is unsupported",
+        ),
+    ];
 
-    match state {
-        EvidenceState::Satisfied => {}
+    for (state, kind, message) in checks {
+        match state {
+            EvidenceState::Satisfied => {}
 
-        EvidenceState::Unsatisfied => {
-            if realization.capabilities.is_unsatisfied() {
+            EvidenceState::Unsatisfied => {
                 findings.push(
                     FeasibilityFinding::new(
-                        FindingKind::UnsupportedCapability,
+                        kind,
                         FindingSeverity::Error,
-                        "The realization does not satisfy required capabilities",
+                        message,
                     )
                     .with_related_id(
                         realization.id.0.clone(),
@@ -894,65 +1057,33 @@ fn evaluate_realization(
                 );
             }
 
-            if realization
-                .backend_compatibility
-                .is_unsatisfied()
-            {
+            EvidenceState::Unknown => {
+                *evidence_complete = false;
+
                 findings.push(
                     FeasibilityFinding::new(
-                        FindingKind::BackendIncompatibility,
-                        FindingSeverity::Error,
-                        "The backend cannot realize the requested computation",
+                        FindingKind::MissingEvidence,
+                        FindingSeverity::Warning,
+                        format!(
+                            "Evidence is missing: {message}"
+                        ),
                     )
                     .with_related_id(
                         realization.id.0.clone(),
                     ),
                 );
             }
-
-            if realization.data_movement.is_unsatisfied() {
-                findings.push(
-                    FeasibilityFinding::new(
-                        FindingKind::DataMovementIncompatibility,
-                        FindingSeverity::Error,
-                        "Required data movement is unsupported",
-                    )
-                    .with_related_id(
-                        realization.id.0.clone(),
-                    ),
-                );
-            }
-
-            if realization.synchronization.is_unsatisfied() {
-                findings.push(
-                    FeasibilityFinding::new(
-                        FindingKind::SynchronizationIncompatibility,
-                        FindingSeverity::Error,
-                        "Required synchronization is unsupported",
-                    )
-                    .with_related_id(
-                        realization.id.0.clone(),
-                    ),
-                );
-            }
-        }
-
-        EvidenceState::Unknown => {
-            *evidence_complete = false;
-
-            findings.push(
-                FeasibilityFinding::new(
-                    FindingKind::MissingEvidence,
-                    FindingSeverity::Warning,
-                    "Realization compatibility is not fully established",
-                )
-                .with_related_id(
-                    realization.id.0.clone(),
-                ),
-            );
         }
     }
+
+    if !realization.evidence_complete {
+        *evidence_complete = false;
+    }
 }
+
+// ============================================================================
+// REQUIREMENT EVALUATION
+// ============================================================================
 
 fn evaluate_requirements(
     requirements: &[RequirementEvidence],
@@ -990,12 +1121,10 @@ fn evaluate_requirements(
                     FeasibilityFinding::new(
                         kind,
                         severity,
-                        requirement
-                            .explanation
-                            .clone()
+                        requirement.explanation.clone()
                             .unwrap_or_else(|| {
                                 format!(
-                                    "Requirement `{}` is not satisfied",
+                                    "Condition `{}` is not satisfied",
                                     requirement.id
                                 )
                             }),
@@ -1009,23 +1138,14 @@ fn evaluate_requirements(
             EvidenceState::Unknown => {
                 *evidence_complete = false;
 
-                let severity =
-                    if requirement.class.is_mandatory() {
-                        FindingSeverity::Error
-                    } else {
-                        FindingSeverity::Warning
-                    };
-
                 findings.push(
                     FeasibilityFinding::new(
                         FindingKind::MissingEvidence,
-                        severity,
-                        requirement
-                            .explanation
-                            .clone()
+                        FindingSeverity::Warning,
+                        requirement.explanation.clone()
                             .unwrap_or_else(|| {
                                 format!(
-                                    "Evidence for requirement `{}` is incomplete",
+                                    "Evidence for `{}` is unresolved",
                                     requirement.id
                                 )
                             }),
@@ -1039,13 +1159,17 @@ fn evaluate_requirements(
     }
 }
 
+// ============================================================================
+// RESOURCE EVALUATION
+// ============================================================================
+
 fn evaluate_resources(
     demands: &[ResourceDemand],
     capacities: &[ResourceCapacity],
     findings: &mut Vec<FeasibilityFinding>,
     evidence_complete: &mut bool,
 ) -> Result<Vec<ResourceFinding>, FeasibilityError> {
-    let mut capacity_by_id = BTreeMap::new();
+    let mut capacity_by_id = std::collections::BTreeMap::new();
 
     for capacity in capacities {
         if capacity_by_id
@@ -1063,7 +1187,11 @@ fn evaluate_resources(
         }
     }
 
-    let mut findings_by_resource = BTreeMap::new();
+    let mut results = Vec::new();
+
+    results
+        .try_reserve(demands.len())
+        .map_err(|_| FeasibilityError::AllocationFailure)?;
 
     for demand in demands {
         let available = capacity_by_id
@@ -1071,88 +1199,59 @@ fn evaluate_resources(
             .cloned();
 
         let state = match &available {
-            Some(available) => {
-                if demand.required.cmp_quantity(available)
-                    != std::cmp::Ordering::Greater
-                {
-                    EvidenceState::Satisfied
-                } else {
-                    EvidenceState::Unsatisfied
-                }
+            Some(capacity) if demand.required <= *capacity => {
+                EvidenceState::Satisfied
             }
+
+            Some(_) => EvidenceState::Unsatisfied,
 
             None => EvidenceState::Unknown,
         };
 
-        let explanation = match state {
-            EvidenceState::Satisfied => {
-                "Resource demand is within available capacity".to_owned()
+        let explanation = match &available {
+            Some(capacity)
+                if state == EvidenceState::Satisfied =>
+            {
+                format!(
+                    "Resource `{}` requires {}; capacity is {}",
+                    demand.resource,
+                    demand.required,
+                    capacity
+                )
             }
 
-            EvidenceState::Unsatisfied => {
+            Some(capacity) => {
                 format!(
                     "Resource `{}` requires {}, but only {} is available",
                     demand.resource,
                     demand.required,
-                    available.as_ref().unwrap()
+                    capacity
                 )
             }
 
-            EvidenceState::Unknown => {
+            None => {
                 format!(
-                    "Resource capacity for `{}` is unknown",
+                    "Capacity evidence for `{}` is unavailable",
                     demand.resource
                 )
             }
         };
 
-        let finding = ResourceFinding {
+        results.push(ResourceFinding {
             resource: demand.resource.clone(),
             required: demand.required.clone(),
-            available,
+            available: available.clone(),
             state,
             explanation: explanation.clone(),
-        };
+        });
 
         match state {
             EvidenceState::Satisfied => {}
 
             EvidenceState::Unsatisfied => {
-                if demand.mandatory {
-                    findings.push(
-                        FeasibilityFinding::new(
-                            FindingKind::ResourceInsufficiency,
-                            FindingSeverity::Error,
-                            explanation,
-                        )
-                        .with_related_id(
-                            Identifier::new(
-                                demand.resource.as_str(),
-                            )?,
-                        ),
-                    );
-                } else {
-                    findings.push(
-                        FeasibilityFinding::new(
-                            FindingKind::ResourceInsufficiency,
-                            FindingSeverity::Warning,
-                            explanation,
-                        )
-                        .with_related_id(
-                            Identifier::new(
-                                demand.resource.as_str(),
-                            )?,
-                        ),
-                    );
-                }
-            }
-
-            EvidenceState::Unknown => {
-                *evidence_complete = false;
-
                 findings.push(
                     FeasibilityFinding::new(
-                        FindingKind::MissingEvidence,
+                        FindingKind::ResourceInsufficiency,
                         if demand.mandatory {
                             FindingSeverity::Error
                         } else {
@@ -1167,16 +1266,32 @@ fn evaluate_resources(
                     ),
                 );
             }
-        }
 
-        findings_by_resource.insert(
-            demand.resource.clone(),
-            finding,
-        );
+            EvidenceState::Unknown => {
+                *evidence_complete = false;
+
+                findings.push(
+                    FeasibilityFinding::new(
+                        FindingKind::MissingEvidence,
+                        FindingSeverity::Warning,
+                        explanation,
+                    )
+                    .with_related_id(
+                        Identifier::new(
+                            demand.resource.as_str(),
+                        )?,
+                    ),
+                );
+            }
+        }
     }
 
-    Ok(findings_by_resource.into_values().collect())
+    Ok(results)
 }
+
+// ============================================================================
+// DEPENDENCY EVALUATION
+// ============================================================================
 
 fn evaluate_dependencies(
     dependencies: &[DependencyFinding],
@@ -1192,9 +1307,7 @@ fn evaluate_dependencies(
                     FeasibilityFinding::new(
                         FindingKind::DependencyViolation,
                         FindingSeverity::Error,
-                        dependency
-                            .explanation
-                            .clone()
+                        dependency.explanation.clone()
                             .unwrap_or_else(|| {
                                 format!(
                                     "Dependency `{}` is not satisfied",
@@ -1215,9 +1328,7 @@ fn evaluate_dependencies(
                     FeasibilityFinding::new(
                         FindingKind::MissingEvidence,
                         FindingSeverity::Warning,
-                        dependency
-                            .explanation
-                            .clone()
+                        dependency.explanation.clone()
                             .unwrap_or_else(|| {
                                 format!(
                                     "Dependency `{}` is unresolved",
@@ -1234,46 +1345,58 @@ fn evaluate_dependencies(
     }
 }
 
+// ============================================================================
+// FINAL CLASSIFICATION
+// ============================================================================
+
 fn determine_status(
     findings: &[FeasibilityFinding],
     evidence_complete: bool,
 ) -> FeasibilityStatus {
-    if findings.iter().any(|finding| {
+    let infeasible = findings.iter().any(|finding| {
         finding.severity == FindingSeverity::Error
-            && matches!(
+            && !matches!(
                 finding.kind,
-                FindingKind::RequirementViolation
-                    | FindingKind::ConstraintViolation
-                    | FindingKind::UnsupportedCapability
-                    | FindingKind::BackendIncompatibility
-                    | FindingKind::ResourceInsufficiency
-                    | FindingKind::DependencyViolation
-                    | FindingKind::DataMovementIncompatibility
-                    | FindingKind::SynchronizationIncompatibility
+                FindingKind::MissingEvidence
+                    | FindingKind::BudgetExhaustion
+                    | FindingKind::EvaluationFailure
             )
-    }) {
-        FeasibilityStatus::Infeasible
-    } else if evidence_complete {
-        FeasibilityStatus::Feasible
-    } else {
+    });
+
+    if infeasible {
+        return FeasibilityStatus::Infeasible;
+    }
+
+    let incomplete = !evidence_complete
+        || findings.iter().any(|finding| {
+            matches!(
+                finding.kind,
+                FindingKind::MissingEvidence
+                    | FindingKind::BudgetExhaustion
+                    | FindingKind::EvaluationFailure
+            )
+        });
+
+    if incomplete {
         FeasibilityStatus::Indeterminate
+    } else {
+        FeasibilityStatus::Feasible
     }
 }
 
-// =============================================================================
-// Input validation
-// =============================================================================
+// ============================================================================
+// VALIDATION
+// ============================================================================
 
 fn validate_input(
     input: &FeasibilityInput,
 ) -> Result<(), FeasibilityError> {
-    let mut requirement_ids = BTreeMap::new();
+    let mut requirement_ids = BTreeSet::new();
 
     for requirement in &input.requirements {
-        if requirement_ids
-            .insert(requirement.id.clone(), ())
-            .is_some()
-        {
+        if !requirement_ids.insert(
+            requirement.id.clone(),
+        ) {
             return Err(
                 FeasibilityError::DuplicateRequirement {
                     id: requirement.id.clone(),
@@ -1282,17 +1405,24 @@ fn validate_input(
         }
     }
 
-    let mut resource_ids = BTreeMap::new();
+    let mut dependency_ids = BTreeSet::new();
 
-    for demand in &input.resource_demands {
-        if resource_ids
-            .insert(demand.resource.clone(), ())
-            .is_some()
-        {
+    for dependency in &input.dependencies {
+        if !dependency_ids.insert(
+            dependency.id.clone(),
+        ) {
             return Err(
-                FeasibilityError::DuplicateResourceDemand {
-                    resource: demand.resource.clone(),
+                FeasibilityError::DuplicateDependency {
+                    id: dependency.id.clone(),
                 },
+            );
+        }
+    }
+
+    for finding in &input.upstream_findings {
+        if finding.message.trim().is_empty() {
+            return Err(
+                FeasibilityError::EmptyFindingMessage,
             );
         }
     }
@@ -1300,45 +1430,54 @@ fn validate_input(
     Ok(())
 }
 
-// =============================================================================
-// Errors
-// =============================================================================
+// ============================================================================
+// ERRORS
+// ============================================================================
 
 /// Errors produced by feasibility analysis.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FeasibilityError {
-    /// An identifier was empty.
+    /// Identifier is empty.
     EmptyIdentifier,
 
-    /// An identifier contained invalid characters.
+    /// Identifier contains control characters.
     InvalidIdentifier {
-        /// Invalid identifier.
+        /// Invalid value.
         value: String,
     },
 
-    /// A resource quantity was malformed.
+    /// Invalid decimal quantity.
     InvalidQuantity {
-        /// Invalid quantity.
+        /// Invalid value.
         value: String,
     },
 
-    /// A requirement was duplicated.
+    /// Duplicate requirement.
     DuplicateRequirement {
-        /// Duplicate requirement.
+        /// Requirement identity.
         id: Identifier,
     },
 
-    /// A resource demand was duplicated.
-    DuplicateResourceDemand {
-        /// Duplicate resource.
+    /// Duplicate dependency.
+    DuplicateDependency {
+        /// Dependency identity.
+        id: Identifier,
+    },
+
+    /// Duplicate resource capacity.
+    DuplicateResourceCapacity {
+        /// Resource identity.
         resource: ResourceId,
     },
 
-    /// A resource capacity was duplicated.
-    DuplicateResourceCapacity {
-        /// Duplicate resource.
-        resource: ResourceId,
-    },
+    /// Arithmetic failure.
+    ArithmeticFailure,
+
+    /// Allocation reservation failed.
+    AllocationFailure,
+
+    /// Finding message is empty.
+    EmptyFindingMessage,
 }
 
 impl fmt::Display for FeasibilityError {
@@ -1372,10 +1511,10 @@ impl fmt::Display for FeasibilityError {
                 )
             }
 
-            Self::DuplicateResourceDemand { resource } => {
+            Self::DuplicateDependency { id } => {
                 write!(
                     formatter,
-                    "duplicate resource demand: {resource}"
+                    "duplicate dependency: {id}"
                 )
             }
 
@@ -1385,21 +1524,39 @@ impl fmt::Display for FeasibilityError {
                     "duplicate resource capacity: {resource}"
                 )
             }
+
+            Self::ArithmeticFailure => {
+                write!(formatter, "resource arithmetic failed")
+            }
+
+            Self::AllocationFailure => {
+                write!(
+                    formatter,
+                    "available memory could not satisfy allocation"
+                )
+            }
+
+            Self::EmptyFindingMessage => {
+                write!(
+                    formatter,
+                    "finding message cannot be empty"
+                )
+            }
         }
     }
 }
 
 impl Error for FeasibilityError {}
 
-// =============================================================================
-// Tests
-// =============================================================================
+// ============================================================================
+// TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn id(value: &str) -> Identifier {
+    fn identifier(value: &str) -> Identifier {
         Identifier::new(value).unwrap()
     }
 
@@ -1411,67 +1568,40 @@ mod tests {
         ResourceId::new(value).unwrap()
     }
 
-    fn realization() -> RealizationEvidence {
-        let mut evidence = RealizationEvidence::new(
-            RealizationId::new("portable.cpu").unwrap(),
-        );
-
-        evidence.capabilities = EvidenceState::Satisfied;
-        evidence.backend_compatibility = EvidenceState::Satisfied;
-        evidence.data_movement = EvidenceState::Satisfied;
-        evidence.synchronization = EvidenceState::Satisfied;
-        evidence.evidence_complete = true;
-
-        evidence
+    fn complete_realization() -> RealizationEvidence {
+        RealizationEvidence {
+            id: RealizationId::new("realization.test").unwrap(),
+            capabilities: EvidenceState::Satisfied,
+            backend_compatibility: EvidenceState::Satisfied,
+            data_movement: EvidenceState::Satisfied,
+            synchronization: EvidenceState::Satisfied,
+            evidence_complete: true,
+        }
     }
 
     #[test]
-    fn feasible_realization_is_reported() {
-        let input = FeasibilityInput::new(realization());
+    fn complete_evidence_is_feasible() {
+        let input = FeasibilityInput::new(
+            complete_realization(),
+        );
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
             FeasibilityStatus::Feasible
-        );
-    }
-
-    #[test]
-    fn unsupported_capability_is_infeasible() {
-        let mut evidence = realization();
-
-        evidence.capabilities =
-            EvidenceState::Unsatisfied;
-
-        let input = FeasibilityInput::new(evidence);
-
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
-
-        assert_eq!(
-            report.status,
-            FeasibilityStatus::Infeasible
         );
     }
 
     #[test]
     fn unknown_evidence_is_indeterminate() {
-        let mut evidence = realization();
+        let realization = RealizationEvidence::new(
+            RealizationId::new("unknown").unwrap(),
+        );
 
-        evidence.capabilities =
-            EvidenceState::Unknown;
+        let input = FeasibilityInput::new(realization);
 
-        evidence.evidence_complete = false;
-
-        let input = FeasibilityInput::new(evidence);
-
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
@@ -1480,44 +1610,61 @@ mod tests {
     }
 
     #[test]
-    fn failed_preference_does_not_make_program_infeasible() {
-        let mut input =
-            FeasibilityInput::new(realization());
+    fn unsupported_capability_is_infeasible() {
+        let mut realization = complete_realization();
+
+        realization.capabilities =
+            EvidenceState::Unsatisfied;
+
+        let input = FeasibilityInput::new(realization);
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
+
+        assert_eq!(
+            report.status,
+            FeasibilityStatus::Infeasible
+        );
+    }
+
+    #[test]
+    fn unmet_preference_does_not_cause_infeasibility() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
 
         input.requirements.push(
             RequirementEvidence::new(
-                id("optimization.low_latency"),
+                identifier("execution.low_latency"),
                 RequirementClass::Preference,
                 EvidenceState::Unsatisfied,
             ),
         );
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
             FeasibilityStatus::Feasible
         );
+
+        assert!(report.has_unmet_preferences());
     }
 
     #[test]
-    fn failed_hard_requirement_is_infeasible() {
-        let mut input =
-            FeasibilityInput::new(realization());
+    fn unmet_hard_requirement_is_infeasible() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
 
         input.requirements.push(
             RequirementEvidence::new(
-                id("quantum.measurement"),
+                identifier("quantum.measurement"),
                 RequirementClass::HardRequirement,
                 EvidenceState::Unsatisfied,
             ),
         );
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
@@ -1526,28 +1673,23 @@ mod tests {
     }
 
     #[test]
-    fn sufficient_resource_capacity_is_feasible() {
-        let mut input =
-            FeasibilityInput::new(realization());
-
-        input.resource_demands.push(
-            ResourceDemand {
-                resource: resource("memory.bytes"),
-                required: quantity("1024"),
-                mandatory: true,
-            },
+    fn satisfied_resource_demand_is_feasible() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
         );
 
-        input.resource_capacities.push(
-            ResourceCapacity {
-                resource: resource("memory.bytes"),
-                available: quantity("2048"),
-            },
-        );
+        input.resource_demands.push(ResourceDemand {
+            resource: resource("memory.bytes"),
+            required: quantity("1024"),
+            mandatory: true,
+        });
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        input.resource_capacities.push(ResourceCapacity {
+            resource: resource("memory.bytes"),
+            available: quantity("2048"),
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
@@ -1556,28 +1698,23 @@ mod tests {
     }
 
     #[test]
-    fn insufficient_resource_capacity_is_infeasible() {
-        let mut input =
-            FeasibilityInput::new(realization());
-
-        input.resource_demands.push(
-            ResourceDemand {
-                resource: resource("memory.bytes"),
-                required: quantity("2048"),
-                mandatory: true,
-            },
+    fn insufficient_mandatory_resource_is_infeasible() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
         );
 
-        input.resource_capacities.push(
-            ResourceCapacity {
-                resource: resource("memory.bytes"),
-                available: quantity("1024"),
-            },
-        );
+        input.resource_demands.push(ResourceDemand {
+            resource: resource("memory.bytes"),
+            required: quantity("2048"),
+            mandatory: true,
+        });
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        input.resource_capacities.push(ResourceCapacity {
+            resource: resource("memory.bytes"),
+            available: quantity("1024"),
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
@@ -1586,21 +1723,18 @@ mod tests {
     }
 
     #[test]
-    fn unknown_resource_capacity_is_indeterminate() {
-        let mut input =
-            FeasibilityInput::new(realization());
-
-        input.resource_demands.push(
-            ResourceDemand {
-                resource: resource("quantum.logical_qubits"),
-                required: quantity("100000000000000000000000"),
-                mandatory: true,
-            },
+    fn missing_resource_capacity_is_not_unlimited() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
         );
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        input.resource_demands.push(ResourceDemand {
+            resource: resource("quantum.logical_qubits"),
+            required: quantity("100000000000000000000000"),
+            mandatory: true,
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
@@ -1609,7 +1743,7 @@ mod tests {
     }
 
     #[test]
-    fn arbitrary_resource_quantities_are_supported() {
+    fn arbitrary_length_quantities_are_supported() {
         let huge = quantity(
             "999999999999999999999999999999999999999999999999999999",
         );
@@ -1621,22 +1755,97 @@ mod tests {
     }
 
     #[test]
-    fn alternative_reports_are_deterministic() {
-        let inputs = vec![
-            FeasibilityInput::new(
-                RealizationEvidence::new(
-                    RealizationId::new("target.z").unwrap(),
-                ),
-            ),
-            FeasibilityInput::new(
-                RealizationEvidence::new(
-                    RealizationId::new("target.a").unwrap(),
-                ),
-            ),
-        ];
+    fn arbitrary_length_addition_is_correct() {
+        let left = quantity("999999999999999999999999");
+        let right = quantity("1");
+
+        assert_eq!(
+            left.checked_add(&right).unwrap().as_str(),
+            "1000000000000000000000000"
+        );
+    }
+
+    #[test]
+    fn duplicate_capacity_is_rejected() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
+
+        input.resource_capacities.push(ResourceCapacity {
+            resource: resource("memory.bytes"),
+            available: quantity("100"),
+        });
+
+        input.resource_capacities.push(ResourceCapacity {
+            resource: resource("memory.bytes"),
+            available: quantity("200"),
+        });
+
+        assert!(matches!(
+            FeasibilityAnalyzer.analyze(&input),
+            Err(FeasibilityError::DuplicateResourceCapacity { .. })
+        ));
+    }
+
+    #[test]
+    fn reports_preserve_distinct_resource_demands() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
+
+        for required in ["10", "20"] {
+            input.resource_demands.push(ResourceDemand {
+                resource: resource("memory.bytes"),
+                required: quantity(required),
+                mandatory: true,
+            });
+        }
+
+        input.resource_capacities.push(ResourceCapacity {
+            resource: resource("memory.bytes"),
+            available: quantity("100"),
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
+
+        assert_eq!(report.resources.len(), 2);
+    }
+
+    #[test]
+    fn failed_dependency_is_infeasible() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
+
+        input.dependencies.push(DependencyFinding {
+            id: identifier("module.library"),
+            state: EvidenceState::Unsatisfied,
+            explanation: None,
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
+
+        assert_eq!(
+            report.status,
+            FeasibilityStatus::Infeasible
+        );
+    }
+
+    #[test]
+    fn alternatives_are_deterministically_ordered() {
+        let first = RealizationEvidence::new(
+            RealizationId::new("target.z").unwrap(),
+        );
+
+        let second = RealizationEvidence::new(
+            RealizationId::new("target.a").unwrap(),
+        );
 
         let reports = FeasibilityAnalyzer
-            .analyze_alternatives(&inputs)
+            .analyze_alternatives(&[
+                FeasibilityInput::new(first),
+                FeasibilityInput::new(second),
+            ])
             .unwrap();
 
         assert_eq!(
@@ -1651,21 +1860,38 @@ mod tests {
     }
 
     #[test]
-    fn unknown_evidence_never_becomes_feasible() {
-        let mut input =
-            FeasibilityInput::new(realization());
-
-        input.dependencies.push(
-            DependencyFinding {
-                id: id("dependency.module"),
-                state: EvidenceState::Unknown,
-                explanation: None,
-            },
+    fn empty_finding_messages_are_rejected() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
         );
 
-        let report = FeasibilityAnalyzer
-            .analyze(&input)
-            .unwrap();
+        input.upstream_findings.push(
+            FeasibilityFinding::new(
+                FindingKind::EvaluationFailure,
+                FindingSeverity::Error,
+                "",
+            ),
+        );
+
+        assert!(matches!(
+            FeasibilityAnalyzer.analyze(&input),
+            Err(FeasibilityError::EmptyFindingMessage)
+        ));
+    }
+
+    #[test]
+    fn unknown_dependency_never_becomes_feasible() {
+        let mut input = FeasibilityInput::new(
+            complete_realization(),
+        );
+
+        input.dependencies.push(DependencyFinding {
+            id: identifier("dependency.unknown"),
+            state: EvidenceState::Unknown,
+            explanation: None,
+        });
+
+        let report = FeasibilityAnalyzer.analyze(&input).unwrap();
 
         assert_eq!(
             report.status,
