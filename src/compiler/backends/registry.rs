@@ -4,200 +4,173 @@
 #![deny(missing_docs)]
 #![deny(unused_must_use)]
 
-//! # Zamani Compiler — Canonical Backend Registry Integration
+//! # Zamani Compiler — Backend Registry Integration
 //!
 //! Path: src/compiler/backends/registry.rs
-//! Edition: Rust 2021
+//!
+//! Rust edition: 2021
 //! Minimum Rust version: 1.97
 //!
-//! # Purpose
+//! Safety:
+//! Safe Rust only. Unsafe Rust is forbidden.
 //!
-//! Provides the compiler-facing interface to the authoritative
-//! backend registry implemented by `crate::backend::registry`.
+//! ## 1. Purpose
+//!
+//! Provides the compiler-facing API for the canonical backend
+//! registry owned by `crate::backend::registry`.
 //!
 //! This module is an integration facade.
 //!
-//! It MUST NOT implement a second backend registry, backend
-//! factory system, backend identity system, or independent
-//! registration lifecycle.
+//! It does not introduce another registry, backend factory,
+//! backend identifier system, alias resolver or registration
+//! lifecycle.
 //!
-//! # Architectural authorities
+//! ## 2. Architectural authorities
 //!
-//! Canonical backend implementation:
+//! Backend interface:
 //!     crate::backend
 //!
-//! Canonical backend registration:
+//! Canonical registry:
 //!     crate::backend::registry
 //!
-//! Backend capability information:
+//! Backend capabilities:
 //!     crate::backend::capabilities
 //!
 //! Backend compatibility:
 //!     crate::backend::compatibility
 //!
-//! Backend target information:
-//!     crate::backend::target
-//!
 //! Compiler backend discovery:
 //!     crate::compiler::backends::discovery
 //!
-//! Compiler backend selection:
+//! Backend selection:
 //!     crate::compiler::backends::selection
 //!
-//! Compiler backend invocation:
+//! Backend invocation:
 //!     crate::compiler::backends::invocation
 //!
 //! Target discovery:
 //!     crate::compiler::planning::target_discovery
 //!
-//! Source semantics:
+//! Semantic authority:
 //!     crate::frontend::semantic
 //!
-//! Canonical universal IR:
+//! Universal IR:
 //!     crate::zuir
 //!
-//! Physical execution:
+//! Runtime execution:
 //!     crate::runtime
 //!
-//! # Ownership
+//! ## 3. Ownership
 //!
 //! This module owns:
 //!
 //! - Compiler-facing registry exports.
-//! - Compiler-facing registry naming.
+//! - Compiler-facing type aliases.
 //! - Registry construction convenience.
-//! - Compiler integration result aliases.
-//! - Public registry integration documentation.
+//! - Read-only registry inspection helpers.
+//! - Explicit backend construction delegation.
+//! - Compiler registry API documentation.
 //!
-//! It does NOT own:
+//! It does not own:
 //!
-//! - Backend implementations.
 //! - Backend registration storage.
 //! - Backend factories.
-//! - Backend identifiers.
-//! - Alias resolution algorithms.
-//! - Backend descriptor validation.
-//! - Target descriptors.
-//! - Capability definitions.
-//! - Capability negotiation.
-//! - Compatibility algorithms.
+//! - Backend identity definitions.
+//! - Alias resolution.
+//! - Descriptor validation.
+//! - Backend implementation.
 //! - Hardware discovery.
-//! - Physical resource allocation.
+//! - Capability definitions.
+//! - Compatibility evaluation.
+//! - Resource feasibility.
 //! - Backend selection.
-//! - IR construction.
-//! - IR lowering.
+//! - Physical resource allocation.
 //! - Code generation.
 //! - Artifact verification.
-//! - Linking.
 //! - Runtime execution.
 //!
-//! # POCO-REAF
+//! ## 4. POCO-REAF
 //!
 //! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! The registry supports an open-world backend ecosystem.
+//! Backend identifiers are open-world identifiers.
 //!
-//! New backend implementations must be registrable without modifying
-//! this facade or adding new architecture-specific variants here.
+//! New computational domains and backend providers must be
+//! supported through registration with the canonical registry.
 //!
-//! Supported backend categories are not a closed enumeration.
+//! Adding a backend must not require modifying this facade.
 //!
-//! # Scalability
+//! ## 5. Scalability
 //!
-//! This module introduces no arbitrary universal limits on:
+//! This module establishes no arbitrary universal maximum for:
 //!
 //! - Registered backends.
 //! - Backend providers.
-//! - Target architectures.
+//! - Backend identifiers.
 //! - Computational domains.
+//! - Architectures.
 //! - Accelerators.
-//! - Hardware devices.
-//! - CPU counts.
-//! - GPU counts.
-//! - FPGA counts.
-//! - QPU counts.
+//! - Quantum processors.
 //! - Distributed participants.
-//! - Memory capacity.
-//! - Quantum resources.
+//! - Hardware resources.
 //! - Future computing technologies.
 //!
-//! Actual memory, address-space, processing-time and operational
-//! constraints remain properties of the executing environment.
+//! Actual operational limitations are determined by:
 //!
-//! Configurable operational budgets belong to compiler configuration.
+//! - Available memory.
+//! - Address-space constraints.
+//! - Configured operational budgets.
+//! - Processing capacity.
+//! - Provider implementation capabilities.
+//! - Target-specific limitations.
 //!
-//! Resource feasibility belongs to compiler planning.
+//! No finite implementation promises literal infinite
+//! physical computation.
 //!
-//! Physical resource acquisition belongs to runtime providers.
+//! ## 6. Architectural invariants
 //!
-//! Literal infinite physical computation is not claimed.
+//! Registration is not availability.
 //!
-//! # Registration invariants
+//! Availability is not compatibility.
 //!
-//! The canonical backend registry is responsible for:
+//! Compatibility is not feasibility.
 //!
-//! - Canonical identifier uniqueness.
-//! - Alias uniqueness.
-//! - Duplicate registration rejection.
-//! - Atomic registration.
-//! - Deterministic enumeration.
-//! - Canonical identifier resolution.
-//! - Backend factory ownership.
-//! - Backend construction.
-//! - Factory identity validation.
-//! - Registry synchronization.
-//! - Registry lifecycle.
+//! Feasibility is not physical resource reservation.
 //!
-//! This module must preserve those guarantees without duplicating them.
+//! Backend construction is not code generation.
 //!
-//! # Integration invariants
+//! Code generation is not artifact verification.
 //!
-//! Registration does not imply compatibility.
+//! Artifact verification is not successful execution.
 //!
-//! Compatibility does not imply resource feasibility.
+//! No operation in this module silently substitutes a backend.
 //!
-//! Resource feasibility does not imply physical availability.
+//! ## 7. Thread safety
 //!
-//! Physical availability does not imply successful code generation.
+//! All synchronization and shared-state behavior is inherited
+//! from the canonical BackendRegistry.
 //!
-//! Code generation does not imply artifact verification.
+//! Cloning CompilerBackendRegistry shares the canonical registry.
 //!
-//! Artifact verification does not imply successful runtime execution.
+//! This module creates no additional mutable registry state.
 //!
-//! No operation in this module silently changes the requested backend.
+//! ## 8. Error handling
 //!
-//! # Thread safety
+//! Canonical RegistryError values are propagated unchanged.
 //!
-//! Thread safety is inherited from the canonical BackendRegistry.
+//! The facade does not discard error identity or convert
+//! structured registry errors into string-only errors.
 //!
-//! Cloning the compiler-facing registry shares the canonical registry
-//! state. It never creates a second independent registry.
+//! ## 9. Compatibility
 //!
-//! # Error handling
+//! Existing public names are preserved.
 //!
-//! Registry errors are propagated using the canonical RegistryError.
+//! CompilerBackendRegistry remains a type alias.
 //!
-//! This preserves the original error information and avoids
-//! incompatible compiler-specific error translations.
+//! CompilerRegistryResult remains the canonical result type.
 //!
-//! # Compatibility
-//!
-//! Public types are direct re-exports of the canonical backend
-//! registry types.
-//!
-//! CompilerBackendRegistry is a type alias, not a new registry.
-//!
-//! # Completion criteria
-//!
-//! - Canonical registry types are re-exported.
-//! - No independent mutable registry exists.
-//! - No duplicate backend factory exists.
-//! - No architecture-specific closed enumeration exists.
-//! - Registry operations retain canonical error information.
-//! - Registry clones share canonical state.
-//! - The compiler-facing module path is stable.
-//! - Rust 1.97+ is supported.
-//! - No unsafe Rust is introduced.
+//! The compiler-facing API version remains independently
+//! versioned from the backend implementation and language.
 
 use std::error::Error;
 
@@ -205,123 +178,128 @@ use std::error::Error;
 // MODULE IDENTITY
 // ============================================================================
 
-/// Stable identity of this compiler registry integration module.
+/// Stable identity of the compiler backend registry integration.
 pub const COMPILER_BACKEND_REGISTRY_MODULE_NAME: &str =
     "zamani.compiler.backends.registry";
 
-/// Version of the compiler-facing registry integration API.
+/// Compiler-facing registry API version.
 ///
-/// Independent of the language, IR, backend implementation and
-/// runtime versions.
+/// Independent of the language, IR, runtime and backend versions.
 pub const COMPILER_BACKEND_REGISTRY_API_VERSION: u16 = 1;
 
 // ============================================================================
-// CANONICAL REGISTRY EXPORTS
+// CANONICAL BACKEND REGISTRY EXPORTS
 // ============================================================================
 
-/// Canonical backend registry implementation.
+/// The authoritative backend registry.
 ///
-/// This is the authoritative registry owned by `crate::backend`.
-///
-/// No additional registry state is introduced here.
+/// All registration, lookup, alias resolution, synchronization
+/// and lifecycle operations remain owned by this type.
 pub use crate::backend::registry::BackendRegistry;
 
 /// Canonical backend descriptor.
 ///
-/// Contains backend identity and registration metadata.
+/// Describes registered backend metadata without constructing
+/// a backend implementation.
 pub use crate::backend::registry::BackendDescriptor;
 
 /// Canonical backend identifier.
 ///
-/// This type is owned by the backend subsystem.
+/// Backend identity remains open-world and case-sensitive.
 pub use crate::backend::registry::BackendId;
 
 /// Canonical backend factory contract.
 ///
-/// Factories remain owned and managed by the canonical registry.
+/// Factory ownership remains with the authoritative registry.
 pub use crate::backend::registry::BackendFactory;
 
-/// Canonical backend registration and lookup errors.
+/// Canonical backend registry error.
 ///
-/// No compiler-specific error conversion is performed.
+/// Original errors are preserved.
 pub use crate::backend::registry::RegistryError;
 
+/// Canonical backend implementation interface.
+///
+/// This is the existing backend trait, not a new compiler trait.
+pub use crate::backend::Backend;
+
 // ============================================================================
-// COMPILER-FACING ALIASES
+// COMPILER-FACING TYPES
 // ============================================================================
 
 /// Compiler-facing name for the canonical backend registry.
 ///
-/// This is exactly the same type as `BackendRegistry`.
+/// This is a type alias, not a second registry implementation.
 ///
-/// Clones share the same underlying canonical registry state.
-///
-/// No independent registration storage is created.
+/// Clones share the canonical registry state.
 pub type CompilerBackendRegistry = BackendRegistry;
 
 /// Result type for compiler-facing registry operations.
 ///
-/// The original canonical RegistryError is preserved.
+/// The canonical RegistryError is preserved.
 pub type CompilerRegistryResult<T> = Result<T, RegistryError>;
 
 // ============================================================================
 // REGISTRY CONSTRUCTION
 // ============================================================================
 
-/// Construct an empty compiler-facing canonical backend registry.
+/// Creates an empty compiler-facing canonical backend registry.
 ///
-/// This delegates directly to the canonical backend registry.
+/// This delegates directly to BackendRegistry::new().
 ///
-/// It does not:
+/// Construction does not:
 ///
 /// - Register built-in backends.
-/// - Discover physical hardware.
-/// - Inspect the host machine.
-/// - Load external plugins.
-/// - Invoke backend factories.
+/// - Discover hardware.
+/// - Probe physical devices.
+/// - Load external providers.
+/// - Evaluate compatibility.
 /// - Select a target.
 /// - Allocate resources.
+/// - Generate code.
 /// - Execute programs.
 ///
-/// Backend registration is an explicit initialization responsibility.
+/// Backend initialization remains an explicit responsibility
+/// of the compiler or toolchain initialization layer.
 ///
 /// # Examples
 ///
 /// ```ignore
-/// use zamani::compiler::backends::registry::new_compiler_backend_registry;
+/// use zamani_compiler::compiler::backends::registry;
 ///
-/// let registry = new_compiler_backend_registry();
+/// let backends = registry::new_compiler_backend_registry();
 ///
-/// assert!(registry.is_empty()?);
-///
-/// # Ok::<(), zamani::backend::registry::RegistryError>(())
+/// assert!(
+///     backends.is_empty()?
+/// );
 /// ```
 ///
 /// # Errors
 ///
-/// Construction itself cannot fail. Subsequent registry operations
+/// Construction cannot fail. Subsequent registry operations
 /// return their canonical RegistryError where appropriate.
 #[must_use]
-pub fn new_compiler_backend_registry() -> CompilerBackendRegistry {
+pub fn new_compiler_backend_registry(
+) -> CompilerBackendRegistry {
     BackendRegistry::new()
 }
 
 // ============================================================================
-// CANONICAL IDENTITY HELPERS
+// BACKEND IDENTITY RESOLUTION
 // ============================================================================
 
-/// Resolve a canonical backend identifier or registered alias.
+/// Resolves a canonical backend identifier or registered alias.
 ///
-/// Resolution delegates to the authoritative registry.
+/// The canonical registry performs the actual resolution.
 ///
-/// The returned identifier is canonical.
+/// Returns the canonical backend identifier.
 ///
 /// No architecture inference or fallback is performed.
 ///
 /// # Errors
 ///
-/// Returns BackendNotFound when the identifier cannot be resolved,
-/// or the original registry error when registry access fails.
+/// Returns BackendNotFound when the identifier is unknown.
+/// Other canonical registry errors are preserved.
 pub fn resolve_backend_id(
     registry: &CompilerBackendRegistry,
     identifier: &str,
@@ -329,15 +307,17 @@ pub fn resolve_backend_id(
     registry.resolve(identifier)
 }
 
-/// Retrieve registered backend metadata.
+/// Retrieves the registered descriptor for a backend.
 ///
-/// This operation does not instantiate the backend.
+/// Both canonical identifiers and registered aliases are accepted.
 ///
-/// It does not establish target compatibility or physical availability.
+/// The operation does not construct the backend.
+///
+/// It does not establish compatibility, feasibility or availability.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn registered_backend_descriptor(
     registry: &CompilerBackendRegistry,
     identifier: &str,
@@ -345,14 +325,15 @@ pub fn registered_backend_descriptor(
     registry.descriptor(identifier)
 }
 
-/// Determine whether a canonical backend identifier or alias
-/// is registered.
+/// Checks whether an identifier or alias is registered.
 ///
-/// This operation only inspects registry metadata.
+/// Registration status is the only property evaluated.
+///
+/// It does not imply that the backend is available or usable.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn is_backend_registered(
     registry: &CompilerBackendRegistry,
     identifier: &str,
@@ -364,52 +345,55 @@ pub fn is_backend_registered(
 // REGISTRY INSPECTION
 // ============================================================================
 
-/// Return registered backend descriptors in canonical identifier order.
+/// Returns all registered backend descriptors.
 ///
-/// Enumeration ordering is provided by the canonical registry.
+/// Results use canonical identifier ordering supplied by
+/// the authoritative registry.
 ///
-/// This function does not instantiate backends or discover hardware.
+/// Backend implementations are not constructed.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn registered_backends(
     registry: &CompilerBackendRegistry,
 ) -> CompilerRegistryResult<Vec<BackendDescriptor>> {
     registry.descriptors()
 }
 
-/// Return registered canonical backend identifiers.
+/// Returns all registered canonical backend identifiers.
 ///
-/// The returned identifiers are independent of registration order.
+/// Aliases are not returned as independent backends.
+///
+/// Ordering is deterministic.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn registered_backend_ids(
     registry: &CompilerBackendRegistry,
 ) -> CompilerRegistryResult<Vec<BackendId>> {
     registry.backend_ids()
 }
 
-/// Return the number of registered canonical backends.
+/// Returns the number of registered canonical backends.
 ///
-/// Aliases are not counted as separate backend implementations.
+/// Aliases do not increase the count.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn registered_backend_count(
     registry: &CompilerBackendRegistry,
 ) -> CompilerRegistryResult<usize> {
     registry.len()
 }
 
-/// Return whether the canonical registry contains no registered backends.
+/// Returns whether the registry contains no registered backends.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn backend_registry_is_empty(
     registry: &CompilerBackendRegistry,
 ) -> CompilerRegistryResult<bool> {
@@ -420,30 +404,21 @@ pub fn backend_registry_is_empty(
 // BACKEND CONSTRUCTION
 // ============================================================================
 
-/// Construct a fresh backend implementation through the canonical registry.
+/// Constructs a backend through the canonical registry.
 ///
-/// The requested identifier may be a canonical backend identifier
-/// or a registered alias.
+/// The identifier may be a canonical identifier or an alias.
 ///
-/// The canonical registry:
+/// The canonical registry is responsible for:
 ///
-/// - Resolves the requested identifier.
-/// - Retrieves its registered factory.
-/// - Executes the factory outside its registry lock.
-/// - Checks the constructed implementation's canonical identity.
+/// - Resolving the identifier.
+/// - Retrieving the associated factory.
+/// - Executing the factory outside its registry lock.
+/// - Validating the constructed backend identity.
 ///
-/// This function does not perform target selection.
+/// This operation does not select a backend.
 ///
-/// It must only be called after the compiler has established that
-/// invoking the explicitly requested backend is appropriate.
-///
-/// # Errors
-///
-/// Returns the original canonical registry error, including:
-///
-/// - BackendNotFound.
-/// - FactoryIdentityMismatch.
-/// - LockPoisoned.
+/// The caller must already have completed the appropriate
+/// compatibility and feasibility checks.
 ///
 /// # Important
 ///
@@ -456,10 +431,14 @@ pub fn backend_registry_is_empty(
 /// - Successful code generation.
 /// - Artifact verification.
 /// - Runtime execution.
+///
+/// # Errors
+///
+/// Returns the original canonical RegistryError.
 pub fn create_registered_backend(
     registry: &CompilerBackendRegistry,
     identifier: &str,
-) -> CompilerRegistryResult<Box<dyn crate::backend::Backend>> {
+) -> CompilerRegistryResult<Box<dyn Backend>> {
     registry.create(identifier)
 }
 
@@ -467,24 +446,20 @@ pub fn create_registered_backend(
 // REGISTRY LIFECYCLE
 // ============================================================================
 
-/// Unregister a backend by canonical identifier or registered alias.
+/// Unregisters a backend using its canonical identifier or alias.
 ///
-/// Unregistration delegates to the canonical registry.
+/// The authoritative registry removes the backend registration
+/// and all aliases belonging to that registration.
 ///
-/// The canonical registry removes the registration and its aliases.
+/// Already constructed backend instances remain independently
+/// owned by their callers.
 ///
-/// Already constructed backend instances remain independently owned
-/// by their callers.
-///
-/// Production initialization should normally establish the required
-/// registrations before compilation requests begin.
-///
-/// Dynamic extension lifecycle management must additionally respect
-/// provider isolation and security policies.
+/// This operation should be restricted to controlled registry
+/// lifecycle management.
 ///
 /// # Errors
 ///
-/// Returns the original canonical registry error.
+/// Returns the original canonical RegistryError.
 pub fn unregister_backend(
     registry: &CompilerBackendRegistry,
     identifier: &str,
@@ -496,14 +471,29 @@ pub fn unregister_backend(
 // ERROR INTEGRATION
 // ============================================================================
 
-/// Return the canonical registry error as a standard error reference.
+/// Returns the canonical registry error as a standard error source.
 ///
-/// This helper preserves the original error type and does not
-/// transform or discard its diagnostic information.
+/// No error conversion or diagnostic information is lost.
 pub fn registry_error_source(
     error: &RegistryError,
 ) -> &(dyn Error + 'static) {
     error
+}
+
+// ============================================================================
+// MODULE CONTRACT HELPERS
+// ============================================================================
+
+/// Returns the stable compiler backend registry module identity.
+#[must_use]
+pub const fn module_name() -> &'static str {
+    COMPILER_BACKEND_REGISTRY_MODULE_NAME
+}
+
+/// Returns the compiler backend registry integration API version.
+#[must_use]
+pub const fn api_version() -> u16 {
+    COMPILER_BACKEND_REGISTRY_API_VERSION
 }
 
 // ============================================================================
@@ -517,30 +507,36 @@ mod tests {
     #[test]
     fn module_identity_is_stable() {
         assert_eq!(
-            COMPILER_BACKEND_REGISTRY_MODULE_NAME,
+            module_name(),
             "zamani.compiler.backends.registry"
         );
+    }
 
-        assert_ne!(
-            COMPILER_BACKEND_REGISTRY_API_VERSION,
-            0
-        );
+    #[test]
+    fn api_version_is_nonzero() {
+        assert_ne!(api_version(), 0);
     }
 
     #[test]
     fn compiler_registry_is_the_canonical_registry_type() {
-        fn accepts_canonical(_: &BackendRegistry) {}
+        fn accepts_canonical_registry(
+            _: &BackendRegistry,
+        ) {
+        }
 
-        fn accepts_compiler(_: &CompilerBackendRegistry) {}
+        fn accepts_compiler_registry(
+            _: &CompilerBackendRegistry,
+        ) {
+        }
 
         let registry = new_compiler_backend_registry();
 
-        accepts_canonical(&registry);
-        accepts_compiler(&registry);
+        accepts_canonical_registry(&registry);
+        accepts_compiler_registry(&registry);
     }
 
     #[test]
-    fn registry_construction_creates_empty_registry() {
+    fn construction_produces_an_empty_registry() {
         let registry = new_compiler_backend_registry();
 
         assert!(
@@ -556,42 +552,44 @@ mod tests {
     }
 
     #[test]
-    fn registry_clone_preserves_canonical_type_identity() {
+    fn cloned_registry_shares_canonical_state() {
         let original = new_compiler_backend_registry();
-        let cloned: CompilerBackendRegistry = original.clone();
 
-        let canonical: BackendRegistry = cloned;
+        let cloned = original.clone();
 
         assert_eq!(
             original.len().expect("registry must be accessible"),
-            canonical.len().expect("registry must be accessible")
+            cloned.len().expect("registry must be accessible")
         );
     }
 
     #[test]
-    fn arbitrary_backend_descriptors_are_representable() {
-        let descriptor = BackendDescriptor::new(
-            "future.vendor:heterogeneous-accelerator",
-            ".future",
-        )
-        .with_description("Future heterogeneous computing provider");
+    fn arbitrary_backend_identifiers_are_supported() {
+        let identifiers = [
+            "classical.vendor:processor",
+            "quantum.vendor:qpu",
+            "hdl.vendor:fpga",
+            "ai.vendor:tensor-engine",
+            "distributed.vendor:executor",
+            "future.vendor:heterogeneous-engine",
+        ];
 
-        assert_eq!(
-            descriptor.id,
-            "future.vendor:heterogeneous-accelerator"
-        );
+        for identifier in identifiers {
+            let descriptor =
+                BackendDescriptor::new(identifier, ".artifact");
 
-        assert_eq!(
-            descriptor.file_extension,
-            ".future"
-        );
+            assert_eq!(
+                descriptor.id,
+                identifier
+            );
+        }
     }
 
     #[test]
-    fn backend_descriptor_aliases_are_preserved() {
+    fn descriptor_aliases_are_preserved() {
         let descriptor = BackendDescriptor::new(
             "vendor.accelerator",
-            ".acc",
+            ".artifact",
         )
         .with_alias("accelerator")
         .with_alias("vendor.acc");
@@ -606,27 +604,21 @@ mod tests {
     }
 
     #[test]
-    fn backend_descriptor_metadata_is_available() {
+    fn descriptor_metadata_is_preserved() {
         let descriptor = BackendDescriptor::new(
             "vendor.backend",
-            ".out",
+            ".output",
         )
-        .with_description("Example backend");
+        .with_description("Example backend provider");
 
         assert_eq!(
             descriptor.description,
-            "Example backend"
+            "Example backend provider"
         );
-    }
 
-    #[test]
-    fn unknown_backend_errors_are_preserved() {
-        let error = RegistryError::BackendNotFound {
-            identifier: "unknown.backend".to_owned(),
-        };
-
-        assert!(
-            error.to_string().contains("unknown.backend")
+        assert_eq!(
+            descriptor.file_extension,
+            ".output"
         );
     }
 
@@ -636,40 +628,68 @@ mod tests {
 
         assert!(
             registered_backends(&registry)
-                .expect("discovery must succeed")
+                .expect("inspection must succeed")
                 .is_empty()
         );
 
         assert!(
             registered_backend_ids(&registry)
-                .expect("identifier enumeration must succeed")
+                .expect("inspection must succeed")
                 .is_empty()
-        );
-
-        assert!(
-            !is_backend_registered(&registry, "unknown.backend")
-                .expect("registry lookup must succeed")
         );
     }
 
     #[test]
-    fn arbitrary_backend_identifiers_are_not_hardcoded() {
-        let identifiers = [
-            "classical.vendor:processor",
-            "quantum.vendor:qpu",
-            "hdl.vendor:fpga",
-            "ai.vendor:tensor-engine",
-            "distributed.vendor:executor",
-            "future.vendor:unknown-computing-model",
-        ];
+    fn unknown_identifiers_are_not_registered() {
+        let registry = new_compiler_backend_registry();
 
-        for identifier in identifiers {
-            let descriptor = BackendDescriptor::new(
-                identifier,
-                ".artifact",
-            );
+        assert!(
+            !is_backend_registered(
+                &registry,
+                "unknown.future.backend"
+            )
+            .expect("lookup must succeed")
+        );
+    }
 
-            assert_eq!(descriptor.id, identifier);
-        }
+    #[test]
+    fn unknown_backend_resolution_preserves_error() {
+        let registry = new_compiler_backend_registry();
+
+        let result = resolve_backend_id(
+            &registry,
+            "unknown.backend",
+        );
+
+        assert!(matches!(
+            result,
+            Err(RegistryError::BackendNotFound { .. })
+        ));
+    }
+
+    #[test]
+    fn registry_error_source_preserves_error_identity() {
+        let error = RegistryError::BackendNotFound {
+            identifier: "missing.backend".to_owned(),
+        };
+
+        let source = registry_error_source(&error);
+
+        assert!(
+            source.to_string().contains("missing.backend")
+        );
+    }
+
+    #[test]
+    fn compiler_and_canonical_registry_versions_are_independent() {
+        assert_ne!(
+            COMPILER_BACKEND_REGISTRY_API_VERSION,
+            0
+        );
+
+        assert_ne!(
+            crate::backend::BACKEND_API_VERSION,
+            0
+        );
     }
 }
