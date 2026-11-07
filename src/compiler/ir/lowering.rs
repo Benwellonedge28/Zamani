@@ -4,206 +4,210 @@
 #![deny(unused_must_use)]
 #![deny(missing_docs)]
 
-//! # Zamani Universal Meta-Compiler — IR Lowering Integration
+//! # Zamani Compiler — Verified IR Lowering Integration
 //!
 //! Path: `src/compiler/ir/lowering.rs`
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97 or later.
 //! Safety: unsafe Rust is forbidden.
 //!
-//! ## PURPOSE
+//! ## Purpose
 //!
-//! Provide the compiler-facing entry point for lowering verified
-//! canonical IR through existing, authoritative domain lowering
-//! implementations.
+//! Provide the compiler-facing admission and orchestration boundary
+//! for lowering verified canonical IR through existing, authoritative
+//! domain-owned lowering implementations.
 //!
-//! This module connects:
+//! This module coordinates:
 //!
-//! - Compiler verification-gated IR input.
-//! - Compiler representation translation.
+//! - Verification-gated compiler input.
+//! - Representation conversion contracts.
 //! - Canonical ZUIR lowering legality.
-//! - Canonical lowering context and resource requirements.
+//! - Canonical lowering context.
 //! - Domain-owned lowering backends.
+//! - Structured result and error propagation.
 //!
-//! It does not implement a second lowering engine.
+//! It does not implement a second IR, verifier, lowering engine,
+//! conversion algorithm, backend registry, or runtime.
 //!
-//! ## ARCHITECTURAL OWNERSHIP
+//! ## Ownership
 //!
 //! This module owns:
 //!
-//! - Verification-gated compiler lowering entry points.
-//! - Compiler-facing lowering error classification.
+//! - The compiler-facing verified lowering entry point.
+//! - Compiler-specific lowering errors.
+//! - Compiler-facing lowering outcomes.
 //! - Enforcement of the verified-input admission boundary.
-//! - Delegation to the canonical translation API.
+//! - Preservation of canonical translation evidence.
 //!
-//! This module does not own:
+//! It does not own:
 //!
-//! - IR structures or identifiers.
-//! - Source-language semantics.
-//! - Type inference or ownership analysis.
+//! - Source grammar or parsing.
+//! - Semantic analysis.
+//! - Canonical IR definitions.
 //! - IR verification algorithms.
 //! - Lowering legality algorithms.
 //! - Domain-specific conversion algorithms.
-//! - Domain IR builders.
-//! - Backend registration or discovery.
-//! - Physical resource allocation.
-//! - Hardware scheduling or routing.
-//! - Code generation or runtime execution.
+//! - Destination IR construction.
+//! - Hardware discovery or allocation.
+//! - Quantum routing or calibration.
+//! - HDL synthesis.
+//! - Physical scheduling.
+//! - Backend code generation.
+//! - Runtime execution.
 //!
-//! Those responsibilities remain with their canonical owners.
-//!
-//! ## CANONICAL AUTHORITIES
+//! ## Canonical authorities
 //!
 //! Verified compiler input:
 //!     crate::compiler::ir::input
 //!
-//! Representation translation:
-//!     crate::compiler::ir::translation
-//!
 //! Representation adapters:
 //!     crate::compiler::ir::adapters
 //!
-//! Lowering API:
+//! Representation translation:
+//!     crate::compiler::ir::translation
+//!
+//! Canonical lowering API:
 //!     crate::zuir::lowering::api
 //!
-//! Lowering context:
+//! Canonical lowering context:
 //!     crate::zuir::lowering::context
 //!
-//! Lowering legality:
+//! Canonical lowering legality:
 //!     crate::zuir::lowering::legality
 //!
-//! Universal IR:
-//!     crate::zuir::ir
+//! ## Verification and trust boundary
 //!
-//! ## TRUST BOUNDARY
+//! A request must contain a VerifiedIrInput produced through the
+//! compiler's canonical verification admission boundary.
 //!
-//! A lowering request must be based on a VerifiedIrInput.
+//! The supplied LegalityCandidate must also explicitly indicate
+//! that its source semantics have been verified.
 //!
-//! The associated LegalityCandidate must also explicitly state that
-//! its source has been verified.
+//! IMPORTANT:
 //!
-//! This module cannot independently prove that a caller-created
-//! EntityKey identifies an entity inside the supplied verified
-//! program snapshot. The domain adapter constructing the candidate
-//! must establish that correspondence.
+//! The current repository does not expose a canonical API that
+//! proves an arbitrary EntityKey belongs to the exact verified
+//! program snapshot held by VerifiedIrInput.
 //!
-//! A successful lowering result means that:
+//! Therefore, the domain adapter constructing the candidate
+//! remains responsible for establishing that relationship.
 //!
-//! - The declared conversion guarantee was accepted.
-//! - Canonical legality analysis authorized direct lowering.
-//! - The registered backend completed successfully.
+//! The source_verified flag is evidence supplied by that adapter;
+//! it is not an independent cryptographic or structural proof.
 //!
-//! It does not prove:
+//! This module must not claim stronger verification guarantees
+//! than the existing canonical APIs actually provide.
 //!
-//! - Destination IR verification.
-//! - Physical target feasibility.
-//! - Successful linking.
-//! - Runtime execution.
-//! - Universal portability.
+//! ## Semantic preservation
 //!
-//! The destination representation must be verified by its own
-//! authoritative verifier before being trusted by later stages.
+//! Potentially lossy conversions are rejected by the translation
+//! boundary.
 //!
-//! ## SEMANTIC PRESERVATION
-//!
-//! Potentially lossy conversions are rejected by the existing
-//! translation boundary.
+//! Canonical legality analysis remains authoritative.
 //!
 //! Conditional, deferred, expansion-required, and unsupported
-//! lowering decisions do not produce a completed artifact.
+//! decisions do not produce a completed direct-lowering artifact.
 //!
-//! No conversion may silently discard effects, ownership rules,
-//! control flow, numerical guarantees, resource requirements,
-//! synchronization, provenance, or domain-specific semantics.
+//! No lowering backend may silently discard:
 //!
-//! ## SCALABILITY AND POCO-REAF
+//! - Types or value semantics.
+//! - Effects.
+//! - Ownership and lifetime requirements.
+//! - Control or data dependencies.
+//! - Numerical guarantees.
+//! - Quantum state or measurement semantics.
+//! - HDL signal and structural semantics.
+//! - Synchronization or communication semantics.
+//! - Resource requirements.
+//! - Provenance.
 //!
-//! This module imposes no fixed limits on:
+//! A destination representation must pass its own authoritative
+//! verification before downstream stages trust it.
 //!
-//! - Programs, modules, functions, or regions.
-//! - Blocks, operations, or values.
-//! - Types, effects, or ownership relationships.
-//! - Qubits, signals, registers, or tensor dimensions.
-//! - Tensor rank or symbolic dimensions.
-//! - Devices, processors, accelerators, or nodes.
+//! ## Scalability and POCO-REAF
+//!
+//! This module imposes no arbitrary universal limits on:
+//!
+//! - Programs, modules, functions, regions, blocks or operations.
+//! - Values, types, effects or ownership relationships.
+//! - Qubits, signals or registers.
+//! - Tensor dimensions or tensor rank.
+//! - Devices, processors, accelerators or nodes.
 //! - Computing domains or domain combinations.
 //!
-//! The module does not copy the verified IR graph.
+//! It does not copy the verified IR graph.
 //!
-//! Work budgets and collection growth remain controlled by the
-//! canonical lowering context and domain-owned implementations.
+//! Work budgets and collection growth belong to the canonical
+//! lowering context and the domain-owned implementation.
 //!
-//! No finite implementation can promise literal infinity.
-//! Resource exhaustion must be reported rather than interpreted
-//! as successful lowering.
+//! Actual memory, address-space, time, representation and target
+//! limits remain real constraints and must be reported.
 //!
-//! ## GRAMMAR BOUNDARY
+//! Literal infinite physical resources are not promised.
+//!
+//! ## Grammar boundary
 //!
 //! Source syntax belongs to the grammar and frontend.
 //! Source meaning belongs to semantic analysis.
 //! Canonical computational meaning belongs to the appropriate IR.
 //!
-//! This module does not parse grammar productions, infer source
-//! semantics, introduce language keywords, or define domain syntax.
+//! This module does not parse grammar productions, introduce
+//! source keywords, or define domain semantics.
 //!
-//! Relevant specifications include:
+//! Relevant specifications:
 //!
 //! - grammar/Zamani.g4
-//! - grammar/DESIGN.md
 //! - grammar/specification/semantic-model.md
 //! - grammar/specification/compilation-model.md
 //! - grammar/specification/scalability-model.md
 //! - grammar/specification/poco-reaf.md
+//! - grammar/validation/semantic-boundaries.md
 //!
-//! ## INTEGRATION
+//! ## Integration
 //!
 //! Parent:
 //!     src/compiler/ir/mod.rs
 //!
-//! Compiler root:
-//!     src/compiler/mod.rs
+//! Required siblings:
+//!     input.rs
+//!     adapters.rs
+//!     translation.rs
+//!     verification.rs
 //!
-//! Required sibling modules:
-//!     input
-//!     adapters
-//!     verification
-//!     translation
-//!
-//! Canonical lowering:
+//! Canonical implementation:
 //!     src/zuir/lowering/
 //!
-//! Domain implementations must implement the canonical
-//! LoweringBackend contract and supply validated legality evidence.
+//! Domain backends must implement the canonical LoweringBackend
+//! contract and supply authoritative legality evidence.
 //!
-//! ## FREEZE CRITERIA
+//! ## Completion criteria
 //!
-//! - Unverified input cannot enter this API.
-//! - Unverified candidates cannot enter this API.
-//! - Lossy conversion remains rejected by translation.
+//! - Unverified compiler input is rejected.
+//! - Candidates without source-verification evidence are rejected.
+//! - Potentially lossy conversions remain rejected.
 //! - Canonical legality analysis remains authoritative.
 //! - Backend errors remain inspectable.
 //! - Non-legal outcomes cannot be mistaken for completed lowering.
-//! - No IR or conversion algorithm is duplicated.
-//! - No arbitrary hardware ceilings or unsafe code are introduced.
-//! - All module declarations and repository integration tests pass.
+//! - No competing IR, verifier, or lowering engine is introduced.
+//! - No unsafe code or arbitrary universal capacity limits exist.
+//! - Repository integration tests and quality gates pass.
 
 use core::fmt;
 use std::error::Error;
 
+use crate::compiler::ir::adapters::AdapterDescriptor;
 use crate::compiler::ir::input::VerifiedIrInput;
-
 use crate::compiler::ir::translation::{
     translate_with,
     TranslationError,
     TranslationOutcome,
 };
 
-use crate::compiler::ir::adapters::AdapterDescriptor;
-
 use crate::zuir::lowering::api::LoweringBackend;
-
-use crate::zuir::lowering::context::LoweringContext;
-
+use crate::zuir::lowering::context::{
+    EntityKey,
+    LoweringContext,
+};
 use crate::zuir::lowering::legality::LegalityCandidate;
 
 // =============================================================================
@@ -212,38 +216,48 @@ use crate::zuir::lowering::legality::LegalityCandidate;
 
 /// Public API version of the compiler IR lowering contract.
 ///
-/// This version is independent of the Zamani language version,
-/// grammar version, semantic-model version, ZUIR version,
-/// domain IR versions, and backend ABI versions.
+/// This version is independent of the language, grammar, semantic
+/// model, ZUIR, domain IR, and backend ABI versions.
 pub const IR_LOWERING_API_VERSION: u16 = 1;
+
+/// Return the compiler IR lowering API version.
+#[must_use]
+pub const fn api_version() -> u16 {
+    IR_LOWERING_API_VERSION
+}
 
 // =============================================================================
 // RESULT TYPE
 // =============================================================================
 
-/// Result alias for compiler-facing verified IR lowering.
+/// Result of a compiler-facing verified IR lowering request.
+///
+/// A successful result means the lowering request was processed
+/// by the canonical translation and legality subsystems.
+///
+/// It does not necessarily mean that an artifact was produced.
+/// Inspect [`IrLoweringOutcome::is_lowered`] before consuming
+/// the artifact.
 pub type IrLoweringResult<T, E> =
     Result<IrLoweringOutcome<T>, IrLoweringError<E>>;
 
 // =============================================================================
-// LOWERING ERROR
+// ERRORS
 // =============================================================================
 
 /// Errors produced by compiler-facing IR lowering.
+///
+/// The underlying translation error is preserved so callers can
+/// inspect legality, context, and backend failures without
+/// parsing diagnostic strings.
 #[derive(Debug)]
 pub enum IrLoweringError<E> {
-    /// The supplied verified-input marker did not report a valid
-    /// verification result.
-    ///
-    /// This is a defensive check. A correctly constructed
-    /// VerifiedIrInput should always satisfy this condition.
+    /// The supplied verified-input marker did not establish
+    /// successful canonical verification.
     InvalidVerifiedInput,
 
-    /// The lowering candidate does not explicitly assert that
-    /// its source representation has passed verification.
-    ///
-    /// The compiler does not infer verification from an entity's
-    /// Rust type or identity.
+    /// The lowering candidate did not explicitly establish
+    /// source-verification evidence.
     SourceVerificationNotEstablished,
 
     /// The canonical translation or lowering implementation failed.
@@ -251,7 +265,10 @@ pub enum IrLoweringError<E> {
 }
 
 impl<E: fmt::Display> fmt::Display for IrLoweringError<E> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidVerifiedInput => {
                 write!(
@@ -290,19 +307,62 @@ where
     }
 }
 
+impl<E> IrLoweringError<E> {
+    /// Return the underlying translation error, if one exists.
+    #[must_use]
+    pub fn translation_error(
+        &self,
+    ) -> Option<&TranslationError<E>> {
+        match self {
+            Self::Translation(error) => Some(error),
+            _ => None,
+        }
+    }
+
+    /// Consume the error and return its underlying translation error,
+    /// if one exists.
+    #[must_use]
+    pub fn into_translation_error(
+        self,
+    ) -> Option<TranslationError<E>> {
+        match self {
+            Self::Translation(error) => Some(error),
+            _ => None,
+        }
+    }
+
+    /// Return whether the error represents rejected verified input.
+    #[must_use]
+    pub const fn is_invalid_verified_input(&self) -> bool {
+        matches!(self, Self::InvalidVerifiedInput)
+    }
+
+    /// Return whether the error represents missing source-verification
+    /// evidence.
+    #[must_use]
+    pub const fn is_source_unverified(&self) -> bool {
+        matches!(
+            self,
+            Self::SourceVerificationNotEstablished
+        )
+    }
+}
+
 // =============================================================================
-// LOWERING OUTCOME
+// OUTCOME
 // =============================================================================
 
-/// Result of a compiler-facing lowering request.
+/// Result of one compiler-facing lowering request.
 ///
-/// The outcome preserves the canonical translation outcome,
-/// including the legality report, optional artifact, and
+/// The outcome preserves the canonical translation result,
+/// including its legality report, optional artifact, and
 /// destination entity mappings.
 ///
-/// An outcome with no artifact is not a completed lowering.
+/// An outcome without an artifact is not a completed lowering.
 ///
-/// Callers must inspect `is_lowered()` before using an artifact.
+/// A completed lowering is not automatically a verified
+/// destination representation, feasible physical realization,
+/// linked executable, or successful runtime execution.
 #[derive(Debug)]
 pub struct IrLoweringOutcome<T> {
     translation: TranslationOutcome<T>,
@@ -317,13 +377,22 @@ impl<T> IrLoweringOutcome<T> {
         Self { translation }
     }
 
-    /// Return the original translation outcome.
+    /// Borrow the original canonical translation outcome.
     ///
     /// The canonical legality report and destination mappings
-    /// remain available through this reference.
+    /// remain available without reconstruction.
     #[must_use]
     pub const fn translation(&self) -> &TranslationOutcome<T> {
         &self.translation
+    }
+
+    /// Consume the outcome and return the canonical translation result.
+    ///
+    /// This preserves the descriptor, legality report, artifact,
+    /// and destination mappings.
+    #[must_use]
+    pub fn into_translation(self) -> TranslationOutcome<T> {
+        self.translation
     }
 
     /// Return the representation conversion descriptor.
@@ -332,16 +401,23 @@ impl<T> IrLoweringOutcome<T> {
         self.translation.descriptor()
     }
 
-    /// Return whether the backend produced a lowering artifact.
+    /// Return whether the canonical backend produced an artifact.
     ///
-    /// This is false for non-legal or otherwise incomplete
-    /// lowering outcomes.
-    ///
-    /// It does not prove destination verification, target
-    /// feasibility, linking success, or runtime execution.
+    /// This is false for non-legal decisions or when the canonical
+    /// lowering API did not invoke the backend.
     #[must_use]
     pub fn is_lowered(&self) -> bool {
         self.translation.is_translated()
+    }
+
+    /// Return whether no lowering artifact was produced.
+    ///
+    /// A false result does not imply an error: the canonical
+    /// legality subsystem may have returned a valid deferred,
+    /// conditional, expansion-required, or unsupported outcome.
+    #[must_use]
+    pub fn is_not_lowered(&self) -> bool {
+        !self.is_lowered()
     }
 
     /// Borrow the produced artifact, if lowering completed.
@@ -352,46 +428,46 @@ impl<T> IrLoweringOutcome<T> {
 
     /// Consume the outcome and return the artifact, if lowering
     /// completed.
+    ///
+    /// This convenience method discards the associated report,
+    /// descriptor, and destination mappings. Use
+    /// [`Self::into_translation`] when that evidence is required.
     #[must_use]
     pub fn into_artifact(self) -> Option<T> {
         self.translation.into_artifact()
     }
 
-    /// Return the destination entities registered by canonical
+    /// Borrow the destination entities registered by canonical
     /// lowering orchestration.
     #[must_use]
-    pub fn destinations(
-        &self,
-    ) -> &[crate::zuir::lowering::context::EntityKey] {
+    pub fn destinations(&self) -> &[EntityKey] {
         self.translation.destinations()
     }
 
-    /// Return the canonical legality report.
+    /// Borrow the canonical lowering-legality report.
     ///
-    /// The report describes the supplied conversion evidence.
+    /// This report describes the supplied conversion evidence.
     /// It is not a physical hardware feasibility report.
     #[must_use]
     pub fn legality(
         &self,
     ) -> &crate::zuir::lowering::legality::LegalityReport {
-        &self.translation.lowering_outcome().legality
+        self.translation.legality()
     }
 }
 
 // =============================================================================
-// VERIFIED LOWERING ENTRY POINT
+// VERIFIED LOWERING
 // =============================================================================
 
 /// Lower one verified source entity through an authoritative
 /// domain-owned lowering backend.
 ///
-/// This is the compiler-facing lowering entry point.
-///
-/// # Inputs
+/// # Arguments
 ///
 /// `verified_input`:
 ///
-/// A verification-gated input created by
+/// A verification-gated compiler input created by
 /// `CompilationIrInput::verify()`.
 ///
 /// `descriptor`:
@@ -401,62 +477,55 @@ impl<T> IrLoweringOutcome<T> {
 ///
 /// `context`:
 ///
-/// The canonical lowering context. It owns lowering-local
-/// mappings, symbolic requirements, provenance, and optional
-/// operational work budgets.
+/// The canonical lowering context. It owns lowering-local mappings,
+/// symbolic requirements, provenance, and optional operational
+/// work accounting.
 ///
 /// `candidate`:
 ///
-/// The semantic and capability evidence for this conversion.
-/// Its `source_verified` field must be true. The domain adapter
-/// must establish that the candidate's source entity belongs to
-/// the supplied verified snapshot.
+/// Semantic, capability, and legality evidence for the conversion.
+/// Its `source_verified` field must be true.
+///
+/// The domain adapter must establish that the candidate's source
+/// entity belongs to the exact verified input snapshot.
 ///
 /// `backend`:
 ///
-/// An implementation of the canonical ZUIR LoweringBackend
-/// contract. It owns the actual conversion algorithm.
+/// An implementation of the canonical ZUIR LoweringBackend contract.
+/// It owns the actual conversion algorithm.
 ///
 /// # Behavior
 ///
-/// 1. Reject an invalid verified-input marker.
-/// 2. Reject a candidate without source-verification evidence.
-/// 3. Delegate conversion-guarantee validation to the existing
-///    translation module.
-/// 4. Delegate legality analysis to the canonical ZUIR lowering API.
-/// 5. Invoke the domain backend only when legality permits it.
-/// 6. Preserve the canonical report and destination mappings.
-/// 7. Return an outcome that distinguishes completed lowering
-///    from a non-legal decision.
+/// 1. Check the compiler verified-input marker.
+/// 2. Require explicit source-verification evidence.
+/// 3. Validate the representation conversion descriptor.
+/// 4. Reject potentially lossy conversions.
+/// 5. Delegate legality analysis to canonical ZUIR lowering.
+/// 6. Invoke the backend only when legality permits direct lowering.
+/// 7. Preserve the canonical report and destination mappings.
 ///
 /// # Errors
 ///
-/// Returns `InvalidVerifiedInput` if the verified-input marker
-/// does not report a valid verification state.
+/// Returns `InvalidVerifiedInput` when the verified-input marker
+/// does not report successful verification.
 ///
-/// Returns `SourceVerificationNotEstablished` if the candidate
-/// does not carry verified-source evidence.
+/// Returns `SourceVerificationNotEstablished` when the candidate
+/// does not carry source-verification evidence.
 ///
-/// Returns `Translation` for lossy conversion rejection,
-/// legality-analysis failure, backend failure, or mapping failure.
+/// Returns `Translation` for malformed descriptors, rejected
+/// conversion guarantees, legality-analysis failures, context
+/// failures, or backend failures.
 ///
 /// # Important
 ///
 /// A successful function return does not necessarily mean that
-/// an artifact was produced. The canonical legality subsystem
-/// can return a deferred, conditional, expansion-required, or
-/// unsupported decision without invoking the backend.
+/// an artifact was produced.
 ///
-/// Always inspect `is_lowered()` and `legality()`.
+/// Always inspect [`IrLoweringOutcome::is_lowered`] and
+/// [`IrLoweringOutcome::legality`].
 ///
-/// # Semantic safety
-///
-/// This function does not manufacture missing capabilities,
-/// resolve unsupported semantics, allocate hardware, or silently
-/// change source behavior.
-///
-/// The destination must pass its own authoritative verifier
-/// before it is trusted by subsequent compiler stages.
+/// This function does not establish destination verification,
+/// target feasibility, physical allocation, linking, or execution.
 pub fn lower_verified_with<B>(
     verified_input: &VerifiedIrInput<'_>,
     descriptor: AdapterDescriptor,
@@ -467,16 +536,25 @@ pub fn lower_verified_with<B>(
 where
     B: LoweringBackend,
 {
+    // Defensive admission check. A correctly constructed
+    // VerifiedIrInput should always satisfy this condition.
     if !verified_input.is_verified() {
         return Err(IrLoweringError::InvalidVerifiedInput);
     }
 
+    // The canonical lowering subsystem must not be asked to infer
+    // source verification from an entity identity or descriptor.
     if !candidate.source_verified {
         return Err(
-            IrLoweringError::SourceVerificationNotEstablished
+            IrLoweringError::SourceVerificationNotEstablished,
         );
     }
 
+    // Do not reconstruct a converter here. The existing translation
+    // boundary validates the descriptor and conversion guarantee.
+    //
+    // The canonical lowering API remains responsible for legality,
+    // backend invocation, and destination mapping registration.
     let translation = translate_with(
         descriptor,
         context,
@@ -489,16 +567,6 @@ where
 }
 
 // =============================================================================
-// API INFORMATION
-// =============================================================================
-
-/// Return the compiler IR lowering API version.
-#[must_use]
-pub const fn api_version() -> u16 {
-    IR_LOWERING_API_VERSION
-}
-
-// =============================================================================
 // TESTS
 // =============================================================================
 
@@ -506,15 +574,48 @@ pub const fn api_version() -> u16 {
 mod tests {
     use super::*;
 
+    use std::io;
+
     #[test]
     fn lowering_api_version_is_available() {
-        assert_eq!(api_version(), IR_LOWERING_API_VERSION);
-        assert_eq!(IR_LOWERING_API_VERSION, 1);
+        assert_eq!(
+            api_version(),
+            IR_LOWERING_API_VERSION
+        );
+
+        assert_eq!(
+            IR_LOWERING_API_VERSION,
+            1
+        );
     }
 
     #[test]
-    fn lowering_error_display_is_stable() {
-        let error: IrLoweringError<std::io::Error> =
+    fn source_verification_error_is_distinct() {
+        let error: IrLoweringError<io::Error> =
+            IrLoweringError::SourceVerificationNotEstablished;
+
+        assert!(error.is_source_unverified());
+
+        assert!(!error.is_invalid_verified_input());
+
+        assert!(error.translation_error().is_none());
+    }
+
+    #[test]
+    fn invalid_verified_input_error_is_distinct() {
+        let error: IrLoweringError<io::Error> =
+            IrLoweringError::InvalidVerifiedInput;
+
+        assert!(error.is_invalid_verified_input());
+
+        assert!(!error.is_source_unverified());
+
+        assert!(error.translation_error().is_none());
+    }
+
+    #[test]
+    fn source_verification_error_display_is_stable() {
+        let error: IrLoweringError<io::Error> =
             IrLoweringError::SourceVerificationNotEstablished;
 
         assert_eq!(
@@ -524,10 +625,21 @@ mod tests {
     }
 
     #[test]
-    fn invalid_verified_input_error_is_distinct() {
-        let error: IrLoweringError<std::io::Error> =
+    fn invalid_verified_input_error_display_is_stable() {
+        let error: IrLoweringError<io::Error> =
             IrLoweringError::InvalidVerifiedInput;
 
-        assert!(error.to_string().contains("invalid verified-input"));
+        assert_eq!(
+            error.to_string(),
+            "IR lowering rejected an invalid verified-input marker"
+        );
+    }
+
+    #[test]
+    fn lowering_error_has_no_translation_error_when_admission_fails() {
+        let error: IrLoweringError<io::Error> =
+            IrLoweringError::InvalidVerifiedInput;
+
+        assert!(error.into_translation_error().is_none());
     }
 }
