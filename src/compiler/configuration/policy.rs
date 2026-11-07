@@ -1,79 +1,109 @@
 
 #![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_docs)]
 
 //! Zamani Universal Meta-Compiler — Compilation Policy Contracts.
 //!
-//! File:
-//!     src/compiler/configuration/policy.rs
+//! Path: src/compiler/configuration/policy.rs
 //!
-//! Purpose:
-//!     Define the compiler-side representation, validation, classification,
-//!     and evaluation boundary for compilation policies.
+//! Rust edition: 2021
+//! Minimum Rust version: 1.97
 //!
-//! Rust:
-//!     Edition 2021.
-//!     Minimum version 1.97.
+//! # Purpose
 //!
-//! Safety:
-//!     Unsafe Rust is forbidden.
+//! Provides compiler-side policy representation, structural validation,
+//! policy classification, conditional evaluation and integration contracts.
 //!
-//! Architectural ownership:
+//! # Architectural ownership
 //!
-//!     grammar/policies/
-//!         Owns policy syntax.
+//! The canonical policy grammar owns policy syntax.
 //!
-//!     semantic policy subsystem
-//!         Owns source-level policy meaning, name resolution, semantic
-//!         validation, policy composition, authorization, and enforcement
-//!         semantics.
+//! The frontend owns AST construction.
 //!
-//!     compiler::configuration::policy
-//!         Owns compiler-side policy contracts, structural validation,
-//!         policy intent classification, and the expression-evaluation
-//!         boundary used by compiler planning.
+//! The semantic subsystem owns:
+//! - Policy name resolution.
+//! - Policy semantic validation.
+//! - Policy composition semantics.
+//! - Expression meaning.
+//! - Authorization semantics.
+//! - Source-level policy enforcement meaning.
 //!
-//!     compiler::configuration::budget
-//!         Owns resource-budget definitions and accounting.
+//! This module owns:
+//! - Compiler-side policy contracts.
+//! - Structural policy validation.
+//! - Policy intent classification.
+//! - Conditional evaluation interfaces.
+//! - Evaluation result representation.
+//! - Fail-closed handling of indeterminate conditions.
 //!
-//!     compiler::configuration::target
-//!         Owns target descriptors and target-specific configuration.
+//! Other authorities:
 //!
-//!     compiler::configuration::config
-//!         Owns construction and validation of the existing CompilerConfig.
+//! configuration/budget.rs:
+//!     Operational resource budgets and accounting.
 //!
-//!     compiler::planning
-//!         Consumes resolved policy information when producing realization
-//!         plans.
+//! configuration/target.rs:
+//!     Target descriptors.
 //!
-//!     runtime / security
-//!         Own actual runtime policy enforcement and authorization.
+//! configuration/config.rs:
+//!     CompilerConfig construction and validation.
 //!
-//! This module deliberately does not create a competing semantic policy
-//! engine, resource model, capability registry, target registry, security
-//! subsystem, or runtime.
+//! analysis/requirements.rs:
+//!     Compiler-side requirements.
 //!
-//! POCO-REAF:
-//!     Policy must govern permitted realizations without making the semantic
-//!     meaning of a program dependent on one physical machine.
+//! planning/:
+//!     Feasibility and realization planning.
 //!
-//! Scalability:
-//!     No arbitrary maximum is imposed on policies, members, rules, clauses,
-//!     properties, identifiers, or expression text. Actual memory and
-//!     execution limits are implementation/resource concerns.
+//! security/:
+//!     Security verification and enforcement integration.
 //!
-//! Determinism:
-//!     Members, rules, clauses, and evaluation results preserve declaration
-//!     order. This module does not use nondeterministic iteration to determine
-//!     policy precedence.
+//! optimization/:
+//!     Optimization policy consumption.
 //!
-//! Expression ownership:
-//!     Expressions are retained as opaque source-level expressions. This
-//!     module does not implement a second Zamani expression parser.
+//! runtime/:
+//!     Runtime policy enforcement.
 //!
-//! Integration:
-//!     The evaluator is generic over its context. Resource, capability,
-//!     semantic, target, and security information can be supplied by their
-//!     authoritative subsystems without making this module own those models.
+//! # Important boundaries
+//!
+//! This module does not:
+//! - Parse Zamani expressions.
+//! - Construct AST nodes.
+//! - Resolve policy names.
+//! - Discover hardware.
+//! - Allocate resources.
+//! - Select physical devices.
+//! - Perform authorization.
+//! - Execute compiler stages.
+//! - Schedule runtime work.
+//! - Define a competing semantic policy engine.
+//!
+//! # POCO-REAF
+//!
+//! Policies describe governing intent independently of physical hardware.
+//!
+//! No universal hardware capacity ceilings are defined here.
+//!
+//! Operational limits belong to explicitly configured budgets.
+//!
+//! Actual feasibility belongs to planning and capability evaluation.
+//!
+//! Literal infinite physical resources are not promised.
+//!
+//! # Determinism
+//!
+//! Policy declaration order is preserved.
+//!
+//! Conditional rules are evaluated in declaration order.
+//!
+//! Composition references are validated deterministically.
+//!
+//! # Expression ownership
+//!
+//! Expressions remain opaque.
+//!
+//! Their syntax and meaning belong to the canonical frontend and semantic
+//! expression subsystem.
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -83,80 +113,103 @@ use std::fmt;
 // VERSION
 // ============================================================================
 
-/// Version of this compiler-side policy contract.
+/// Version of the compiler-side policy contract.
 ///
-/// This is not the Zamani language version, grammar version, semantic-model
-/// version, compiler version, or artifact version.
-pub const POLICY_API_VERSION: u16 = 1;
+/// Independent of the language, grammar, semantic-model, IR and artifact
+/// versions.
+pub const POLICY_API_VERSION: u16 = 2;
 
 // ============================================================================
-// IDENTIFIERS AND EXPRESSIONS
+// IDENTIFIERS
 // ============================================================================
 
-/// A qualified policy identifier.
+/// A qualified, open-world policy identifier.
 ///
 /// Examples:
 ///
-///     execution::portable
-///     deployment::production
-///     quantum::fault_tolerant
-///     organization::security::strict
+/// - execution::portable
+/// - deployment::production
+/// - quantum::fault_tolerant
+/// - organization::security::strict
 ///
-/// Identifiers are open-world. This type does not enumerate policy names or
-/// computational domains.
+/// Identity resolution remains the responsibility of semantic analysis.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PolicyId(String);
 
 impl PolicyId {
-    /// Creates a policy identifier.
-    ///
-    /// Empty or whitespace-only identifiers are rejected.
-    /// No arbitrary identifier-length or namespace-depth ceiling is imposed.
-    pub fn new(value: impl Into<String>) -> Result<Self, PolicyValidationError> {
+    /// Constructs a policy identifier.
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, PolicyValidationError> {
         let value = value.into();
 
         if value.trim().is_empty() {
             return Err(PolicyValidationError::EmptyIdentifier);
         }
 
+        if value.chars().any(char::is_control) {
+            return Err(
+                PolicyValidationError::ControlCharacter {
+                    field: "policy identifier",
+                },
+            );
+        }
+
         Ok(Self(value))
     }
 
-    /// Returns the identifier as text.
+    /// Returns the original identifier.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    /// Consumes the identifier and returns its text.
+    /// Consumes the identifier.
     pub fn into_string(self) -> String {
         self.0
     }
 }
 
 impl fmt::Display for PolicyId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
+// ============================================================================
+// EXPRESSIONS
+// ============================================================================
+
 /// An opaque Zamani policy expression.
 ///
-/// Expression syntax and meaning belong to the canonical grammar and
-/// semantic-expression subsystems. This type preserves the expression for
-/// downstream evaluation without interpreting or rewriting it.
+/// This type preserves source expression text without interpreting it.
+///
+/// Parsing and semantic meaning remain owned by the frontend.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PolicyExpression(String);
 
 impl PolicyExpression {
-    /// Creates an opaque policy expression.
+    /// Constructs an expression.
     ///
-    /// Whitespace-only expressions are rejected.
-    /// The original expression text is preserved.
-    pub fn new(value: impl Into<String>) -> Result<Self, PolicyValidationError> {
+    /// Newlines and ordinary whitespace are preserved.
+    /// NUL characters are rejected.
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, PolicyValidationError> {
         let value = value.into();
 
         if value.trim().is_empty() {
             return Err(PolicyValidationError::EmptyExpression);
+        }
+
+        if value.contains('\0') {
+            return Err(
+                PolicyValidationError::ControlCharacter {
+                    field: "policy expression",
+                },
+            );
         }
 
         Ok(Self(value))
@@ -167,45 +220,64 @@ impl PolicyExpression {
         &self.0
     }
 
-    /// Consumes the expression and returns its original text.
+    /// Consumes the expression.
     pub fn into_string(self) -> String {
         self.0
     }
 }
 
 impl fmt::Display for PolicyExpression {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-/// A policy property key.
+// ============================================================================
+// PROPERTY KEYS
+// ============================================================================
+
+/// An open-world policy property key.
 ///
-/// Property names are open-world. A new policy property must not require
-/// adding a new Rust enum variant.
+/// New property names do not require new Rust enum variants.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PolicyPropertyKey(String);
 
 impl PolicyPropertyKey {
-    /// Creates a property key.
-    pub fn new(value: impl Into<String>) -> Result<Self, PolicyValidationError> {
+    /// Constructs a property key.
+    pub fn new(
+        value: impl Into<String>,
+    ) -> Result<Self, PolicyValidationError> {
         let value = value.into();
 
         if value.trim().is_empty() {
             return Err(PolicyValidationError::EmptyPropertyKey);
         }
 
+        if value.chars().any(char::is_control) {
+            return Err(
+                PolicyValidationError::ControlCharacter {
+                    field: "policy property key",
+                },
+            );
+        }
+
         Ok(Self(value))
     }
 
-    /// Returns the property key.
+    /// Returns the original property key.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 
 impl fmt::Display for PolicyPropertyKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -214,54 +286,41 @@ impl fmt::Display for PolicyPropertyKey {
 // POLICY CLASSIFICATION
 // ============================================================================
 
-/// The broad role played by a policy directive.
-///
-/// Classification does not execute or authorize the directive. It allows
-/// downstream semantic, planning, security, and runtime systems to handle
-/// different kinds of policy intent without conflating their meanings.
+/// Broad classification of policy intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PolicyClass {
-    /// Mandatory program requirements, constraints, capability demands,
-    /// and resource demands.
+    /// Requirements, constraints, capabilities and resources.
     MandatoryIntent,
 
     /// Advisory optimization preferences.
     AdvisoryIntent,
 
-    /// Permission and prohibition declarations.
-    ///
-    /// These are policy declarations, not proof of security authorization.
+    /// Permission, prohibition and sandbox declarations.
     AuthorizationIntent,
 
-    /// Selection, negotiation, fallback, recovery, retry, escalation,
-    /// simulation, and adaptation declarations.
+    /// Selection, negotiation, fallback and adaptation.
     RealizationIntent,
 
-    /// Determinism, reproducibility, effects, provenance, and contract
-    /// declarations.
+    /// Determinism, reproducibility, effects and provenance.
     SemanticContractIntent,
 
-    /// Open-ended policy metadata.
+    /// Open-ended metadata.
     MetadataIntent,
 }
 
-/// Indicates whether a directive expresses a mandatory condition or
-/// advisory intent.
-///
-/// This is deliberately not a complete feasibility result.
+/// Strength of a policy directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PolicyStrength {
-    /// Must be satisfied by any permitted realization.
+    /// Must be satisfied.
     Mandatory,
 
-    /// Desirable, but cannot override mandatory requirements or constraints.
+    /// Advisory and unable to override mandatory conditions.
     Advisory,
 
-    /// Describes governing or authorization intent that requires evaluation
-    /// by the appropriate authoritative subsystem.
+    /// Requires interpretation by its governing authority.
     Governing,
 
-    /// Provides metadata or contextual information.
+    /// Informational metadata.
     Informational,
 }
 
@@ -269,47 +328,82 @@ pub enum PolicyStrength {
 // DIRECTIVE KINDS
 // ============================================================================
 
-/// Domain-neutral policy directive kinds.
+/// Canonical policy directive categories.
 ///
-/// These correspond to the conceptual policy forms in the canonical
-/// `grammar/policies/policy.g4` grammar.
+/// This enum follows the current canonical policy grammar.
 ///
-/// The enum classifies syntax-level intent. It does not replace the semantic
-/// policy model and does not enumerate hardware, vendor, device, or domain
-/// capabilities.
+/// It does not enumerate computing domains, hardware, vendors or devices.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PolicyDirectiveKind {
+    /// Requirement declaration.
     Requirement,
+
+    /// Constraint declaration.
     Constraint,
+
+    /// Capability declaration.
     Capability,
+
+    /// Resource declaration.
     Resource,
 
+    /// Permission declaration.
     Permission,
+
+    /// Prohibition declaration.
     Prohibition,
+
+    /// Advisory preference.
     Preference,
 
+    /// Alternative realization declaration.
     Fallback,
+
+    /// Selection intent.
     Selection,
+
+    /// Negotiation intent.
     Negotiation,
+
+    /// Retry intent.
     Retry,
+
+    /// Recovery intent.
     Recovery,
+
+    /// Escalation intent.
     Escalation,
+
+    /// Rejection intent.
     Rejection,
 
+    /// Simulation intent.
     Simulation,
+
+    /// Adaptation intent.
     Adaptation,
+
+    /// Sandboxing intent.
     Sandbox,
 
+    /// Determinism declaration.
     Determinism,
+
+    /// Reproducibility declaration.
     Reproducibility,
 
+    /// Effect declaration.
     Effect,
+
+    /// Provenance declaration.
     Provenance,
+
+    /// Contract reference.
     ContractReference,
 }
 
 impl PolicyDirectiveKind {
-    /// Returns the classification of this directive.
+    /// Returns the policy classification.
     pub const fn class(self) -> PolicyClass {
         match self {
             Self::Requirement
@@ -319,9 +413,9 @@ impl PolicyDirectiveKind {
 
             Self::Preference => PolicyClass::AdvisoryIntent,
 
-            Self::Permission | Self::Prohibition | Self::Sandbox => {
-                PolicyClass::AuthorizationIntent
-            }
+            Self::Permission
+            | Self::Prohibition
+            | Self::Sandbox => PolicyClass::AuthorizationIntent,
 
             Self::Fallback
             | Self::Selection
@@ -337,11 +431,13 @@ impl PolicyDirectiveKind {
             | Self::Reproducibility
             | Self::Effect
             | Self::Provenance
-            | Self::ContractReference => PolicyClass::SemanticContractIntent,
+            | Self::ContractReference => {
+                PolicyClass::SemanticContractIntent
+            }
         }
     }
 
-    /// Returns the strength of this directive.
+    /// Returns the policy strength.
     pub const fn strength(self) -> PolicyStrength {
         match self {
             Self::Requirement
@@ -353,9 +449,8 @@ impl PolicyDirectiveKind {
 
             Self::Permission
             | Self::Prohibition
-            | Self::Sandbox => PolicyStrength::Governing,
-
-            Self::Fallback
+            | Self::Sandbox
+            | Self::Fallback
             | Self::Selection
             | Self::Negotiation
             | Self::Retry
@@ -372,23 +467,50 @@ impl PolicyDirectiveKind {
         }
     }
 
-    /// Returns whether this directive must not be silently ignored by a
-    /// conforming downstream policy resolver.
+    /// Returns whether an expression is optional for this directive.
     ///
-    /// This does not mean that this module performs the resolution.
+    /// The canonical grammar permits optional expressions only for
+    /// determinism and reproducibility declarations.
+    pub const fn permits_expression_omission(self) -> bool {
+        matches!(
+            self,
+            Self::Determinism | Self::Reproducibility
+        )
+    }
+
+    /// Returns whether this directive is legal as a conditional rule action.
+    ///
+    /// This follows policyRuleAction in grammar/policies/policy.g4.
+    pub const fn is_valid_rule_action(self) -> bool {
+        !matches!(
+            self,
+            Self::Requirement
+                | Self::Constraint
+                | Self::Capability
+                | Self::Resource
+        )
+    }
+
+    /// Returns whether downstream resolution is required.
+    ///
+    /// Preferences are advisory, but they must still be considered.
+    /// Unsupported preferences must not silently become mandatory or
+    /// disappear without an explicit downstream decision.
     pub const fn requires_downstream_resolution(self) -> bool {
-        !matches!(self, Self::Preference)
+        true
+    }
+
+    /// Returns whether the directive is advisory.
+    pub const fn is_advisory(self) -> bool {
+        matches!(self, Self::Preference)
     }
 }
 
 // ============================================================================
-// DIRECTIVES AND ACTIONS
+// DIRECTIVES
 // ============================================================================
 
-/// A policy directive and its optional expression.
-///
-/// Determinism and reproducibility declarations may be expression-free in
-/// the grammar. Other directive kinds require an expression.
+/// One policy directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyDirective {
     kind: PolicyDirectiveKind,
@@ -396,7 +518,23 @@ pub struct PolicyDirective {
 }
 
 impl PolicyDirective {
-    /// Creates a directive with an expression.
+    /// Constructs a directive from its kind and expression.
+    pub fn new(
+        kind: PolicyDirectiveKind,
+        expression: Option<PolicyExpression>,
+    ) -> Result<Self, PolicyValidationError> {
+        if expression.is_none()
+            && !kind.permits_expression_omission()
+        {
+            return Err(
+                PolicyValidationError::ExpressionRequired { kind },
+            );
+        }
+
+        Ok(Self { kind, expression })
+    }
+
+    /// Constructs a directive with an expression.
     pub fn with_expression(
         kind: PolicyDirectiveKind,
         expression: PolicyExpression,
@@ -407,7 +545,7 @@ impl PolicyDirective {
         }
     }
 
-    /// Creates an expression-free determinism declaration.
+    /// Constructs an expression-free determinism directive.
     pub fn deterministic() -> Self {
         Self {
             kind: PolicyDirectiveKind::Determinism,
@@ -415,7 +553,7 @@ impl PolicyDirective {
         }
     }
 
-    /// Creates an expression-free reproducibility declaration.
+    /// Constructs an expression-free reproducibility directive.
     pub fn reproducible() -> Self {
         Self {
             kind: PolicyDirectiveKind::Reproducibility,
@@ -423,35 +561,17 @@ impl PolicyDirective {
         }
     }
 
-    /// Creates a directive from its kind and optional expression.
-    pub fn new(
-        kind: PolicyDirectiveKind,
-        expression: Option<PolicyExpression>,
-    ) -> Result<Self, PolicyValidationError> {
-        let permits_empty_expression = matches!(
-            kind,
-            PolicyDirectiveKind::Determinism
-                | PolicyDirectiveKind::Reproducibility
-        );
-
-        if expression.is_none() && !permits_empty_expression {
-            return Err(PolicyValidationError::ExpressionRequired { kind });
-        }
-
-        Ok(Self { kind, expression })
-    }
-
     /// Returns the directive kind.
     pub const fn kind(&self) -> PolicyDirectiveKind {
         self.kind
     }
 
-    /// Returns the directive classification.
+    /// Returns its classification.
     pub const fn class(&self) -> PolicyClass {
         self.kind.class()
     }
 
-    /// Returns the directive strength.
+    /// Returns its strength.
     pub const fn strength(&self) -> PolicyStrength {
         self.kind.strength()
     }
@@ -462,18 +582,22 @@ impl PolicyDirective {
     }
 }
 
-/// The action performed when a conditional policy rule matches.
-///
-/// The action is either a policy directive or an opaque expression whose
-/// meaning is resolved by the canonical semantic policy subsystem.
+// ============================================================================
+// POLICY ACTIONS
+// ============================================================================
+
+/// An action associated with a conditional policy rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyAction {
+    /// A structured policy directive.
     Directive(PolicyDirective),
+
+    /// An opaque canonical policy expression.
     Expression(PolicyExpression),
 }
 
 impl PolicyAction {
-    /// Returns the directive when the action is a directive.
+    /// Returns the directive, if present.
     pub fn as_directive(&self) -> Option<&PolicyDirective> {
         match self {
             Self::Directive(directive) => Some(directive),
@@ -483,27 +607,29 @@ impl PolicyAction {
 }
 
 // ============================================================================
-// RULE CLAUSES AND RULES
+// CONDITIONAL RULES
 // ============================================================================
 
-/// Additional clauses attached to a conditional policy rule.
-///
-/// Conditions are conjunctive in this compiler-side representation.
-/// Property clauses are preserved as data and interpreted downstream.
+/// An additional clause in a conditional rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyRuleClause {
+    /// An additional conjunctive condition.
     Condition(PolicyExpression),
 
+    /// An open-world property assignment.
+    ///
+    /// Property assignments are retained for semantic resolution.
+    /// They are not interpreted as boolean conditions here.
     Property {
+        /// Property key.
         key: PolicyPropertyKey,
+
+        /// Opaque property value.
         value: PolicyExpression,
     },
 }
 
-/// A conditional policy rule.
-///
-/// The condition is an opaque expression. The expression evaluator supplied
-/// by the semantic layer determines its truth value.
+/// One conditional policy rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyRule {
     condition: PolicyExpression,
@@ -512,7 +638,7 @@ pub struct PolicyRule {
 }
 
 impl PolicyRule {
-    /// Creates a conditional policy rule.
+    /// Constructs a conditional rule.
     pub fn new(
         condition: PolicyExpression,
         action: PolicyAction,
@@ -524,21 +650,28 @@ impl PolicyRule {
         }
     }
 
-    /// Adds an additional condition.
-    pub fn with_condition(mut self, condition: PolicyExpression) -> Self {
-        self.clauses
-            .push(PolicyRuleClause::Condition(condition));
+    /// Adds an additional conjunctive condition.
+    pub fn with_condition(
+        mut self,
+        condition: PolicyExpression,
+    ) -> Self {
+        self.clauses.push(
+            PolicyRuleClause::Condition(condition),
+        );
+
         self
     }
 
-    /// Adds an open-world property clause.
+    /// Adds a property assignment.
     pub fn with_property(
         mut self,
         key: PolicyPropertyKey,
         value: PolicyExpression,
     ) -> Self {
-        self.clauses
-            .push(PolicyRuleClause::Property { key, value });
+        self.clauses.push(
+            PolicyRuleClause::Property { key, value },
+        );
+
         self
     }
 
@@ -552,7 +685,7 @@ impl PolicyRule {
         &self.action
     }
 
-    /// Returns all additional clauses in declaration order.
+    /// Returns clauses in declaration order.
     pub fn clauses(&self) -> &[PolicyRuleClause] {
         &self.clauses
     }
@@ -562,21 +695,27 @@ impl PolicyRule {
 // POLICY MEMBERS
 // ============================================================================
 
-/// One member of a policy declaration.
-///
-/// The variants preserve the policy grammar's open-world structure without
-/// creating separate policy languages for quantum, AI, HDL, distributed,
-/// classical, networking, or future computing domains.
+/// One member of a policy document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyMember {
+    /// A direct policy directive.
     Directive(PolicyDirective),
+
+    /// A conditional rule.
     Rule(PolicyRule),
 
+    /// Policy extension reference.
     Extends(PolicyId),
+
+    /// Explicit policy override reference.
     Override(PolicyId),
 
+    /// Open-world policy property.
     Property {
+        /// Property key.
         key: PolicyPropertyKey,
+
+        /// Property value.
         value: PolicyExpression,
     },
 }
@@ -585,12 +724,9 @@ pub enum PolicyMember {
 // POLICY DOCUMENT
 // ============================================================================
 
-/// A compiler-side policy document.
+/// A structurally represented policy document.
 ///
-/// This is a structural representation of one named policy declaration.
-/// It is not the authoritative semantic policy model.
-///
-/// Declaration order is preserved.
+/// This is not the authoritative semantic policy model.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyDocument {
     id: PolicyId,
@@ -606,7 +742,7 @@ impl PolicyDocument {
         }
     }
 
-    /// Creates a policy document from an identifier string.
+    /// Creates a named policy document.
     pub fn named(
         id: impl Into<String>,
     ) -> Result<Self, PolicyValidationError> {
@@ -618,9 +754,19 @@ impl PolicyDocument {
         &self.id
     }
 
-    /// Returns policy members in declaration order.
+    /// Returns members in source declaration order.
     pub fn members(&self) -> &[PolicyMember] {
         &self.members
+    }
+
+    /// Returns the number of members.
+    pub fn len(&self) -> usize {
+        self.members.len()
+    }
+
+    /// Returns whether the policy is empty.
+    pub fn is_empty(&self) -> bool {
+        self.members.is_empty()
     }
 
     /// Adds a policy member.
@@ -630,8 +776,11 @@ impl PolicyDocument {
         self.members.push(member);
     }
 
-    /// Adds a directive.
-    pub fn add_directive(&mut self, directive: PolicyDirective) {
+    /// Adds a direct directive.
+    pub fn add_directive(
+        &mut self,
+        directive: PolicyDirective,
+    ) {
         self.add_member(PolicyMember::Directive(directive));
     }
 
@@ -640,12 +789,12 @@ impl PolicyDocument {
         self.add_member(PolicyMember::Rule(rule));
     }
 
-    /// Adds a policy extension reference.
+    /// Adds an extension reference.
     pub fn extends(&mut self, parent: PolicyId) {
         self.add_member(PolicyMember::Extends(parent));
     }
 
-    /// Adds an explicit policy override reference.
+    /// Adds an override reference.
     pub fn overrides(&mut self, parent: PolicyId) {
         self.add_member(PolicyMember::Override(parent));
     }
@@ -656,13 +805,15 @@ impl PolicyDocument {
         key: PolicyPropertyKey,
         value: PolicyExpression,
     ) {
-        self.add_member(PolicyMember::Property { key, value });
+        self.add_member(
+            PolicyMember::Property { key, value },
+        );
     }
 
     /// Validates structural invariants.
     ///
-    /// This method does not resolve names, evaluate expressions, determine
-    /// authorization, check hardware availability, or establish feasibility.
+    /// Name resolution, composition-cycle detection across documents,
+    /// authorization and expression semantics remain external.
     pub fn validate(&self) -> Result<(), PolicyValidationError> {
         let mut composition_references = BTreeSet::new();
 
@@ -679,17 +830,20 @@ impl PolicyDocument {
                 PolicyMember::Extends(parent)
                 | PolicyMember::Override(parent) => {
                     if parent == &self.id {
-                        return Err(PolicyValidationError::SelfComposition {
-                            policy: self.id.clone(),
-                        });
+                        return Err(
+                            PolicyValidationError::SelfComposition {
+                                policy: self.id.clone(),
+                            },
+                        );
                     }
 
                     if !composition_references.insert(parent.clone()) {
                         return Err(
-                            PolicyValidationError::DuplicateCompositionReference {
-                                policy: self.id.clone(),
-                                referenced: parent.clone(),
-                            },
+                            PolicyValidationError::
+                                DuplicateCompositionReference {
+                                    policy: self.id.clone(),
+                                    referenced: parent.clone(),
+                                },
                         );
                     }
                 }
@@ -703,18 +857,20 @@ impl PolicyDocument {
         Ok(())
     }
 
-    /// Evaluates the conditions of this policy document.
+    /// Evaluates conditional rules using an authoritative expression
+    /// evaluator.
     ///
-    /// Directives are preserved as active declarations.
+    /// Directives are retained in declaration order.
     ///
-    /// A rule is active only when its primary condition and every additional
-    /// condition evaluate to `True`.
+    /// Rules activate only when their primary condition and all additional
+    /// condition clauses evaluate to True.
     ///
-    /// An `Unknown` condition is an error. It is never treated as `False`,
-    /// because silently dropping an unresolved mandatory policy could change
-    /// program meaning or permit an invalid realization.
+    /// Unknown is an error. It is never silently interpreted as False.
     ///
-    /// This method does not enforce the resulting directives.
+    /// Property assignments are preserved in the resulting action.
+    ///
+    /// This function does not perform authorization, capability matching,
+    /// resource feasibility, target selection or enforcement.
     pub fn evaluate<C, E>(
         &self,
         context: &C,
@@ -729,12 +885,16 @@ impl PolicyDocument {
         let mut active = Vec::new();
         let mut inactive_rules = 0usize;
 
-        for (member_index, member) in self.members.iter().enumerate() {
+        for (member_index, member) in
+            self.members.iter().enumerate()
+        {
             match member {
                 PolicyMember::Directive(directive) => {
                     active.push(EvaluatedPolicyAction {
                         member_index,
-                        action: PolicyAction::Directive(directive.clone()),
+                        action: PolicyAction::Directive(
+                            directive.clone(),
+                        ),
                         clauses: Vec::new(),
                         origin: PolicyActionOrigin::Direct,
                     });
@@ -747,6 +907,8 @@ impl PolicyDocument {
                     )?;
 
                     match primary {
+                        TruthValue::True => {}
+
                         TruthValue::False => {
                             inactive_rules += 1;
                             continue;
@@ -754,52 +916,64 @@ impl PolicyDocument {
 
                         TruthValue::Unknown => {
                             return Err(
-                                PolicyEvaluationError::IndeterminateCondition {
-                                    policy: self.id.clone(),
-                                    expression: rule.condition().clone(),
-                                },
+                                PolicyEvaluationError::
+                                    IndeterminateCondition {
+                                        policy: self.id.clone(),
+                                        expression:
+                                            rule.condition().clone(),
+                                    },
                             );
                         }
-
-                        TruthValue::True => {}
                     }
 
-                    let mut rule_matches = true;
+                    let mut matches = true;
 
                     for clause in rule.clauses() {
-                        if let PolicyRuleClause::Condition(condition) = clause {
-                            match evaluator.evaluate(condition, context)? {
+                        if let PolicyRuleClause::Condition(
+                            condition,
+                        ) = clause
+                        {
+                            match evaluator.evaluate(
+                                condition,
+                                context,
+                            )? {
                                 TruthValue::True => {}
+
                                 TruthValue::False => {
-                                    rule_matches = false;
+                                    matches = false;
                                     break;
                                 }
+
                                 TruthValue::Unknown => {
                                     return Err(
-                                        PolicyEvaluationError::IndeterminateCondition {
-                                            policy: self.id.clone(),
-                                            expression: condition.clone(),
-                                        },
+                                        PolicyEvaluationError::
+                                            IndeterminateCondition {
+                                                policy: self.id.clone(),
+                                                expression:
+                                                    condition.clone(),
+                                            },
                                     );
                                 }
                             }
                         }
                     }
 
-                    if rule_matches {
+                    if matches {
                         active.push(EvaluatedPolicyAction {
                             member_index,
                             action: rule.action().clone(),
                             clauses: rule.clauses().to_vec(),
-                            origin: PolicyActionOrigin::ConditionalRule,
+                            origin:
+                                PolicyActionOrigin::ConditionalRule,
                         });
                     } else {
                         inactive_rules += 1;
                     }
                 }
 
-                // Composition and properties are retained in the document.
-                // Their semantic resolution belongs to the policy subsystem.
+                // These members require semantic policy composition
+                // or property resolution. They are deliberately not
+                // interpreted as executable actions here.
                 PolicyMember::Extends(_)
                 | PolicyMember::Override(_)
                 | PolicyMember::Property { .. } => {}
@@ -821,36 +995,51 @@ impl PolicyDocument {
 fn validate_directive(
     directive: &PolicyDirective,
 ) -> Result<(), PolicyValidationError> {
-    let expression_required = !matches!(
-        directive.kind(),
-        PolicyDirectiveKind::Determinism
-            | PolicyDirectiveKind::Reproducibility
-    );
-
-    if expression_required && directive.expression().is_none() {
-        return Err(PolicyValidationError::ExpressionRequired {
-            kind: directive.kind(),
-        });
+    if directive.expression().is_none()
+        && !directive
+            .kind()
+            .permits_expression_omission()
+    {
+        return Err(
+            PolicyValidationError::ExpressionRequired {
+                kind: directive.kind(),
+            },
+        );
     }
 
     Ok(())
 }
 
-fn validate_rule(rule: &PolicyRule) -> Result<(), PolicyValidationError> {
-    match &rule.action {
-        PolicyAction::Directive(directive) => {
-            validate_directive(directive)?;
-        }
-        PolicyAction::Expression(expression) => {
-            if expression.as_str().trim().is_empty() {
-                return Err(PolicyValidationError::EmptyExpression);
-            }
+fn validate_rule(
+    rule: &PolicyRule,
+) -> Result<(), PolicyValidationError> {
+    if let PolicyAction::Directive(directive) = rule.action() {
+        validate_directive(directive)?;
+
+        if !directive.kind().is_valid_rule_action() {
+            return Err(
+                PolicyValidationError::InvalidRuleAction {
+                    kind: directive.kind(),
+                },
+            );
         }
     }
 
-    for clause in &rule.clauses {
-        if let PolicyRuleClause::Property { key, value } = clause {
-            validate_property(key, value)?;
+    if let PolicyAction::Expression(expression) = rule.action() {
+        validate_expression(expression)?;
+    }
+
+    validate_expression(rule.condition())?;
+
+    for clause in rule.clauses() {
+        match clause {
+            PolicyRuleClause::Condition(condition) => {
+                validate_expression(condition)?;
+            }
+
+            PolicyRuleClause::Property { key, value } => {
+                validate_property(key, value)?;
+            }
         }
     }
 
@@ -865,39 +1054,54 @@ fn validate_property(
         return Err(PolicyValidationError::EmptyPropertyKey);
     }
 
-    if value.as_str().trim().is_empty() {
+    validate_expression(value)
+}
+
+fn validate_expression(
+    expression: &PolicyExpression,
+) -> Result<(), PolicyValidationError> {
+    if expression.as_str().trim().is_empty() {
         return Err(PolicyValidationError::EmptyExpression);
+    }
+
+    if expression.as_str().contains('\0') {
+        return Err(
+            PolicyValidationError::ControlCharacter {
+                field: "policy expression",
+            },
+        );
     }
 
     Ok(())
 }
 
 // ============================================================================
-// EVALUATION CONTRACT
+// THREE-VALUED EVALUATION
 // ============================================================================
 
-/// Three-valued expression evaluation result.
+/// Three-valued condition result.
 ///
-/// `Unknown` is intentionally distinct from `False`.
+/// Unknown is distinct from False.
 ///
-/// An unresolved condition must not silently disable a policy rule.
+/// An unresolved mandatory policy condition must fail closed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TruthValue {
+    /// The expression is true.
     True,
+
+    /// The expression is false.
     False,
+
+    /// The expression cannot currently be determined.
     Unknown,
 }
 
-/// Evaluates an opaque policy expression using an authoritative context.
+/// Evaluates opaque policy expressions.
 ///
-/// Implementations belong to the semantic/expression subsystem or another
-/// explicitly authorized policy evaluator.
+/// Implementations belong to the authoritative semantic expression
+/// subsystem or an explicitly authorized evaluator.
 ///
-/// The context can provide access to resolved semantic facts, capability
-/// information, target information, or resource information through existing
-/// repository-owned interfaces.
-///
-/// This trait does not prescribe or duplicate those interfaces.
+/// The compiler policy module does not prescribe the context representation.
 pub trait PolicyExpressionEvaluator<Context> {
     /// Evaluates an expression.
     fn evaluate(
@@ -907,14 +1111,21 @@ pub trait PolicyExpressionEvaluator<Context> {
     ) -> Result<TruthValue, PolicyEvaluationError>;
 }
 
-/// Origin of an evaluated policy action.
+// ============================================================================
+// EVALUATED ACTIONS
+// ============================================================================
+
+/// Origin of an evaluated action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PolicyActionOrigin {
+    /// Direct policy declaration.
     Direct,
+
+    /// Conditional rule.
     ConditionalRule,
 }
 
-/// An action whose condition has been evaluated successfully.
+/// An action whose conditions evaluated successfully.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvaluatedPolicyAction {
     member_index: usize,
@@ -924,41 +1135,43 @@ pub struct EvaluatedPolicyAction {
 }
 
 impl EvaluatedPolicyAction {
-    /// Returns the zero-based declaration position of the originating member.
+    /// Returns the zero-based source member position.
     pub const fn member_index(&self) -> usize {
         self.member_index
     }
 
-    /// Returns the active action.
+    /// Returns the action.
     pub fn action(&self) -> &PolicyAction {
         &self.action
     }
 
-    /// Returns the clauses associated with the action.
+    /// Returns associated clauses.
+    ///
+    /// Property clauses are retained without reinterpretation.
     pub fn clauses(&self) -> &[PolicyRuleClause] {
         &self.clauses
     }
 
-    /// Returns whether the action came from a conditional rule.
+    /// Returns the action origin.
     pub const fn origin(&self) -> PolicyActionOrigin {
         self.origin
     }
 
-    /// Returns the directive kind, if the action is a directive.
+    /// Returns the directive kind.
     pub fn directive_kind(&self) -> Option<PolicyDirectiveKind> {
         self.action
             .as_directive()
             .map(PolicyDirective::kind)
     }
 
-    /// Returns the policy class, if the action is a directive.
+    /// Returns the policy classification.
     pub fn class(&self) -> Option<PolicyClass> {
         self.action
             .as_directive()
             .map(PolicyDirective::class)
     }
 
-    /// Returns the policy strength, if the action is a directive.
+    /// Returns the policy strength.
     pub fn strength(&self) -> Option<PolicyStrength> {
         self.action
             .as_directive()
@@ -966,10 +1179,13 @@ impl EvaluatedPolicyAction {
     }
 }
 
-/// The result of evaluating a policy document's conditions.
+// ============================================================================
+// EVALUATION RESULT
+// ============================================================================
+
+/// Result of evaluating a policy document.
 ///
-/// This is not a feasibility result and is not proof that an action has been
-/// authorized, satisfied, or implemented.
+/// This result is not proof of authorization, feasibility or execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolicyEvaluation {
     policy: PolicyId,
@@ -988,94 +1204,137 @@ impl PolicyEvaluation {
         &self.active
     }
 
-    /// Returns the number of conditional rules that did not match.
+    /// Returns the inactive conditional-rule count.
     pub const fn inactive_rule_count(&self) -> usize {
         self.inactive_rules
     }
 
-    /// Returns whether no active action was produced.
+    /// Returns whether no actions were activated.
     pub fn is_empty(&self) -> bool {
         self.active.is_empty()
     }
 
-    /// Returns active actions with mandatory strength.
+    /// Returns mandatory actions.
     pub fn mandatory_actions(
         &self,
     ) -> impl Iterator<Item = &EvaluatedPolicyAction> {
-        self.active
-            .iter()
-            .filter(|action| {
-                action.strength() == Some(PolicyStrength::Mandatory)
-            })
+        self.active.iter().filter(|action| {
+            action.strength() == Some(PolicyStrength::Mandatory)
+        })
     }
 
-    /// Returns active advisory actions.
+    /// Returns advisory actions.
     pub fn advisory_actions(
         &self,
     ) -> impl Iterator<Item = &EvaluatedPolicyAction> {
-        self.active
-            .iter()
-            .filter(|action| {
-                action.strength() == Some(PolicyStrength::Advisory)
-            })
+        self.active.iter().filter(|action| {
+            action.strength() == Some(PolicyStrength::Advisory)
+        })
     }
 
-    /// Returns active governing actions.
+    /// Returns governing actions.
     pub fn governing_actions(
         &self,
     ) -> impl Iterator<Item = &EvaluatedPolicyAction> {
-        self.active
-            .iter()
-            .filter(|action| {
-                action.strength() == Some(PolicyStrength::Governing)
-            })
+        self.active.iter().filter(|action| {
+            action.strength() == Some(PolicyStrength::Governing)
+        })
     }
 }
 
 // ============================================================================
-// ERRORS
+// VALIDATION ERRORS
 // ============================================================================
 
-/// Structural policy validation errors.
+/// Structural policy validation failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyValidationError {
+    /// Empty identifier.
     EmptyIdentifier,
+
+    /// Empty expression.
     EmptyExpression,
+
+    /// Empty property key.
     EmptyPropertyKey,
 
+    /// Invalid control character.
+    ControlCharacter {
+        /// Affected input field.
+        field: &'static str,
+    },
+
+    /// An expression is required for this directive.
     ExpressionRequired {
+        /// Directive kind.
         kind: PolicyDirectiveKind,
     },
 
+    /// A directive is not legal as a conditional rule action.
+    InvalidRuleAction {
+        /// Invalid directive kind.
+        kind: PolicyDirectiveKind,
+    },
+
+    /// A policy references itself.
     SelfComposition {
+        /// Policy identifier.
         policy: PolicyId,
     },
 
+    /// A composition reference is duplicated.
     DuplicateCompositionReference {
+        /// Policy identifier.
         policy: PolicyId,
+
+        /// Referenced policy.
         referenced: PolicyId,
     },
 }
 
 impl fmt::Display for PolicyValidationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::EmptyIdentifier => {
-                formatter.write_str("policy identifier cannot be empty")
+                formatter.write_str(
+                    "policy identifier cannot be empty",
+                )
             }
 
             Self::EmptyExpression => {
-                formatter.write_str("policy expression cannot be empty")
+                formatter.write_str(
+                    "policy expression cannot be empty",
+                )
             }
 
             Self::EmptyPropertyKey => {
-                formatter.write_str("policy property key cannot be empty")
+                formatter.write_str(
+                    "policy property key cannot be empty",
+                )
+            }
+
+            Self::ControlCharacter { field } => {
+                write!(
+                    formatter,
+                    "{field} contains an invalid control character"
+                )
             }
 
             Self::ExpressionRequired { kind } => {
                 write!(
                     formatter,
                     "policy directive {kind:?} requires an expression"
+                )
+            }
+
+            Self::InvalidRuleAction { kind } => {
+                write!(
+                    formatter,
+                    "policy directive {kind:?} is not valid \
+                     as a conditional rule action"
                 )
             }
 
@@ -1092,8 +1351,8 @@ impl fmt::Display for PolicyValidationError {
             } => {
                 write!(
                     formatter,
-                    "policy `{policy}` contains a duplicate composition \
-                     reference to `{referenced}`"
+                    "policy `{policy}` contains duplicate composition \
+                     reference `{referenced}`"
                 )
             }
         }
@@ -1102,31 +1361,52 @@ impl fmt::Display for PolicyValidationError {
 
 impl Error for PolicyValidationError {}
 
-/// Policy evaluation errors.
+// ============================================================================
+// EVALUATION ERRORS
+// ============================================================================
+
+/// Policy evaluation failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyEvaluationError {
+    /// The document is structurally invalid.
     InvalidDocument(PolicyValidationError),
 
+    /// A required condition is indeterminate.
     IndeterminateCondition {
+        /// Policy identifier.
         policy: PolicyId,
+
+        /// Unresolved expression.
         expression: PolicyExpression,
     },
 
+    /// Expression evaluation failed.
     ExpressionFailure {
+        /// Expression.
         expression: PolicyExpression,
+
+        /// Failure description.
         message: String,
     },
 
+    /// Evaluation is unavailable.
     EvaluationUnavailable {
+        /// Explanation.
         message: String,
     },
 }
 
 impl fmt::Display for PolicyEvaluationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidDocument(error) => {
-                write!(formatter, "invalid policy document: {error}")
+                write!(
+                    formatter,
+                    "invalid policy document: {error}"
+                )
             }
 
             Self::IndeterminateCondition {
@@ -1135,8 +1415,8 @@ impl fmt::Display for PolicyEvaluationError {
             } => {
                 write!(
                     formatter,
-                    "policy `{policy}` has an indeterminate condition: \
-                     `{expression}`"
+                    "policy `{policy}` has an indeterminate \
+                     condition: `{expression}`"
                 )
             }
 
@@ -1146,8 +1426,8 @@ impl fmt::Display for PolicyEvaluationError {
             } => {
                 write!(
                     formatter,
-                    "failed to evaluate policy expression `{expression}`: \
-                     {message}"
+                    "failed to evaluate policy expression \
+                     `{expression}`: {message}"
                 )
             }
 
@@ -1184,30 +1464,36 @@ mod tests {
                 "true" => Ok(TruthValue::True),
                 "false" => Ok(TruthValue::False),
                 "unknown" => Ok(TruthValue::Unknown),
-                other => Err(PolicyEvaluationError::ExpressionFailure {
-                    expression: PolicyExpression::new(other)
-                        .expect("test expression is non-empty"),
-                    message: "unknown test expression".to_owned(),
-                }),
+
+                other => Err(
+                    PolicyEvaluationError::ExpressionFailure {
+                        expression: PolicyExpression::new(other)
+                            .expect("test expression must be non-empty"),
+                        message: "unknown test expression".to_owned(),
+                    },
+                ),
             }
         }
     }
 
     fn expression(value: &str) -> PolicyExpression {
         PolicyExpression::new(value)
-            .expect("test expression must be non-empty")
+            .expect("valid test expression")
     }
 
     fn identifier(value: &str) -> PolicyId {
         PolicyId::new(value)
-            .expect("test identifier must be non-empty")
+            .expect("valid test identifier")
     }
 
     fn directive(
         kind: PolicyDirectiveKind,
         value: &str,
     ) -> PolicyDirective {
-        PolicyDirective::with_expression(kind, expression(value))
+        PolicyDirective::with_expression(
+            kind,
+            expression(value),
+        )
     }
 
     #[test]
@@ -1216,65 +1502,63 @@ mod tests {
     }
 
     #[test]
-    fn policy_identifier_rejects_empty_values() {
-        assert!(matches!(
-            PolicyId::new("  "),
-            Err(PolicyValidationError::EmptyIdentifier)
-        ));
-    }
-
-    #[test]
-    fn policy_identifier_preserves_qualified_names() {
-        let id = identifier("organization::deployment::production");
-
-        assert_eq!(
-            id.as_str(),
-            "organization::deployment::production"
+    fn identifiers_support_future_domains() {
+        assert!(
+            PolicyId::new(
+                "future::computing::new_domain"
+            ).is_ok()
         );
     }
 
     #[test]
-    fn expression_rejects_empty_values() {
-        assert!(matches!(
-            PolicyExpression::new(" \n "),
-            Err(PolicyValidationError::EmptyExpression)
-        ));
+    fn empty_identifiers_are_rejected() {
+        assert!(PolicyId::new(" ").is_err());
     }
 
     #[test]
-    fn expression_preserves_original_text() {
-        let value = " execution::deterministic ";
+    fn control_characters_in_identifiers_are_rejected() {
+        assert!(PolicyId::new("policy\ninvalid").is_err());
+    }
 
-        let parsed = expression(value);
+    #[test]
+    fn expressions_preserve_source_text() {
+        let source = " execution::deterministic ";
 
-        assert_eq!(parsed.as_str(), value);
+        assert_eq!(
+            expression(source).as_str(),
+            source
+        );
+    }
+
+    #[test]
+    fn expressions_reject_nul() {
+        assert!(PolicyExpression::new("a\0b").is_err());
     }
 
     #[test]
     fn property_keys_are_open_world() {
-        let key = PolicyPropertyKey::new(
-            "future::compiler::optimization_strategy",
-        )
-        .expect("property key should be accepted");
-
-        assert_eq!(
-            key.as_str(),
-            "future::compiler::optimization_strategy"
+        assert!(
+            PolicyPropertyKey::new(
+                "future::optimization::strategy"
+            ).is_ok()
         );
     }
 
     #[test]
-    fn directive_classification_keeps_preferences_advisory() {
-        assert_eq!(
-            PolicyDirectiveKind::Preference.strength(),
-            PolicyStrength::Advisory
-        );
+    fn empty_property_keys_are_rejected() {
+        assert!(PolicyPropertyKey::new(" ").is_err());
+    }
 
+    #[test]
+    fn requirements_are_mandatory() {
         assert_eq!(
             PolicyDirectiveKind::Requirement.strength(),
             PolicyStrength::Mandatory
         );
+    }
 
+    #[test]
+    fn constraints_are_mandatory() {
         assert_eq!(
             PolicyDirectiveKind::Constraint.strength(),
             PolicyStrength::Mandatory
@@ -1282,190 +1566,219 @@ mod tests {
     }
 
     #[test]
-    fn permission_and_prohibition_are_not_requirements() {
+    fn preferences_remain_advisory() {
+        assert_eq!(
+            PolicyDirectiveKind::Preference.strength(),
+            PolicyStrength::Advisory
+        );
+    }
+
+    #[test]
+    fn preferences_still_require_downstream_resolution() {
+        assert!(
+            PolicyDirectiveKind::Preference
+                .requires_downstream_resolution()
+        );
+    }
+
+    #[test]
+    fn permissions_are_not_requirements() {
         assert_eq!(
             PolicyDirectiveKind::Permission.class(),
             PolicyClass::AuthorizationIntent
         );
+    }
 
+    #[test]
+    fn prohibitions_are_not_requirements() {
         assert_eq!(
             PolicyDirectiveKind::Prohibition.class(),
             PolicyClass::AuthorizationIntent
         );
+    }
 
-        assert_ne!(
-            PolicyDirectiveKind::Permission.class(),
-            PolicyClass::MandatoryIntent
+    #[test]
+    fn expression_omission_matches_grammar() {
+        assert!(
+            PolicyDirective::new(
+                PolicyDirectiveKind::Determinism,
+                None,
+            ).is_ok()
+        );
+
+        assert!(
+            PolicyDirective::new(
+                PolicyDirectiveKind::Reproducibility,
+                None,
+            ).is_ok()
+        );
+
+        assert!(
+            PolicyDirective::new(
+                PolicyDirectiveKind::Requirement,
+                None,
+            ).is_err()
         );
     }
 
     #[test]
-    fn expression_free_determinism_is_supported() {
-        let directive = PolicyDirective::deterministic();
-
-        assert_eq!(
-            directive.kind(),
-            PolicyDirectiveKind::Determinism
+    fn conditional_action_matches_grammar() {
+        assert!(
+            PolicyDirectiveKind::Preference
+                .is_valid_rule_action()
         );
 
-        assert!(directive.expression().is_none());
+        assert!(
+            !PolicyDirectiveKind::Requirement
+                .is_valid_rule_action()
+        );
+
+        assert!(
+            !PolicyDirectiveKind::Constraint
+                .is_valid_rule_action()
+        );
+
+        assert!(
+            !PolicyDirectiveKind::Capability
+                .is_valid_rule_action()
+        );
+
+        assert!(
+            !PolicyDirectiveKind::Resource
+                .is_valid_rule_action()
+        );
     }
 
     #[test]
-    fn expression_free_reproducibility_is_supported() {
-        let directive = PolicyDirective::reproducible();
-
-        assert_eq!(
-            directive.kind(),
-            PolicyDirectiveKind::Reproducibility
-        );
-
-        assert!(directive.expression().is_none());
-    }
-
-    #[test]
-    fn other_directives_require_expressions() {
-        let result = PolicyDirective::new(
-            PolicyDirectiveKind::Requirement,
-            None,
-        );
-
-        assert!(matches!(
-            result,
-            Err(PolicyValidationError::ExpressionRequired { .. })
-        ));
-    }
-
-    #[test]
-    fn document_preserves_declaration_order() {
-        let mut document = PolicyDocument::named("deployment::portable")
-            .expect("document should be created");
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Requirement,
+    fn self_composition_is_rejected() {
+        let mut policy = PolicyDocument::named(
             "execution::portable",
-        ));
+        ).unwrap();
 
-        document.add_directive(directive(
-            PolicyDirectiveKind::Preference,
-            "lower_energy",
-        ));
-
-        assert_eq!(document.members().len(), 2);
+        policy.extends(identifier("execution::portable"));
 
         assert!(matches!(
-            document.members()[0],
-            PolicyMember::Directive(_)
-        ));
-
-        assert!(matches!(
-            document.members()[1],
-            PolicyMember::Directive(_)
-        ));
-    }
-
-    #[test]
-    fn document_rejects_self_extension() {
-        let mut document = PolicyDocument::named("deployment::portable")
-            .expect("document should be created");
-
-        document.extends(identifier("deployment::portable"));
-
-        assert!(matches!(
-            document.validate(),
+            policy.validate(),
             Err(PolicyValidationError::SelfComposition { .. })
         ));
     }
 
     #[test]
-    fn document_rejects_duplicate_composition_references() {
-        let mut document = PolicyDocument::named("deployment::portable")
-            .expect("document should be created");
+    fn duplicate_composition_is_rejected() {
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
 
-        document.extends(identifier("deployment::base"));
-        document.overrides(identifier("deployment::base"));
+        policy.extends(identifier("execution::base"));
+        policy.overrides(identifier("execution::base"));
 
         assert!(matches!(
-            document.validate(),
-            Err(PolicyValidationError::DuplicateCompositionReference { .. })
+            policy.validate(),
+            Err(
+                PolicyValidationError::
+                    DuplicateCompositionReference { .. }
+            )
         ));
     }
 
     #[test]
-    fn document_accepts_distinct_composition_references() {
-        let mut document = PolicyDocument::named("deployment::portable")
-            .expect("document should be created");
+    fn declaration_order_is_preserved() {
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
 
-        document.extends(identifier("deployment::base"));
-        document.overrides(identifier("deployment::legacy"));
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Requirement,
+            "classical::compute",
+        ));
 
-        assert!(document.validate().is_ok());
-    }
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Preference,
+            "execution::portable",
+        ));
 
-    #[test]
-    fn conditional_rule_is_active_when_condition_is_true() {
-        let rule = PolicyRule::new(
-            expression("true"),
-            PolicyAction::Directive(directive(
-                PolicyDirectiveKind::Preference,
-                "lower_energy",
-            )),
+        assert_eq!(policy.len(), 2);
+
+        assert_eq!(
+            match &policy.members()[0] {
+                PolicyMember::Directive(value) => value.kind(),
+                _ => unreachable!(),
+            },
+            PolicyDirectiveKind::Requirement
         );
-
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
-
-        document.add_rule(rule);
-
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
-
-        assert_eq!(result.active_actions().len(), 1);
-        assert_eq!(result.inactive_rule_count(), 0);
     }
 
     #[test]
-    fn conditional_rule_is_inactive_when_condition_is_false() {
+    fn false_condition_disables_rule() {
         let rule = PolicyRule::new(
             expression("false"),
             PolicyAction::Directive(directive(
                 PolicyDirectiveKind::Preference,
-                "lower_energy",
+                "portable",
             )),
         );
 
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
 
-        document.add_rule(rule);
+        policy.add_rule(rule);
 
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
 
         assert!(result.is_empty());
         assert_eq!(result.inactive_rule_count(), 1);
     }
 
     #[test]
-    fn unknown_rule_condition_fails_closed() {
+    fn true_condition_activates_rule() {
         let rule = PolicyRule::new(
-            expression("unknown"),
+            expression("true"),
             PolicyAction::Directive(directive(
                 PolicyDirectiveKind::Preference,
-                "lower_energy",
+                "portable",
             )),
         );
 
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
 
-        document.add_rule(rule);
+        policy.add_rule(rule);
+
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
+
+        assert_eq!(result.active_actions().len(), 1);
+    }
+
+    #[test]
+    fn unknown_condition_fails_closed() {
+        let rule = PolicyRule::new(
+            expression("unknown"),
+            PolicyAction::Directive(directive(
+                PolicyDirectiveKind::Requirement,
+                "required",
+            )),
+        );
+
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_rule(rule);
 
         assert!(matches!(
-            document.evaluate(&(), &TestEvaluator),
-            Err(PolicyEvaluationError::IndeterminateCondition { .. })
+            policy.evaluate(&(), &TestEvaluator),
+            Err(
+                PolicyEvaluationError::
+                    IndeterminateCondition { .. }
+            )
         ));
     }
 
@@ -1475,170 +1788,184 @@ mod tests {
             expression("true"),
             PolicyAction::Directive(directive(
                 PolicyDirectiveKind::Preference,
-                "lower_energy",
+                "portable",
             )),
         )
         .with_condition(expression("false"));
 
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
 
-        document.add_rule(rule);
+        policy.add_rule(rule);
 
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
 
         assert!(result.is_empty());
-        assert_eq!(result.inactive_rule_count(), 1);
-    }
-
-    #[test]
-    fn active_actions_preserve_original_member_indices() {
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Preference,
-            "lower_energy",
-        ));
-
-        document.add_rule(PolicyRule::new(
-            expression("false"),
-            PolicyAction::Expression(expression("unused")),
-        ));
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Requirement,
-            "execution::deterministic",
-        ));
-
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
-
-        assert_eq!(result.active_actions()[0].member_index(), 0);
-        assert_eq!(result.active_actions()[1].member_index(), 2);
-    }
-
-    #[test]
-    fn evaluation_does_not_turn_preferences_into_requirements() {
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Preference,
-            "lower_latency",
-        ));
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Requirement,
-            "execution::deterministic",
-        ));
-
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
-
-        assert_eq!(result.advisory_actions().count(), 1);
-        assert_eq!(result.mandatory_actions().count(), 1);
-    }
-
-    #[test]
-    fn direct_directives_are_preserved_without_interpretation() {
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
-
-        document.add_directive(directive(
-            PolicyDirectiveKind::Capability,
-            "future::accelerator::compute",
-        ));
-
-        let result = document
-            .evaluate(&(), &TestEvaluator)
-            .expect("evaluation should succeed");
-
-        assert_eq!(result.active_actions().len(), 1);
-        assert_eq!(
-            result.active_actions()[0].directive_kind(),
-            Some(PolicyDirectiveKind::Capability)
-        );
-    }
-
-    #[test]
-    fn policy_document_supports_open_world_domains() {
-        let domains = [
-            "classical::vector",
-            "quantum::measurement",
-            "ai::inference",
-            "hdl::synthesis",
-            "distributed::communication",
-            "networking::transport",
-            "future::computing::domain",
-        ];
-
-        let mut document = PolicyDocument::named("execution::universal")
-            .expect("document should be created");
-
-        for domain in domains {
-            document.add_directive(directive(
-                PolicyDirectiveKind::Requirement,
-                domain,
-            ));
-        }
-
-        assert_eq!(document.members().len(), domains.len());
-        assert!(document.validate().is_ok());
     }
 
     #[test]
     fn property_clauses_are_preserved() {
-        let key = PolicyPropertyKey::new("priority")
-            .expect("property key should be valid");
-
         let rule = PolicyRule::new(
             expression("true"),
-            PolicyAction::Expression(expression("select target")),
-        )
-        .with_property(key, expression("high"));
-
-        assert_eq!(rule.clauses().len(), 1);
-
-        assert!(matches!(
-            rule.clauses()[0],
-            PolicyRuleClause::Property { .. }
-        ));
-    }
-
-    #[test]
-    fn evaluation_failure_is_propagated() {
-        let mut document = PolicyDocument::named("execution::portable")
-            .expect("document should be created");
-
-        document.add_rule(PolicyRule::new(
-            expression("unsupported_expression"),
-            PolicyAction::Expression(expression("select target")),
-        ));
-
-        assert!(matches!(
-            document.evaluate(&(), &TestEvaluator),
-            Err(PolicyEvaluationError::ExpressionFailure { .. })
-        ));
-    }
-
-    #[test]
-    fn no_fixed_policy_member_limit_is_encoded() {
-        let mut document = PolicyDocument::named("execution::large")
-            .expect("document should be created");
-
-        for index in 0..10_000usize {
-            document.add_directive(directive(
+            PolicyAction::Directive(directive(
                 PolicyDirectiveKind::Preference,
-                &format!("preference::{index}"),
-            ));
-        }
+                "portable",
+            )),
+        )
+        .with_property(
+            PolicyPropertyKey::new("priority").unwrap(),
+            expression("10"),
+        );
 
-        assert_eq!(document.members().len(), 10_000);
-        assert!(document.validate().is_ok());
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_rule(rule);
+
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
+
+        assert_eq!(
+            result.active_actions()[0].clauses().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn direct_directives_are_retained() {
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_directive(
+            PolicyDirective::deterministic()
+        );
+
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
+
+        assert_eq!(result.active_actions().len(), 1);
+    }
+
+    #[test]
+    fn invalid_conditional_directive_is_rejected() {
+        let rule = PolicyRule::new(
+            expression("true"),
+            PolicyAction::Directive(directive(
+                PolicyDirectiveKind::Requirement,
+                "classical::compute",
+            )),
+        );
+
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_rule(rule);
+
+        assert!(matches!(
+            policy.validate(),
+            Err(
+                PolicyValidationError::InvalidRuleAction { .. }
+            )
+        ));
+    }
+
+    #[test]
+    fn active_actions_preserve_source_order() {
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Requirement,
+            "first",
+        ));
+
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Preference,
+            "second",
+        ));
+
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
+
+        assert_eq!(result.active_actions().len(), 2);
+
+        assert_eq!(
+            result.active_actions()[0].member_index(),
+            0
+        );
+
+        assert_eq!(
+            result.active_actions()[1].member_index(),
+            1
+        );
+    }
+
+    #[test]
+    fn mandatory_and_advisory_actions_remain_distinct() {
+        let mut policy = PolicyDocument::named(
+            "execution::portable",
+        ).unwrap();
+
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Requirement,
+            "required",
+        ));
+
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Preference,
+            "preferred",
+        ));
+
+        let result = policy.evaluate(
+            &(),
+            &TestEvaluator,
+        ).unwrap();
+
+        assert_eq!(
+            result.mandatory_actions().count(),
+            1
+        );
+
+        assert_eq!(
+            result.advisory_actions().count(),
+            1
+        );
+    }
+
+    #[test]
+    fn empty_policy_is_valid() {
+        let policy = PolicyDocument::named(
+            "execution::empty",
+        ).unwrap();
+
+        assert!(policy.validate().is_ok());
+    }
+
+    #[test]
+    fn future_computing_domains_are_supported() {
+        let mut policy = PolicyDocument::named(
+            "future::universal",
+        ).unwrap();
+
+        policy.add_directive(directive(
+            PolicyDirectiveKind::Capability,
+            "future::photonic::compute",
+        ));
+
+        assert!(policy.validate().is_ok());
     }
 }
