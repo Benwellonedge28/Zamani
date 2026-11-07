@@ -10,69 +10,57 @@
 //!
 //! Rust:
 //!     Edition 2021
-//!     Minimum version 1.97
+//!     Minimum version: Rust 1.97
 //!
 //! Safety:
 //!     Safe Rust only.
 //!     Unsafe Rust is forbidden.
 //!
-//! ================================================================
-//! PURPOSE
-//! ================================================================
+//! # Purpose
 //!
-//! This module defines the immutable, shareable context associated
-//! with one compiler operation.
+//! Provides immutable, shareable, compilation-wide context for one
+//! logical compilation operation.
 //!
-//! The context provides:
+//! The context coordinates:
 //!
-//! - Immutable compiler configuration.
-//! - Shared configuration access.
+//! - The canonical CompilerConfig.
 //! - Optional source identity.
-//! - Shared operational resource-budget accounting.
-//! - Shared cancellation.
+//! - Shared operational budget accounting.
+//! - Cooperative cancellation.
 //! - Configuration validation.
 //! - Context derivation for additional source units.
-//! - Thread-safe context cloning.
+//! - Shared context construction for independently created consumers.
 //!
-//! The context is intended to be shared by compiler stages and
-//! parallel compilation workers.
+//! # Architectural ownership
 //!
-//! ================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ================================================================
+//! Canonical owners:
 //!
-//! Existing authoritative owners:
-//!
-//! crate::compiler_types
+//! crate::compiler_types:
 //!     CompilerConfig
-//!     CompilationTarget
-//!     OptimizationLevel
 //!
-//! compiler::configuration::config
-//!     Configuration construction and validation.
+//! compiler::configuration::config:
+//!     Configuration validation and validation modes.
 //!
-//! compiler::configuration::budget
+//! compiler::configuration::budget:
 //!     CompilationBudget
 //!     BudgetTracker
 //!     BudgetDimension
 //!     BudgetError
 //!
-//! compiler::configuration::target
-//!     TargetId
-//!     TargetDescriptor
-//!     Target metadata and structural validation.
+//! compiler::context::compilation_state:
+//!     Compilation lifecycle and legal state transitions.
 //!
-//! compiler::diagnostics
-//!     Compiler diagnostic definitions.
+//! compiler::context::dependency_context:
+//!     Compilation units and dependency relationships.
 //!
-//! crate::source_map
-//!     FileId
-//!     BytePos
-//!     Span
-//!     SourceFile
-//!     SourceMap
+//! compiler::context::provenance_context:
+//!     Compilation provenance and transformation lineage.
 //!
-//! This module owns only the shared compilation context.
+//! frontend:
+//!     Canonical source maps, source spans and source locations.
+//!
+//! This module owns only the shared compilation context and its
+//! cooperative cancellation token.
 //!
 //! It does NOT own:
 //!
@@ -81,80 +69,86 @@
 //! - Name resolution.
 //! - Type inference.
 //! - Semantic validation.
-//! - Ownership analysis.
-//! - Borrow checking.
+//! - Ownership or borrow analysis.
 //! - Effect analysis.
 //! - Capability semantics.
 //! - Resource requirement semantics.
+//! - Compilation lifecycle transitions.
+//! - Dependency graph construction.
+//! - Provenance lineage.
 //! - Canonical IR.
 //! - Optimization algorithms.
 //! - Hardware discovery.
 //! - Physical resource allocation.
 //! - Backend selection.
 //! - Backend implementation.
+//! - Linking.
 //! - Runtime execution.
 //! - Distributed scheduling.
 //! - Quantum routing.
 //! - Quantum error correction.
 //!
-//! ================================================================
-//! POCO-REAF
-//! ================================================================
+//! # POCO-REAF
 //!
 //! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! This context introduces no universal hardware-capacity ceilings.
+//! This module introduces no universal hardware-capacity ceilings.
 //!
-//! It does not impose fixed limits on:
+//! It does not establish fixed limits for:
 //!
-//! - CPUs.
-//! - Cores.
-//! - Threads.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Qubits.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - Register width.
-//! - IR operations.
-//! - Modules.
-//! - Functions.
-//! - Source size.
+//! - CPUs, cores, threads or workers;
+//! - GPUs, FPGAs, ASICs, QPUs or accelerators;
+//! - Nodes, devices or network participants;
+//! - Memory or storage;
+//! - Qubits or logical qubits;
+//! - Tensor dimensions or tensor rank;
+//! - Register widths;
+//! - Modules, functions or IR operations;
+//! - Compilation stages;
+//! - Source files or source units;
+//! - Backends, providers or computing domains.
 //!
-//! Resource budgets are configurable.
+//! Budgets are explicit operational accounting policies.
 //!
-//! An unlimited budget means that this context imposes no explicit
-//! operational budget for the corresponding dimension.
+//! An unlimited budget imposes no configured limit for the relevant
+//! budget dimension. It does not promise infinite physical resources.
 //!
-//! It does not promise infinite physical resources.
+//! The budget implementation uses its own documented numeric
+//! representation and reports accounting overflow explicitly.
 //!
-//! ================================================================
-//! CONCURRENCY
-//! ================================================================
+//! # Sharing and concurrency
 //!
 //! Cloning CompilationContext shares:
 //!
-//! - Compiler configuration.
-//! - Budget accounting.
+//! - Immutable compiler configuration;
+//! - Budget accounting;
 //! - Cancellation state.
 //!
-//! This prevents parallel workers from independently receiving
-//! fresh copies of the same compilation budget.
+//! Additional-source contexts also share the same budget and
+//! cancellation state.
 //!
-//! Configuration is immutable after construction.
+//! Configuration and source identity cannot be mutated through a
+//! shared context.
 //!
-//! Operational accounting and cancellation use controlled,
-//! thread-safe interior mutability.
+//! Budget accounting and cancellation are synchronized by their
+//! authoritative implementations.
 //!
-//! ================================================================
-//! DEPENDENCY DIRECTION
-//! ================================================================
+//! # Cancellation semantics
+//!
+//! Cancellation is cooperative.
+//!
+//! A cancellation request is visible to all clones sharing the token.
+//!
+//! Cancellation does not forcibly terminate a thread, interrupt an
+//! operating-system operation or roll back already-accounted work.
+//!
+//! A stage must check cancellation at safe interruption points.
+//!
+//! Cancellation may race with an already-running budget operation.
+//! A successful budget operation is accounted even if cancellation
+//! is requested concurrently.
+//!
+//! # Dependency direction
 //!
 //! compiler_types
 //!       |
@@ -164,25 +158,32 @@
 //!       v
 //! compilation_context
 //!       |
-//!       +----> compiler API
-//!       |
-//!       +----> compilation sessions
-//!       |
+//!       +----> API and sessions
 //!       +----> pipeline
-//!       |
 //!       +----> analysis
-//!       |
 //!       +----> optimization
-//!       |
 //!       +----> parallel compilation
-//!       |
 //!       +----> incremental compilation
 //!
 //! This module does not depend on pipeline orchestration.
 //!
-//! It can therefore be completed independently of the pipeline.
+//! # Grammar boundary
 //!
-//! ================================================================
+//! Source-level compilation syntax is owned by the grammar and frontend.
+//!
+//! Relevant grammar authorities include:
+//!
+//!     grammar/Zamani.g4
+//!     grammar/compile/compile.g4
+//!     grammar/compile/provenance.g4
+//!     grammar/spec/provenance.md
+//!
+//! Those files describe source-language declarations and semantics.
+//!
+//! This Rust module represents runtime compiler-operation context.
+//!
+//! It does not parse grammar productions, construct AST nodes or
+//! interpret source-level provenance declarations.
 
 use std::error::Error;
 use std::fmt;
@@ -209,29 +210,28 @@ use crate::compiler_types::CompilerConfig;
 // API VERSION
 // ============================================================================
 
-/// Public API version for the compilation-context contract.
+/// Public API version of the compilation-context contract.
 ///
-/// This is independent of:
+/// This version is independent of:
 ///
-/// - Zamani language version.
-/// - Compiler release version.
-/// - Grammar version.
-/// - AST version.
-/// - Semantic-model version.
-/// - IR version.
+/// - Zamani language version;
+/// - Grammar version;
+/// - Compiler release version;
+/// - AST version;
+/// - Semantic-model version;
+/// - IR version;
 /// - Backend ABI version.
 ///
-/// Increment only when the public context contract changes
-/// incompatibly.
+/// Increment when this module's public contract changes incompatibly.
 pub const COMPILATION_CONTEXT_API_VERSION: u16 = 1;
 
 // ============================================================================
 // SOURCE IDENTITY
 // ============================================================================
 
-/// Identifies the origin of source associated with a compilation.
+/// Describes the origin of a logical source unit.
 ///
-/// This is descriptive metadata.
+/// This is descriptive compilation metadata.
 ///
 /// It does not define source-language semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -250,15 +250,24 @@ pub enum SourceOrigin {
     Unspecified,
 }
 
-/// Identifies a logical source unit.
+/// Identifies the logical origin of source associated with a
+/// compilation context.
 ///
-/// The canonical source-map implementation remains responsible for
-/// FileId, SourceFile, Span, byte positions, and source mapping.
+/// The canonical frontend source-map implementation remains
+/// responsible for:
+///
+/// - FileId;
+/// - SourceFile;
+/// - Span;
+/// - byte positions;
+/// - source mapping;
+/// - source-location diagnostics.
 ///
 /// This structure does not introduce a competing source map.
 ///
-/// A source identity can be shared between compiler stages without
-/// copying its logical name or filesystem path.
+/// Filesystem paths are retained as PathBuf values. The logical
+/// display name is descriptive and must not be used as a replacement
+/// for the original filesystem path.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceIdentity {
     logical_name: Arc<str>,
@@ -266,13 +275,14 @@ pub struct SourceIdentity {
     origin: SourceOrigin,
 }
 
-/// Errors associated with source identity construction.
+/// Errors produced while constructing source identities.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SourceIdentityError {
-    /// The logical source name is empty.
+    /// The logical name or path is empty.
     EmptyName,
 
-    /// The logical source name contains control characters.
+    /// The logical name contains control characters.
     InvalidName,
 }
 
@@ -282,17 +292,13 @@ impl fmt::Display for SourceIdentityError {
         formatter: &mut fmt::Formatter<'_>,
     ) -> fmt::Result {
         match self {
-            Self::EmptyName => {
-                formatter.write_str(
-                    "source identity requires a non-empty logical name",
-                )
-            }
+            Self::EmptyName => formatter.write_str(
+                "source identity requires a non-empty logical name",
+            ),
 
-            Self::InvalidName => {
-                formatter.write_str(
-                    "source identity contains invalid control characters",
-                )
-            }
+            Self::InvalidName => formatter.write_str(
+                "source identity contains control characters",
+            ),
         }
     }
 }
@@ -301,31 +307,23 @@ impl Error for SourceIdentityError {}
 
 impl SourceIdentity {
     /// Creates an identity for an in-memory source unit.
-    ///
-    /// No arbitrary source-name length limit is imposed.
     pub fn new(
         logical_name: impl Into<Arc<str>>,
     ) -> Result<Self, SourceIdentityError> {
-        Self::with_origin(
-            logical_name,
-            SourceOrigin::InMemory,
-        )
+        Self::with_origin(logical_name, SourceOrigin::InMemory)
     }
 
-    /// Creates an identity with an explicitly supplied origin.
+    /// Creates an identity with an explicit origin.
+    ///
+    /// The logical name must be non-empty and must not contain
+    /// control characters.
     pub fn with_origin(
         logical_name: impl Into<Arc<str>>,
         origin: SourceOrigin,
     ) -> Result<Self, SourceIdentityError> {
         let logical_name = logical_name.into();
 
-        if logical_name.trim().is_empty() {
-            return Err(SourceIdentityError::EmptyName);
-        }
-
-        if logical_name.chars().any(char::is_control) {
-            return Err(SourceIdentityError::InvalidName);
-        }
+        Self::validate_logical_name(&logical_name)?;
 
         Ok(Self {
             logical_name,
@@ -334,12 +332,15 @@ impl SourceIdentity {
         })
     }
 
-    /// Creates a filesystem-backed source identity.
+    /// Creates an identity for a filesystem-backed source.
     ///
     /// This constructor does not access the filesystem.
     ///
-    /// Paths are retained as PathBuf so that non-UTF-8 filesystem
-    /// paths are not discarded.
+    /// The original PathBuf is preserved, including non-UTF-8
+    /// platform paths.
+    ///
+    /// The display name is descriptive metadata. It is not used
+    /// to reopen or identify the original filesystem object.
     pub fn from_path(
         path: impl Into<PathBuf>,
     ) -> Result<Self, SourceIdentityError> {
@@ -352,9 +353,7 @@ impl SourceIdentity {
         let logical_name: Arc<str> =
             Arc::from(path.display().to_string());
 
-        if logical_name.trim().is_empty() {
-            return Err(SourceIdentityError::EmptyName);
-        }
+        Self::validate_logical_name(&logical_name)?;
 
         Ok(Self {
             logical_name,
@@ -367,10 +366,22 @@ impl SourceIdentity {
     pub fn generated(
         logical_name: impl Into<Arc<str>>,
     ) -> Result<Self, SourceIdentityError> {
-        Self::with_origin(
-            logical_name,
-            SourceOrigin::Generated,
-        )
+        Self::with_origin(logical_name, SourceOrigin::Generated)
+    }
+
+    /// Validates a logical source name.
+    fn validate_logical_name(
+        logical_name: &str,
+    ) -> Result<(), SourceIdentityError> {
+        if logical_name.trim().is_empty() {
+            return Err(SourceIdentityError::EmptyName);
+        }
+
+        if logical_name.chars().any(char::is_control) {
+            return Err(SourceIdentityError::InvalidName);
+        }
+
+        Ok(())
     }
 
     /// Returns the logical source name.
@@ -379,12 +390,10 @@ impl SourceIdentity {
         self.logical_name.as_ref()
     }
 
-    /// Returns the filesystem path when available.
+    /// Returns the original filesystem path, when available.
     #[must_use]
     pub fn path(&self) -> Option<&Path> {
-        self.path
-            .as_ref()
-            .map(|path| path.as_path())
+        self.path.as_ref().map(|path| path.as_path())
     }
 
     /// Returns the source origin.
@@ -393,7 +402,7 @@ impl SourceIdentity {
         self.origin
     }
 
-    /// Returns whether this identity refers to a filesystem path.
+    /// Returns whether this identity is filesystem-backed.
     #[must_use]
     pub fn is_filesystem_backed(&self) -> bool {
         self.path.is_some()
@@ -404,20 +413,25 @@ impl SourceIdentity {
 // CANCELLATION
 // ============================================================================
 
-/// Thread-safe cancellation token.
+/// Thread-safe cooperative cancellation token.
 ///
 /// Clones share the same cancellation state.
 ///
-/// This allows a compiler session to request cancellation while
-/// compilation stages or parallel workers are executing.
+/// A session, API caller or orchestrator can request cancellation
+/// while compiler stages or parallel workers are executing.
 ///
-/// Cancellation is cooperative.
+/// Cancellation is cooperative:
 ///
-/// Compiler stages must periodically inspect the token and stop
-/// according to their own cancellation-safety contracts.
+/// - It is not thread termination.
+/// - It is not an operating-system interrupt.
+/// - It does not roll back completed work.
+/// - It does not automatically update CompilationStateTracker.
 ///
-/// This type does not forcibly terminate threads or interrupt
-/// arbitrary operating-system operations.
+/// The lifecycle owner observes cancellation and performs the
+/// appropriate lifecycle transition.
+///
+/// A token cannot be reset. Create a new token for a new independent
+/// compilation operation.
 #[derive(Debug, Clone, Default)]
 pub struct CancellationToken {
     cancelled: Arc<AtomicBool>,
@@ -434,10 +448,10 @@ impl CancellationToken {
 
     /// Requests cancellation.
     ///
-    /// Returns true if this invocation changed the state from
-    /// not-cancelled to cancelled.
+    /// Returns true only when this call changes the token from
+    /// uncancelled to cancelled.
     ///
-    /// Returns false if cancellation had already been requested.
+    /// Repeated cancellation requests are idempotent.
     pub fn cancel(&self) -> bool {
         !self.cancelled.swap(true, Ordering::AcqRel)
     }
@@ -448,7 +462,10 @@ impl CancellationToken {
         self.cancelled.load(Ordering::Acquire)
     }
 
-    /// Checks cancellation and returns an explicit result.
+    /// Checks cancellation.
+    ///
+    /// Returns ContextError::Cancelled if cancellation has
+    /// already been requested.
     pub fn check(&self) -> Result<(), ContextError> {
         if self.is_cancelled() {
             Err(ContextError::Cancelled)
@@ -456,26 +473,42 @@ impl CancellationToken {
             Ok(())
         }
     }
+
+    /// Returns whether another token shares this cancellation state.
+    ///
+    /// This is an identity check, not a synchronization operation.
+    #[must_use]
+    pub fn shares_state_with(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.cancelled, &other.cancelled)
+    }
 }
 
 // ============================================================================
-// CONTEXT ERROR
+// CONTEXT ERRORS
 // ============================================================================
 
-/// Errors associated with compilation-context operations.
+/// Errors produced by compilation-context operations.
+///
+/// The original structured error is preserved.
+///
+/// This module does not flatten errors into strings or create a
+/// competing diagnostic representation.
+///
+/// Callers may translate these errors into the canonical compiler
+/// or frontend diagnostic system.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum ContextError {
     /// The supplied compiler configuration is invalid.
     Configuration(ConfigurationError),
 
-    /// The supplied budget operation failed.
+    /// A budget operation failed.
     Budget(BudgetError),
 
     /// A source identity could not be constructed.
     SourceIdentity(SourceIdentityError),
 
-    /// The compilation has been cancelled.
+    /// Compilation cancellation has been requested.
     Cancelled,
 }
 
@@ -545,16 +578,10 @@ impl From<SourceIdentityError> for ContextError {
 }
 
 // ============================================================================
-// IMMUTABLE CONTEXT STORAGE
+// INTERNAL STORAGE
 // ============================================================================
 
-/// Internal context data.
-///
-/// All configuration and source metadata is immutable after
-/// construction.
-///
-/// Operational state is shared through its dedicated thread-safe
-/// owners.
+/// Immutable data shared by clones of one compilation context.
 #[derive(Debug)]
 struct CompilationContextInner {
     config: Arc<CompilerConfig>,
@@ -563,50 +590,47 @@ struct CompilationContextInner {
     cancellation: CancellationToken,
 }
 
-/// Immutable, shareable context for one compilation operation.
+/// Immutable, shareable context for one logical compilation operation.
 ///
-/// Cloning this structure is inexpensive.
+/// Cloning a context is inexpensive and shares its operational state.
 ///
-/// Clones share:
+/// Shared state:
 ///
-/// - Compiler configuration.
-/// - Budget accounting.
-/// - Cancellation state.
+/// - Compiler configuration;
+/// - Budget accounting;
+/// - Cancellation.
 ///
-/// The context is suitable for use by:
+/// Source identity is immutable within one context instance.
 ///
-/// - Sequential compiler stages.
-/// - Parallel compilation workers.
-/// - Incremental compilation.
-/// - Compiler API sessions.
-/// - IDE and language-server integrations.
-///
-/// The context does not own semantic or hardware state.
+/// A derived additional-source context shares the original
+/// configuration, budget and cancellation while associating a
+/// different source identity.
 #[derive(Debug, Clone)]
 pub struct CompilationContext {
     inner: Arc<CompilationContextInner>,
 }
 
 impl CompilationContext {
-    /// Creates a compilation context using an existing canonical
-    /// CompilerConfig.
+    /// Creates a context using the canonical CompilerConfig.
     ///
-    /// The default budget is unlimited.
+    /// Defaults:
     ///
-    /// No new hardware target is selected by this constructor.
+    /// - No source identity;
+    /// - Unlimited explicit compiler budget;
+    /// - Fresh cancellation token;
+    /// - Standard configuration validation.
     ///
-    /// The target value already contained in CompilerConfig is
-    /// preserved exactly.
+    /// The target already present in CompilerConfig is preserved.
     ///
-    /// Structural configuration validation is performed.
+    /// This constructor does not discover hardware, select a backend,
+    /// allocate resources or execute compilation.
     pub fn new(
         config: CompilerConfig,
     ) -> Result<Self, ContextError> {
         CompilationContextBuilder::new(config).build()
     }
 
-    /// Creates a context from an existing compiler configuration
-    /// and an explicit source identity.
+    /// Creates a context associated with one source unit.
     pub fn for_source(
         config: CompilerConfig,
         source: SourceIdentity,
@@ -616,8 +640,7 @@ impl CompilationContext {
             .build()
     }
 
-    /// Creates a context with an explicit source identity and
-    /// resource budget.
+    /// Creates a context with an explicit optional source and budget.
     pub fn with_budget(
         config: CompilerConfig,
         source: Option<SourceIdentity>,
@@ -629,9 +652,7 @@ impl CompilationContext {
             .build()
     }
 
-    /// Returns the authoritative compiler configuration.
-    ///
-    /// The returned reference is immutable.
+    /// Returns the canonical immutable compiler configuration.
     #[must_use]
     pub fn config(&self) -> &CompilerConfig {
         self.inner.config.as_ref()
@@ -639,13 +660,13 @@ impl CompilationContext {
 
     /// Returns a shared reference-counted compiler configuration.
     ///
-    /// Cloning the returned Arc does not duplicate the configuration.
+    /// Cloning this Arc does not clone the underlying configuration.
     #[must_use]
     pub fn shared_config(&self) -> Arc<CompilerConfig> {
         Arc::clone(&self.inner.config)
     }
 
-    /// Returns the source identity when one was supplied.
+    /// Returns the source identity associated with this context.
     #[must_use]
     pub fn source(&self) -> Option<&SourceIdentity> {
         self.inner.source.as_ref()
@@ -653,15 +674,16 @@ impl CompilationContext {
 
     /// Returns the shared budget tracker.
     ///
-    /// Every clone of the context uses the same accounting ledger.
+    /// All clones and derived additional-source contexts use the
+    /// same accounting ledger.
     #[must_use]
     pub fn budget_tracker(&self) -> &BudgetTracker {
         &self.inner.budget
     }
 
-    /// Returns a clone of the shared budget tracker.
+    /// Returns a shared clone of the budget tracker.
     ///
-    /// The clone shares the original accounting ledger.
+    /// The returned tracker uses the same accounting ledger.
     #[must_use]
     pub fn shared_budget_tracker(&self) -> BudgetTracker {
         self.inner.budget.shared()
@@ -673,25 +695,27 @@ impl CompilationContext {
         self.inner.cancellation.clone()
     }
 
-    /// Returns whether compilation has been cancelled.
+    /// Returns whether cancellation has been requested.
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.inner.cancellation.is_cancelled()
     }
 
-    /// Checks whether compilation may continue.
+    /// Checks whether this compilation may continue.
     pub fn check_cancelled(&self) -> Result<(), ContextError> {
         self.inner.cancellation.check()
     }
 
     /// Accounts for compiler work against the shared budget.
     ///
-    /// The operation is atomic with respect to other clones of the
-    /// same BudgetTracker.
+    /// The budget tracker performs its own synchronized accounting.
     ///
-    /// Budget exhaustion is reported explicitly.
+    /// Cancellation is checked before accounting. Cancellation may
+    /// still race with the accounting operation; if accounting
+    /// succeeds, the work remains accounted.
     ///
-    /// No work is silently truncated.
+    /// Budget exhaustion and accounting errors are returned
+    /// explicitly. Work is never silently truncated.
     pub fn consume_budget(
         &self,
         dimension: BudgetDimension,
@@ -705,18 +729,19 @@ impl CompilationContext {
             .map_err(ContextError::Budget)
     }
 
-    /// Derives a context for another source unit in the same
-    /// compilation operation.
+    /// Derives a context for another source unit belonging to the
+    /// same logical compilation operation.
     ///
-    /// The new context shares:
+    /// The derived context shares:
     ///
-    /// - Original compiler configuration.
-    /// - Original budget accounting.
-    /// - Original cancellation state.
+    /// - The canonical compiler configuration;
+    /// - The original budget accounting ledger;
+    /// - The original cancellation state.
     ///
     /// Only the source identity changes.
     ///
-    /// This is useful for multi-file compilation.
+    /// This is suitable for multi-file compilation and parallel
+    /// compilation units.
     #[must_use]
     pub fn for_additional_source(
         &self,
@@ -732,11 +757,11 @@ impl CompilationContext {
         }
     }
 
-    /// Returns the number of strong references to the immutable
-    /// context storage.
+    /// Returns the number of strong references to this context's
+    /// immutable storage.
     ///
-    /// This is an observability method, not a synchronization
-    /// or lifecycle guarantee.
+    /// This is an observability method only. It must not be used
+    /// to make correctness or lifecycle decisions.
     #[must_use]
     pub fn context_reference_count(&self) -> usize {
         Arc::strong_count(&self.inner)
@@ -744,6 +769,8 @@ impl CompilationContext {
 
     /// Returns the number of strong references to the shared
     /// compiler configuration.
+    ///
+    /// This is an observability method only.
     #[must_use]
     pub fn configuration_reference_count(&self) -> usize {
         Arc::strong_count(&self.inner.config)
@@ -756,39 +783,51 @@ impl CompilationContext {
 
 /// Builder for CompilationContext.
 ///
-/// The builder centralizes configuration validation and ensures
-/// that all context instances are constructed consistently.
+/// The builder ensures that configuration validation and shared
+/// service association happen before a context becomes available.
 ///
 /// It does not define a competing CompilerConfig.
+///
+/// A caller may supply either:
+///
+/// - A CompilationBudget from which a new tracker is constructed; or
+/// - An existing BudgetTracker whose accounting ledger is shared.
+///
+/// Supplying a budget after a shared tracker replaces the tracker
+/// selection. Supplying a shared tracker after a budget replaces
+/// the budget selection.
 #[derive(Debug)]
 pub struct CompilationContextBuilder {
     config: CompilerConfig,
     source: Option<SourceIdentity>,
     budget: CompilationBudget,
+    shared_budget: Option<BudgetTracker>,
     cancellation: CancellationToken,
     validation_mode: ConfigurationValidationMode,
 }
 
 impl CompilationContextBuilder {
-    /// Creates a builder from the existing canonical configuration.
+    /// Creates a builder from the canonical compiler configuration.
     ///
     /// Defaults:
     ///
-    /// - No source identity.
-    /// - Unlimited explicit compiler budget.
-    /// - Fresh cancellation token.
+    /// - No source identity;
+    /// - Unlimited explicit budget;
+    /// - No externally supplied budget tracker;
+    /// - Fresh cancellation token;
     /// - Standard configuration validation.
     pub fn new(config: CompilerConfig) -> Self {
         Self {
             config,
             source: None,
             budget: CompilationBudget::unlimited(),
+            shared_budget: None,
             cancellation: CancellationToken::new(),
             validation_mode: ConfigurationValidationMode::Standard,
         }
     }
 
-    /// Supplies the source identity.
+    /// Associates a source identity with the context.
     #[must_use]
     pub fn source(
         mut self,
@@ -798,7 +837,7 @@ impl CompilationContextBuilder {
         self
     }
 
-    /// Supplies an optional source identity.
+    /// Associates an optional source identity with the context.
     #[must_use]
     pub fn optional_source(
         mut self,
@@ -808,24 +847,42 @@ impl CompilationContextBuilder {
         self
     }
 
-    /// Supplies the compilation budget.
+    /// Supplies a budget configuration.
     ///
-    /// The budget controls compiler-accounted work.
+    /// A new tracker is created when build() is called.
     ///
-    /// It does not allocate or reserve physical resources.
+    /// The budget controls compiler-accounted work. It does not
+    /// allocate or reserve physical resources.
     #[must_use]
     pub fn budget(
         mut self,
         budget: CompilationBudget,
     ) -> Self {
         self.budget = budget;
+        self.shared_budget = None;
         self
     }
 
-    /// Supplies an existing shared cancellation token.
+    /// Supplies an existing shared budget tracker.
     ///
-    /// This allows a compiler session to coordinate cancellation
-    /// across independently constructed context consumers.
+    /// The constructed context will use the same accounting ledger
+    /// as the supplied tracker.
+    ///
+    /// This supports multiple independently constructed context
+    /// consumers participating in one compilation operation.
+    #[must_use]
+    pub fn shared_budget_tracker(
+        mut self,
+        tracker: BudgetTracker,
+    ) -> Self {
+        self.shared_budget = Some(tracker);
+        self
+    }
+
+    /// Supplies an existing cancellation token.
+    ///
+    /// This allows API sessions, orchestration and independently
+    /// constructed context consumers to share cancellation.
     #[must_use]
     pub fn cancellation_token(
         mut self,
@@ -837,10 +894,11 @@ impl CompilationContextBuilder {
 
     /// Selects the configuration validation mode.
     ///
-    /// Standard validation checks structural compatibility.
+    /// Standard validation preserves compatibility while checking
+    /// structural validity.
     ///
-    /// Production validation rejects configuration modes that the
-    /// current production pipeline does not support.
+    /// Production validation applies the restrictions defined by
+    /// the canonical configuration subsystem.
     #[must_use]
     pub fn validation_mode(
         mut self,
@@ -860,20 +918,36 @@ impl CompilationContextBuilder {
 
     /// Builds the immutable compilation context.
     ///
-    /// Configuration is validated before the context is returned.
+    /// Configuration validation occurs before the context is
+    /// returned.
     ///
-    /// No filesystem access, parsing, semantic analysis, target
-    /// discovery, or backend invocation occurs here.
+    /// This method performs no:
+    ///
+    /// - Filesystem access;
+    /// - Parsing;
+    /// - Semantic analysis;
+    /// - Hardware discovery;
+    /// - Physical resource allocation;
+    /// - Backend invocation;
+    /// - Runtime execution.
+    ///
+    /// An already-cancelled token is preserved. The caller can
+    /// observe it through check_cancelled().
     pub fn build(self) -> Result<CompilationContext, ContextError> {
         validate_compiler_config(
             &self.config,
             self.validation_mode,
         )?;
 
+        let budget = match self.shared_budget {
+            Some(tracker) => tracker,
+            None => BudgetTracker::new(self.budget),
+        };
+
         let inner = CompilationContextInner {
             config: Arc::new(self.config),
             source: self.source,
-            budget: BudgetTracker::new(self.budget),
+            budget,
             cancellation: self.cancellation,
         };
 
@@ -914,20 +988,22 @@ mod tests {
         }
     }
 
+    fn test_dimension() -> BudgetDimension {
+        BudgetDimension::new(
+            "compiler_work",
+            "units",
+        )
+        .expect("test budget dimension should be valid")
+    }
+
     #[test]
     fn context_preserves_existing_configuration() {
         let config = test_config();
 
-        let context = CompilationContext::new(
-            config.clone(),
-        )
-        .expect("context construction should succeed");
+        let context = CompilationContext::new(config.clone())
+            .expect("context construction should succeed");
 
-        assert_eq!(
-            context.config().target,
-            config.target
-        );
-
+        assert_eq!(context.config().target, config.target);
         assert_eq!(
             context.config().opt_level,
             OptimizationLevel::Basic
@@ -958,7 +1034,8 @@ mod tests {
             .expect("context construction should succeed");
 
         assert!(
-            context.budget_tracker()
+            context
+                .budget_tracker()
                 .budget()
                 .is_unlimited()
         );
@@ -977,10 +1054,7 @@ mod tests {
         )
         .expect("context construction should succeed");
 
-        assert_eq!(
-            context.source(),
-            Some(&source)
-        );
+        assert_eq!(context.source(), Some(&source));
     }
 
     #[test]
@@ -1008,7 +1082,7 @@ mod tests {
         let source = SourceIdentity::generated(
             "generated/module.zm",
         )
-        .expect("generated identity should be valid");
+        .expect("generated source identity should be valid");
 
         assert_eq!(
             source.origin(),
@@ -1017,12 +1091,32 @@ mod tests {
     }
 
     #[test]
-    fn empty_source_identity_is_rejected() {
-        let result = SourceIdentity::new("   ");
+    fn unspecified_source_origin_is_supported() {
+        let source = SourceIdentity::with_origin(
+            "module.zm",
+            SourceOrigin::Unspecified,
+        )
+        .expect("source identity should be valid");
 
+        assert_eq!(
+            source.origin(),
+            SourceOrigin::Unspecified
+        );
+    }
+
+    #[test]
+    fn empty_source_identity_is_rejected() {
         assert!(matches!(
-            result,
+            SourceIdentity::new("   "),
             Err(SourceIdentityError::EmptyName)
+        ));
+    }
+
+    #[test]
+    fn control_characters_in_logical_names_are_rejected() {
+        assert!(matches!(
+            SourceIdentity::new("module\nname.zm"),
+            Err(SourceIdentityError::InvalidName)
         ));
     }
 
@@ -1069,12 +1163,36 @@ mod tests {
     }
 
     #[test]
+    fn cancellation_tokens_can_report_shared_identity() {
+        let first = CancellationToken::new();
+        let second = first.clone();
+        let independent = CancellationToken::new();
+
+        assert!(first.shares_state_with(&second));
+        assert!(!first.shares_state_with(&independent));
+    }
+
+    #[test]
+    fn pre_cancelled_token_remains_cancelled_after_build() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let context = CompilationContextBuilder::new(test_config())
+            .cancellation_token(token)
+            .build()
+            .expect("context construction should succeed");
+
+        assert!(context.is_cancelled());
+
+        assert!(matches!(
+            context.check_cancelled(),
+            Err(ContextError::Cancelled)
+        ));
+    }
+
+    #[test]
     fn budget_accounting_is_shared_between_context_clones() {
-        let dimension = BudgetDimension::new(
-            "compiler_work",
-            "units",
-        )
-        .expect("budget dimension should be valid");
+        let dimension = test_dimension();
 
         let budget = CompilationBudget::new()
             .with_limit(
@@ -1091,14 +1209,13 @@ mod tests {
 
         let clone = context.clone();
 
-        context.consume_budget(
-            dimension.clone(),
-            40,
-        )
-        .expect("first consumption should succeed");
+        context
+            .consume_budget(dimension.clone(), 40)
+            .expect("budget consumption should succeed");
 
         assert_eq!(
-            clone.budget_tracker()
+            clone
+                .budget_tracker()
                 .consumed(&dimension)
                 .expect("accounting should succeed"),
             40
@@ -1106,12 +1223,43 @@ mod tests {
     }
 
     #[test]
+    fn independently_constructed_contexts_can_share_budget() {
+        let dimension = test_dimension();
+
+        let budget = CompilationBudget::new()
+            .with_limit(
+                dimension.clone(),
+                BudgetLimit::bounded(100),
+            );
+
+        let tracker = BudgetTracker::new(budget);
+
+        let first = CompilationContextBuilder::new(test_config())
+            .shared_budget_tracker(tracker.shared())
+            .build()
+            .expect("first context should build");
+
+        let second = CompilationContextBuilder::new(test_config())
+            .shared_budget_tracker(tracker.shared())
+            .build()
+            .expect("second context should build");
+
+        first
+            .consume_budget(dimension.clone(), 35)
+            .expect("first context should consume budget");
+
+        assert_eq!(
+            second
+                .budget_tracker()
+                .consumed(&dimension)
+                .expect("shared accounting should succeed"),
+            35
+        );
+    }
+
+    #[test]
     fn budget_exhaustion_is_reported() {
-        let dimension = BudgetDimension::new(
-            "compiler_work",
-            "units",
-        )
-        .expect("budget dimension should be valid");
+        let dimension = test_dimension();
 
         let budget = CompilationBudget::new()
             .with_limit(
@@ -1126,16 +1274,11 @@ mod tests {
         )
         .expect("context construction should succeed");
 
-        context.consume_budget(
-            dimension.clone(),
-            10,
-        )
-        .expect("budget should permit the configured amount");
+        context
+            .consume_budget(dimension.clone(), 10)
+            .expect("configured budget should permit this amount");
 
-        let result = context.consume_budget(
-            dimension,
-            1,
-        );
+        let result = context.consume_budget(dimension, 1);
 
         assert!(matches!(
             result,
@@ -1144,12 +1287,23 @@ mod tests {
     }
 
     #[test]
+    fn cancellation_prevents_new_budget_consumption() {
+        let dimension = test_dimension();
+
+        let context = CompilationContext::new(test_config())
+            .expect("context construction should succeed");
+
+        context.cancellation_token().cancel();
+
+        assert!(matches!(
+            context.consume_budget(dimension, 1),
+            Err(ContextError::Cancelled)
+        ));
+    }
+
+    #[test]
     fn additional_source_context_shares_budget() {
-        let dimension = BudgetDimension::new(
-            "ir_entities",
-            "entities",
-        )
-        .expect("budget dimension should be valid");
+        let dimension = test_dimension();
 
         let budget = CompilationBudget::new()
             .with_limit(
@@ -1164,21 +1318,18 @@ mod tests {
         )
         .expect("context construction should succeed");
 
-        let source = SourceIdentity::new(
-            "module_b.zm",
-        )
-        .expect("source identity should be valid");
+        let source = SourceIdentity::new("module_b.zm")
+            .expect("source identity should be valid");
 
         let child = context.for_additional_source(source);
 
-        context.consume_budget(
-            dimension.clone(),
-            25,
-        )
-        .expect("consumption should succeed");
+        context
+            .consume_budget(dimension.clone(), 25)
+            .expect("budget consumption should succeed");
 
         assert_eq!(
-            child.budget_tracker()
+            child
+                .budget_tracker()
                 .consumed(&dimension)
                 .expect("accounting should succeed"),
             25
@@ -1190,10 +1341,8 @@ mod tests {
         let context = CompilationContext::new(test_config())
             .expect("context construction should succeed");
 
-        let source = SourceIdentity::new(
-            "module_b.zm",
-        )
-        .expect("source identity should be valid");
+        let source = SourceIdentity::new("module_b.zm")
+            .expect("source identity should be valid");
 
         let child = context.for_additional_source(source);
 
@@ -1203,7 +1352,28 @@ mod tests {
     }
 
     #[test]
-    fn production_validation_rejects_experimental_optimization() {
+    fn additional_source_context_preserves_configuration() {
+        let context = CompilationContext::new(test_config())
+            .expect("context construction should succeed");
+
+        let source = SourceIdentity::new("module_b.zm")
+            .expect("source identity should be valid");
+
+        let child = context.for_additional_source(source);
+
+        assert_eq!(
+            child.config().target,
+            context.config().target
+        );
+
+        assert_eq!(
+            child.config().opt_level,
+            context.config().opt_level
+        );
+    }
+
+    #[test]
+    fn production_validation_rejects_unsupported_optimization() {
         let config = CompilerConfig {
             opt_level: OptimizationLevel::UltraAGI,
             ..test_config()
@@ -1220,7 +1390,7 @@ mod tests {
     }
 
     #[test]
-    fn standard_validation_does_not_change_configuration() {
+    fn standard_validation_preserves_legacy_configuration() {
         let config = CompilerConfig {
             opt_level: OptimizationLevel::UltraAGI,
             ..test_config()
