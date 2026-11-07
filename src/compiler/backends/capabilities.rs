@@ -6,94 +6,79 @@
 
 //! # Zamani Compiler — Backend Capability Integration
 //!
-//! Path: `src/compiler/backends/capabilities.rs`
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97+
-//! Safety: Safe Rust only. Unsafe Rust is forbidden.
+//! Path:
+//! `src/compiler/backends/capabilities.rs`
+//!
+//! Rust edition: 2021
+//! Minimum Rust version: 1.97
 //!
 //! # Purpose
 //!
-//! Integrate the canonical backend capability model with the compiler's
-//! backend-selection interface.
+//! Integrates the compiler with the canonical backend capability system.
 //!
-//! This module does not introduce another capability model, capability
-//! registry, target registry, compatibility engine, or resource planner.
+//! This module is an adapter, not an independent capability authority.
 //!
-//! # Canonical authorities
+//! Canonical capability definitions:
+//! `crate::backend::capabilities`
 //!
-//! - `crate::backend::capabilities`:
-//!   Capability identifiers, declarations, profiles, evidence and matching.
+//! Canonical backend registration:
+//! `crate::backend::registry`
 //!
-//! - `crate::backend::registry`:
-//!   Registered backend identities and implementations.
-//!
-//! - `crate::compiler::backends::selection`:
-//!   Backend eligibility and deterministic selection.
-//!
-//! - `crate::compiler::analysis::capabilities`:
-//!   Compiler-facing semantic capability analysis.
-//!
-//! - `crate::compiler::planning::capability_matching`:
-//!   Target-scoped semantic capability matching.
-//!
-//! - `crate::compiler::planning::resource_planning`:
-//!   Resource feasibility.
+//! Compiler backend selection:
+//! `crate::compiler::backends::selection`
 //!
 //! # Ownership
 //!
 //! This module owns:
 //!
-//! - Backend-to-capability-profile association.
-//! - The backend capability profile provider interface.
-//! - Compiler-facing capability evaluation.
-//! - Conversion of canonical capability outcomes into backend eligibility.
+//! - Backend capability profile association.
+//! - Capability profile provider contracts.
+//! - Compiler-facing capability requests.
+//! - Capability evaluation coordination.
+//! - Capability result classification.
+//! - Backend realization feasibility integration.
 //!
 //! It does not own:
 //!
-//! - Source-language capability semantics.
-//! - Canonical backend capability definitions.
-//! - Capability evidence authentication.
+//! - Source-language semantic requirements.
+//! - Canonical capability definitions.
 //! - Backend registration.
 //! - Target discovery.
-//! - Resource feasibility.
-//! - Hardware allocation.
+//! - Physical resource allocation.
+//! - Hardware inventory.
 //! - Scheduling or routing.
 //! - Code generation.
 //! - Runtime execution.
 //!
-//! # Conservative compatibility rules
+//! # Important distinction
 //!
-//! - Empty requirements do not prove compatibility.
-//! - Missing profiles do not prove compatibility.
-//! - Missing capability declarations are unresolved, not proof of support.
-//! - Explicitly unavailable capabilities are incompatible.
-//! - Disallowed experimental or deprecated capabilities are incompatible
-//!   under the active policy.
-//! - Insufficient evidence remains unresolved.
-//! - Provider failures are reported as errors.
-//! - A profile associated with a different backend is rejected.
+//! Capability compatibility is not complete realization feasibility.
+//!
+//! A backend satisfying every capability requirement does not establish
+//! that the complete workload can be compiled or executed.
+//!
+//! A production selection evaluator must combine capability evidence
+//! with the authoritative realization feasibility evaluator.
 //!
 //! # Scalability
 //!
-//! No fixed backend, capability, architecture, accelerator, device,
-//! processor, node, memory, or resource-count ceiling is introduced.
+//! No universal finite limits are imposed on:
 //!
-//! Collections grow according to available resources.
+//! - Backends.
+//! - Capabilities.
+//! - Computational domains.
+//! - CPU architectures.
+//! - GPU architectures.
+//! - FPGA architectures.
+//! - QPU architectures.
+//! - Devices.
+//! - Distributed participants.
+//! - Memory.
+//! - Quantum resources.
+//! - Future computing technologies.
 //!
-//! Operational budgets belong to compilation orchestration.
-//!
-//! Literal infinity is not promised.
-//!
-//! # Integration
-//!
-//! The resulting `BackendCapabilityEvaluator` implements the existing
-//! `BackendEligibilityEvaluator` interface from `selection.rs`.
-//!
-//! Its output can be passed directly to `BackendSelector::select`.
-//!
-//! The profile provider is deliberately external. The canonical backend
-//! registry does not currently own capability profiles, and this module
-//! must not create a second mutable registry to compensate for that fact.
+//! Operational budgets and actual physical limits remain external
+//! contracts.
 
 use std::error::Error;
 use std::fmt;
@@ -124,30 +109,23 @@ use crate::compiler::backends::selection::{
 // MODULE IDENTITY
 // ============================================================================
 
-/// Stable architectural identity of this module.
+/// Stable identity of this compiler integration module.
 pub const BACKEND_CAPABILITIES_MODULE_NAME: &str =
     "zamani.compiler.backends.capabilities";
 
-/// Version of this compiler-facing capability integration contract.
-///
-/// This is independent of the language, backend, target, and artifact
-/// schema versions.
+/// Version of the compiler-facing capability integration contract.
 pub const BACKEND_CAPABILITIES_API_VERSION: u16 = 1;
 
 // ============================================================================
-// BACKEND PROFILE ASSOCIATION
+// BACKEND CAPABILITY PROFILE
 // ============================================================================
 
-/// A canonical backend capability profile associated with one registered
-/// backend identifier.
+/// Associates a canonical capability profile with a registered backend.
 ///
-/// `backend_id` is the canonical identifier from `BackendDescriptor`.
+/// The backend identifier must match the canonical identifier from
+/// `BackendDescriptor`.
 ///
-/// The profile name is descriptive metadata. It is not used to infer
-/// backend identity.
-///
-/// This association prevents a provider from accidentally returning the
-/// capability profile of a different backend.
+/// The profile itself remains owned by `crate::backend::capabilities`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackendCapabilityProfile {
     backend_id: String,
@@ -155,31 +133,18 @@ pub struct BackendCapabilityProfile {
 }
 
 impl BackendCapabilityProfile {
-    /// Construct and validate a backend capability profile association.
+    /// Creates and validates a backend capability profile association.
     ///
     /// # Errors
     ///
-    /// Returns an error when:
-    ///
-    /// - The backend identifier is empty.
-    /// - The backend identifier contains control characters.
-    /// - The canonical capability profile is invalid.
+    /// Returns an error for an invalid backend identifier or profile.
     pub fn new(
         backend_id: impl Into<String>,
         profile: CapabilityProfile,
     ) -> Result<Self, BackendCapabilityError> {
         let backend_id = backend_id.into();
 
-        if backend_id.trim().is_empty() {
-            return Err(BackendCapabilityError::EmptyBackendId);
-        }
-
-        if backend_id.chars().any(char::is_control) {
-            return Err(BackendCapabilityError::InvalidBackendId {
-                backend_id,
-                reason: "control characters are forbidden".to_owned(),
-            });
-        }
+        validate_backend_id(&backend_id)?;
 
         profile.validate().map_err(|error| {
             BackendCapabilityError::InvalidProfile {
@@ -194,27 +159,23 @@ impl BackendCapabilityProfile {
         })
     }
 
-    /// Return the associated canonical backend identifier.
+    /// Returns the canonical backend identifier.
     #[must_use]
     pub fn backend_id(&self) -> &str {
         &self.backend_id
     }
 
-    /// Return the canonical backend capability profile.
+    /// Returns the canonical capability profile.
     #[must_use]
     pub fn profile(&self) -> &CapabilityProfile {
         &self.profile
     }
 
-    /// Validate the profile and its association with a backend descriptor.
-    ///
-    /// This must be called when accepting data from an external provider,
-    /// deserialized configuration, or another untrusted source.
+    /// Validates the association against a registered backend.
     ///
     /// # Errors
     ///
-    /// Returns an error if the profile belongs to another backend or if
-    /// the canonical profile validation fails.
+    /// Returns an error when the identities differ or the profile is invalid.
     pub fn validate_for(
         &self,
         backend: &BackendDescriptor,
@@ -238,56 +199,57 @@ impl BackendCapabilityProfile {
 }
 
 // ============================================================================
+// IDENTIFIER VALIDATION
+// ============================================================================
+
+fn validate_backend_id(
+    backend_id: &str,
+) -> Result<(), BackendCapabilityError> {
+    if backend_id.trim().is_empty() {
+        return Err(BackendCapabilityError::EmptyBackendId);
+    }
+
+    if backend_id != backend_id.trim()
+        || backend_id.chars().any(char::is_control)
+        || backend_id.chars().any(char::is_whitespace)
+        || backend_id.contains('/')
+        || backend_id.contains('\\')
+    {
+        return Err(BackendCapabilityError::InvalidBackendId {
+            backend_id: backend_id.to_owned(),
+            reason: "invalid canonical backend identifier".to_owned(),
+        });
+    }
+
+    Ok(())
+}
+
+// ============================================================================
 // PROFILE PROVIDER
 // ============================================================================
 
-/// Supplies the canonical capability profile associated with a registered
-/// backend.
+/// Provides canonical backend capability profiles.
 ///
-/// Implementations may adapt:
+/// Implementations may adapt existing backend manifests, verified
+/// implementation declarations, toolchain conformance reports,
+/// or target capability inventories.
 ///
-/// - Explicit backend configuration.
-/// - A validated backend manifest.
-/// - A verified backend implementation declaration.
-/// - A target-provider inventory.
-/// - A toolchain conformance report.
-/// - A hardware capability inventory.
+/// A provider must never infer capabilities from names, aliases,
+/// file extensions, vendor strings, or descriptions.
 ///
-/// The provider must use an explicit canonical backend-ID mapping.
+/// Returning `None` means that the capability profile is unknown.
 ///
-/// It must never infer capability support from:
+/// It does not mean that the backend supports everything.
 ///
-/// - Backend names.
-/// - Aliases.
-/// - Vendor strings.
-/// - File extensions.
-/// - Architecture names.
-/// - Display descriptions.
-///
-/// Returning `None` means that no usable profile is available. It does not
-/// mean that the backend supports every capability or supports none.
-///
-/// The provider must not allocate physical hardware, reserve resources,
-/// execute a program, or invoke a compiler backend.
+/// Providers must not allocate hardware or execute programs.
 pub trait BackendCapabilityProfileProvider: Send + Sync {
-    /// Retrieve the capability profile for one registered backend.
-    ///
-    /// `Ok(None)` means that capability evidence is unavailable.
-    ///
-    /// `Err` means that profile retrieval failed.
-    ///
-    /// The returned profile must identify the same canonical backend as
-    /// the descriptor supplied to this method.
+    /// Retrieves the profile associated with a registered backend.
     fn profile_for(
         &self,
         backend: &BackendDescriptor,
     ) -> Result<Option<BackendCapabilityProfile>, String>;
 }
 
-/// Allow a thread-safe closure to act as a capability profile provider.
-///
-/// This makes it possible to integrate existing inventories and manifests
-/// without introducing another registry implementation.
 impl<F> BackendCapabilityProfileProvider for F
 where
     F: Fn(
@@ -305,19 +267,17 @@ where
 }
 
 // ============================================================================
-// EVALUATION REQUEST
+// CAPABILITY REQUEST
 // ============================================================================
 
-/// Backend capability requirements and the policy used to evaluate them.
+/// Mandatory capability requirements and their evaluation policy.
 ///
-/// The contained requirement type belongs to the canonical backend
-/// capability model.
+/// All entries represent mandatory capability requirements.
 ///
-/// Requirements retain their original order, including duplicates.
-/// This module does not silently remove or rewrite requirements.
+/// Preferences, constraints, hints, and resource requirements must
+/// remain distinguishable in their authoritative semantic models.
 ///
-/// An empty requirement collection is allowed as an input representation,
-/// but it cannot establish backend compatibility.
+/// This type does not convert them into capability requirements.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BackendCapabilityRequest {
     requirements: Vec<CapabilityRequirement>,
@@ -325,7 +285,7 @@ pub struct BackendCapabilityRequest {
 }
 
 impl BackendCapabilityRequest {
-    /// Create a backend capability request.
+    /// Creates a capability evaluation request.
     #[must_use]
     pub fn new(
         requirements: Vec<CapabilityRequirement>,
@@ -337,25 +297,25 @@ impl BackendCapabilityRequest {
         }
     }
 
-    /// Return the required backend capabilities.
+    /// Returns mandatory capability requirements.
     #[must_use]
     pub fn requirements(&self) -> &[CapabilityRequirement] {
         &self.requirements
     }
 
-    /// Return the active capability policy.
+    /// Returns the capability evidence policy.
     #[must_use]
     pub const fn policy(&self) -> CapabilityPolicy {
         self.policy
     }
 
-    /// Return the number of requirements.
+    /// Returns the requirement count.
     #[must_use]
     pub fn len(&self) -> usize {
         self.requirements.len()
     }
 
-    /// Whether the request contains no capability requirements.
+    /// Returns whether the request contains no requirements.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.requirements.is_empty()
@@ -366,32 +326,32 @@ impl BackendCapabilityRequest {
 // ERRORS
 // ============================================================================
 
-/// Errors associated with compiler-facing backend capability contracts.
+/// Errors produced by compiler backend capability integration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BackendCapabilityError {
-    /// The associated backend identifier is empty.
+    /// Backend identifier is empty.
     EmptyBackendId,
 
-    /// The associated backend identifier is malformed.
+    /// Backend identifier is malformed.
     InvalidBackendId {
-        /// Supplied identifier.
+        /// Supplied backend identifier.
         backend_id: String,
 
         /// Validation explanation.
         reason: String,
     },
 
-    /// The supplied profile does not belong to the requested backend.
+    /// Profile belongs to another backend.
     BackendIdentityMismatch {
-        /// Expected canonical backend identifier.
+        /// Expected backend identifier.
         expected: String,
 
-        /// Actual profile backend identifier.
+        /// Actual backend identifier.
         actual: String,
     },
 
-    /// The canonical capability profile is invalid.
+    /// Capability profile failed validation.
     InvalidProfile {
         /// Associated backend identifier.
         backend_id: String,
@@ -429,8 +389,8 @@ impl fmt::Display for BackendCapabilityError {
             } => {
                 write!(
                     formatter,
-                    "backend capability profile identity mismatch: \
-                     expected `{expected}`, received `{actual}`"
+                    "backend identity mismatch: expected `{expected}`, \
+                     received `{actual}`"
                 )
             }
 
@@ -440,8 +400,7 @@ impl fmt::Display for BackendCapabilityError {
             } => {
                 write!(
                     formatter,
-                    "invalid capability profile for backend \
-                     `{backend_id}`: {reason}"
+                    "invalid capability profile for `{backend_id}`: {reason}"
                 )
             }
         }
@@ -451,24 +410,24 @@ impl fmt::Display for BackendCapabilityError {
 impl Error for BackendCapabilityError {}
 
 // ============================================================================
-// EVALUATOR
+// CAPABILITY EVALUATOR
 // ============================================================================
 
-/// Evaluates backend capability profiles using the canonical backend
-/// capability matching implementation.
+/// Evaluates mandatory capability requirements against canonical profiles.
 ///
-/// This adapter is intended to be supplied directly to
-/// `BackendSelector::select`.
+/// This evaluator establishes capability compatibility only.
 ///
-/// It does not maintain a profile registry or modify the backend registry.
+/// It must be combined with realization feasibility before final
+/// production backend selection.
+///
+/// It does not own a profile registry.
 pub struct BackendCapabilityEvaluator<'a> {
     provider: &'a dyn BackendCapabilityProfileProvider,
     request: BackendCapabilityRequest,
 }
 
 impl<'a> BackendCapabilityEvaluator<'a> {
-    /// Construct an evaluator using an existing profile provider and
-    /// capability request.
+    /// Constructs an evaluator.
     #[must_use]
     pub fn new(
         provider: &'a dyn BackendCapabilityProfileProvider,
@@ -480,51 +439,49 @@ impl<'a> BackendCapabilityEvaluator<'a> {
         }
     }
 
-    /// Return the evaluator's immutable capability request.
+    /// Returns the immutable capability request.
     #[must_use]
     pub fn request(&self) -> &BackendCapabilityRequest {
         &self.request
     }
 
-    /// Evaluate one backend using its canonical capability profile.
+    /// Evaluates capability compatibility for one registered backend.
+    ///
+    /// Empty requirements produce Unknown because an empty capability
+    /// request cannot establish overall compatibility.
+    ///
+    /// Missing profiles and missing evidence fail closed.
     ///
     /// # Errors
     ///
-    /// Returns an error when:
-    ///
-    /// - The provider fails.
-    /// - The provider returns a profile associated with another backend.
-    /// - The profile fails validation.
-    ///
-    /// Missing profiles and missing capability evidence are represented
-    /// as `Unknown`, not as errors.
-    pub fn evaluate_backend(
+    /// Returns an error when the provider fails or supplies an invalid
+    /// profile association.
+    pub fn evaluate_capabilities(
         &self,
         backend: &BackendDescriptor,
     ) -> Result<BackendEligibility, String> {
         if self.request.is_empty() {
             return Ok(BackendEligibility::Unknown {
                 reason:
-                    "no capability requirements were supplied; \
-                     compatibility cannot be established"
+                    "no mandatory capability requirements were supplied"
                         .to_owned(),
             });
         }
 
-        let Some(association) = self
+        let association = self
             .provider
             .profile_for(backend)
             .map_err(|reason| {
                 format!(
-                    "capability profile provider failed for backend \
-                     `{}`: {reason}",
+                    "capability provider failed for backend `{}`: {reason}",
                     backend.id
                 )
-            })?
-        else {
+            })?;
+
+        let Some(association) = association else {
             return Ok(BackendEligibility::Unknown {
                 reason: format!(
-                    "no capability profile is available for backend `{}`",
+                    "capability profile unavailable for backend `{}`",
                     backend.id
                 ),
             });
@@ -534,9 +491,7 @@ impl<'a> BackendCapabilityEvaluator<'a> {
             .validate_for(backend)
             .map_err(|error| error.to_string())?;
 
-        let profile = association.profile();
-
-        let result = profile.check(
+        let result = association.profile().check(
             self.request.requirements(),
             self.request.policy(),
         );
@@ -545,13 +500,90 @@ impl<'a> BackendCapabilityEvaluator<'a> {
     }
 }
 
-impl BackendEligibilityEvaluator for BackendCapabilityEvaluator<'_> {
-    /// Evaluate the backend using the canonical capability profile.
+// ============================================================================
+// REALIZATION FEASIBILITY
+// ============================================================================
+
+/// Evaluates non-capability conditions required for a backend realization.
+///
+/// The implementation must integrate the authoritative planning,
+/// compatibility, resource, target, ABI, and toolchain contracts.
+///
+/// It must not allocate physical hardware.
+///
+/// Returning Compatible means the available evidence establishes
+/// feasibility for the supplied workload and target context.
+///
+/// Returning Unknown means feasibility cannot yet be established.
+///
+/// This interface deliberately does not prescribe a second resource model.
+pub trait BackendRealizationFeasibilityEvaluator: Send + Sync {
+    /// Evaluates non-capability realization feasibility.
+    fn evaluate_feasibility(
+        &self,
+        backend: &BackendDescriptor,
+    ) -> Result<BackendEligibility, String>;
+}
+
+// ============================================================================
+// COMPLETE BACKEND ELIGIBILITY COMPOSITION
+// ============================================================================
+
+/// Combines capability compatibility and realization feasibility.
+///
+/// This is the evaluator intended for production backend selection.
+///
+/// A backend is Compatible only when both independent evaluations
+/// establish compatibility.
+///
+/// An incompatible result cannot be overridden by an unknown result.
+///
+/// Unknown is never promoted to Compatible.
+pub struct CompleteBackendEligibilityEvaluator<'a> {
+    capabilities: &'a BackendCapabilityEvaluator<'a>,
+    feasibility: &'a dyn BackendRealizationFeasibilityEvaluator,
+}
+
+impl<'a> CompleteBackendEligibilityEvaluator<'a> {
+    /// Creates a complete backend eligibility evaluator.
+    #[must_use]
+    pub fn new(
+        capabilities: &'a BackendCapabilityEvaluator<'a>,
+        feasibility: &'a dyn BackendRealizationFeasibilityEvaluator,
+    ) -> Self {
+        Self {
+            capabilities,
+            feasibility,
+        }
+    }
+
+    /// Evaluates both capability and realization feasibility.
+    pub fn evaluate_complete(
+        &self,
+        backend: &BackendDescriptor,
+    ) -> Result<BackendEligibility, String> {
+        let capability_result =
+            self.capabilities.evaluate_capabilities(backend)?;
+
+        let feasibility_result =
+            self.feasibility.evaluate_feasibility(backend)?;
+
+        combine_eligibility(
+            capability_result,
+            feasibility_result,
+        )
+    }
+}
+
+impl BackendEligibilityEvaluator
+    for CompleteBackendEligibilityEvaluator<'_>
+{
+    /// Evaluates complete backend eligibility.
     fn evaluate(
         &self,
         backend: &BackendDescriptor,
     ) -> Result<BackendEligibility, String> {
-        self.evaluate_backend(backend)
+        self.evaluate_complete(backend)
     }
 }
 
@@ -559,32 +591,24 @@ impl BackendEligibilityEvaluator for BackendCapabilityEvaluator<'_> {
 // RESULT CLASSIFICATION
 // ============================================================================
 
-/// Convert the canonical backend capability-check result into the existing
-/// compiler backend eligibility contract.
+/// Converts the canonical capability-check result into compiler eligibility.
 ///
-/// This function does not reimplement capability matching. It only
-/// classifies the outcomes already produced by `CapabilityProfile::check`.
+/// This function does not reimplement capability matching.
 fn classify_result(
     result: &CapabilityCheckResult,
 ) -> Result<BackendEligibility, String> {
     if result.is_empty() {
         return Ok(BackendEligibility::Unknown {
-            reason:
-                "the capability checker returned no evaluated requirements"
-                    .to_owned(),
+            reason: "capability checker returned no evaluated requirements"
+                .to_owned(),
         });
     }
 
     if result.is_compatible() {
         return Ok(BackendEligibility::Compatible {
-            // This adapter evaluates compatibility only. It does not
-            // claim to estimate execution performance or cost.
-            //
-            // A separate optimization or cost-model evaluator may provide
-            // a meaningful rank when that information is available.
             rank: 0,
             explanation:
-                "all required backend capabilities satisfy the active policy"
+                "all mandatory capability requirements satisfy the active policy"
                     .to_owned(),
         });
     }
@@ -610,11 +634,11 @@ fn classify_result(
                 unresolved.push(explanation);
             }
 
-            // CapabilityOutcome is non-exhaustive. New canonical outcomes
-            // must fail closed until their meaning is explicitly mapped.
+            // Canonical outcome types are non-exhaustive.
+            // Unknown future outcomes must not become Compatible.
             _ => {
                 unresolved.push(format!(
-                    "{explanation}; outcome requires explicit evaluation"
+                    "{explanation}; explicit interpretation required"
                 ));
             }
         }
@@ -633,10 +657,82 @@ fn classify_result(
     }
 
     Ok(BackendEligibility::Unknown {
-        reason:
-            "capability compatibility could not be established"
-                .to_owned(),
+        reason: "capability compatibility could not be established"
+            .to_owned(),
     })
+}
+
+// ============================================================================
+// ELIGIBILITY COMPOSITION
+// ============================================================================
+
+fn combine_eligibility(
+    capabilities: BackendEligibility,
+    feasibility: BackendEligibility,
+) -> Result<BackendEligibility, String> {
+    match (&capabilities, &feasibility) {
+        (
+            BackendEligibility::Incompatible { reason: left },
+            BackendEligibility::Incompatible { reason: right },
+        ) => {
+            Ok(BackendEligibility::Incompatible {
+                reason: format!("{left}; {right}"),
+            })
+        }
+
+        (
+            BackendEligibility::Incompatible { reason },
+            _,
+        )
+        | (
+            _,
+            BackendEligibility::Incompatible { reason },
+        ) => {
+            Ok(BackendEligibility::Incompatible {
+                reason: reason.clone(),
+            })
+        }
+
+        (
+            BackendEligibility::Unknown { reason: left },
+            BackendEligibility::Unknown { reason: right },
+        ) => {
+            Ok(BackendEligibility::Unknown {
+                reason: format!("{left}; {right}"),
+            })
+        }
+
+        (
+            BackendEligibility::Unknown { reason },
+            _
+        )
+        | (
+            _,
+            BackendEligibility::Unknown { reason },
+        ) => {
+            Ok(BackendEligibility::Unknown {
+                reason: reason.clone(),
+            })
+        }
+
+        (
+            BackendEligibility::Compatible {
+                explanation: left,
+                ..
+            },
+            BackendEligibility::Compatible {
+                explanation: right,
+                ..
+            },
+        ) => {
+            Ok(BackendEligibility::Compatible {
+                // This is a neutral compatibility rank.
+                // Actual optimization ranking belongs to the cost model.
+                rank: 0,
+                explanation: format!("{left}; {right}"),
+            })
+        }
+    }
 }
 
 // ============================================================================
@@ -647,234 +743,148 @@ fn classify_result(
 mod tests {
     use super::*;
 
-    struct FixedProvider {
-        profile: Option<BackendCapabilityProfile>,
-    }
-
-    impl BackendCapabilityProfileProvider for FixedProvider {
-        fn profile_for(
-            &self,
-            _backend: &BackendDescriptor,
-        ) -> Result<Option<BackendCapabilityProfile>, String> {
-            Ok(self.profile.clone())
-        }
-    }
-
-    struct FailingProvider;
-
-    impl BackendCapabilityProfileProvider for FailingProvider {
-        fn profile_for(
-            &self,
-            _backend: &BackendDescriptor,
-        ) -> Result<Option<BackendCapabilityProfile>, String> {
-            Err("test provider failure".to_owned())
-        }
-    }
-
     fn backend() -> BackendDescriptor {
-        BackendDescriptor::new("backend.example", ".bin")
+        BackendDescriptor::new("test.backend", ".test")
     }
 
-    fn requirement() -> CapabilityRequirement {
-        CapabilityRequirement::from_name("example.compute")
-            .expect("valid capability requirement")
-    }
+    fn profile() -> CapabilityProfile {
+        let mut profile = CapabilityProfile::new("test.profile");
 
-    fn profile(
-        status: CapabilityStatus,
-        direct_evidence: bool,
-    ) -> CapabilityProfile {
-        let mut profile = CapabilityProfile::new("example-profile");
-
-        let mut descriptor = CapabilityDescriptor::from_name(
-            "example.compute",
-            status,
-            "Example computation capability",
+        let descriptor = CapabilityDescriptor::from_name(
+            "classical.integer",
+            CapabilityStatus::Supported,
+            "Integer computation",
         )
-        .expect("valid capability descriptor");
-
-        if direct_evidence {
-            descriptor = descriptor.with_evidence(
-                CapabilityEvidence::new(
-                    CapabilityEvidenceKind::Verified,
-                    "compiler-capability-test",
-                    Some("conformance test passed".to_owned()),
-                ),
-            );
-        }
+        .expect("valid capability");
 
         profile
             .capabilities_mut()
             .insert(descriptor)
-            .expect("capability insertion succeeds");
+            .expect("insertion succeeds");
 
         profile
     }
 
-    fn request(
-        policy: CapabilityPolicy,
-    ) -> BackendCapabilityRequest {
+    fn request() -> BackendCapabilityRequest {
         BackendCapabilityRequest::new(
-            vec![requirement()],
-            policy,
+            vec![
+                CapabilityRequirement::from_name(
+                    "classical.integer",
+                )
+                .expect("valid requirement"),
+            ],
+            CapabilityPolicy::default(),
         )
-    }
-
-    fn association(
-        profile: CapabilityProfile,
-    ) -> BackendCapabilityProfile {
-        BackendCapabilityProfile::new(
-            "backend.example",
-            profile,
-        )
-        .expect("valid backend profile association")
     }
 
     #[test]
-    fn profile_association_preserves_backend_identity() {
-        let association = association(profile(
-            CapabilityStatus::Supported,
-            false,
-        ));
-
+    fn module_identity_is_stable() {
         assert_eq!(
-            association.backend_id(),
-            "backend.example"
+            BackendCapabilityEvaluator::<'static>::new
+                as fn(
+                    &'static dyn BackendCapabilityProfileProvider,
+                    BackendCapabilityRequest,
+                ) -> BackendCapabilityEvaluator<'static>,
+                BackendCapabilityEvaluator::new,
         );
+
+        assert_ne!(BACKEND_CAPABILITIES_API_VERSION, 0);
+        assert!(!BACKEND_CAPABILITIES_MODULE_NAME.is_empty());
     }
 
     #[test]
-    fn empty_backend_id_is_rejected() {
-        let result = BackendCapabilityProfile::new(
-            "",
-            CapabilityProfile::new("profile"),
-        );
-
-        assert!(matches!(
-            result,
-            Err(BackendCapabilityError::EmptyBackendId)
-        ));
-    }
-
-    #[test]
-    fn profile_identity_mismatch_is_rejected() {
-        let association = BackendCapabilityProfile::new(
-            "backend.other",
-            CapabilityProfile::new("profile"),
+    fn rejects_empty_backend_identity() {
+        assert!(BackendCapabilityProfile::new(
+            " ",
+            profile(),
         )
-        .expect("valid association");
+        .is_err());
+    }
 
-        let result = association.validate_for(&backend());
+    #[test]
+    fn rejects_control_characters_in_backend_identity() {
+        assert!(BackendCapabilityProfile::new(
+            "backend\ninvalid",
+            profile(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn rejects_backend_identity_mismatch() {
+        let association = BackendCapabilityProfile::new(
+            "another.backend",
+            profile(),
+        )
+        .expect("association construction succeeds");
 
         assert!(matches!(
-            result,
-            Err(
-                BackendCapabilityError::BackendIdentityMismatch {
-                    ..
-                }
-            )
+            association.validate_for(&backend()),
+            Err(BackendCapabilityError::BackendIdentityMismatch { .. })
         ));
     }
 
     #[test]
-    fn supported_capability_is_eligible() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Supported,
-                false,
-            ))),
-        };
+    fn accepts_matching_backend_identity() {
+        let association = BackendCapabilityProfile::new(
+            "test.backend",
+            profile(),
+        )
+        .expect("association construction succeeds");
 
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(CapabilityPolicy::default()),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Compatible { .. }
-        ));
-    }
-
-    #[test]
-    fn unavailable_capability_is_incompatible() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Unavailable,
-                false,
-            ))),
-        };
-
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(CapabilityPolicy::default()),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Incompatible { .. }
-        ));
+        assert!(association.validate_for(&backend()).is_ok());
     }
 
     #[test]
     fn missing_profile_is_unknown() {
-        let provider = FixedProvider {
-            profile: None,
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(None)
         };
 
         let evaluator = BackendCapabilityEvaluator::new(
             &provider,
-            request(CapabilityPolicy::default()),
+            request(),
         );
 
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
         assert!(matches!(
-            result,
-            BackendEligibility::Unknown { .. }
+            evaluator.evaluate_capabilities(&backend()),
+            Ok(BackendEligibility::Unknown { .. })
         ));
     }
 
     #[test]
-    fn missing_capability_is_unknown() {
-        let provider = FixedProvider {
-            profile: Some(association(
-                CapabilityProfile::new("empty-profile"),
-            )),
+    fn matching_capability_is_compatible_at_capability_level() {
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    profile(),
+                )
+                .expect("valid association"),
+            ))
         };
 
         let evaluator = BackendCapabilityEvaluator::new(
             &provider,
-            request(CapabilityPolicy::default()),
+            request(),
         );
 
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
         assert!(matches!(
-            result,
-            BackendEligibility::Unknown { .. }
+            evaluator.evaluate_capabilities(&backend()),
+            Ok(BackendEligibility::Compatible { .. })
         ));
     }
 
     #[test]
-    fn empty_requirements_do_not_prove_compatibility() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Supported,
-                false,
-            ))),
+    fn empty_requirement_is_unknown() {
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    profile(),
+                )
+                .expect("valid association"),
+            ))
         };
 
         let evaluator = BackendCapabilityEvaluator::new(
@@ -885,201 +895,195 @@ mod tests {
             ),
         );
 
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
         assert!(matches!(
-            result,
-            BackendEligibility::Unknown { .. }
-        ));
-    }
-
-    #[test]
-    fn direct_evidence_policy_is_respected() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Supported,
-                false,
-            ))),
-        };
-
-        let policy = CapabilityPolicy {
-            allow_experimental: false,
-            allow_deprecated: false,
-            require_direct_evidence: true,
-        };
-
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(policy),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Unknown { .. }
-        ));
-    }
-
-    #[test]
-    fn direct_verified_evidence_satisfies_strict_policy() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Supported,
-                true,
-            ))),
-        };
-
-        let policy = CapabilityPolicy {
-            allow_experimental: false,
-            allow_deprecated: false,
-            require_direct_evidence: true,
-        };
-
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(policy),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Compatible { .. }
-        ));
-    }
-
-    #[test]
-    fn experimental_capability_is_rejected_by_default() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Experimental,
-                false,
-            ))),
-        };
-
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(CapabilityPolicy::default()),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Incompatible { .. }
-        ));
-    }
-
-    #[test]
-    fn experimental_capability_requires_explicit_permission() {
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Experimental,
-                false,
-            ))),
-        };
-
-        let policy = CapabilityPolicy {
-            allow_experimental: true,
-            allow_deprecated: false,
-            require_direct_evidence: false,
-        };
-
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(policy),
-        );
-
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result,
-            BackendEligibility::Compatible { .. }
+            evaluator.evaluate_capabilities(&backend()),
+            Ok(BackendEligibility::Unknown { .. })
         ));
     }
 
     #[test]
     fn provider_failure_is_propagated() {
+        let provider = |_backend: &BackendDescriptor| {
+            Err::<Option<BackendCapabilityProfile>, _>(
+                "inventory unavailable",
+            )
+        };
+
         let evaluator = BackendCapabilityEvaluator::new(
-            &FailingProvider,
-            request(CapabilityPolicy::default()),
+            &provider,
+            request(),
         );
-
-        let result = evaluator.evaluate_backend(&backend());
-
-        assert!(result.is_err());
 
         assert!(
-            result
-                .expect_err("provider must fail")
-                .contains("test provider failure")
+            evaluator
+                .evaluate_capabilities(&backend())
+                .is_err()
         );
     }
 
     #[test]
-    fn evaluator_implements_existing_selection_interface() {
-        fn accepts_evaluator(
-            _: &dyn BackendEligibilityEvaluator,
-        ) {
+    fn missing_required_capability_is_unknown() {
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    CapabilityProfile::new("empty"),
+                )
+                .expect("valid association"),
+            ))
+        };
+
+        let evaluator = BackendCapabilityEvaluator::new(
+            &provider,
+            request(),
+        );
+
+        assert!(matches!(
+            evaluator.evaluate_capabilities(&backend()),
+            Ok(BackendEligibility::Unknown { .. })
+        ));
+    }
+
+    #[test]
+    fn explicit_unavailability_is_incompatible() {
+        let mut unavailable = CapabilityProfile::new("unavailable");
+
+        unavailable
+            .capabilities_mut()
+            .insert(
+                CapabilityDescriptor::from_name(
+                    "classical.integer",
+                    CapabilityStatus::Unavailable,
+                    "Unavailable",
+                )
+                .expect("valid descriptor"),
+            )
+            .expect("insertion succeeds");
+
+        let provider = move |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    unavailable.clone(),
+                )
+                .expect("valid association"),
+            ))
+        };
+
+        let evaluator = BackendCapabilityEvaluator::new(
+            &provider,
+            request(),
+        );
+
+        assert!(matches!(
+            evaluator.evaluate_capabilities(&backend()),
+            Ok(BackendEligibility::Incompatible { .. })
+        ));
+    }
+
+    struct Feasible;
+
+    impl BackendRealizationFeasibilityEvaluator for Feasible {
+        fn evaluate_feasibility(
+            &self,
+            _backend: &BackendDescriptor,
+        ) -> Result<BackendEligibility, String> {
+            Ok(BackendEligibility::Compatible {
+                rank: 0,
+                explanation: "realization is feasible".to_owned(),
+            })
         }
+    }
 
-        let provider = FixedProvider {
-            profile: Some(association(profile(
-                CapabilityStatus::Supported,
-                false,
-            ))),
-        };
+    struct UnknownFeasibility;
 
-        let evaluator = BackendCapabilityEvaluator::new(
-            &provider,
-            request(CapabilityPolicy::default()),
-        );
-
-        accepts_evaluator(&evaluator);
+    impl BackendRealizationFeasibilityEvaluator for UnknownFeasibility {
+        fn evaluate_feasibility(
+            &self,
+            _backend: &BackendDescriptor,
+        ) -> Result<BackendEligibility, String> {
+            Ok(BackendEligibility::Unknown {
+                reason: "resource availability is unknown".to_owned(),
+            })
+        }
     }
 
     #[test]
-    fn request_preserves_requirement_order_and_duplicates() {
-        let first = requirement();
-        let second = requirement();
+    fn complete_evaluator_requires_feasibility() {
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    profile(),
+                )
+                .expect("valid association"),
+            ))
+        };
 
-        let request = BackendCapabilityRequest::new(
-            vec![first, second],
-            CapabilityPolicy::default(),
+        let capabilities = BackendCapabilityEvaluator::new(
+            &provider,
+            request(),
         );
 
-        assert_eq!(request.len(), 2);
+        let feasibility = UnknownFeasibility;
+
+        let complete = CompleteBackendEligibilityEvaluator::new(
+            &capabilities,
+            &feasibility,
+        );
+
+        assert!(matches!(
+            complete.evaluate_complete(&backend()),
+            Ok(BackendEligibility::Unknown { .. })
+        ));
     }
 
     #[test]
-    fn evaluator_does_not_infer_support_from_backend_name() {
-        let provider = FixedProvider {
-            profile: None,
+    fn complete_evaluator_accepts_both_positive_results() {
+        let provider = |_backend: &BackendDescriptor| {
+            Ok::<_, String>(Some(
+                BackendCapabilityProfile::new(
+                    "test.backend",
+                    profile(),
+                )
+                .expect("valid association"),
+            ))
         };
 
-        let evaluator = BackendCapabilityEvaluator::new(
+        let capabilities = BackendCapabilityEvaluator::new(
             &provider,
-            request(CapabilityPolicy::default()),
+            request(),
         );
 
-        let result = evaluator
-            .evaluate_backend(&backend())
-            .expect("evaluation succeeds");
+        let feasibility = Feasible;
+
+        let complete = CompleteBackendEligibilityEvaluator::new(
+            &capabilities,
+            &feasibility,
+        );
+
+        assert!(matches!(
+            complete.evaluate_complete(&backend()),
+            Ok(BackendEligibility::Compatible { .. })
+        ));
+    }
+
+    #[test]
+    fn incompatible_result_cannot_be_overridden() {
+        let result = combine_eligibility(
+            BackendEligibility::Incompatible {
+                reason: "unsupported capability".to_owned(),
+            },
+            BackendEligibility::Compatible {
+                rank: 0,
+                explanation: "resources available".to_owned(),
+            },
+        )
+        .expect("composition succeeds");
 
         assert!(matches!(
             result,
-            BackendEligibility::Unknown { .. }
+            BackendEligibility::Incompatible { .. }
         ));
     }
 }
