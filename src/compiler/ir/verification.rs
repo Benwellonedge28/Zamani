@@ -4,129 +4,90 @@
 #![deny(unused_must_use)]
 #![deny(missing_docs)]
 
-//! # Zamani Universal Meta-Compiler — IR Verification Integration
+//! # Zamani Compiler — IR Verification Integration
 //!
 //! Path: `src/compiler/ir/verification.rs`
 //! Edition: Rust 2021
-//! Minimum Rust version: 1.97 or later
-//! Safety: Safe Rust only.
+//! Minimum Rust version: 1.97 or later.
+//! Safety: Unsafe Rust is forbidden.
 //!
 //! ## Purpose
 //!
 //! Provide the compiler-facing verification boundary for canonical
 //! intermediate representations.
 //!
-//! This module coordinates existing authoritative verification
-//! implementations. It does not implement another IR verifier.
+//! This module coordinates authoritative verification implementations.
+//! It does not define another IR or implement another verifier.
 //!
-//! Its initial supported representation is canonical ZUIR.
+//! The currently integrated full-program verification path is canonical
+//! ZUIR through `crate::zuir::verify::verify_full`.
 //!
-//! The compiler can verify:
-//!
-//! - Initial IR supplied to the compiler.
-//! - IR after an optimization or transformation.
-//! - IR before subsequent lowering or backend processing.
-//!
-//! All ZUIR verification is delegated to:
-//!
-//!     crate::zuir::verify::verify_full
-//!
-//! The canonical verifier owns the verification algorithms,
-//! verification stages, findings, and completeness status.
-//!
-//! ## Architectural ownership
+//! ## Ownership
 //!
 //! This module owns:
 //!
-//! - Compiler-facing verification entry points.
-//! - Verification-point identification.
+//! - Compiler-facing ZUIR verification entry points.
+//! - Compiler pipeline verification-point identification.
 //! - Preservation of canonical verification reports.
-//! - Compiler-facing acceptance decisions.
-//! - The boundary between IR verification and later compiler stages.
+//! - Strict acceptance and rejection of verification outcomes.
+//! - Structured compiler-facing verification errors.
 //!
 //! This module does not own:
 //!
-//! - IR structures or identifiers.
-//! - Semantic analysis.
-//! - Type inference.
-//! - Ownership semantics.
-//! - Structural verification algorithms.
-//! - Control-flow verification algorithms.
-//! - Dominance analysis.
-//! - SSA verification algorithms.
-//! - Effect verification algorithms.
-//! - Resource verification algorithms.
-//! - Dialect verification algorithms.
-//! - Quantum IR validation algorithms.
-//! - HDLIR verification algorithms.
-//! - AI semantic validation.
-//! - Hardware capability discovery.
-//! - Target feasibility.
-//! - Physical resource allocation.
-//! - Scheduling or routing.
-//! - Backend code generation.
-//! - Runtime execution.
+//! - Source grammar, parsing, AST construction, or semantic analysis.
+//! - Canonical IR structures, IDs, or types.
+//! - Structural, type, control-flow, effect, ownership, or resource
+//!   verification algorithms.
+//! - Quantum, HDL, AI, hybrid, or distributed verification algorithms.
+//! - Target discovery, physical allocation, scheduling, or routing.
+//! - Backend code generation or runtime execution.
 //!
-//! These responsibilities remain with their authoritative subsystems.
+//! ## Canonical authorities
 //!
-//! ## Verification authority
+//! Universal IR:
+//!     crate::zuir
 //!
-//! Canonical universal IR:
-//!
-//!     crate::zuir::ir
-//!
-//! Canonical full-program verifier:
-//!
+//! Full ZUIR verification:
 //!     crate::zuir::verify::verify_full
 //!
-//! Canonical verification input:
-//!
-//!     crate::zuir::verify::FullVerificationInput
-//!
-//! Canonical verification report:
-//!
-//!     crate::zuir::verify::FullVerificationReport
-//!
-//! Canonical verification status:
-//!
-//!     crate::zuir::verify::VerificationStatus
-//!
-//! Classical integration:
-//!
+//! Classical IR:
 //!     crate::classical::zcir::verify
 //!
-//! Quantum validation:
-//!
+//! Quantum IR:
 //!     crate::quantum::ir::validation
 //!
-//! HDLIR verification:
-//!
+//! HDLIR:
 //!     crate::hdl::hdlir::verify
 //!
-//! AI semantic validation:
+//! Hybrid computation:
+//!     crate::hybrid
 //!
-//!     crate::ai::validation
+//! AI computation:
+//!     crate::ai
 //!
-//! ## Verification trust boundary
+//! Distributed computation:
+//!     crate::distributed
 //!
-//! An IR is not trusted merely because it:
+//! The existence of a domain verifier does not imply that this module
+//! already integrates it. Domain adapters must be added only after their
+//! actual input, report, error, and completeness contracts are established.
 //!
-//! - Was produced by the frontend.
-//! - Was constructed through a builder.
-//! - Was previously verified.
-//! - Was loaded from a cache.
-//! - Was deserialized.
-//! - Was produced by an optimizer.
-//! - Was received from another compilation process.
+//! ## Trust boundary
 //!
-//! Verification must be performed against the exact IR snapshot
-//! that the downstream compiler stage will consume.
+//! Verification applies to the exact IR snapshot described by the
+//! supplied verification input.
 //!
-//! Any transformation that changes the IR invalidates the assumption
-//! that a previous verification report describes the changed snapshot.
+//! A previous report does not automatically verify:
 //!
-//! The caller must therefore supply a new, consistent verification
-//! input after every transformation that requires renewed verification.
+//! - A transformed IR.
+//! - A deserialized IR.
+//! - A cached IR.
+//! - An externally supplied IR.
+//! - A translated destination representation.
+//!
+//! A transformation that changes the representation requires fresh
+//! verification before the changed representation crosses a boundary
+//! that requires verified input.
 //!
 //! ## Verification status
 //!
@@ -141,61 +102,48 @@
 //! Incomplete:
 //!     At least one required property could not be established.
 //!
-//! Only Valid is accepted by this integration boundary.
+//! Only Valid is accepted by strict verification admission.
 //!
-//! Incomplete must never be silently converted into Valid.
+//! Invalid and Incomplete must never be converted into success.
 //!
 //! ## Completeness boundary
 //!
-//! A Valid result means that the currently integrated canonical
-//! verification stages passed.
+//! A Valid ZUIR report establishes only the properties checked by the
+//! canonical full verifier.
 //!
-//! It does not establish:
+//! It does not automatically establish:
 //!
-//! - Complete SSA use-def legality unless an SSA verifier is integrated.
+//! - Complete SSA use-def legality.
 //! - Target compatibility.
 //! - Backend legality.
-//! - Hardware feasibility.
-//! - Physical resource availability.
-//! - Successful synthesis.
-//! - Successful execution.
-//! - Correctness of arbitrary external dialect implementations.
+//! - Physical resource feasibility.
+//! - Quantum topology feasibility.
+//! - HDL synthesis correctness.
+//! - Hybrid execution correctness.
+//! - Distributed consistency.
+//! - Successful linking or execution.
 //!
-//! These properties must be established by their respective
-//! authoritative verification or realization stages.
+//! Those properties require their respective authoritative checks.
 //!
-//! ## Scalability and POCO-REAF
+//! ## Scalability
 //!
-//! This module introduces no arbitrary limits on:
+//! This module imposes no arbitrary universal ceilings on:
 //!
-//! - Programs.
-//! - Modules.
-//! - Functions.
-//! - Regions.
-//! - Blocks.
-//! - Operations.
-//! - Values.
-//! - Types.
-//! - Effects.
-//! - Ownership relationships.
-//! - Logical qubits.
-//! - Hardware signals.
-//! - Tensor dimensions.
+//! - Programs, modules, functions, or regions.
+//! - Blocks, operations, values, or types.
+//! - Effects or ownership relationships.
+//! - Qubits, signals, registers, or tensor dimensions.
 //! - Tensor rank.
-//! - Devices.
-//! - Processing units.
-//! - Distributed participants.
+//! - Devices, processors, accelerators, or participants.
 //! - Computing domains.
 //!
-//! It does not duplicate the IR or create fixed-size representations.
+//! The canonical verifier determines the actual work.
 //!
-//! Verification work is determined by the canonical verifier,
-//! the supplied IR, available resources, and explicit policies.
+//! Memory exhaustion, arithmetic failure, operational-budget exhaustion,
+//! or unavailable verification context must never be interpreted as
+//! successful verification.
 //!
-//! Resource exhaustion must not be interpreted as successful
-//! verification.
-//!
-//! Literal infinity cannot be guaranteed by finite software.
+//! No finite implementation can promise literal infinite computation.
 //!
 //! ## Determinism
 //!
@@ -205,59 +153,82 @@
 //! - No random identifiers.
 //! - No hidden target selection.
 //! - No hardware discovery.
-//! - No filesystem access.
-//! - No network access.
-//! - No console output.
-//! - No mutation of the supplied IR.
+//! - No filesystem or network access.
+//! - No mutation of supplied IR.
 //!
-//! Verification ordering and finding ordering remain the
-//! responsibility of the canonical verifier.
+//! Canonical verification ordering and diagnostic ordering remain owned
+//! by the authoritative verifier.
+//!
+//! ## Grammar boundary
+//!
+//! This module does not parse source text or define language semantics.
+//!
+//! The relevant authority chain is:
+//!
+//!     grammar/Zamani.g4
+//!         |
+//!         v
+//!     frontend
+//!         |
+//!         v
+//!     semantic model
+//!         |
+//!         v
+//!     canonical IR
+//!         |
+//!         v
+//!     compiler IR verification
+//!
+//! Relevant specifications:
+//!
+//! - grammar/Zamani.g4
+//! - grammar/lexer/tokens.g4
+//! - grammar/specification/semantic-model.md
+//! - grammar/specification/compilation-model.md
+//! - grammar/specification/portability-model.md
+//! - grammar/specification/poco-reaf.md
+//! - grammar/validation/semantic-boundaries.md
 //!
 //! ## Integration
 //!
 //! Parent:
-//!
-//!     src/compiler/ir/mod.rs
-//!
-//! Compiler root:
-//!
-//!     src/compiler/mod.rs
+//!     crate::compiler::ir
 //!
 //! Initial input:
+//!     crate::compiler::ir::input
 //!
-//!     src/compiler/ir/input.rs
-//!
-//! Representation adapters:
-//!
-//!     src/compiler/ir/adapters.rs
+//! Canonical verifier:
+//!     crate::zuir::verify
 //!
 //! Downstream consumers:
-//!
 //!     compiler analysis
-//!     compiler pass manager
-//!     optimization
-//!     lowering
-//!     planning
-//!     backend integration
-//!
-//! Domain-specific verification must be integrated only through
-//! the actual public APIs of the owning domain subsystems.
+//!     compiler pass management
+//!     compiler optimization
+//!     compiler lowering
+//!     compiler planning
+//!     compiler backend integration
 //!
 //! ## Freeze criteria
 //!
-//! - Canonical ZUIR verification is invoked without reimplementation.
-//! - Invalid IR is never accepted.
-//! - Incomplete verification is never accepted.
-//! - Reports are preserved without losing canonical findings.
-//! - Verification can be repeated after transformations.
+//! - Canonical ZUIR verification is delegated, not duplicated.
+//! - Invalid IR cannot pass strict admission.
+//! - Incomplete verification cannot pass strict admission.
+//! - Canonical reports and findings are preserved.
+//! - Reverification after transformations is supported.
+//! - Domain-specific verification is not falsely claimed.
+//! - No arbitrary universal hardware ceiling is introduced.
 //! - No unsafe code is introduced.
-//! - No arbitrary hardware ceiling is introduced.
-//! - Tests and repository integration pass.
+//! - Repository tests and quality gates pass.
+
+use core::fmt;
+use std::error::Error;
 
 use crate::zuir::verify::{
     verify_full,
     FullVerificationInput,
     FullVerificationReport,
+    VerificationSeverity,
+    VerificationStage,
     VerificationStatus,
 };
 
@@ -269,57 +240,185 @@ use crate::zuir::verify::{
 ///
 /// This version is independent of the Zamani language version,
 /// grammar version, semantic-model version, ZUIR version,
-/// and backend ABI version.
-pub const IR_VERIFICATION_API_VERSION: u16 = 1;
+/// domain IR versions, and backend ABI versions.
+pub const IR_VERIFICATION_API_VERSION: u16 = 2;
 
 // =============================================================================
 // VERIFICATION POINT
 // =============================================================================
 
-/// Identifies the point in the compiler pipeline at which
-/// verification is being performed.
+/// Identifies the compiler pipeline point requesting verification.
 ///
-/// This value describes the compiler stage requesting verification.
-/// It does not change the verification algorithms or their meaning.
+/// This value describes the verification request. It does not alter
+/// canonical verification algorithms or their semantic meaning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum VerificationPoint {
-    /// Verification of IR entering the compiler IR boundary.
-    ///
-    /// This is normally used before analysis or optimization.
+    /// Verify IR entering the compiler IR boundary.
     CompilationInput,
 
-    /// Verification of IR after an optimization or transformation.
-    ///
-    /// The caller must provide a new verification snapshot that
-    /// describes the transformed representation.
+    /// Verify IR after an optimization or transformation.
     AfterTransformation,
 
-    /// Verification before lowering to another representation.
-    ///
-    /// This check establishes the properties covered by the
-    /// canonical verifier, not target-specific legality.
+    /// Verify IR before conversion or lowering.
     BeforeLowering,
 
-    /// Verification before backend input construction.
-    ///
-    /// Backend-specific compatibility and artifact validation
-    /// remain separate responsibilities.
+    /// Verify IR before backend input construction.
     BeforeBackend,
 }
+
+// =============================================================================
+// VERIFICATION ERROR CLASSIFICATION
+// =============================================================================
+
+/// Classification of a failed strict verification request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum IrVerificationErrorKind {
+    /// The canonical verifier established that the IR is invalid.
+    InvalidIr,
+
+    /// The canonical verifier could not establish all required
+    /// verification properties.
+    IncompleteVerification,
+}
+
+// =============================================================================
+// VERIFICATION ERROR
+// =============================================================================
+
+/// Structured error produced when strict IR verification fails.
+///
+/// The original canonical report is retained without replacing,
+/// flattening, or discarding its findings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IrVerificationError {
+    point: VerificationPoint,
+    kind: IrVerificationErrorKind,
+    report: FullVerificationReport,
+}
+
+impl IrVerificationError {
+    /// Construct a strict verification error from a non-valid report.
+    ///
+    /// This constructor is private to prevent inconsistent error states.
+    fn from_report(
+        point: VerificationPoint,
+        report: FullVerificationReport,
+    ) -> Result<(), Self> {
+        let kind = match report.status() {
+            VerificationStatus::Valid => return Ok(()),
+
+            VerificationStatus::Invalid => {
+                IrVerificationErrorKind::InvalidIr
+            }
+
+            VerificationStatus::Incomplete => {
+                IrVerificationErrorKind::IncompleteVerification
+            }
+        };
+
+        Err(Self {
+            point,
+            kind,
+            report,
+        })
+    }
+
+    /// Return the compiler pipeline point that requested verification.
+    #[must_use]
+    pub const fn point(&self) -> VerificationPoint {
+        self.point
+    }
+
+    /// Return the failure classification.
+    #[must_use]
+    pub const fn kind(&self) -> IrVerificationErrorKind {
+        self.kind
+    }
+
+    /// Borrow the complete canonical verification report.
+    #[must_use]
+    pub fn report(&self) -> &FullVerificationReport {
+        &self.report
+    }
+
+    /// Consume the error and recover the canonical report.
+    #[must_use]
+    pub fn into_report(self) -> FullVerificationReport {
+        self.report
+    }
+
+    /// Return the number of error findings.
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.report.count(VerificationSeverity::Error)
+    }
+
+    /// Return the number of deferred findings.
+    #[must_use]
+    pub fn deferred_count(&self) -> usize {
+        self.report.count(VerificationSeverity::Deferred)
+    }
+
+    /// Return whether the failure represents invalid IR.
+    #[must_use]
+    pub const fn is_invalid(&self) -> bool {
+        matches!(
+            self.kind,
+            IrVerificationErrorKind::InvalidIr
+        )
+    }
+
+    /// Return whether verification was incomplete.
+    #[must_use]
+    pub const fn is_incomplete(&self) -> bool {
+        matches!(
+            self.kind,
+            IrVerificationErrorKind::IncompleteVerification
+        )
+    }
+}
+
+impl fmt::Display for IrVerificationError {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        match self.kind {
+            IrVerificationErrorKind::InvalidIr => {
+                write!(
+                    formatter,
+                    "IR verification failed at {:?}: {} error finding(s)",
+                    self.point,
+                    self.error_count(),
+                )
+            }
+
+            IrVerificationErrorKind::IncompleteVerification => {
+                write!(
+                    formatter,
+                    "IR verification incomplete at {:?}: {} deferred finding(s)",
+                    self.point,
+                    self.deferred_count(),
+                )
+            }
+        }
+    }
+}
+
+impl Error for IrVerificationError {}
 
 // =============================================================================
 // VERIFICATION OUTCOME
 // =============================================================================
 
-/// Compiler-facing result of one canonical ZUIR verification run.
+/// Compiler-facing outcome of one canonical ZUIR verification run.
 ///
-/// This structure retains the original canonical report.
+/// The outcome preserves the original canonical report.
 ///
-/// It does not copy or reinterpret individual verification findings.
-///
-/// A caller must inspect `status()` or `is_valid()` before allowing
-/// the IR to proceed to a stage that requires verified input.
+/// An outcome is not automatically accepted. Call [`Self::into_result`]
+/// when the caller requires successful verification before proceeding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IrVerificationOutcome {
     point: VerificationPoint,
@@ -329,8 +428,8 @@ pub struct IrVerificationOutcome {
 impl IrVerificationOutcome {
     /// Construct an outcome from a canonical verification report.
     ///
-    /// This constructor is private because compiler callers must
-    /// obtain outcomes through the canonical verification entry point.
+    /// This constructor is private. Production outcomes must originate
+    /// from the canonical verification entry point.
     fn from_report(
         point: VerificationPoint,
         report: FullVerificationReport,
@@ -341,25 +440,19 @@ impl IrVerificationOutcome {
         }
     }
 
-    /// Return the compiler pipeline point associated with this run.
+    /// Return the pipeline point associated with this verification.
     #[must_use]
     pub const fn point(&self) -> VerificationPoint {
         self.point
     }
 
     /// Borrow the original canonical verification report.
-    ///
-    /// The report contains the authoritative findings, stages
-    /// completed, severity information, and verification status.
     #[must_use]
     pub fn report(&self) -> &FullVerificationReport {
         &self.report
     }
 
     /// Consume the outcome and return its canonical report.
-    ///
-    /// This is useful when an existing API stores
-    /// `FullVerificationReport` directly.
     #[must_use]
     pub fn into_report(self) -> FullVerificationReport {
         self.report
@@ -371,45 +464,81 @@ impl IrVerificationOutcome {
         self.report.status()
     }
 
-    /// Return true only when canonical verification completed
-    /// without errors or deferred findings.
-    ///
-    /// This is the acceptance decision for this verification boundary.
+    /// Return true only when canonical verification succeeded.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.status() == VerificationStatus::Valid
     }
 
-    /// Return true if the canonical verifier identified invalid IR.
+    /// Return true when canonical verification found invalid IR.
     #[must_use]
     pub fn is_invalid(&self) -> bool {
         self.status() == VerificationStatus::Invalid
     }
 
-    /// Return true if canonical verification was incomplete.
+    /// Return true when canonical verification was incomplete.
     #[must_use]
     pub fn is_incomplete(&self) -> bool {
         self.status() == VerificationStatus::Incomplete
     }
 
-    /// Return the number of canonical verification findings.
+    /// Return true when the report contains error findings.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.report.has_errors()
+    }
+
+    /// Return true when the report contains deferred findings.
+    #[must_use]
+    pub fn has_deferred_findings(&self) -> bool {
+        self.report.is_incomplete()
+    }
+
+    /// Return the total number of canonical findings.
     #[must_use]
     pub fn finding_count(&self) -> usize {
         self.report.issues().len()
     }
 
-    /// Return the verification stages completed by the canonical verifier.
+    /// Return the number of findings at the requested severity.
     #[must_use]
-    pub fn completed_stages(
+    pub fn count(
         &self,
-    ) -> &[crate::zuir::verify::VerificationStage] {
+        severity: VerificationSeverity,
+    ) -> usize {
+        self.report.count(severity)
+    }
+
+    /// Borrow the verification stages completed by the canonical verifier.
+    #[must_use]
+    pub fn completed_stages(&self) -> &[VerificationStage] {
         self.report.stages_completed()
     }
 
-    /// Return the verification integration API version.
+    /// Return the compiler IR verification API version.
     #[must_use]
     pub const fn api_version(&self) -> u16 {
         IR_VERIFICATION_API_VERSION
+    }
+
+    /// Require successful verification before proceeding.
+    ///
+    /// Invalid and incomplete reports are returned as structured errors.
+    /// The complete canonical report is preserved in the error.
+    ///
+    /// A successful result proves only the properties covered by the
+    /// canonical verifier. It does not prove target feasibility,
+    /// backend compatibility, or execution success.
+    pub fn into_result(
+        self,
+    ) -> Result<Self, IrVerificationError> {
+        match IrVerificationError::from_report(
+            self.point,
+            self.report.clone(),
+        ) {
+            Ok(()) => Ok(self),
+            Err(error) => Err(error),
+        }
     }
 }
 
@@ -422,44 +551,27 @@ impl IrVerificationOutcome {
 /// This function delegates the entire verification operation to
 /// `crate::zuir::verify::verify_full`.
 ///
-/// It does not implement or duplicate any verification algorithm.
+/// Invalid and incomplete reports are preserved in the returned outcome.
+/// Use [`verify_zuir_required`] when successful verification is mandatory.
 ///
-/// The supplied `FullVerificationInput` must describe one consistent,
-/// immutable snapshot of the program and all related IR entities.
+/// # Snapshot requirement
 ///
-/// # Acceptance
+/// All references inside `FullVerificationInput` must describe one
+/// consistent IR snapshot.
 ///
-/// A result is accepted only when:
-///
-///     outcome.status() == VerificationStatus::Valid
-///
-/// Invalid and incomplete reports are preserved and returned as
-/// outcomes so callers can inspect the canonical findings.
-///
-/// They are not converted into successful verification.
+/// The caller must not mutate the supplied data while verification runs.
+/// The borrowed input contract does not protect against interior mutability
+/// in caller-provided types.
 ///
 /// # Reverification
 ///
-/// Call this function again after any transformation that changes
-/// the IR and requires renewed verification.
+/// Call this function again after a transformation that changes the IR.
+/// Supply a new verification input describing the transformed snapshot.
 ///
-/// The caller must construct a new `FullVerificationInput` referring
-/// to the transformed IR snapshot.
+/// # Completeness
 ///
-/// # Important
-///
-/// A valid result proves only the properties currently checked by
-/// the canonical ZUIR verifier. It does not prove target feasibility,
-/// complete SSA legality, backend compatibility, or execution success.
-///
-/// # Arguments
-///
-/// * `input` - Complete canonical verification input.
-/// * `point` - Compiler pipeline point requesting verification.
-///
-/// # Returns
-///
-/// An `IrVerificationOutcome` preserving the canonical report.
+/// A valid result establishes only the properties covered by the canonical
+/// full ZUIR verifier. It is not a target or execution guarantee.
 #[must_use = "IR verification outcomes must be inspected"]
 pub fn verify_zuir(
     input: &FullVerificationInput<'_>,
@@ -470,58 +582,135 @@ pub fn verify_zuir(
     IrVerificationOutcome::from_report(point, report)
 }
 
+/// Verify canonical ZUIR and require successful verification.
+///
+/// Unlike [`verify_zuir`], this function rejects both Invalid and
+/// Incomplete outcomes.
+///
+/// The complete canonical report is retained in the error.
+///
+/// This is the preferred entry point for compiler stages that must not
+/// process unverified IR.
+pub fn verify_zuir_required(
+    input: &FullVerificationInput<'_>,
+    point: VerificationPoint,
+) -> Result<IrVerificationOutcome, IrVerificationError> {
+    verify_zuir(input, point).into_result()
+}
+
 // =============================================================================
-// PIPELINE-SPECIFIC ENTRY POINTS
+// PIPELINE ENTRY POINTS
 // =============================================================================
 
 /// Verify ZUIR entering the compiler IR pipeline.
 ///
-/// This is the normal entry point for `compiler::ir::input`.
+/// Invalid and incomplete reports remain inspectable in the outcome.
+/// Use `verify_zuir_required` with `CompilationInput` when admission
+/// requires successful verification.
 #[must_use = "IR verification outcomes must be inspected"]
 pub fn verify_compilation_input(
     input: &FullVerificationInput<'_>,
 ) -> IrVerificationOutcome {
-    verify_zuir(input, VerificationPoint::CompilationInput)
+    verify_zuir(
+        input,
+        VerificationPoint::CompilationInput,
+    )
 }
 
 /// Verify ZUIR after an optimization or transformation.
 ///
-/// The supplied input must describe the transformed IR snapshot,
-/// not the original pre-transformation snapshot.
-///
-/// A transformation must not reuse a stale verification input if
-/// the transformation changed any referenced IR entity.
+/// The supplied input must describe the transformed representation,
+/// not a stale pre-transformation snapshot.
 #[must_use = "IR verification outcomes must be inspected"]
 pub fn verify_after_transformation(
     input: &FullVerificationInput<'_>,
 ) -> IrVerificationOutcome {
-    verify_zuir(input, VerificationPoint::AfterTransformation)
+    verify_zuir(
+        input,
+        VerificationPoint::AfterTransformation,
+    )
 }
 
-/// Verify ZUIR immediately before representation lowering.
+/// Verify ZUIR before representation lowering.
 ///
-/// This is a target-independent IR check.
-///
-/// Lowering legality, conversion correctness, and target feasibility
-/// must still be established by their respective subsystems.
+/// This is target-independent IR verification. It does not replace
+/// conversion legality or target feasibility checks.
 #[must_use = "IR verification outcomes must be inspected"]
 pub fn verify_before_lowering(
     input: &FullVerificationInput<'_>,
 ) -> IrVerificationOutcome {
-    verify_zuir(input, VerificationPoint::BeforeLowering)
+    verify_zuir(
+        input,
+        VerificationPoint::BeforeLowering,
+    )
 }
 
-/// Verify ZUIR immediately before backend input construction.
+/// Verify ZUIR before backend input construction.
 ///
-/// This is not a replacement for backend-specific input validation.
-///
-/// The backend remains responsible for checking its accepted
-/// representation, ABI, target compatibility, and artifact contract.
+/// Backend-specific compatibility, ABI validation, and artifact
+/// verification remain separate responsibilities.
 #[must_use = "IR verification outcomes must be inspected"]
 pub fn verify_before_backend(
     input: &FullVerificationInput<'_>,
 ) -> IrVerificationOutcome {
-    verify_zuir(input, VerificationPoint::BeforeBackend)
+    verify_zuir(
+        input,
+        VerificationPoint::BeforeBackend,
+    )
+}
+
+// =============================================================================
+// STRICT PIPELINE ENTRY POINTS
+// =============================================================================
+
+/// Verify compiler input and reject invalid or incomplete IR.
+pub fn require_valid_compilation_input(
+    input: &FullVerificationInput<'_>,
+) -> Result<IrVerificationOutcome, IrVerificationError> {
+    verify_zuir_required(
+        input,
+        VerificationPoint::CompilationInput,
+    )
+}
+
+/// Verify transformed IR and reject invalid or incomplete IR.
+pub fn require_valid_transformation(
+    input: &FullVerificationInput<'_>,
+) -> Result<IrVerificationOutcome, IrVerificationError> {
+    verify_zuir_required(
+        input,
+        VerificationPoint::AfterTransformation,
+    )
+}
+
+/// Verify IR before lowering and reject invalid or incomplete IR.
+pub fn require_valid_before_lowering(
+    input: &FullVerificationInput<'_>,
+) -> Result<IrVerificationOutcome, IrVerificationError> {
+    verify_zuir_required(
+        input,
+        VerificationPoint::BeforeLowering,
+    )
+}
+
+/// Verify IR before backend construction and reject invalid or incomplete IR.
+pub fn require_valid_before_backend(
+    input: &FullVerificationInput<'_>,
+) -> Result<IrVerificationOutcome, IrVerificationError> {
+    verify_zuir_required(
+        input,
+        VerificationPoint::BeforeBackend,
+    )
+}
+
+// =============================================================================
+// API INFORMATION
+// =============================================================================
+
+/// Return the compiler IR verification integration API version.
+#[must_use]
+pub const fn api_version() -> u16 {
+    IR_VERIFICATION_API_VERSION
 }
 
 // =============================================================================
@@ -534,7 +723,11 @@ mod tests {
 
     #[test]
     fn verification_api_version_is_available() {
-        assert_eq!(IR_VERIFICATION_API_VERSION, 1);
+        assert_eq!(
+            api_version(),
+            IR_VERIFICATION_API_VERSION
+        );
+        assert_ne!(IR_VERIFICATION_API_VERSION, 0);
     }
 
     #[test]
@@ -551,22 +744,20 @@ mod tests {
     }
 
     #[test]
-    fn canonical_report_status_is_preserved() {
+    fn strict_conversion_accepts_only_valid_reports() {
         let report = FullVerificationReport::default();
 
         let outcome = IrVerificationOutcome::from_report(
             VerificationPoint::CompilationInput,
-            report.clone(),
+            report,
         );
 
-        assert_eq!(outcome.report(), &report);
-        assert_eq!(outcome.status(), report.status());
-        assert_eq!(outcome.is_valid(), report.is_valid());
-        assert_eq!(outcome.finding_count(), report.issues().len());
+        assert!(outcome.is_valid());
+        assert!(outcome.into_result().is_ok());
     }
 
     #[test]
-    fn outcome_preserves_verification_point() {
+    fn outcome_preserves_its_verification_point() {
         let outcome = IrVerificationOutcome::from_report(
             VerificationPoint::AfterTransformation,
             FullVerificationReport::default(),
@@ -579,7 +770,7 @@ mod tests {
     }
 
     #[test]
-    fn outcome_can_return_the_original_report() {
+    fn canonical_report_is_preserved() {
         let report = FullVerificationReport::default();
 
         let outcome = IrVerificationOutcome::from_report(
@@ -587,11 +778,20 @@ mod tests {
             report.clone(),
         );
 
-        assert_eq!(outcome.into_report(), report);
+        assert_eq!(outcome.report(), &report);
+        assert_eq!(outcome.status(), report.status());
+        assert_eq!(
+            outcome.finding_count(),
+            report.issues().len()
+        );
+        assert_eq!(
+            outcome.completed_stages(),
+            report.stages_completed()
+        );
     }
 
     #[test]
-    fn completed_stages_are_exposed_from_canonical_report() {
+    fn outcome_can_return_the_original_report() {
         let report = FullVerificationReport::default();
 
         let outcome = IrVerificationOutcome::from_report(
@@ -599,9 +799,51 @@ mod tests {
             report.clone(),
         );
 
-        assert_eq!(
-            outcome.completed_stages(),
-            report.stages_completed()
+        assert_eq!(outcome.into_report(), report);
+    }
+
+    #[test]
+    fn verification_error_classifications_are_distinct() {
+        assert_ne!(
+            IrVerificationErrorKind::InvalidIr,
+            IrVerificationErrorKind::IncompleteVerification
         );
+    }
+
+    #[test]
+    fn error_display_is_structured() {
+        let report = FullVerificationReport::default();
+
+        let error = IrVerificationError {
+            point: VerificationPoint::BeforeLowering,
+            kind: IrVerificationErrorKind::InvalidIr,
+            report,
+        };
+
+        assert!(error.to_string().contains("IR verification failed"));
+        assert!(error.to_string().contains("BeforeLowering"));
+        assert!(error.is_invalid());
+        assert!(!error.is_incomplete());
+    }
+
+    #[test]
+    fn error_preserves_the_canonical_report() {
+        let report = FullVerificationReport::default();
+
+        let error = IrVerificationError {
+            point: VerificationPoint::BeforeBackend,
+            kind: IrVerificationErrorKind::IncompleteVerification,
+            report: report.clone(),
+        };
+
+        assert_eq!(error.report(), &report);
+        assert_eq!(error.into_report(), report);
+    }
+
+    #[test]
+    fn error_implements_standard_error_trait() {
+        fn accepts_error<E: Error>() {}
+
+        accepts_error::<IrVerificationError>();
     }
 }
