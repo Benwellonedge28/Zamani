@@ -1,4 +1,4 @@
-Zamani Compiler — Portability Contract
+Zamani Compiler — Production Portability Contract
 
 Canonical path: "src/compiler/documentation/PORTABILITY_CONTRACT.md"
 
@@ -6,19 +6,29 @@ Repository: "github.com/Benwellonedge28/Zamani"
 
 Subsystem: "src/compiler/"
 
-Document type: Normative compiler architecture and integration contract
+Document ID: "ZAMANI-COMPILER-PORTABILITY"
 
-Status: Proposed production contract; implementation conformance must be demonstrated independently.
+Contract version: 1.0.0
 
-Rust baseline: Rust 1.97 or later, edition 2021. The grammar architecture specifies Rust 1.97.1 or later; the repository must maintain a consistent minimum-version policy.
+Document role: Normative compiler architecture, portability, integration and conformance contract.
 
-Safety: Safe Rust only. No "unsafe".
+Implementation status: This document establishes the required production contract. Compliance must be demonstrated by implementation and tests; documentation alone does not establish production readiness.
+
+Rust edition: 2021.
+
+Minimum Rust version: 1.97, consistent with the current "Cargo.toml" declaration. The crate documentation must be reconciled with this baseline.
+
+Memory safety: Safe Rust only. "unsafe" Rust is prohibited.
 
 Primary objective:
 
 "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever (POCO-REAF)"
 
-Scalability objective: Support the smallest meaningful computation through arbitrarily large finite workloads, constrained by actual available resources, program semantics, implementation capabilities and explicit operational policies, never by arbitrary universal hardware ceilings.
+Scalability objective:
+
+Support the smallest meaningful computation through arbitrarily large finite computations and deployments, subject to actual resource availability, implementation capabilities, representation constraints, program semantics and explicitly configured operational budgets.
+
+The language and compiler MUST NOT impose arbitrary universal hardware-capacity ceilings.
 
 ---
 
@@ -26,177 +36,244 @@ Scalability objective: Support the smallest meaningful computation through arbit
 
 This document establishes the production portability contract for the Zamani compiler.
 
-Its purpose is to ensure that programs written in Zamani can preserve their declared semantic meaning while being compiled, transformed, optimized, packaged and realized across different computing environments.
+It defines how the compiler must preserve the semantic meaning of Zamani programs while supporting compilation, transformation, optimization, packaging and realization across different computational environments.
 
-The compiler must support a unified programming model encompassing:
+The portability contract applies to:
 
 - Classical computing.
 - Systems programming.
 - Parallel and concurrent computing.
-- Distributed computing.
 - Scientific and numerical computing.
+- AI and machine learning.
+- Deep learning and neural networks.
 - Tensor computation.
-- Artificial intelligence.
-- Machine learning and deep learning.
 - Symbolic and probabilistic computation.
 - Quantum computing.
-- Hybrid quantum-classical computing.
-- Quantum error correction integration.
-- Hardware description and hardware/software co-design.
-- FPGA and ASIC realization.
-- GPU and other accelerators.
-- Neuromorphic computing.
-- Photonic and optical computing.
+- Quantum simulation.
+- Quantum-classical hybrid computation.
+- Quantum error-correction integration.
+- Hardware description languages.
+- Hardware/software co-design.
+- FPGA and ASIC synthesis.
+- GPU and other accelerator computation.
+- Neuromorphic computation.
+- Photonic and optical computation.
+- Distributed computing.
 - Networking.
 - Cryptographic computation.
 - Embedded and edge computing.
 - Cloud and high-performance computing.
 - Future computational architectures.
 
-These must remain domains of one programming language.
+These are domains of one programming language.
 
-The compiler must not introduce separate, incompatible language semantics for different hardware classes.
+The compiler MUST NOT introduce separate, incompatible language semantics for different hardware families.
 
-The fundamental rule is:
+The fundamental principle is:
 
-Zamani source code describes computation and its semantic requirements. The compiler and downstream execution infrastructure determine how that computation can be realized.
+Zamani source code defines computational meaning. The compiler determines valid representations and realization strategies. The backend and runtime infrastructure realize those computations using actual compatible resources.
 
-The compiler must preserve that distinction throughout its entire lifecycle.
+The compiler MUST preserve this separation throughout its entire lifecycle.
 
-2. Normative language
+2. Normative terminology
 
-The following terminology is normative:
+The following terms have normative meanings.
 
-- MUST: Mandatory.
-- MUST NOT: Prohibited.
-- SHOULD: Recommended unless a documented reason exists otherwise.
-- SHOULD NOT: Discouraged.
-- MAY: Optional.
-- CAN: Describes a capability rather than an obligation.
+Term| Meaning
+MUST| Mandatory requirement
+MUST NOT| Prohibited behavior
+REQUIRED| Mandatory requirement
+SHOULD| Recommended unless a documented reason justifies deviation
+SHOULD NOT| Discouraged unless a documented reason justifies deviation
+MAY| Permitted behavior
+CAN| Capability statement
+PORTABLE| Satisfies an explicitly established portability contract
+TARGET-INDEPENDENT| Does not unnecessarily depend on a particular target realization
+TARGET-SPECIFIC| Explicitly associated with a particular realization
+REALIZATION| Implementation of validated computation for an execution environment
+FEASIBILITY| Evidence-based determination that a proposed realization can satisfy its requirements
+UNKNOWN| Insufficient evidence to establish a property
+VERIFICATION| Validation performed by the appropriate authoritative verifier
+POCO-REAF| Program Once, Compile Once, Run Everywhere, Anywhere, Forever
 
-A compiler implementation that violates a MUST or MUST NOT requirement is not conformant with this contract.
+A requirement in this document MUST NOT be interpreted as proof that the corresponding implementation already exists.
 
-3. Architectural authorities
+3. Architectural authority
 
-This document is subordinate to the repository's established language and architectural authorities.
+This document is a compiler-facing contract.
 
-The authority relationship is:
+It does not replace the language specifications, grammar, semantic implementation, intermediate representations, backends or runtime.
+
+3.1 Repository authorities
 
 Authority| Responsibility
 "grammar/DESIGN.md"| Grammar architecture and ownership
-"grammar/specification/"| Normative language semantics
-"grammar/spec/portability.md"| Formal portability semantics
-"grammar/spec/resources.md"| Resource semantics
-"grammar/specification/poco-reaf.md"| POCO-REAF language objective
-"grammar/specification/scalability-model.md"| Language scalability semantics
-"grammar/validation/portability.md"| Grammar and semantic portability validation
-"grammar/validation/semantic-boundaries.md"| Semantic ownership boundaries
 "grammar/Zamani.g4"| Canonical ANTLR composition root
-"grammar/antlr/ZamaniLexer.g4"| Canonical lexer boundary
-"grammar/antlr/ZamaniParser.g4"| Canonical parser boundary
+"grammar/resources/portability.g4"| Source-level portability syntax
+"grammar/compile/target.g4"| Source-level target intent
+"grammar/compile/target-selection.g4"| Source-level target-selection intent
+"grammar/specification/portability.md"| Normative language portability specification
+"grammar/spec/portability.md"| Formal portability semantic contract
+"grammar/spec/resources.md"| Resource semantics
+"grammar/spec/determinism.md"| Determinism and reproducibility semantics
+"grammar/spec/compatibility.md"| Compatibility and migration semantics
+"grammar/specification/semantic-model.md"| Canonical semantic model
+"grammar/specification/poco-reaf.md"| POCO-REAF language objective
+"grammar/specification/scalability-model.md"| Language scalability requirements
+"grammar/validation/portability.md"| Portability validation requirements
+"grammar/validation/semantic-boundaries.md"| Semantic ownership boundaries
+"src/frontend/"| Canonical frontend implementation
+"src/frontend/semantic/"| Semantic authority
+"src/zuir/"| Universal intermediate representation
+"src/classical/"| Classical computation authority
+"src/quantum/ir/"| Canonical quantum IR
+"src/hdl/hdlir/"| Hardware-description IR
+"src/ai/"| AI computation authority
+"src/hybrid/"| Hybrid computation authority
+"src/distributed/"| Distributed computation authority
+"src/backend/"| Backend implementation authority
+"src/runtime/"| Runtime and physical execution authority
 
-The compiler consumes these contracts.
+The compiler integrates these authorities.
 
-It MUST NOT independently redefine their language semantics.
+It MUST NOT recreate their responsibilities.
 
-When a conflict is discovered, the compiler implementation must not silently invent a resolution. The responsible specification authority must resolve the conflict through a reviewed and versioned change.
+3.2 Conflict resolution
 
-4. Ownership
+When a conflict is discovered:
 
-4.1 What this document owns
+1. Identify the authoritative subsystem responsible for the conflicting concept.
+2. Record the conflicting definitions and affected interfaces.
+3. Do not silently select whichever implementation is easiest.
+4. Resolve the conflict through the responsible specification and architecture owners.
+5. Version incompatible contract changes.
+6. Update affected implementations and conformance tests.
 
-This document owns the compiler-facing portability contract, including:
+A compiler implementation MUST NOT silently redefine source-language semantics.
 
-1. Portable compilation semantics.
-2. Target-independent compilation.
-3. Portable intermediate representations.
-4. Portability-preserving transformations.
-5. Portable compilation artifacts.
-6. Target-specific realization boundaries.
-7. Portability classification integration.
-8. Capability and requirement preservation.
-9. Cross-target semantic equivalence.
-10. Portability evidence requirements.
-11. Compilation compatibility.
-12. Portable artifact versioning requirements.
-13. Portability diagnostics.
-14. Portability conformance testing.
-15. Future-backend compatibility requirements.
-16. POCO-REAF compiler integration.
+4. Portability ownership
 
-4.2 What this document does not own
+4.1 What this contract owns
+
+This document owns the compiler-facing rules for:
+
+- Semantic portability preservation.
+- Target-independent compilation.
+- Portable representation integration.
+- Portability-preserving transformations.
+- Portable compilation artifacts.
+- Target-specific realization boundaries.
+- Portability evidence requirements.
+- Capability and requirement preservation.
+- Cross-target semantic conformance.
+- Artifact compatibility.
+- Reproducible compilation requirements.
+- Portability diagnostics.
+- POCO-REAF compiler integration.
+- Portability classification integration.
+- Portability testing.
+- Portability-related failure handling.
+
+4.2 What this contract does not own
 
 It does not own:
 
 - Source grammar.
-- Lexical rules.
-- Parsing.
+- Lexer implementation.
+- Parser implementation.
 - AST definitions.
-- Source-language semantics.
-- Type-system definitions.
+- Source-level type semantics.
+- Source-level effect semantics.
 - Ownership semantics.
 - Resource semantics.
-- Capability semantics.
+- Capability definitions.
 - Canonical IR definitions.
-- Optimization algorithms.
-- Physical hardware discovery.
-- Device allocation.
+- Domain-specific optimization algorithms.
+- Hardware discovery.
+- Physical resource allocation.
 - Physical placement.
 - Runtime scheduling.
 - Quantum routing.
-- Quantum error correction algorithms.
+- Quantum error correction.
 - Noise modeling.
+- ZQN implementation.
 - HAL implementation.
 - Backend code generation.
 - Physical execution.
 
-Those responsibilities remain with their existing repository authorities.
+These responsibilities remain with their established repository authorities.
 
 5. Fundamental portability definition
 
-Portability is the preservation of the declared semantic contract of a program while its implementation realization changes.
+Portability is the preservation of the declared semantic contract of a program while its realization changes.
 
 Let:
 
-- (P) represent the validated semantic program.
-- (E) represent an execution environment.
-- (R) represent a realization strategy.
-- (O) represent observable program behavior.
+- P = Validated Zamani program.
+- S(P) = Specified semantic meaning.
+- E = Execution environment.
+- C(E) = Capabilities available in the environment.
+- R(E) = Resources available in the environment.
+- K(P) = Program constraints.
+- Q(P) = Applicable policies.
+- L = Selected realization strategy.
+- O = Observable program behavior.
 
 A realization is:
 
-[
-\operatorname{Realize}(P,E,R)\rightarrow O
-]
+"Realize(S(P), E, L) -> O"
 
-Two realizations are portable equivalents when they preserve the required observable semantics:
+A realization is valid only if it preserves the required semantic properties of the original program.
 
-[
-\operatorname{Realize}(P,E_1,R_1)
-\equiv_{\mathrm{semantic}}
-\operatorname{Realize}(P,E_2,R_2)
-]
+For two environments:
 
-The physical implementations may differ substantially.
+"Realize(S(P), E1, L1)"
+
+and
+
+"Realize(S(P), E2, L2)"
+
+the realizations are portable equivalents when both satisfy the same applicable source-level semantic contract.
+
+The physical implementations may differ.
 
 For example:
 
-- One realization may use a CPU.
-- Another may use a GPU.
-- Another may use an FPGA.
-- Another may use a quantum processor.
-- Another may distribute the workload across multiple machines.
-- Another may use an architecture introduced in the future.
+- CPU instructions may differ.
+- Memory layouts may differ.
+- Parallel decomposition may differ.
+- Device selection may differ.
+- Quantum gate decomposition may differ.
+- Physical qubit mappings may differ.
+- FPGA synthesis may differ.
+- Distributed placement may differ.
+- Network topology may differ.
+- Scheduling may differ.
 
-The implementation may change.
+However, the implementation MUST NOT silently violate the program's specified observable behavior.
 
-The required program semantics must not change.
+The equivalence test MUST account for:
 
-The equivalence relation must account for the language's actual observable-behavior contract, including permitted nondeterminism, floating-point rules, concurrency, effects, timing requirements and quantum measurement behavior.
+- Types.
+- Effects.
+- Ownership.
+- Memory safety.
+- Numerical semantics.
+- Floating-point guarantees.
+- Concurrency semantics.
+- Ordering requirements.
+- Communication semantics.
+- Quantum state and measurement semantics.
+- Hardware-description semantics.
+- Explicit approximation contracts.
+- Explicit nondeterminism.
+- Security and correctness guarantees.
 
-The compiler must not assume that all computational domains have identical execution semantics.
+Portability does not require identical internal implementations.
 
-6. POCO-REAF interpretation
+6. POCO-REAF contract
+
+6.1 Definition
 
 POCO-REAF means:
 
@@ -207,748 +284,236 @@ The compiler must make this objective technically meaningful.
 It requires:
 
 1. One canonical source-language meaning.
-2. Target-independent semantic representation.
-3. Stable canonical IR contracts.
+2. One authoritative semantic model.
+3. Stable canonical representation contracts.
 4. Explicit capability requirements.
 5. Explicit resource requirements.
-6. Portable transformations.
-7. Versioned compilation artifacts.
+6. Semantics-preserving transformations.
+7. Portable compilation artifacts.
 8. Extensible backend realization.
-9. Target-independent artifact metadata.
-10. Reproducible compilation.
-11. Cross-target conformance.
+9. Reproducible compilation.
+10. Cross-target conformance.
+11. Compatibility and migration guarantees.
 12. Preservation of observable semantics.
 
-6.1 Compile-once boundary
+6.2 Meaning of Compile Once
 
-The compiler should support the following architecture:
+Compile Once MUST NOT be interpreted as requiring one native executable binary to execute directly on every conceivable architecture.
 
-                 ZAMANI SOURCE
-                       |
-                       v
-                LEXICAL ANALYSIS
-                       |
-                       v
-                    PARSING
-                       |
-                       v
-                 CANONICAL AST
-                       |
-                       v
-               SEMANTIC ANALYSIS
-                       |
-                       v
-             VALIDATED SEMANTIC MODEL
-                       |
-                       v
-                CANONICAL IR
-                       |
-                       v
-            PORTABLE COMPILATION ARTIFACT
-                       |
-              +--------+---------+
-              |        |         |
-              v        v         v
-             CPU      GPU       FPGA
-              |        |         |
-              +--------+---------+
-                       |
-                       v
-               OTHER TARGETS
-                       |
-                       v
-                FUTURE TARGETS
+The compiler must distinguish:
 
-A portable compilation artifact must be reusable for subsequent target realization without requiring source rewriting.
+Canonical compilation
 
-However, the compiler must distinguish a portable artifact from a target-specific executable.
+The source program is parsed, semantically validated and converted into canonical representations.
 
-A portable IR package is not automatically an executable binary.
+Portable compilation output
 
-A target-specific backend may need to perform lowering, legalization, specialization or code generation.
+A verified representation or artifact retains sufficient semantic information for subsequent compatible realization.
 
-This does not invalidate POCO-REAF.
+Target realization
 
-The objective is to avoid recompiling the source-language meaning unnecessarily, not to promise that one physical machine-code binary can execute natively on every architecture.
+A backend may perform target-specific lowering, legalization, specialization, code generation or packaging.
 
-6.2 What POCO-REAF does not promise
+The intended architecture is:
+
+             ZAMANI SOURCE
+                    |
+                    v
+              FRONTEND
+                    |
+                    v
+           SEMANTIC VALIDATION
+                    |
+                    v
+        CANONICAL SEMANTIC MODEL
+                    |
+                    v
+          CANONICAL DOMAIN IRs
+                    |
+                    v
+           VERIFIED PORTABLE IR
+                    |
+                    v
+          PORTABLE ARTIFACT PACKAGE
+                    |
+          +---------+---------+
+          |         |         |
+          v         v         v
+         CPU       GPU       FPGA
+          |         |         |
+          v         v         v
+        TARGET-SPECIFIC REALIZATION
+                    |
+                    v
+               EXECUTION
+
+A portable artifact should be reusable for subsequent compatible target realizations without requiring developers to rewrite the original source program or unnecessarily repeat source-level semantic analysis.
+
+Target-specific code generation may still be required.
+
+6.3 What POCO-REAF does not promise
 
 POCO-REAF does not promise:
 
 - Infinite physical memory.
-- Infinite processors.
-- Infinite processing speed.
+- Infinite processing capacity.
+- Infinite execution time.
 - Universal hardware capabilities.
-- Identical performance across machines.
-- Identical physical execution strategies.
-- Guaranteed availability of every requested accelerator.
-- Automatic realization of unsupported operations.
+- Identical performance on every machine.
+- Identical native binaries on every architecture.
+- Automatic execution of unsupported operations.
+- Guaranteed availability of every accelerator.
+- Guaranteed physical resource reservations.
+- Automatic semantic degradation when requirements cannot be met.
 
-It promises an architecture that does not unnecessarily bind program meaning to today's physical machines.
+A program requiring a quantum capability cannot be assumed executable on a CPU without an explicitly supported simulator or alternative realization preserving its required semantics.
 
-7. Portability architecture
+An HDL artifact is not automatically a native executable.
 
-The compiler must implement or integrate the following logical stages.
+A target-independent IR is not automatically a physical hardware implementation.
 
-SOURCE
-  |
-  v
-FRONTEND
-  |
-  v
-SEMANTIC VALIDATION
-  |
-  v
-CANONICAL REPRESENTATIONS
-  |
-  v
-PORTABILITY ANALYSIS
-  |
-  v
-IR VERIFICATION
-  |
-  v
-PORTABLE TRANSFORMATIONS
-  |
-  v
-OPTIMIZATION
-  |
-  v
-CAPABILITY ANALYSIS
-  |
-  v
-FEASIBILITY ANALYSIS
-  |
-  v
-HETEROGENEOUS PLANNING
-  |
-  v
-DOMAIN-SPECIFIC LOWERING
-  |
-  v
-BACKEND REALIZATION
-  |
-  v
-ARTIFACT VALIDATION
-  |
-  v
-LINKING AND PACKAGING
-  |
-  v
-DEPLOYMENT
-  |
-  v
-RUNTIME
+7. Portability dimensions
 
-Each stage has a distinct responsibility.
+The compiler MUST distinguish the following portability dimensions.
 
-Stage| Responsibility
-Frontend| Produce canonical AST
-Semantic analysis| Establish program meaning
-Canonical IR| Represent computation
-Portability analysis| Establish portability properties and dependencies
-Verification| Validate semantic and representation invariants
-Transformation| Preserve meaning while changing representation
-Optimization| Improve implementation quality without changing required behavior
-Capability analysis| Determine required and available capabilities
-Feasibility analysis| Determine whether a realization satisfies requirements
-Planning| Produce abstract realization plans
-Lowering| Transform representations for a supported target
-Backend| Produce target-specific outputs
-Artifact validation| Verify artifact structure and integrity
-Linking| Resolve dependencies and composition
-Runtime| Execute and manage actual resources
+Dimension| Contract
+Source portability| The same source can be accepted by compatible language implementations.
+Semantic portability| The specified meaning remains preserved.
+IR portability| Compatible canonical representations can be transported and validated.
+Artifact portability| Compilation artifacts can be consumed by compatible implementations.
+Realization portability| A compatible backend can derive a valid target-specific implementation.
+Execution portability| The program can execute in an environment satisfying its requirements.
 
-The compiler must not collapse these responsibilities into one large orchestration function.
+These dimensions are related but independent.
 
-8. Repository integration contracts
+A program may have source and semantic portability while requiring a particular class of execution capability.
 
-The following existing files and subsystems are authoritative integration points.
+A portable IR artifact may not be directly executable.
 
-8.1 Compiler composition root
+A target-specific executable may be valid but not portable to another architecture.
 
-File: "src/compiler/mod.rs"
+The compiler MUST NOT collapse these dimensions into one boolean.
 
-Responsibilities:
+8. Portability classifications
 
-- Expose the compiler's canonical module hierarchy.
-- Establish compiler-level integration boundaries.
-- Preserve existing public APIs.
-- Coordinate compilation without duplicating domain authorities.
-- Integrate artifact portability.
-- Expose the compiler's portability-related contracts through the appropriate modules.
+The existing canonical classification authority is:
 
-Required integration:
+"src/compiler/artifacts/portability.rs"
 
-pub mod artifacts;
+No second competing "PortabilityClass" enum may be introduced.
 
-The current compiler root must explicitly expose the existing artifact subsystem.
-
-The integration must use:
-
-crate::compiler::artifacts
-
-as the canonical compiler artifact boundary.
-
-Do not create a second artifact module or portability implementation.
-
-The compiler root must remain independent of particular hardware vendors.
-
-8.2 Artifact portability
-
-File: "src/compiler/artifacts/portability.rs"
-
-This file already implements:
-
-- Portability authority identifiers.
-- Evidence references.
-- Portability declarations.
-- Portability classifications.
-- Artifact portability assessments.
-- Manifest portability assessments.
-- Portability policies.
-- Structured errors.
-
-It is the canonical compiler artifact portability implementation.
-
-Required extensions and integration:
-
-1. Preserve its existing public API unless a reviewed compatibility migration is approved.
-2. Ensure all artifact assessments distinguish declaration from verification.
-3. Require appropriate evidence for verified portability.
-4. Preserve explicit target dependencies.
-5. Support open-ended computing domains.
-6. Support future architecture identifiers.
-7. Preserve resource and capability dependencies.
-8. Distinguish unknown evidence from negative evidence.
-9. Integrate with artifact validation.
-10. Integrate with compiler-level portability diagnostics.
-11. Support target-independent and target-specific artifact relationships.
-12. Preserve deterministic assessment behavior.
-13. Ensure policy rejection never silently converts an artifact into another portability class.
-
-Important:
-
-This module records evidence and classifications. It does not independently authenticate an external attestation or prove that a backend is correct.
-
-Those responsibilities belong to their authoritative verification and trust systems.
-
-8.3 Artifact model
-
-File: "src/compiler/artifacts/artifact.rs"
-
-Owns:
-
-- Artifact identity.
-- Artifact descriptors.
-- Artifact kinds.
-- Artifact formats.
-- Artifact payloads.
-- Payload references.
-- Content digests.
-- Target references.
-- Producer identity.
-- Provenance.
-
-Required portability integration:
-
-An artifact must be able to describe whether it represents:
-
-- Portable canonical computation.
-- Portable intermediate representation.
-- Domain-specific intermediate representation.
-- Target-specific intermediate representation.
-- Target-specific executable.
-- Hardware configuration.
-- Deployment package.
-- Hybrid deployment bundle.
-- Other registered artifact categories.
-
-These must be extensible identifiers, not a permanently closed inventory of hardware categories.
-
-Artifact identity must not be confused with target identity.
-
-Content integrity must not be confused with semantic correctness.
-
-A valid digest does not prove portability.
-
-8.4 Artifact manifests
-
-File: "src/compiler/artifacts/manifest.rs"
-
-Owns:
-
-- Artifact collections.
-- Manifest identity.
-- Manifest versions.
-- Dependency relationships.
-- Artifact roots.
-- Manifest structural validation.
-
-Required integration:
-
-A portable compilation manifest must be capable of describing:
-
-- Canonical IR dependencies.
-- Domain IR dependencies.
-- Compiler compatibility requirements.
-- Semantic-model compatibility.
-- Capability requirements.
-- Resource requirements.
-- Artifact provenance.
-- Verification evidence references.
-- Optional target-specific realizations.
-- External payload references.
-- Cross-domain dependencies.
-
-A manifest must not claim that every referenced artifact is executable.
-
-The distinction between portable and realized artifacts must remain explicit.
-
-8.5 Artifact metadata
-
-File: "src/compiler/artifacts/metadata.rs"
-
-Owns:
-
-- Namespaced metadata.
-- Metadata access.
-- Metadata validation.
-- Metadata merging.
-- Configurable metadata policies.
-
-Required integration:
-
-Portable metadata must not silently encode physical target assumptions.
-
-Target-specific metadata must be explicitly identifiable.
-
-Metadata must distinguish:
-
-- Compiler information.
-- Language information.
-- Semantic information.
-- IR information.
-- Backend information.
-- Target information.
-- Portability information.
-- Provenance information.
-- Verification information.
-
-Unknown metadata namespaces must remain extensible subject to explicit validation policy.
-
-8.6 Artifact validation
-
-File: "src/compiler/artifacts/validation.rs"
-
-Owns artifact and manifest validation.
-
-The existing implementation distinguishes:
-
-- Valid.
-- Invalid.
-- Incomplete.
-
-These distinctions are mandatory for portability.
-
-Required validation sequence:
-
-DECODE
-  |
-  v
-STRUCTURAL VALIDATION
-  |
-  v
-CONTENT INTEGRITY
-  |
-  v
-PROVENANCE VALIDATION
-  |
-  v
-IR VERIFICATION
-  |
-  v
-PORTABILITY ASSESSMENT
-  |
-  v
-SECURITY VALIDATION
-  |
-  v
-BACKEND / TARGET COMPATIBILITY
-
-Only applicable checks should be required for a particular artifact kind.
-
-A deferred check must not be represented as successful verification.
-
-An external payload that has not been retrieved and verified must remain explicitly unresolved.
-
-A successfully decoded artifact must not automatically be considered safe to execute.
-
-8.7 Artifact serialization
-
-File: "src/compiler/artifacts/serialization.rs"
-
-Owns the stable wire representation of artifacts and manifests.
-
-Required integration:
-
-- Preserve serialization format versioning.
-- Preserve deterministic encoding.
-- Preserve strict decoding.
-- Preserve configurable input and output budgets.
-- Preserve external payload references.
-- Reject unsupported format versions.
-- Validate decoded structures.
-- Maintain forward compatibility through explicit schema evolution.
-
-The serialization format version must remain independent of:
-
-- Zamani language version.
-- Compiler version.
-- Semantic-model version.
-- ZUIR version.
-- Domain IR versions.
-- Backend version.
-- Runtime version.
-
-Large payloads should use external payload references when appropriate rather than requiring all content to be loaded into compiler memory.
-
-8.8 Existing hybrid compiler
-
-File: "src/compiler/hybrid_pipeline.rs"
-
-Required integration:
-
-The hybrid compilation path must preserve portability across domain boundaries.
-
-It must support:
-
-- Classical-to-quantum dependencies.
-- Quantum-to-classical dependencies.
-- AI-to-classical dependencies.
-- AI-to-quantum dependencies.
-- HDL-to-software dependencies.
-- Distributed computation.
-- Cross-domain data exchange.
-- Synchronization requirements.
-- Resource dependencies.
-- Capability requirements.
-- Domain-specific verification.
-
-The compiler must not invent a second hybrid semantic model.
-
-The authoritative hybrid subsystem and canonical IR implementations remain responsible for their respective representations.
-
-8.9 Hybrid profiles
-
-File: "src/compiler/hybrid_profiles.rs"
-
-Required integration:
-
-Profiles must not become hidden hardware ceilings.
-
-They may describe:
-
-- Optimization objectives.
-- Compilation characteristics.
-- Execution preferences.
-- Expected workload properties.
-- Measured performance.
-- Energy characteristics.
-- Domain-specific policies.
-
-Profiles must be versioned and extensible.
-
-A profile is not proof of target feasibility.
-
-8.10 Hardware partitioning
-
-File: "src/compiler/hardware_partitioner.rs"
-
-Required integration:
-
-The partitioner must use explicit capability and requirement information.
-
-It must support heterogeneous partitioning rather than assume that one device category represents all computation.
-
-It must consider:
-
-- Operation compatibility.
-- Data dependencies.
-- Communication costs.
-- Memory locality.
-- Synchronization.
-- Resource requirements.
-- Capability requirements.
-- Latency.
-- Throughput.
-- Energy.
-- Feasibility.
-- Alternative realizations.
-
-It must return explicit infeasibility information.
-
-It must not allocate physical devices or assume that a planned device is available.
-
-Physical allocation belongs to the appropriate runtime and resource-management authorities.
-
-8.11 Compiler linking
-
-File: "src/compiler/linker.rs"
-
-Required integration:
-
-- Portable module composition.
-- Symbol compatibility.
-- Domain dependency validation.
-- Target-specific relocation.
-- ABI compatibility.
-- Artifact dependency resolution.
-- Hybrid bundle composition.
-- Version compatibility.
-- Explicit unsupported-linkage diagnostics.
-
-Linking must not erase portability metadata or provenance.
-
-8.12 Incremental compilation
-
-File: "src/compiler/incremental.rs"
-
-Required integration:
-
-Portable cache identities must distinguish semantic inputs from target-specific realization inputs.
-
-A portable compilation cache key should include the relevant:
-
-- Source identity.
-- Language version.
-- Semantic contract version.
-- Canonical IR version.
-- Compiler transformation configuration.
-- Dependency fingerprints.
-- Relevant optimization policy.
-
-A target-specific realization cache must additionally include the relevant:
-
-- Target descriptor version.
-- Backend identity and version.
-- ABI.
-- Target features.
-- Lowering configuration.
-
-A physical device identifier must not unnecessarily contaminate a target-independent cache key.
-
-Cache reuse must never bypass required verification.
-
-8.13 Compiler diagnostics
-
-File: "src/compiler/diagnostics.rs"
-
-Required integration:
-
-Portability failures must be structured and machine-readable.
-
-Diagnostics must distinguish:
-
-- Semantic invalidity.
-- Missing capability.
-- Insufficient resources.
-- Target incompatibility.
-- Unsupported lowering.
-- Missing portability evidence.
-- Invalid portability declaration.
-- Artifact incompatibility.
-- Unsupported serialization version.
-- Security rejection.
-- Incomplete validation.
-- Operational resource exhaustion.
-
-Diagnostics must preserve source locations and provenance where available.
-
-8.14 LLVM and WebAssembly
-
-Existing files:
-
-- "src/compiler/llvm_backend.rs"
-- "src/compiler/wasm_backend.rs"
-- "src/compiler/wasm_cfg.rs"
-
-Required integration:
-
-These must remain backend-specific implementations.
-
-They must consume the compiler's established IR and portability contracts.
-
-They must not define competing portable semantic models.
-
-Their outputs must accurately identify whether they are:
-
-- Intermediate representations.
-- Object files.
-- Executables.
-- Libraries.
-- WebAssembly modules.
-- Other explicitly identified formats.
-
-The compiler must not claim that a generated source file or manifest is an executable artifact.
-
-9. Canonical IR portability
-
-The compiler must integrate existing IR authorities.
-
-Representation| Canonical owner
-Universal IR| "src/zuir/"
-Classical IR| "src/classical/"
-Quantum IR| "src/quantum/ir/"
-HDL/hardware IR| "src/hdl/hdlir/"
-AI computation| "src/ai/"
-Hybrid composition| "src/hybrid/"
-Distributed computation| "src/distributed/"
-
-The compiler must not introduce competing representations.
-
-9.1 Universal IR
-
-ZUIR is the universal representation boundary.
-
-It must preserve the semantics and relationships necessary for subsequent realization.
-
-The compiler consumes and coordinates ZUIR.
-
-It must not create another universal IR.
-
-9.2 Classical IR
-
-Classical computation must use the existing classical IR authority.
-
-CPU, GPU and accelerator specialization must not redefine classical source semantics.
-
-9.3 Quantum IR
-
-"src/quantum/ir/" remains the canonical quantum IR boundary.
-
-The compiler must preserve:
-
-- Logical quantum state semantics.
-- Quantum operation semantics.
-- Measurement semantics.
-- Classical control dependencies.
-- Quantum resource requirements.
-- Required ordering.
-- Applicable effects.
-
-Physical qubit mapping, routing, scheduling, QEC and noise handling remain downstream.
-
-The compiler must not turn physical qubit identifiers into universal source-level semantics.
-
-9.4 HDL and hardware IR
-
-Hardware intent must remain distinct from physical implementation.
-
-The compiler must preserve the canonical HDL/hardware representation.
-
-It must not impose universal limits on:
-
-- Signal counts.
-- Register counts.
-- Port counts.
-- Hardware widths.
-- Pipeline depth.
-- FPGA resources.
-- ASIC resources.
-- Physical topology.
-
-Program-defined values and explicit target constraints remain valid.
-
-9.5 AI and tensor IR
-
-AI and tensor computations must retain their canonical semantic and IR representations.
-
-The compiler must not introduce arbitrary universal limits on tensor rank, model size, dimensions, parameter counts or accelerator counts.
-
-Symbolic and dynamic shapes must be preserved where supported by the semantic and IR contracts.
-
-9.6 Hybrid and distributed representations
-
-Hybrid and distributed computation must preserve:
-
-- Cross-domain dependencies.
-- Data exchange.
-- Synchronization.
-- Ordering.
-- Effects.
-- Resource requirements.
-- Capability requirements.
-- Failure contracts.
-- Provenance.
-
-The compiler must not assume that all domain operations execute on one physical machine.
-
-10. Portability classifications
-
-The compiler must distinguish different kinds of portability dependencies.
-
-At minimum, the overall portability model must be capable of expressing:
+The classification model must be capable of representing:
 
 Classification| Meaning
-Portable| No unnecessary target-specific dependency
-Resource-dependent| Depends on abstract resource availability
-Capability-dependent| Requires a supported capability
-Scale-dependent| Requirements vary with workload
-Target-constrained| Valid under an explicit target constraint
-Target-specific| Explicitly depends on a particular realization
-Implementation-defined| Chosen by a downstream implementation
-Non-portable| Cannot preserve the requested portability boundary
-Unknown| Insufficient evidence to establish the classification
+Portable| Target-independent within its established contract
+Resource-dependent| Depends on available abstract resources
+Capability-dependent| Requires specified capabilities
+Scale-dependent| Realization depends on workload size
+Target-constrained| Valid only under explicit target constraints
+Target-specific| Bound to a particular realization
+Implementation-defined| Depends on documented implementation choices
+Non-portable| Cannot satisfy the requested portability boundary
+Unknown| Insufficient evidence to establish portability
 
-These are conceptual semantic categories.
+The implementation MUST preserve the existing public API and classification semantics unless a reviewed compatibility migration is approved.
 
-Their representation must remain consistent with the existing "PortabilityClass" implementation in "src/compiler/artifacts/portability.rs".
+8.1 Unknown is not portable
 
-Do not introduce a second competing portability enum.
+Unknown evidence MUST NOT be interpreted as:
 
-An unknown classification must never be interpreted as verified portability.
+- Verified portable.
+- Verified compatible.
+- Feasible.
+- Executable.
+- Safe to deploy.
 
-11. Requirements and capabilities
+Unknown and incompatible are different states.
 
-The compiler must preserve the distinction between:
+A target may be incompatible because evidence establishes that it cannot satisfy a requirement.
 
-Concept| Meaning
-Requirement| What the program needs
-Capability| What an environment can provide
-Constraint| What a realization must obey
-Preference| What is desirable
-Hint| Optional optimization guidance
-Budget| An operational allowance
-Feasibility| Whether a realization satisfies its obligations
+A target may be unknown because insufficient information is available.
 
-Example:
+Both states must remain distinguishable.
 
-requires capability("quantum.measurement");
+9. Requirements, capabilities and policies
 
-requires memory >= required_memory;
+The compiler MUST preserve the distinction between six concepts.
 
-prefers capability("tensor.acceleration");
+Concept| Meaning| Authority
+Requirement| What the computation needs| Frontend semantic model
+Capability| What an implementation can provide| Capability authority
+Preference| What the developer would prefer| Semantic/configuration policy
+Constraint| What a valid realization must obey| Semantic/resource contracts
+Hint| Advisory optimization information| Appropriate semantic or planning contract
+Feasibility| Whether evidence establishes a valid realization| Compiler planning and authoritative evaluators
 
-constrains latency <= required_latency;
+These concepts MUST NOT be merged into a single target flag or closed hardware enumeration.
 
-These are conceptual examples. Their exact syntax and semantics are governed by the canonical grammar and semantic specifications.
+Examples:
 
-The compiler must not collapse all of these into one hardware-target enumeration.
+- A quantum requirement is not a vendor selection.
+- A GPU preference is not a mandatory GPU requirement.
+- A memory budget is not a universal language memory limit.
+- A target descriptor is not proof of hardware availability.
+- A registered backend is not proof of compatibility.
+- A compatibility decision is not a resource reservation.
 
-Capability identifiers must be extensible.
+9.1 Requirements
 
-A future capability must not require redesigning the compiler's central portability model.
+Mandatory requirements MUST be preserved throughout compilation.
 
-12. Scalability requirements
+They MUST NOT silently become preferences or hints.
 
-Zamani must scale from the smallest supported computation to arbitrarily large finite realizations.
+9.2 Capabilities
 
-The architecture must not introduce universal finite ceilings.
+Capabilities must use extensible identities.
+
+The compiler MUST NOT require a new central enum or compiler-root modification for every future computational capability.
+
+Capability evidence must be obtained through authoritative registries and evaluators.
+
+9.3 Preferences
+
+Preferences may influence selection and optimization.
+
+They MUST NOT override correctness, security, compatibility, feasibility or mandatory constraints.
+
+9.4 Constraints
+
+Hard constraints MUST be satisfied.
+
+An unsatisfied hard constraint MUST result in explicit infeasibility or rejection.
+
+9.5 Hints
+
+Hints may guide implementation decisions.
+
+They MUST NOT silently change program semantics.
+
+9.6 Feasibility
+
+Feasibility must be evidence-based.
+
+The compiler MUST distinguish:
+
+- Feasible.
+- Infeasible.
+- Unknown.
+- Invalid evidence.
+- Stale evidence.
+- Evaluation failure.
+
+10. Resource-independent scalability
+
+Zamani must support computation from the smallest meaningful workload to arbitrarily large finite workloads.
+
+The compiler MUST NOT introduce universal hardware ceilings.
 
 The prohibition includes:
 
 MAX_QUBITS
+MAX_LOGICAL_QUBITS
+MAX_PHYSICAL_QUBITS
 MAX_CPUS
 MAX_CORES
 MAX_THREADS
@@ -963,206 +528,541 @@ MAX_STORAGE
 MAX_REGISTER_WIDTH
 MAX_VECTOR_WIDTH
 MAX_TENSOR_RANK
-MAX_NETWORK_SIZE
 MAX_WORKERS
 MAX_MODULES
 MAX_OPERATIONS
+MAX_TARGETS
+MAX_BACKENDS
+MAX_DOMAINS
 
 Equivalent hidden restrictions are equally prohibited.
 
-12.1 Distinguish implementation budgets from language limits
+10.1 Real implementation constraints
 
-Operational budgets are permitted.
+The prohibition does not eliminate real limitations.
+
+The compiler may encounter:
+
+- Host address-space limits.
+- Available memory limits.
+- Provider capacity.
+- Operating-system limits.
+- Target instruction-width limits.
+- Artifact-format limits.
+- Representation limits.
+- Operational time budgets.
+- Network limits.
+- Physical hardware limits.
+
+These MUST be represented as explicit implementation or target constraints.
+
+They MUST NOT be presented as universal Zamani language limitations.
+
+10.2 Operational budgets
+
+Budgets are permitted.
 
 Examples:
 
-- Maximum compilation time selected by the user.
-- Maximum memory budget selected by the build environment.
-- Maximum parallel workers selected by policy.
-- Maximum artifact output size selected by the caller.
-- Maximum cache storage selected by configuration.
+- Maximum compilation time.
+- Maximum memory consumed by one compilation.
+- Maximum temporary storage.
+- Maximum concurrent compiler work.
+- Maximum optimization effort.
+- Maximum artifact transfer size.
 
-These are operational safeguards.
+Budgets must be configurable through the appropriate configuration and policy authorities.
 
-They must not become permanent source-language restrictions.
+They must not silently become universal semantic ceilings.
 
-The compiler must distinguish:
+10.3 Exact quantities
 
-1. Language invalidity.
-2. Semantic invalidity.
-3. Target incompatibility.
-4. Resource infeasibility.
-5. Configured budget exhaustion.
-6. Actual implementation resource exhaustion.
+The compiler must preserve exact resource quantities where the semantic model requires exactness.
 
-12.2 Infinity
+The canonical resource authority is:
 
-Infinity means the absence of artificial language-level capacity ceilings.
+"src/frontend/semantic/resources/"
 
-It does not mean infinite physical resources.
+In particular:
 
-The compiler must support growth until actual constraints prevent further work, and must report those constraints accurately.
+- "model.rs" owns canonical resource quantities and resource records.
+- "symbolic.rs" owns symbolic resource expressions.
+- "requirements.rs" owns extraction from the canonical AST.
+- "constraints.rs" owns semantic constraint interpretation.
+- "mod.rs" owns the subsystem composition boundary.
 
-13. Portable transformation requirements
+"ExactQuantity" uses canonical decimal strings rather than imposing "u64", "u128" or "usize" limits on semantic quantities.
 
-Every compiler transformation affecting a portable representation must preserve the relevant semantic contract.
+The compiler resource planner MUST consume these canonical types rather than defining competing quantity models.
 
-A transformation must define:
+Machine-sized indexes may be used internally where appropriate, but their implementation limits must be explicit and must not redefine source-language resource semantics.
 
-1. Input representation.
-2. Output representation.
-3. Preconditions.
-4. Required analyses.
-5. Semantic-preservation obligations.
-6. Effect-preservation obligations.
-7. Capability implications.
-8. Resource implications.
-9. Provenance.
-10. Invalidated analyses.
-11. Determinism properties.
-12. Failure behavior.
-13. Verification procedure.
+10.4 Literal infinity
+
+The phrase scale to infinity means:
+
+No arbitrary universal finite capacity ceiling is imposed by the language or compiler architecture.
+
+It does not mean that physical computation is mathematically infinite.
+
+The compiler must support progressively larger workloads whenever the relevant representations, implementations and available resources permit them.
+
+11. Target independence
+
+A program should not depend unnecessarily on a particular machine.
+
+The compiler MUST distinguish:
+
+- Target identity.
+- Target role.
+- Target capability.
+- Target availability.
+- Target compatibility.
+- Target feasibility.
+- Target preference.
+- Target realization.
+
+The existing target descriptor authority is:
+
+"src/compiler/configuration/target.rs"
+
+It owns:
+
+- Target identifiers.
+- Target roles.
+- Artifact-format identifiers.
+- Extensible metadata.
+- Descriptor construction.
+- Structural validation.
+- Legacy target adaptation.
+
+It does NOT own:
+
+- Physical discovery.
+- Hardware inventory.
+- Capability matching.
+- Resource allocation.
+- Backend compatibility.
+- Runtime scheduling.
+- Physical execution.
+
+11.1 Open-world target identities
+
+Target identities MUST remain extensible.
+
+Adding a new processor, accelerator, QPU, FPGA, ASIC, simulator, photonic device or future computational substrate MUST NOT require redesigning the central compiler architecture.
+
+Target identifiers are not proof of capability.
+
+11.2 No implicit host target
+
+A production compiler MUST NOT silently choose an arbitrary host architecture when a target decision is required.
+
+A missing target must be handled according to the compilation request and portability contract.
+
+The compiler may perform target-independent compilation without selecting a physical execution target.
+
+Target-specific realization requires an explicit target or a valid target-discovery and selection process.
+
+The current legacy "CompilationTarget" compatibility model must not become the permanent closed-world target authority.
+
+12. Canonical representation portability
+
+The compiler integrates existing representation authorities.
+
+It MUST NOT introduce another universal or domain-specific IR merely to simplify compiler implementation.
+
+Representation| Canonical authority
+Universal IR| "src/zuir/"
+Classical computation| "src/classical/"
+Quantum computation| "src/quantum/ir/"
+HDL/hardware| "src/hdl/hdlir/"
+AI computation| "src/ai/"
+Hybrid computation| "src/hybrid/"
+Distributed computation| "src/distributed/"
+
+The compiler-facing integration boundary is:
+
+"src/compiler/ir/"
+
+This subsystem owns adapters, compatibility coordination, translation orchestration, lowering integration and verification-result propagation.
+
+It MUST NOT own a competing canonical IR.
+
+12.1 ZUIR
+
+ZUIR remains the universal IR authority.
+
+It must preserve the computational structure and semantic information required for downstream realization.
+
+The compiler must consume and coordinate ZUIR rather than redefine its program, operation, value, region or block models.
+
+ZUIR serialization and structural verification remain under "src/zuir/".
+
+12.2 Classical computation
+
+Classical computations must preserve their semantics across compatible CPU, GPU and accelerator realizations.
+
+The compiler must not assume that every classical operation can be executed identically on every accelerator.
+
+12.3 Quantum computation
+
+The canonical quantum semantic boundary is:
+
+"src/quantum/ir/"
+
+The compiler MUST preserve:
+
+- Quantum state semantics.
+- Operation semantics.
+- Measurement semantics.
+- Classical control dependencies.
+- Logical resource requirements.
+- Required ordering.
+- Applicable effects.
+- Explicit approximation and error contracts.
+
+The compiler MUST NOT confuse logical and physical qubits.
+
+Physical qubit mapping, routing, scheduling, calibration, noise and QEC remain with their respective authoritative subsystems.
+
+12.4 HDL and hardware description
+
+The compiler must preserve hardware-description semantics.
+
+It must distinguish:
+
+- Logical hardware structures.
+- Signal semantics.
+- Structural connectivity.
+- Timing contracts.
+- Synthesis requirements.
+- Target-specific physical realization.
+
+It MUST NOT impose universal limits on signal count, register count, bus width, pipeline depth or physical resources.
+
+Actual synthesis constraints belong to the selected synthesis implementation and target.
+
+12.5 AI and tensor computation
+
+AI and tensor semantics must remain under the established AI, semantic and tensor authorities.
+
+The compiler must preserve:
+
+- Tensor shape information.
+- Symbolic and dynamic dimensions.
+- Data dependencies.
+- Numerical semantics.
+- Model structure.
+- Differentiation requirements.
+- Training and inference semantics.
+- Distributed and accelerator requirements.
+
+No arbitrary universal tensor-rank, model-size or parameter-count ceilings may be introduced.
+
+12.6 Hybrid computation
+
+Hybrid compilation must preserve cross-domain relationships.
 
 Examples include:
 
-- Constant folding.
-- Dead-code elimination.
-- Loop transformations.
-- Instruction fusion.
-- Vectorization.
-- Parallelization.
-- Tensor optimization.
-- Quantum decomposition.
-- Classical/quantum boundary transformation.
-- Hardware-specific lowering.
-- Distributed decomposition.
+- Classical-to-quantum data dependencies.
+- Quantum-to-classical measurement results.
+- AI-to-classical computation.
+- AI-to-quantum interfaces.
+- HDL-to-software interfaces.
+- Distributed-to-local execution.
+- Cross-domain synchronization.
 
-A transformation must not silently:
+The compiler MUST NOT create a competing hybrid semantic authority.
 
-- Remove required operations.
-- Introduce undeclared effects.
-- Change measurement semantics.
-- Violate memory ordering.
-- Change required numerical behavior.
-- Discard capability requirements.
-- Discard resource constraints.
-- Convert an exact operation into an approximation without permission.
-- Introduce a target dependency into a portable artifact without recording it.
+12.7 Distributed computation
 
-If semantic preservation cannot be established, the compiler must reject the transformation or mark the result as insufficiently verified.
+Distributed portability must preserve:
 
-14. Capability and feasibility integration
-
-The compiler must separate capability discovery from feasibility evaluation.
-
-The conceptual flow is:
-
-PROGRAM REQUIREMENTS
-        |
-        v
-CANONICAL CAPABILITY REQUIREMENTS
-        |
-        v
-TARGET CAPABILITY DESCRIPTORS
-        |
-        v
-RESOURCE AVAILABILITY
-        |
-        v
-CONSTRAINT EVALUATION
-        |
-        v
-FEASIBILITY REPORT
-        |
-        v
-REALIZATION PLAN
-
-A capability descriptor must not automatically imply that a target is currently available.
-
-A resource descriptor must not automatically imply that the resource can be allocated.
-
-A feasible plan must not automatically imply successful physical execution.
-
-These are distinct guarantees.
-
-The compiler must be able to report multiple feasible alternatives when the planning architecture supports them.
-
-It must report explicit infeasibility when no acceptable realization can be established.
-
-15. Target-independent and target-specific artifacts
-
-The compiler must distinguish two fundamental artifact categories.
-
-15.1 Portable compilation artifact
-
-A portable artifact should preserve:
-
-- Canonical IR.
-- Domain IR dependencies.
-- Semantic contracts.
-- Effects.
-- Resource requirements.
-- Capability requirements.
-- Portability classification.
-- Dependency information.
+- Communication semantics.
+- Data dependencies.
+- Ordering.
+- Consistency requirements.
+- Synchronization.
+- Failure contracts.
+- Security boundaries.
 - Provenance.
-- Verification evidence.
-- Compatibility metadata.
-- Version information.
+- Partitioning constraints.
 
-It must not unnecessarily depend on a specific physical device.
+The compiler may produce abstract partitioning and routing plans.
 
-15.2 Target-specific realization artifact
+Actual resource allocation and runtime execution belong to the relevant downstream authorities.
 
-A target-specific artifact may contain:
+13. Portability-preserving transformations
 
-- Target-specific IR.
-- Native object files.
-- Executables.
-- GPU binaries.
-- FPGA bitstreams.
-- ASIC synthesis outputs.
-- Quantum execution packages.
-- WebAssembly modules.
-- Device-specific configuration.
-- Deployment bundles.
+Every transformation that changes a program representation MUST have an explicit semantic-preservation contract.
 
-It must explicitly identify its target and compatibility requirements.
+This applies to:
 
-A target-specific artifact must not be presented as universally executable.
+- Optimization.
+- Simplification.
+- Specialization.
+- Monomorphization.
+- Instruction fusion.
+- Operation decomposition.
+- Outlining.
+- Domain lowering.
+- Target legalization.
+- Code generation.
+- Linking.
+- Artifact composition.
 
-15.3 Artifact relationship
+A transformation must declare:
 
-The architecture must preserve the derivation:
+1. Its accepted input representation.
+2. Its output representation.
+3. Applicable semantic domains.
+4. Preconditions.
+5. Required analyses.
+6. Legality conditions.
+7. Preserved analyses.
+8. Invalidated analyses.
+9. Required verification.
+10. Failure behavior.
+11. Provenance information.
+12. Determinism guarantees.
 
-PORTABLE ARTIFACT
+A transformation valid for classical IR MUST NOT automatically be considered valid for quantum IR or HDLIR.
+
+A failed legality check MUST NOT be converted into successful transformation output.
+
+13.1 Optimization
+
+Optimization remains coordinated by:
+
+- "src/compiler/optimization/"
+- "src/compiler/passes/"
+
+The compiler must support extensible optimization providers and domain-specific legality rules.
+
+A closed mapping of every possible optimization or hardware domain is prohibited.
+
+Optimization must preserve the applicable semantic, numerical, ownership, effect, concurrency and correctness contracts.
+
+14. Capability matching and backend selection
+
+Backend selection is not portability verification.
+
+The compiler must preserve the following distinctions:
+
+Backend registration
         |
         v
-TARGET REALIZATION
+Backend discovery
         |
         v
-TARGET-SPECIFIC ARTIFACT
+Capability evaluation
+        |
+        v
+Compatibility evaluation
+        |
+        v
+Resource feasibility
+        |
+        v
+Selection
+        |
+        v
+Backend invocation
 
-The realization must retain provenance linking it to its portable input.
+The relevant existing compiler boundary is:
 
-16. Portable artifact validation
+"src/compiler/backends/"
 
-The existing artifact validation system must remain authoritative.
+The authoritative backend implementation remains:
 
-The compiler must integrate the following independent validation responsibilities:
+"src/backend/"
 
-Validation| Authority
-Artifact structure| "artifacts/validation.rs"
-Payload integrity| Artifact validation and digest implementation
-Manifest structure| "artifacts/manifest.rs"
-Metadata policy| "artifacts/metadata.rs"
-Portability assessment| "artifacts/portability.rs"
-Wire-format validation| "artifacts/serialization.rs"
-Semantic correctness| Frontend semantic authority
-IR correctness| Canonical IR verifiers
-Security| Existing security subsystem
-Backend compatibility| Backend and target contracts
-Execution feasibility| Appropriate planning/runtime authorities
+14.1 Existing backend selection
+
+"src/compiler/backends/selection.rs" already defines:
+
+- Backend selection requests.
+- Ordered preferences.
+- Backend eligibility.
+- Compatibility evaluation.
+- Unknown compatibility.
+- Deterministic ranking.
+
+This contract must be preserved.
+
+Unknown compatibility MUST NOT be treated as compatible.
+
+Backend registration MUST NOT establish compatibility.
+
+Compatibility MUST NOT establish resource feasibility.
+
+Resource feasibility MUST NOT establish physical availability.
+
+Backend selection MUST NOT be confused with execution.
+
+14.2 Extensibility
+
+New backends must integrate through the established registry and provider contracts.
+
+The compiler MUST NOT require a new closed enumeration or a modification of the composition root for every new backend.
+
+14.3 Fallback
+
+Fallback is permitted only when the alternative realization satisfies the original semantic requirements.
+
+The compiler MUST NOT silently replace:
+
+- A required quantum operation with a different classical computation.
+- A required hardware implementation with a software approximation.
+- A required precision with lower precision.
+- A required consistency model with a weaker one.
+
+Any permitted alternative must be supported by explicit semantics and validation.
+
+15. Resource feasibility and planning
+
+The compiler-facing planning authority is:
+
+"src/compiler/planning/"
+
+The existing resource planning implementation is:
+
+"src/compiler/planning/resource_planning.rs"
+
+It already consumes:
+
+- Canonical semantic resource requirements.
+- Capability-matching results.
+- Target-scoped resource evidence.
+- Exact resource quantities.
+
+The compiler must preserve these ownership boundaries.
+
+Resource planning determines whether a proposed realization is supported by available evidence.
+
+It does not allocate, reserve or execute physical resources.
+
+15.1 Feasibility results
+
+Planning must distinguish:
+
+- Feasible.
+- Infeasible.
+- Unknown.
+- Invalid evidence.
+- Stale evidence.
+- Evaluation failure.
+
+Insufficient evidence MUST NOT be interpreted as feasibility.
+
+15.2 Resource snapshots
+
+Resource observations must carry sufficient identity and provenance to identify the inventory revision against which a plan was made.
+
+A plan based on stale evidence must not be represented as a guarantee of current availability.
+
+15.3 Physical allocation
+
+Physical resource acquisition belongs to the runtime and relevant resource providers.
+
+The compiler must hand off requirements and plans without pretending that a plan reserves hardware.
+
+16. Artifact portability
+
+The canonical compiler artifact subsystem is:
+
+"src/compiler/artifacts/"
+
+The artifact portability implementation is:
+
+"src/compiler/artifacts/portability.rs"
+
+This module is the single compiler-owned portability classification and assessment authority.
+
+It must not be duplicated elsewhere.
+
+16.1 Artifact identity
+
+"artifacts/artifact.rs" owns artifact identity, descriptors, formats, payloads, metadata and provenance.
+
+Artifact identity must remain distinct from:
+
+- Source identity.
+- Program identity.
+- Target identity.
+- Backend identity.
+- Runtime identity.
+- Resource identity.
+
+16.2 Artifact manifests
+
+"artifacts/manifest.rs" owns artifact collections and manifest relationships.
+
+A portable manifest must preserve:
+
+- Artifact identities.
+- Dependencies.
+- Representation versions.
+- Semantic compatibility requirements.
+- Capability requirements.
+- Resource requirements.
+- Target associations.
+- Provenance.
+- Verification evidence references.
+- External payload references.
+- Cross-domain dependencies.
+
+Manifest aggregation must not hide an incompatible or unverified dependency.
+
+16.3 Artifact metadata
+
+"artifacts/metadata.rs" owns artifact metadata conventions.
+
+Metadata must distinguish:
+
+- Language information.
+- Semantic-model information.
+- Compiler information.
+- IR information.
+- Backend information.
+- Target information.
+- Portability information.
+- Provenance information.
+- Verification information.
+- Security information.
+
+Unknown namespaces must remain extensible under explicit validation policies.
+
+Metadata alone is not proof of portability.
+
+16.4 Portability evidence
+
+The existing "artifacts/portability.rs" module records portability declarations and evidence references.
+
+The following rules are mandatory:
+
+1. A missing target reference does not prove portability.
+2. A portability declaration does not prove semantic correctness.
+3. An evidence reference does not automatically authenticate its source.
+4. A verified portability classification requires evidence from the appropriate authoritative verifier.
+5. An unverified declaration must remain distinguishable from verified evidence.
+6. Conflicting declarations must be rejected or explicitly resolved.
+7. Stale evidence must not silently establish current compatibility.
+8. A manifest must preserve the evidence of all relevant dependencies.
+9. An unsupported artifact format must not be considered valid.
+10. Unknown evidence must remain unknown.
+
+The security subsystem is responsible for trust and authenticity decisions.
+
+The IR and semantic verification authorities are responsible for correctness evidence.
+
+The portability subsystem records and assesses that evidence; it must not manufacture verification.
+
+16.5 Artifact validation
+
+"artifacts/validation.rs" owns artifact validation coordination.
 
 Validation must distinguish:
 
@@ -1170,569 +1070,715 @@ Validation must distinguish:
 - Invalid.
 - Incomplete.
 
-A missing verification step must never be treated as a successful verification.
+An incomplete validation must never be reported as fully verified.
 
-17. Serialization and compatibility
+Where applicable, validation must coordinate:
 
-Portable artifacts must remain usable across supported compiler versions and future target implementations.
+Decoding
+    |
+    v
+Structural validation
+    |
+    v
+Content integrity
+    |
+    v
+Provenance validation
+    |
+    v
+Semantic / IR verification
+    |
+    v
+Portability assessment
+    |
+    v
+Security validation
+    |
+    v
+Target compatibility
 
-The compatibility system must independently track:
+The exact checks depend on the artifact kind.
 
-- Zamani language version.
+A successfully decoded artifact is not automatically safe to execute.
+
+A valid digest is not proof of semantic correctness.
+
+16.6 Serialization
+
+"artifacts/serialization.rs" owns the stable compiler artifact serialization boundary.
+
+It must support:
+
+- Versioned formats.
+- Deterministic encoding.
+- Strict decoding.
+- Schema compatibility.
+- Explicit unsupported-version errors.
+- Configurable operational budgets.
+- External payload references.
+- Corruption detection.
+- Secure input validation.
+
+Artifact serialization versions must remain independent of:
+
+- Language versions.
+- Compiler API versions.
+- Semantic-model versions.
+- ZUIR versions.
+- Domain IR versions.
+- Backend versions.
+- Runtime versions.
+
+ZUIR serialization remains owned by "src/zuir/serialization/".
+
+The compiler artifact serializer MUST NOT replace it.
+
+17. Reproducibility and determinism
+
+Portability requires controlled reproducibility.
+
+The compiler must conform to:
+
+"grammar/spec/determinism.md"
+
+It must preserve deterministic behavior where required by the language and build contract.
+
+Reproducibility must account for:
+
+- Source identity.
+- Language version.
 - Grammar version.
 - Semantic-model version.
-- Compiler API version.
-- Canonical IR version.
-- Domain IR versions.
-- Artifact model version.
-- Manifest schema version.
-- Serialization format version.
-- Backend interface version.
-- Target ABI.
-- Runtime compatibility version.
-
-These versions must not be collapsed into one number.
-
-An artifact must provide sufficient information for a consumer to determine compatibility.
-
-Unsupported versions must produce explicit diagnostics.
-
-Incompatible formats must not be silently interpreted as compatible.
-
-18. Deterministic and reproducible compilation
-
-Where deterministic compilation is required, identical semantic inputs and compilation configuration must produce reproducible outputs.
-
-The reproducibility contract must consider:
-
-- Source content.
-- Language version.
-- Semantic version.
-- IR version.
+- Canonical IR versions.
 - Compiler version.
+- Compiler configuration.
 - Transformation configuration.
-- Optimization policy.
+- Dependency fingerprints.
+- Backend versions.
+- Target descriptors.
+- Relevant ABI information.
+- Artifact serialization versions.
+
+The compiler must distinguish target-independent compilation fingerprints from target-specific realization fingerprints.
+
+17.1 Portable compilation fingerprints
+
+A portable compilation fingerprint should include semantic and representation inputs that determine the canonical portable output.
+
+It should not unnecessarily include physical device identifiers or temporary machine inventory information.
+
+17.2 Target-specific fingerprints
+
+A target-specific realization fingerprint must additionally include relevant:
+
+- Target identity.
+- Target descriptor version.
+- Backend identity.
 - Backend version.
-- Relevant target descriptors.
-- Dependency versions.
-- Serialization format.
+- ABI.
+- Target capabilities.
+- Lowering configuration.
+- Relevant toolchain versions.
 
-Physical timestamps, random identifiers, device IDs and environmental information must not accidentally contaminate target-independent artifact identities.
+17.3 Incremental compilation
 
-When a compilation operation is intentionally nondeterministic, the compiler must record the relevant nondeterminism and provenance.
+The existing subsystem is:
 
-19. Security and trust boundaries
+"src/compiler/incremental/"
 
-Portability is not a security guarantee.
+It must preserve:
 
-A portable artifact may still be:
+- Correct dependency fingerprints.
+- Precise invalidation.
+- Cache integrity.
+- Cache version compatibility.
+- Reproducibility.
+- Security verification.
 
-- Malformed.
-- Corrupted.
-- Incompatible.
-- Untrusted.
-- Unsafe to execute.
-- Produced by an untrusted compiler.
-- Associated with unverified external content.
+A cache hit MUST NOT bypass required semantic, IR or security verification.
 
-The compiler must not infer security from portability.
+18. Compiler pipeline integration
 
-Required security integration includes:
+The compiler composition root is:
 
-1. Artifact integrity.
-2. Provenance verification.
-3. External dependency validation.
-4. Backend trust policy.
-5. Compilation policy.
-6. Supply-chain verification.
-7. Execution authorization.
-8. Target-specific security constraints.
+"src/compiler/mod.rs"
 
-No untrusted artifact should become executable merely because its serialization succeeded.
+It already establishes the intended separation between frontend, semantic analysis, IR, analysis, planning, lowering, backend integration, artifacts and runtime handoff.
 
-All Rust implementation must remain safe Rust.
+The compiler pipeline must implement the following logical stages.
 
-20. Failure and recovery contract
+Stage| Authority
+Source acquisition| Compiler API
+Lexing| Frontend lexer
+Parsing| Frontend parser
+AST construction| Frontend AST
+Semantic validation| Frontend semantic
+Resource analysis| Frontend semantic resources
+Capability analysis| Frontend semantic capabilities
+Canonical IR construction| ZUIR and domain IRs
+IR verification| Canonical IR authorities
+Dependency analysis| Compiler analysis
+Ownership and effect analysis| Frontend semantic and compiler analysis
+Transformation planning| Pass manager
+Optimization| Optimization subsystem
+Target discovery| Planning and provider authorities
+Capability matching| Planning
+Resource feasibility| Resource planning
+Partitioning| Planning and domain authorities
+Data movement| Planning and distributed authorities
+Scheduling and routing planning| Planning and relevant domain authorities
+Domain-specific lowering| Canonical domain authorities and lowering
+Target legalization| Lowering and backend contracts
+Backend realization| "src/backend/"
+Artifact validation| Artifacts and security
+Linking| Compiler linking subsystem
+Packaging| Artifact and deployment authorities
+Runtime handoff| Runtime integration
 
-A portability-aware compilation process must have explicit failure categories.
+Not every program needs every stage.
 
-Failure| Required behavior
-Invalid source| Frontend diagnostic
-Invalid semantics| Semantic diagnostic
-Invalid IR| IR verification failure
-Missing capability| Capability diagnostic
-Insufficient resources| Resource feasibility diagnostic
-Incompatible target| Target compatibility diagnostic
-Unsupported lowering| Backend diagnostic
-Invalid artifact| Artifact validation failure
-Incomplete evidence| Incomplete validation
-Unsupported serialization version| Compatibility diagnostic
-Resource exhaustion| Explicit operational failure
-Security rejection| Security diagnostic
+The pipeline must support domain-specific and conditional routes.
 
-Fallbacks are permitted only when they preserve the required semantics and satisfy applicable policies.
+However, a required stage MUST NOT be silently skipped.
 
-The compiler must not silently convert an unsupported operation into a different operation.
+A pipeline stage must report:
 
-An approximation must be explicitly permitted by the semantic contract.
+- Its applicability.
+- Its dependencies.
+- Its input contract.
+- Its output contract.
+- Its verification obligations.
+- Its failure conditions.
+- Its provenance.
+- Its resource-budget consumption.
 
-A failed realization must not be reported as successful compilation.
+A declared stage is not proof of an implemented stage.
 
-21. Repository-wide integration map
+19. Cross-domain portability
+
+The compiler must preserve the semantics of each computational domain.
+
+19.1 Classical
+
+Required properties:
+
+- Type and value correctness.
+- Ownership and memory safety.
+- Effect preservation.
+- Concurrency correctness.
+- Numerical guarantees.
+- ABI compatibility.
+
+19.2 Quantum
+
+Required properties:
+
+- Quantum state semantics.
+- Gate and operation semantics.
+- Measurement semantics.
+- Logical resource preservation.
+- Classical-quantum dependencies.
+- Explicit approximation and error contracts.
+- Correct quantum IR integration.
+
+19.3 HDL
+
+Required properties:
+
+- Signal semantics.
+- Structural relationships.
+- Hardware behavior.
+- Timing requirements.
+- Interface compatibility.
+- Synthesis constraints.
+- Target-specific realization boundaries.
+
+19.4 Hybrid
+
+Required properties:
+
+- Cross-domain data exchange.
+- Synchronization.
+- Ordering.
+- Effects.
+- Resource requirements.
+- Capability requirements.
+- Domain-specific verification.
+
+19.5 Distributed
+
+Required properties:
+
+- Communication semantics.
+- Ordering.
+- Consistency.
+- Failure behavior.
+- Synchronization.
+- Partition dependencies.
+- Security.
+- Provenance.
+
+19.6 AI and tensor
+
+Required properties:
+
+- Tensor semantics.
+- Shape preservation.
+- Numerical behavior.
+- Differentiation contracts.
+- Training and inference behavior.
+- Accelerator compatibility.
+- Distributed computation requirements.
+
+No domain may silently inherit another domain's transformation or execution assumptions.
+
+20. Compiler diagnostics
+
+Portability-related errors must use the existing compiler diagnostics subsystem:
+
+"src/compiler/diagnostics/"
+
+Diagnostics must integrate with the canonical frontend source-location infrastructure.
+
+The compiler MUST NOT create a competing source-map or source-span system.
+
+At minimum, diagnostics must distinguish:
+
+- Invalid portability declaration.
+- Missing portability evidence.
+- Invalid semantic representation.
+- Unsupported IR version.
+- Unsupported artifact version.
+- Missing capability.
+- Incompatible target.
+- Insufficient resources.
+- Unknown resource availability.
+- Stale resource evidence.
+- Unsupported lowering.
+- Invalid transformation.
+- Failed verification.
+- Incompatible backend.
+- Invalid artifact dependency.
+- ABI incompatibility.
+- Security rejection.
+- Operational budget exhaustion.
+- Unsupported execution environment.
+
+Where available, diagnostics must preserve:
+
+- Source spans.
+- Relevant AST or semantic identities.
+- Target identity.
+- Backend identity.
+- Requirement identity.
+- Evidence references.
+- Failure stage.
+- Recovery information.
+
+An unsupported target must produce an explicit diagnostic rather than silently selecting an incompatible backend.
+
+21. Security requirements
+
+Portability must not weaken security.
+
+The compiler security authority is:
+
+"src/compiler/security/"
+
+The following requirements are mandatory:
+
+1. Validate externally supplied artifacts.
+2. Validate provider identities and versions.
+3. Preserve provenance.
+4. Authenticate evidence where required.
+5. Validate dependency integrity.
+6. Reject unsupported serialization versions.
+7. Prevent untrusted extensions from bypassing verification.
+8. Isolate untrusted backend and provider execution.
+9. Apply explicit operational budgets.
+10. Protect against resource-exhaustion attacks.
+11. Preserve security policies during lowering.
+12. Validate generated artifacts before deployment.
+13. Preserve cryptographic integrity where required.
+14. Prevent cache poisoning and untrusted cache reuse.
+
+A portability claim must never be used as a substitute for security verification.
+
+22. Extensibility and future computational domains
+
+The compiler must remain open to future computational technologies.
+
+New domains and providers must integrate through explicit contracts and registries.
+
+The architecture must not require editing a closed central enumeration whenever a new technology appears.
+
+New integrations must identify:
+
+- Domain identity.
+- Semantic authority.
+- Canonical representation.
+- Capability vocabulary.
+- Resource requirements.
+- Verification authority.
+- Transformation contracts.
+- Lowering contracts.
+- Backend/provider contracts.
+- Artifact format.
+- Compatibility rules.
+- Runtime integration.
+- Conformance tests.
+
+A new domain MUST NOT introduce a competing semantic model or universal IR.
+
+A new backend MUST NOT redefine language semantics.
+
+A new capability MUST NOT require a redesign of the compiler's central portability model.
+
+23. Rust safety and compatibility
+
+All Zamani-owned compiler implementations MUST use safe Rust.
+
+The following are prohibited:
+
+- "unsafe" blocks.
+- "unsafe" functions.
+- "unsafe" implementations.
+- Unnecessary raw-pointer manipulation.
+- Unvalidated external data.
+- Unchecked assumptions about representation sizes.
+
+Compiler modules should establish:
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+Applicable strict lint policies must be enforced at crate or module boundaries.
+
+Broad lint suppressions must not be used to conceal incomplete implementations.
+
+The crate's Rust minimum version must remain consistent with "Cargo.toml".
+
+Public APIs must document:
+
+- Ownership.
+- Borrowing.
+- Thread-safety.
+- Error behavior.
+- Compatibility guarantees.
+- Resource-budget behavior.
+- Versioning.
+
+24. Exact repository integration contracts
 
 The following integrations are mandatory.
 
-Repository path| Portability responsibility
-"src/frontend/"| Canonical AST and semantic input
-"src/frontend/semantic/"| Validated source meaning and semantic portability
-"src/semantic.rs"| Legacy compatibility where still required
-"src/zuir/"| Canonical universal representation
-"src/classical/"| Classical representation and lowering
-"src/quantum/ir/"| Canonical quantum representation
-"src/hdl/hdlir/"| Canonical hardware representation
-"src/ai/"| AI computation
-"src/hybrid/"| Cross-domain composition
-"src/distributed/"| Distributed computation semantics
-"src/backend/"| Target-specific code generation
-"src/runtime/"| Resource acquisition and execution
-"src/optimizer/"| Canonical optimization
-"src/ir_verify.rs"| IR verification integration
-"src/source_map/"| Source mapping and diagnostics
-"src/toolchain/"| Compilation, packaging and deployment
-
-The compiler must coordinate these systems without taking over their ownership.
-
-22. Grammar integration contract
-
-The compiler's portability implementation must remain consistent with the actual grammar architecture.
-
-The canonical source composition is:
-
-grammar/Zamani.g4
-        |
-        +---- ZamaniParser.g4
-        |
-        +---- ZamaniLexer.g4
-
-The root grammar owns complete-program composition.
-
-The subordinate parser and lexer hierarchies own their respective language rules.
-
-Portability-specific source syntax is owned by:
-
-"grammar/resources/portability.g4"
-
-The formal portability semantics are owned by:
-
-"grammar/spec/portability.md"
-
-The human-readable normative specification is maintained under:
-
-"grammar/specification/portability.md"
-
-The grammar validation contract is:
-
-"grammar/validation/portability.md"
-
-22.1 Grammar responsibilities
-
-The compiler must consume the parsed and semantically validated representation.
-
-It must not:
-
-- Parse portability syntax independently.
-- Redefine portability expressions.
-- Create another expression language.
-- Introduce a competing resource model.
-- Perform hardware discovery during parsing.
-- Perform resource allocation during parsing.
-- Treat grammar acceptance as proof of target feasibility.
-
-22.2 Grammar-to-compiler traceability
-
-Every stable portability-sensitive language construct must have a traceable mapping:
-
-GRAMMAR RULE
-    |
-    v
-AST NODE
-    |
-    v
-SEMANTIC CONTRACT
-    |
-    v
-CANONICAL IR MAPPING
-    |
-    v
-COMPILER PORTABILITY ANALYSIS
-    |
-    v
-ARTIFACT METADATA / EVIDENCE
-    |
-    v
-TARGET REALIZATION
-
-A construct accepted by the grammar but discarded before IR is an incomplete implementation.
-
-A construct accepted by the parser must not automatically be advertised as production-supported.
-
-23. Required compiler directory integration
-
-The compiler should organize portability responsibilities without creating duplicate authorities.
-
-The existing artifact subsystem must be reused.
-
-Recommended organization:
-
-src/compiler/
-|
-+-- mod.rs
-|
-+-- documentation/
-|   |
-|   +-- ARCHITECTURE.md
-|   +-- PIPELINE_CONTRACT.md
-|   +-- INTEGRATION_CONTRACT.md
-|   +-- PORTABILITY_CONTRACT.md
-|
-+-- artifacts/
-|   |
-|   +-- mod.rs
-|   +-- artifact.rs
-|   +-- manifest.rs
-|   +-- metadata.rs
-|   +-- portability.rs
-|   +-- validation.rs
-|   +-- serialization.rs
-|
-+-- analysis/
-|   |
-|   +-- portability.rs
-|   +-- capabilities.rs
-|   +-- requirements.rs
-|   +-- feasibility.rs
-|
-+-- ir/
-|   |
-|   +-- portability.rs
-|   +-- verification.rs
-|   +-- adapters.rs
-|
-+-- planning/
-|   |
-|   +-- target_discovery.rs
-|   +-- capability_matching.rs
-|   +-- resource_planning.rs
-|   +-- feasibility.rs
-|
-+-- backends/
-|   |
-|   +-- compatibility.rs
-|   +-- selection.rs
-|   +-- invocation.rs
-|
-+-- testing/
-    |
-    +-- portability.rs
-    +-- cross_target.rs
-    +-- semantic_equivalence.rs
-    +-- scalability.rs
+File or subsystem| Portability responsibility
+"src/compiler/mod.rs"| Compiler composition and architectural invariants
+"src/compiler/api/"| Public compilation requests and responses
+"src/compiler/configuration/"| Target descriptors, policies, profiles and budgets
+"src/compiler/compiler_types.rs"| Legacy compatibility types and controlled migration
+"src/compiler/context/"| Compilation state, dependencies and provenance
+"src/compiler/analysis/"| Compiler-facing dependency, capability and feasibility analysis
+"src/compiler/ir/"| Canonical IR integration and verified adapters
+"src/compiler/pipeline/"| Conditional compilation stages and orchestration
+"src/compiler/passes/"| Pass registration, legality and preservation
+"src/compiler/optimization/"| Semantics-preserving optimization
+"src/compiler/lowering/"| Domain and target-specific lowering
+"src/compiler/backends/"| Backend discovery, compatibility and selection
+"src/compiler/planning/"| Target, resource and heterogeneous planning
+"src/compiler/parallel/"| Dependency-aware compiler parallelism
+"src/compiler/incremental/"| Fingerprints, caching and invalidation
+"src/compiler/artifacts/"| Artifact portability and validation
+"src/compiler/linking/"| Portable module composition and target-specific linking
+"src/compiler/diagnostics/"| Structured portability diagnostics
+"src/compiler/security/"| Artifact, provider and evidence trust
+"src/compiler/profiling/"| Measurements and optimization evidence
+"src/compiler/testing/"| Portability conformance testing
 
-This is the desired integration structure, not a claim that every proposed file already exists.
+24.1 Frontend integration
 
-The existing files must be inspected before creating new ones.
+The compiler consumes:
 
-In particular:
+- "src/frontend/"
+- "src/frontend/ast/"
+- "src/frontend/semantic/"
+- "src/frontend/semantic/resources/"
+- The canonical semantic model.
 
-- "artifacts/portability.rs" remains the canonical artifact portability implementation.
-- A future "analysis/portability.rs" may analyze semantic and IR portability, but must delegate artifact classification to the existing artifact subsystem.
-- A future "ir/portability.rs" may verify representation portability, but must not define another IR.
-- A future "planning/feasibility.rs" must not allocate devices.
-- A future "backends/compatibility.rs" must integrate with "src/backend/".
-
-24. Portability analysis contract
-
-The compiler must analyze portability before target-specific lowering.
-
-The analysis should identify:
-
-1. Semantic target dependencies.
-2. Resource dependencies.
-3. Capability dependencies.
-4. Explicit target constraints.
-5. Non-portable operations.
-6. Domain interoperability dependencies.
-7. Required adaptations.
-8. Unsupported transformations.
-9. Evidence requirements.
-10. Potential realization alternatives.
+The legacy interfaces exposed through "src/lib.rs", including "src/semantic.rs" and "src/ir_gen.rs", must be migrated through explicit compatibility adapters.
 
-The analysis must produce structured results.
+They must not become competing production semantic or IR authorities.
 
-It must not mutate the canonical semantic model merely to make a target appear compatible.
+24.2 IR integration
 
-Portability analysis must distinguish:
-
-- Proven portability.
-- Declared portability.
-- Conditional portability.
-- Unknown portability.
-- Target-specific behavior.
-- Failed portability verification.
-
-The precise representation must reuse the existing artifact portability contract where the subject is an artifact.
-
-25. Cross-domain portability
-
-The compiler must preserve the semantics of all supported computing domains.
-
-25.1 Classical
-
-The same classical semantics must be realizable on compatible processors and accelerators.
-
-25.2 Quantum
-
-Logical quantum semantics must remain distinct from physical mapping.
-
-"quantum::ir" remains canonical.
-
-Routing, scheduling, QEC and ZQN must preserve the applicable logical contract.
-
-25.3 Hybrid
-
-Classical and quantum operations must preserve dependencies, synchronization and data exchange.
-
-25.4 AI
-
-AI computation must preserve model, tensor, numerical and execution contracts.
-
-25.5 HDL
-
-Hardware intent must remain distinct from a particular physical implementation.
-
-25.6 Distributed
-
-Distributed semantics must remain independent of a permanently fixed number of nodes.
-
-25.7 Networking and cryptography
-
-Network protocols, cryptographic semantics, security requirements and interoperability contracts must survive realization changes.
-
-25.8 Future domains
-
-A new computational domain must be able to participate through registered semantic and IR contracts.
-
-The compiler must not require changes to its fundamental portability model merely because a new domain or architecture appears.
-
-26. Future hardware and backend extensibility
-
-The compiler must support open-ended backend registration.
-
-The architecture must not depend on a closed list of:
-
-- Processor manufacturers.
-- GPU vendors.
-- Quantum hardware vendors.
-- FPGA vendors.
-- Accelerator models.
-- Device architectures.
-- Execution providers.
-
-Each backend must establish:
-
-1. Supported IR representations.
-2. Supported operations.
-3. Supported capabilities.
-4. Target requirements.
-5. Resource requirements.
-6. Lowering contracts.
-7. ABI compatibility.
-8. Artifact formats.
-9. Verification requirements.
-10. Failure behavior.
-11. Version compatibility.
-12. Portability implications.
-
-Adding a backend must not require changing source semantics.
-
-Adding a new target must not require rewriting a portable program.
-
-27. Portability test architecture
-
-The repository must maintain portability tests.
-
-Recommended organization:
-
-tests/
-|
-+-- portability/
-    |
-    +-- positive/
-    +-- negative/
-    +-- boundary/
-    +-- semantic_equivalence/
-    +-- cross_target/
-    +-- artifacts/
-    +-- serialization/
-    +-- capabilities/
-    +-- resources/
-    +-- classical/
-    +-- quantum/
-    +-- hybrid/
-    +-- ai/
-    +-- hdl/
-    +-- distributed/
-    +-- security/
-    +-- compatibility/
-    +-- determinism/
-    +-- scalability/
-    +-- diagnostics/
-
-Reuse existing test locations where equivalent infrastructure already exists.
-
-Do not duplicate test frameworks.
-
-27.1 Required fixtures
-
-The following fixtures should be available where supported by the language:
+The compiler consumes canonical representations through:
+
+"src/compiler/ir/"
+
+The compiler must not duplicate:
+
+- ZUIR.
+- Classical IR.
+- Quantum IR.
+- HDLIR.
+- AI semantic representations.
+- Hybrid semantic representations.
+- Distributed semantic representations.
+
+24.3 Backend integration
+
+The compiler coordinates backend selection and invocation.
+
+The authoritative code-generation implementations remain in:
+
+"src/backend/"
+
+The compiler must not implement another backend architecture inside "src/compiler/backends/".
+
+24.4 Runtime integration
+
+The compiler hands validated artifacts and execution requirements to:
+
+"src/runtime/"
+
+The runtime owns actual resource negotiation and execution.
+
+The compiler must not claim that a compilation plan guarantees physical execution.
+
+24.5 Linking integration
+
+The compiler linking authority is:
+
+"src/compiler/linking/"
+
+It must preserve:
+
+- Artifact portability information.
+- Semantic compatibility.
+- ABI compatibility.
+- Domain dependencies.
+- Provenance.
+- Version requirements.
+
+It must not introduce a competing root-level linker implementation.
+
+24.6 Grammar integration
+
+The compiler must consume the language contracts defined by:
+
+- "grammar/Zamani.g4"
+- "grammar/resources/portability.g4"
+- "grammar/compile/target.g4"
+- "grammar/compile/target-selection.g4"
+- "grammar/spec/portability.md"
+- "grammar/spec/resources.md"
+- "grammar/spec/determinism.md"
+- "grammar/spec/compatibility.md"
+- "grammar/specification/portability.md"
+- "grammar/validation/portability.md"
+
+The root grammar remains the canonical composition boundary.
+
+The compiler must not create another grammar root or independently interpret source syntax.
+
+The repository must also reconcile any documented discrepancy between the ANTLR lexer/parser import declarations and the actual grammar file inventory before declaring grammar-to-frontend portability conformance.
+
+25. Portability conformance testing
+
+Portability must be demonstrated through executable tests.
+
+The compiler MUST NOT claim production portability merely because:
+
+- A module exists.
+- A trait exists.
+- A grammar accepts a construct.
+- A backend registers successfully.
+- An artifact contains portability metadata.
+- A target descriptor validates.
+- A compilation stage is declared.
+
+25.1 Required test categories
+
+Test category| Required evidence
+Source portability| Same source accepted by compatible frontend implementations
+Semantic portability| Required meaning preserved
+IR portability| Canonical representations verify
+Artifact portability| Portable artifacts serialize, deserialize and validate
+Target portability| Compatible target realization succeeds
+Capability validation| Missing capabilities are detected
+Resource feasibility| Insufficient resources are reported
+Unknown evidence| Unknown never becomes feasible
+Classical portability| Classical semantics preserved
+Quantum portability| Quantum semantics preserved
+HDL portability| Hardware-description semantics preserved
+Hybrid portability| Cross-domain dependencies preserved
+Distributed portability| Communication and consistency preserved
+AI portability| Tensor and model semantics preserved
+Reproducibility| Equivalent declared inputs produce reproducible outputs
+Incremental compilation| Cache invalidation is correct
+Security| Untrusted inputs cannot bypass validation
+Scalability| No arbitrary universal hardware ceilings
+Failure handling| Unsupported realizations fail explicitly
+
+25.2 Required fixtures
+
+The compiler conformance suite should include:
 
 minimal.zm
 classical.zm
 quantum.zm
-hybrid.zm
-ai.zm
 hdl.zm
+hybrid.zm
 distributed.zm
-poco-reaf.zm
+ai.zm
+tensor.zm
+networking.zm
+crypto.zm
+embedded.zm
+multi_target.zm
 
-27.2 Semantic equivalence tests
+These fixtures must test actual compilation paths.
 
-Test the same semantic computation through multiple realizations.
+They must not merely test module imports or successful parsing.
 
-Examples:
+25.3 Cross-target equivalence
 
-Same classical program
-       |
-       +---- CPU
-       |
-       +---- GPU
-       |
-       +---- Other compatible accelerator
+Where multiple compatible implementations exist, tests must compare their results against the applicable semantic contract.
 
-Verify equivalent observable behavior within the applicable numerical and concurrency contracts.
+The comparison must use the domain's actual equivalence rules.
 
-Quantum:
+For example:
 
-Same logical quantum program
-       |
-       +---- Quantum simulator
-       |
-       +---- QPU A
-       |
-       +---- QPU B
+- Classical results may require value equivalence.
+- Floating-point results may require specified numerical tolerances.
+- Quantum results may require distributional or state-level equivalence.
+- HDL results may require behavioral or formal equivalence.
+- Distributed results may require consistency and ordering equivalence.
 
-Verify the applicable logical and statistical semantic contract, accounting for the declared noise and measurement model.
+One universal equality test is insufficient for every computing domain.
 
-HDL:
+26. Scalability qualification
 
-Same hardware intent
-       |
-       +---- Simulation
-       |
-       +---- FPGA
-       |
-       +---- ASIC flow
+The compiler must be tested progressively across increasing workload sizes.
 
-Verify equivalence under the supported hardware semantics.
+Testing must cover:
 
-Distributed:
+- Small workloads.
+- Increasingly large workloads.
+- Large dependency graphs.
+- Large artifact manifests.
+- Large symbolic resource expressions.
+- Large IR structures.
+- Large numbers of registered providers.
+- Large numbers of compilation units.
+- Heterogeneous workloads.
+- Distributed compilation.
 
-Same distributed computation
-       |
-       +---- Smaller deployment
-       |
-       +---- Larger deployment
+Tests must evaluate:
 
-Verify that changing deployment scale does not violate the declared computation contract.
-
-28. Hard-coding audit
-
-The compiler and artifact subsystem must be audited for hidden capacity restrictions.
-
-Search for constructs such as:
-
-MAX_QUBITS
-MAX_CPUS
-MAX_GPUS
-MAX_FPGAS
-MAX_QPUS
-MAX_NODES
-MAX_MEMORY
-MAX_THREADS
-MAX_WORKERS
-MAX_TENSOR_RANK
-MAX_REGISTER_WIDTH
-MAX_DEVICES
-
-Also investigate equivalent restrictions expressed through:
-
-- Fixed-size arrays.
-- Closed target enums.
-- Fixed-size identifier tables.
-- Arbitrary collection truncation.
-- Hardcoded worker counts.
-- Hardcoded parser limits.
-- Fixed metadata lengths.
-- Fixed artifact counts.
-- Fixed domain registries.
-
-A restriction must be classified before being removed.
-
-Some operational safeguards are legitimate.
-
-For example, an explicitly configured artifact byte budget is acceptable.
-
-A hidden universal artifact-size ceiling is not.
-
-The audit must distinguish:
-
-Restriction| Policy
-Universal hardware capacity ceiling| Prohibited
-Universal language-level workload ceiling| Prohibited
-Configurable resource budget| Permitted
-Target-specific capability limit| Permitted
-Security safeguard| Permitted when justified
-Actual operating-system limitation| Must be reported
-Implementation allocation failure| Must be reported
-Program-defined numeric constant| Permitted
-
-29. Performance and resource behavior
-
-The compiler must support both small and large workloads efficiently.
-
-It should provide:
-
-- Lazy processing where appropriate.
+- Memory consumption.
+- Compilation time.
+- Resource accounting.
+- Failure behavior.
 - Incremental compilation.
-- Dependency-aware caching.
-- Parallel compilation.
-- Streaming artifact processing where appropriate.
-- Avoidance of unnecessary materialization.
-- Configurable concurrency.
-- Explicit cancellation.
-- Resource-aware compilation.
-- Memory-conscious transformations.
-- Deterministic output collection where required.
+- Determinism.
+- Parallel execution.
+- Representation limits.
+- Operational budget enforcement.
 
-The compiler must not promise that every workload can fit in memory.
+No fixed universal benchmark size establishes the maximum supported Zamani program.
 
-Where the implementation supports streaming or external storage, it should use those mechanisms for large artifacts.
+A benchmark is evidence about a particular implementation and environment, not a language ceiling.
 
-Where it does not, it must report the actual limitation rather than silently truncate data.
+27. File completion and integration freeze
 
-30. Production quality requirements
+Every implementation file participating in portability must have an explicit completion contract.
 
-The implementation must satisfy the repository's Rust requirements.
+Each file must establish:
+
+1. Purpose.
+2. Ownership.
+3. Non-responsibilities.
+4. Canonical authorities.
+5. Public API.
+6. Input and output contracts.
+7. Dependencies.
+8. Dependency direction.
+9. Ownership and lifetime rules.
+10. Error handling.
+11. Determinism.
+12. Concurrency.
+13. Security.
+14. Scalability.
+15. Integration consumers.
+16. Required tests.
+17. Compatibility rules.
+18. Completion criteria.
+
+27.1 Freeze rule
+
+A file is complete only when:
+
+- Its public contract is defined.
+- Its dependencies are known.
+- Its downstream consumers are known.
+- Its error model is agreed.
+- Its integration behavior is tested.
+- Its documentation matches its implementation.
+- Its required tests pass.
+- Its compatibility expectations are documented.
+
+A file must not be declared frozen merely because its implementation compiles.
+
+27.2 Contract changes
+
+No architecture can guarantee that an implementation defect will never require a previously completed contract to change.
+
+When an integration defect is discovered:
+
+1. Identify the responsible authority.
+2. Determine whether the defect is implementation-only or a contract defect.
+3. Avoid unnecessary changes to unrelated files.
+4. Record affected consumers.
+5. Version incompatible contract changes.
+6. Update the relevant tests.
+7. Revalidate the integration chain.
+
+This provides controlled evolution without repeated architectural redesign.
+
+28. Production readiness requirements
+
+The compiler may claim portability conformance only when the following conditions are demonstrated.
+
+- One canonical source-language semantic authority.
+- One canonical universal IR authority.
+- Canonical domain IR integration.
+- Verified semantics-preserving transformations.
+- Explicit requirements and capabilities.
+- Evidence-based feasibility.
+- Open-world target and provider registration.
+- Correct domain-specific lowering.
+- Valid backend realization.
+- Portable artifact contracts.
+- Versioned serialization.
+- Provenance preservation.
+- Reproducible compilation.
+- Deterministic behavior where required.
+- Secure artifact validation.
+- Cross-target conformance.
+- Explicit unsupported-operation diagnostics.
+- Correct resource exhaustion behavior.
+- Incremental compilation correctness.
+- No arbitrary universal hardware ceilings.
+- No unsafe Rust.
+- Passing integration and regression tests.
+
+The existence of the corresponding files or modules is not sufficient evidence.
+
+29. Required Rust quality gates
+
+The repository must maintain these quality gates:
 
 cargo fmt --all -- --check
 
@@ -1742,333 +1788,123 @@ cargo test --all-targets
 
 cargo clippy --all-targets -- -D warnings
 
-Additionally:
-
-- Rust 1.97 or later.
-- Rust 2021 edition.
-- No unsafe Rust.
-- No artificial universal hardware ceilings.
-- No duplicate IR authorities.
-- No duplicate artifact authorities.
-- No fabricated backend output.
-- No silent semantic fallback.
-- No unverified portability claims.
-- No successful compilation result when a required stage failed.
-- No unverified external payloads represented as validated.
-- No target-specific artifact represented as universally portable.
+Additional requirements:
+
+- Test the declared Rust minimum version.
+- Test a current stable Rust toolchain.
+- Validate all supported feature configurations.
+- Validate public documentation.
+- Verify that no "unsafe" code is introduced.
+- Ensure broad lint suppressions do not hide incomplete compiler implementations.
+
+Passing these commands is necessary but not sufficient for portability conformance.
+
+30. Final architectural invariant
+
+The complete Zamani portability architecture is:
+
+                 ZAMANI SOURCE
+                       |
+                       v
+                CANONICAL GRAMMAR
+                       |
+                       v
+                    FRONTEND
+                       |
+                       v
+              CANONICAL AST
+                       |
+                       v
+              SEMANTIC AUTHORITY
+                       |
+                       v
+           VALIDATED SEMANTIC MODEL
+                       |
+                       v
+               CANONICAL ZUIR
+                       |
+              +--------+--------+
+              |        |        |
+              v        v        v
+          CLASSICAL  QUANTUM   HDLIR
+              |        |        |
+              +--------+--------+
+                       |
+                       v
+             OTHER DOMAIN IRs
+                       |
+                       v
+                IR VERIFICATION
+                       |
+                       v
+          SEMANTICS-PRESERVING PASSES
+                       |
+                       v
+                  OPTIMIZATION
+                       |
+                       v
+             CAPABILITY NEGOTIATION
+                       |
+                       v
+              RESOURCE FEASIBILITY
+                       |
+                       v
+           HETEROGENEOUS PLANNING
+                       |
+                       v
+             DOMAIN-SPECIFIC LOWERING
+                       |
+                       v
+               BACKEND REALIZATION
+                       |
+                       v
+             PORTABLE / TARGET-SPECIFIC
+                  ARTIFACTS
+                       |
+                       v
+              VALIDATION AND LINKING
+                       |
+                       v
+                DEPLOYMENT HANDOFF
+                       |
+                       v
+                    RUNTIME
+                       |
+                       v
+              PHYSICAL EXECUTION
+
+The compiler coordinates this architecture.
+
+It does not replace the semantic authority, IR authorities, domain implementations, backend implementations or runtime.
+
+The fundamental invariant is:
+
+One Zamani program must retain its specified computational meaning across compatible realizations, regardless of changes in machine size, hardware architecture, execution location or available computational resources.
+
+The compiler must support the smallest meaningful computation and scale progressively to arbitrarily large finite realizations without imposing arbitrary universal hardware ceilings.
+
+Unknown capabilities must remain unknown.
+
+Infeasible computations must be reported honestly.
+
+Unsupported transformations must not silently change semantics.
+
+Portable artifacts must retain their provenance and verification evidence.
 
-Where the repository's grammar architecture requires Rust 1.97.1 or later, that stronger minimum must be preserved.
+Target-specific realizations must remain distinguishable from portable representations.
 
-31. File integration and freeze requirements
-
-This contract must be implementable without repeatedly redesigning its shared interfaces.
-
-The following contracts must be established before dependent implementation work is frozen.
-
-File| Required contract
-"compiler/mod.rs"| Canonical compiler composition and artifact export
-"compiler/artifacts/mod.rs"| Canonical artifact public API
-"compiler/artifacts/artifact.rs"| Artifact identity and payload
-"compiler/artifacts/manifest.rs"| Artifact dependencies
-"compiler/artifacts/metadata.rs"| Metadata schema and policy
-"compiler/artifacts/portability.rs"| Canonical artifact portability assessment
-"compiler/artifacts/validation.rs"| Validation states and evidence requirements
-"compiler/artifacts/serialization.rs"| Stable wire compatibility
-"compiler/diagnostics.rs"| Portability diagnostic integration
-"compiler/analysis/portability.rs"| Semantic and IR portability analysis
-"compiler/ir/portability.rs"| IR portability verification
-"compiler/planning/feasibility.rs"| Capability and resource feasibility
-"compiler/backends/compatibility.rs"| Backend compatibility
-"compiler/testing/portability.rs"| Shared portability test contracts
-
-The last five paths are proposed integration points, not assertions that the files already exist.
-
-Every implementation file must define:
-
-1. Purpose.
-2. Ownership.
-3. Non-ownership.
-4. Public API.
-5. Dependencies.
-6. Upstream integrations.
-7. Downstream integrations.
-8. Data contracts.
-9. Invariants.
-10. Errors.
-11. Resource behavior.
-12. Scalability behavior.
-13. Determinism.
-14. Security.
-15. Compatibility.
-16. Tests.
-17. Freeze criteria.
-
-A file is frozen only after its implementation and integrations satisfy these obligations.
-
-A legitimate later semantic or compatibility change may require a reviewed modification. Freezing must never preserve a known defect.
-
-32. Implementation sequence
-
-The implementation must follow dependency order.
-
-Phase 0 — Repository audit
-
-Verify:
-
-- Existing compiler modules.
-- Existing artifact subsystem.
-- Existing grammar authorities.
-- Existing IR authorities.
-- Existing backend interfaces.
-- Existing tests.
-- Existing module exports.
-- Existing compatibility obligations.
-
-Deliverable: authoritative dependency and integration map.
-
-Phase 1 — Artifact integration
-
-Complete:
-
-- "src/compiler/artifacts/mod.rs"
-- "src/compiler/artifacts/artifact.rs"
-- "src/compiler/artifacts/manifest.rs"
-- "src/compiler/artifacts/metadata.rs"
-- "src/compiler/artifacts/portability.rs"
-- "src/compiler/artifacts/validation.rs"
-- "src/compiler/artifacts/serialization.rs"
-
-Preserve the existing canonical implementations.
-
-Phase 2 — Compiler root integration
-
-Complete the artifact integration in:
-
-"src/compiler/mod.rs"
-
-Preserve the compiler's existing public module hierarchy.
-
-Phase 3 — Semantic and IR portability
-
-Implement the compiler-facing portability analysis and verification contracts.
-
-Integrate canonical semantic and IR authorities.
-
-Phase 4 — Transformation portability
-
-Integrate pass legality, semantic preservation, analysis invalidation and provenance.
-
-Phase 5 — Capability and feasibility
-
-Integrate capability matching, resource planning and feasibility reporting.
-
-Phase 6 — Heterogeneous planning
-
-Integrate the existing hardware partitioner and hybrid pipeline.
-
-Phase 7 — Backend compatibility
-
-Integrate existing backend implementations through established backend contracts.
-
-Phase 8 — Artifact realization
-
-Integrate target-specific artifact generation, validation, serialization and linking.
-
-Phase 9 — Incremental and parallel compilation
-
-Ensure portable compilation and target-specific realization use sound dependency identities.
-
-Phase 10 — Production conformance
-
-Run cross-target, hybrid, semantic-equivalence, security, scalability and regression tests.
-
-33. Acceptance criteria
-
-The compiler is conformant with this portability contract only when the following conditions are demonstrated.
-
-Language and semantics
-
-- [ ] One canonical Zamani language.
-- [ ] One canonical grammar composition root.
-- [ ] One canonical AST architecture.
-- [ ] One semantic authority.
-- [ ] Portable semantics remain target-independent.
-- [ ] Requirements and capabilities remain distinct.
-- [ ] Logical and physical resources remain distinct.
-
-Intermediate representations
-
-- [ ] ZUIR remains canonical.
-- [ ] Classical IR remains canonical.
-- [ ] "quantum::ir" remains canonical.
-- [ ] HDL/hardware IR remains canonical.
-- [ ] AI and tensor integration does not duplicate existing authorities.
-- [ ] Hybrid dependencies are preserved.
-- [ ] Distributed semantics are preserved.
-
-Portability
-
-- [ ] Portable artifacts are distinguishable from target-specific artifacts.
-- [ ] Portability declarations are distinguishable from verified evidence.
-- [ ] Unknown evidence is not treated as successful verification.
-- [ ] Target-specific requirements are recorded.
-- [ ] Future backend extensions do not require source rewriting.
-- [ ] Cross-target semantic equivalence is tested.
-- [ ] Unsupported operations produce explicit diagnostics.
-
-Scalability
-
-- [ ] No artificial universal hardware ceilings.
-- [ ] No hidden device-count ceilings.
-- [ ] No fixed worker-count ceiling.
-- [ ] No arbitrary tensor-rank ceiling.
-- [ ] No universal memory ceiling.
-- [ ] Configurable operational budgets work.
-- [ ] Actual resource exhaustion is reported.
-- [ ] Large artifact processing is supported by the available implementation strategy.
-
-Artifacts
-
-- [ ] Artifact integrity is validated.
-- [ ] Manifest dependencies are validated.
-- [ ] Serialization versions are enforced.
-- [ ] Portability assessment is integrated.
-- [ ] Provenance is preserved.
-- [ ] Incomplete validation remains incomplete.
-- [ ] Target-specific artifacts identify their compatibility requirements.
-
-Safety and reliability
-
-- [ ] Safe Rust only.
-- [ ] Rust baseline is verified.
-- [ ] Deterministic behavior is tested where required.
-- [ ] Security validation is integrated.
-- [ ] No fabricated compilation success.
-- [ ] No silent semantic changes.
-- [ ] Required quality gates pass.
-
-34. Final architecture invariant
-
-The following invariant is mandatory:
-
-The same Zamani program must retain its declared semantic meaning when its realization changes, provided the new realization satisfies the program's requirements and constraints.
-
-The compiler may:
-
-- Optimize.
-- Specialize.
-- Decompose.
-- Lower.
-- Legalize.
-- Partition.
-- Select compatible backends.
-- Produce multiple target artifacts.
-
-But it must not silently redefine the program.
-
-35. Final POCO-REAF model
-
-                 ONE ZAMANI PROGRAM
-                         |
-                         v
-                 ONE SOURCE MEANING
-                         |
-                         v
-                ONE CANONICAL MODEL
-                         |
-                         v
-                PORTABLE IR / PACKAGE
-                         |
-                         v
-                 VERIFIED ARTIFACT
-                         |
-              +----------+----------+
-              |          |          |
-              v          v          v
-             CPU        GPU        FPGA
-              |          |          |
-              +----------+----------+
-                         |
-              +----------+----------+
-              |          |          |
-              v          v          v
-             QPU     DISTRIBUTED   CLOUD
-              |          |          |
-              +----------+----------+
-                         |
-                         v
-                  FUTURE TARGETS
-
-The source semantics remain stable.
-
-The implementation adapts to the environment.
-
-The compiler must not turn today's hardware limitations into permanent language limitations.
-
-36. Final definitions
-
-Portability
-
-Preservation of a program's declared semantic contract across permitted changes in implementation realization.
-
-Scalability
-
-The ability of the same language and semantic architecture to represent and process workloads of varying sizes without arbitrary universal capacity ceilings.
-
-Portable compilation artifact
-
-A versioned artifact containing validated target-independent representations and the information necessary for subsequent compatible realization.
-
-Target-specific realization
-
-A derived implementation of portable semantics for a particular target or execution environment.
-
-POCO-REAF
-
-The ability to express computation once, establish its semantic meaning once, preserve that meaning in canonical portable representations, and reuse it across compatible present and future execution environments without rewriting the source merely because the underlying hardware or execution topology changes.
+POCO-REAF is achieved through semantic preservation, extensible realization, reproducible artifacts and verified compatibility—not through pretending that every machine has identical capabilities.
 
 ---
 
-37. Completion and conformance statement
+END OF PORTABILITY CONTRACT
 
-This document defines the compiler portability contract.
+Canonical file: "src/compiler/documentation/PORTABILITY_CONTRACT.md"
 
-Its existence does not prove that the compiler, backends, runtime or all computing domains already satisfy it.
+Contract version: "1.0.0"
 
-The repository must maintain separate evidence for:
+Rust baseline: "1.97+", edition "2021"
 
-Component| Required status
-Portability contract| Defined and reviewed
-Grammar integration| Conformant
-Semantic integration| Implemented and verified
-IR integration| Implemented and verified
-Artifact portability| Implemented and tested
-Capability integration| Implemented and tested
-Feasibility integration| Implemented and tested
-Backend integration| Verified per provider
-Cross-target behavior| Conformance demonstrated
-Runtime realization| Verified per execution environment
+Safety: "#![forbid(unsafe_code)]"
 
-The overall portability claim must reflect the actual demonstrated implementation status.
-
-No subsystem may claim universal portability solely because its interface or specification exists.
-
-Final principle:
-
-Zamani must not solve today's hardware limitations by turning them into tomorrow's programming-language limitations.
-
-The language defines computation.
-
-The semantic layer establishes meaning.
-
-The canonical IR preserves that meaning.
-
-The compiler coordinates transformations and realization.
-
-The backends produce target-specific implementations.
-
-The runtime executes those implementations.
-
-The same program semantics remain the source of truth.
-
-Program Once. Compile Once. Run Everywhere. Anywhere. Forever.
+Portability objective: "Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever"
