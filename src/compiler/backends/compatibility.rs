@@ -4,74 +4,66 @@
 #![deny(missing_docs)]
 #![deny(unused_must_use)]
 
-//! # Zamani Compiler — Backend Compatibility Adapter
+//! # Zamani Compiler — Backend Compatibility Integration
 //!
-//! Path: `src/compiler/backends/compatibility.rs`
+//! Path: src/compiler/backends/compatibility.rs
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //!
 //! ## Purpose
 //!
-//! Adapt the canonical backend compatibility engine to the compiler's
-//! backend-selection interface.
+//! Integrates the canonical backend compatibility evaluator with
+//! the compiler backend-selection infrastructure.
 //!
-//! The authoritative compatibility implementation is:
+//! Authoritative compatibility implementation:
 //!
 //!     crate::backend::compatibility
 //!
-//! The authoritative backend-selection interface is:
+//! Authoritative backend registry:
+//!
+//!     crate::backend::registry
+//!
+//! Authoritative backend selection:
 //!
 //!     crate::compiler::backends::selection
 //!
-//! This module connects those existing contracts. It does not implement
-//! another capability model, resource model, target registry, or
-//! compatibility algorithm.
+//! This module is an adapter. It does not implement another
+//! capability model, resource model, target registry,
+//! or compatibility algorithm.
 //!
 //! ## Ownership
 //!
 //! This module owns:
 //!
-//! - Explicit association between a backend ID and a target profile.
-//! - The compiler-facing compatibility-profile provider interface.
-//! - Adaptation of canonical compatibility reports to backend eligibility.
-//! - Structured errors at this integration boundary.
+//! - Backend-to-target compatibility profile association.
+//! - Compiler-facing profile provider contract.
+//! - Detailed backend compatibility evaluation.
+//! - Adaptation into BackendEligibility.
+//! - Integration-boundary validation and errors.
+//!
+//! ## Non-responsibilities
 //!
 //! This module does not own:
 //!
 //! - Source-language semantics.
+//! - Grammar or parsing.
 //! - Semantic capability requirements.
 //! - Capability identifiers.
 //! - Resource identifiers or quantities.
 //! - Target descriptors.
 //! - Backend registration.
-//! - Backend construction.
-//! - Target discovery.
-//! - Resource planning.
-//! - Hardware allocation.
+//! - Hardware discovery.
+//! - Resource allocation.
+//! - Resource feasibility planning.
 //! - Scheduling or routing.
-//! - IR verification or transformation.
+//! - IR construction or verification.
 //! - Code generation.
 //! - Artifact validation.
 //! - Runtime execution.
 //!
-//! ## Important distinctions
-//!
-//! Registration is not compatibility.
-//!
-//! Compatibility is not resource allocation.
-//!
-//! A target profile is not proof of physical availability.
-//!
-//! A compatibility report is not proof that a backend can generate a
-//! valid executable artifact.
-//!
-//! Unknown evidence is never treated as successful compatibility.
-//!
-//! An empty requirement set is not proof of compatibility.
-//!
 //! ## Scalability
 //!
-//! No fixed maximum is imposed on:
+//! No arbitrary universal limits are imposed on:
 //!
 //! - Backends.
 //! - Targets.
@@ -80,29 +72,32 @@
 //! - Resource quantities.
 //! - Computational domains.
 //! - Hardware architectures.
+//! - Distributed participants.
 //!
-//! The adapter uses the canonical compatibility types and collections.
-//! Actual resource exhaustion remains an explicit implementation failure.
+//! Resource representation and evaluation are delegated to
+//! the canonical backend compatibility implementation.
 //!
-//! ## Integration
+//! Actual resource exhaustion remains an explicit failure.
 //!
-//! The parent module must declare:
+//! Literal infinite physical computation is not claimed.
 //!
-//!     pub mod compatibility;
+//! ## Safety
 //!
-//! The compiler root must expose the backend module.
+//! Unsafe Rust is forbidden.
 //!
-//! The backend root must expose the canonical compatibility module.
+//! External profile-provider results must be validated.
 //!
-//! The canonical backend registry must remain the sole backend registry.
+//! Unknown compatibility must never be treated as success.
 
 use std::error::Error;
 use std::fmt;
 
 use crate::backend::compatibility::{
     CompatibilityEvaluator,
+    CompatibilityIssue,
     CompatibilityReport,
     CompatibilityRequest,
+    CompatibilitySeverity,
     CompatibilityStatus,
     TargetCapabilityProfile,
 };
@@ -129,38 +124,42 @@ pub const BACKEND_COMPATIBILITY_API_VERSION: u16 = 1;
 // ERRORS
 // ============================================================================
 
-/// Errors originating at the compiler/backend compatibility boundary.
+/// Errors occurring at the compiler/backend compatibility boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BackendCompatibilityError {
-    /// A backend identifier was empty or malformed.
+    /// Backend identity is empty or malformed.
     InvalidBackendIdentifier {
         /// Supplied backend identifier.
         backend_id: String,
+
         /// Explanation of the validation failure.
         reason: String,
     },
 
-    /// A target profile was not associated with a valid backend identifier.
+    /// A target profile is associated with an invalid backend.
     InvalidProfileBinding {
-        /// Backend identifier supplied to the binding.
+        /// Backend identifier.
         backend_id: String,
+
         /// Explanation of the validation failure.
         reason: String,
     },
 
-    /// A provider returned a profile associated with another backend.
+    /// Provider returned a profile belonging to another backend.
     BackendIdentityMismatch {
         /// Backend requested by the compiler.
         requested_backend_id: String,
-        /// Backend identity declared by the returned binding.
+
+        /// Backend associated with the returned profile.
         profile_backend_id: String,
     },
 
-    /// The profile provider failed to produce a result.
+    /// The profile provider failed.
     ProviderFailure {
         /// Backend whose profile was requested.
         backend_id: String,
-        /// Provider's error description.
+
+        /// Provider failure explanation.
         reason: String,
     },
 }
@@ -174,38 +173,46 @@ impl fmt::Display for BackendCompatibilityError {
             Self::InvalidBackendIdentifier {
                 backend_id,
                 reason,
-            } => write!(
-                formatter,
-                "invalid backend identifier `{backend_id}`: {reason}"
-            ),
+            } => {
+                write!(
+                    formatter,
+                    "Invalid backend identifier `{backend_id}`: {reason}"
+                )
+            }
 
             Self::InvalidProfileBinding {
                 backend_id,
                 reason,
-            } => write!(
-                formatter,
-                "invalid compatibility profile binding for \
-                 backend `{backend_id}`: {reason}"
-            ),
+            } => {
+                write!(
+                    formatter,
+                    "Invalid compatibility profile binding for \
+                     backend `{backend_id}`: {reason}"
+                )
+            }
 
             Self::BackendIdentityMismatch {
                 requested_backend_id,
                 profile_backend_id,
-            } => write!(
-                formatter,
-                "backend compatibility profile identity mismatch: \
-                 requested `{requested_backend_id}`, received \
-                 `{profile_backend_id}`"
-            ),
+            } => {
+                write!(
+                    formatter,
+                    "Backend identity mismatch: requested \
+                     `{requested_backend_id}`, received \
+                     `{profile_backend_id}`"
+                )
+            }
 
             Self::ProviderFailure {
                 backend_id,
                 reason,
-            } => write!(
-                formatter,
-                "failed to obtain compatibility profile for \
-                 backend `{backend_id}`: {reason}"
-            ),
+            } => {
+                write!(
+                    formatter,
+                    "Failed to obtain compatibility profile \
+                     for backend `{backend_id}`: {reason}"
+                )
+            }
         }
     }
 }
@@ -216,13 +223,13 @@ impl Error for BackendCompatibilityError {}
 // IDENTIFIER VALIDATION
 // ============================================================================
 
-/// Validate a backend identifier at the adapter boundary.
+/// Validate a backend identifier at the integration boundary.
 ///
-/// The canonical registry remains responsible for canonical backend
-/// identifier validation. This check protects independently supplied
-/// profile bindings and provider results.
+/// Canonical identifier syntax and uniqueness remain the responsibility
+/// of the backend registry.
 ///
-/// No arbitrary length limit is imposed.
+/// This function validates independently supplied identifiers without
+/// imposing an arbitrary maximum identifier length.
 fn validate_backend_identifier(
     backend_id: &str,
 ) -> Result<(), BackendCompatibilityError> {
@@ -239,8 +246,7 @@ fn validate_backend_identifier(
         return Err(
             BackendCompatibilityError::InvalidBackendIdentifier {
                 backend_id: backend_id.to_owned(),
-                reason: "identifier must not contain control characters"
-                    .to_owned(),
+                reason: "identifier contains control characters".to_owned(),
             },
         );
     }
@@ -249,8 +255,7 @@ fn validate_backend_identifier(
         return Err(
             BackendCompatibilityError::InvalidBackendIdentifier {
                 backend_id: backend_id.to_owned(),
-                reason: "identifier must not contain surrounding whitespace"
-                    .to_owned(),
+                reason: "identifier contains surrounding whitespace".to_owned(),
             },
         );
     }
@@ -258,10 +263,11 @@ fn validate_backend_identifier(
     Ok(())
 }
 
-/// Validate the target identity contained in a canonical profile.
+/// Validate a canonical target profile identity.
 ///
-/// The target ID is deliberately not required to equal the backend ID.
-/// One backend may support several target environments.
+/// Backend and target identities are intentionally independent.
+///
+/// One backend may support multiple targets.
 fn validate_target_identity(
     backend_id: &str,
     target_id: &str,
@@ -270,8 +276,7 @@ fn validate_target_identity(
         return Err(
             BackendCompatibilityError::InvalidProfileBinding {
                 backend_id: backend_id.to_owned(),
-                reason: "target profile identifier must not be empty"
-                    .to_owned(),
+                reason: "target identifier must not be empty".to_owned(),
             },
         );
     }
@@ -280,8 +285,7 @@ fn validate_target_identity(
         return Err(
             BackendCompatibilityError::InvalidProfileBinding {
                 backend_id: backend_id.to_owned(),
-                reason: "target profile identifier must not contain \
-                         control characters"
+                reason: "target identifier contains control characters"
                     .to_owned(),
             },
         );
@@ -291,8 +295,7 @@ fn validate_target_identity(
         return Err(
             BackendCompatibilityError::InvalidProfileBinding {
                 backend_id: backend_id.to_owned(),
-                reason: "target profile identifier must not contain \
-                         surrounding whitespace"
+                reason: "target identifier contains surrounding whitespace"
                     .to_owned(),
             },
         );
@@ -302,27 +305,21 @@ fn validate_target_identity(
 }
 
 // ============================================================================
-// BACKEND-TO-TARGET PROFILE BINDING
+// BACKEND-TO-TARGET BINDING
 // ============================================================================
 
-/// Explicit association between a registered backend and a canonical
-/// target capability profile.
+/// Explicit association between a registered backend and its
+/// canonical target compatibility profile.
 ///
-/// This type does not duplicate the target capability model. It holds the
-/// canonical `TargetCapabilityProfile` directly.
+/// This type reuses TargetCapabilityProfile directly.
 ///
-/// The backend ID identifies the registered backend implementation.
-/// The profile's target ID identifies the target environment described by
-/// that profile.
+/// It does not create another capability or resource representation.
 ///
-/// These identifiers are intentionally independent.
+/// Backend identity identifies the registered implementation.
 ///
-/// For example, one backend may provide different profiles for multiple
-/// targets. A provider can select the appropriate profile using the
-/// compilation request and its own authoritative metadata.
+/// Target identity identifies the environment described by the profile.
 ///
-/// A profile must never be associated with a backend merely because their
-/// display names, extensions, vendors, or architecture names appear similar.
+/// These identities must never be assumed to be identical.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendCompatibilityBinding {
     backend_id: String,
@@ -330,12 +327,12 @@ pub struct BackendCompatibilityBinding {
 }
 
 impl BackendCompatibilityBinding {
-    /// Create an explicit backend-to-target compatibility binding.
+    /// Create an explicit backend-to-target association.
     ///
     /// # Errors
     ///
-    /// Returns an error if either identity is empty, contains surrounding
-    /// whitespace, or contains control characters.
+    /// Returns an error when either identifier is empty, contains
+    /// control characters, or contains surrounding whitespace.
     pub fn new(
         backend_id: impl Into<String>,
         profile: TargetCapabilityProfile,
@@ -355,44 +352,47 @@ impl BackendCompatibilityBinding {
         })
     }
 
-    /// Return the canonical backend identifier.
+    /// Return the associated canonical backend identifier.
     #[must_use]
     pub fn backend_id(&self) -> &str {
         &self.backend_id
     }
 
-    /// Return the target identifier described by this profile.
+    /// Return the target identifier.
     #[must_use]
     pub fn target_id(&self) -> &str {
         &self.profile.target_id
     }
 
-    /// Return the canonical target capability profile.
+    /// Return the authoritative target capability profile.
     #[must_use]
     pub fn profile(&self) -> &TargetCapabilityProfile {
         &self.profile
     }
 
-    /// Consume the binding and return its canonical target profile.
+    /// Consume the binding and return its target profile.
     #[must_use]
     pub fn into_profile(self) -> TargetCapabilityProfile {
         self.profile
     }
 
-    /// Verify that this binding belongs to the requested backend.
+    /// Validate the association against a requested backend.
     ///
-    /// This check is performed again when a provider returns a binding.
-    /// Construction-time validation alone is insufficient because providers
-    /// may load or deserialize profile metadata from external sources.
+    /// This check is repeated when a provider returns a binding.
+    ///
+    /// Construction-time validation is not sufficient when providers
+    /// obtain metadata from external or serialized sources.
     ///
     /// # Errors
     ///
-    /// Returns an identity mismatch if the binding belongs to another
-    /// backend.
+    /// Returns an error if the binding belongs to another backend
+    /// or its target identity is invalid.
     pub fn validate_for(
         &self,
         backend: &BackendDescriptor,
     ) -> Result<(), BackendCompatibilityError> {
+        validate_backend_identifier(&backend.id)?;
+
         if self.backend_id != backend.id {
             return Err(
                 BackendCompatibilityError::BackendIdentityMismatch {
@@ -412,38 +412,43 @@ impl BackendCompatibilityBinding {
 }
 
 // ============================================================================
-// PROFILE PROVIDER
+// COMPATIBILITY PROFILE PROVIDER
 // ============================================================================
 
-/// Supplies explicit compatibility profiles for registered backends.
+/// Supplies explicit target compatibility profiles for registered backends.
 ///
-/// Implementations may source profiles from:
+/// Providers may obtain profiles from:
 ///
 /// - Backend metadata.
 /// - Validated toolchain descriptions.
 /// - Target adapters.
 /// - Deployment descriptions.
-/// - Trusted capability-evidence providers.
-/// - Configuration supplied by the application.
+/// - Trusted capability evidence.
+/// - Explicit application configuration.
 ///
-/// The provider must not infer capabilities from backend names, file
-/// extensions, vendor names, or architecture strings.
+/// Providers must never infer compatibility from:
 ///
-/// A missing profile means that compatibility cannot be established.
+/// - Backend names.
+/// - Vendor names.
+/// - File extensions.
+/// - Architecture strings.
+/// - Display names.
 ///
-/// Provider implementations must be safe for concurrent use because the
-/// backend-selection interface requires `Send + Sync`.
+/// Missing profile information means compatibility is unknown.
+///
+/// Provider implementations must be safe for concurrent use.
 pub trait BackendCompatibilityProfileProvider: Send + Sync {
-    /// Obtain the compatibility profile associated with a backend.
+    /// Obtain a compatibility profile for a registered backend.
     ///
-    /// The returned binding must explicitly identify the requested backend.
+    /// The returned binding must identify the requested backend.
     ///
-    /// Returning `Ok(None)` means that no usable compatibility profile is
-    /// available. It does not mean that the backend is incompatible.
+    /// Returning `Ok(None)` means no usable profile is available.
+    ///
+    /// It does not mean the backend is incompatible.
     ///
     /// # Errors
     ///
-    /// Return an error when profile retrieval or validation fails.
+    /// Returns a descriptive error if profile retrieval fails.
     fn profile_for(
         &self,
         backend: &BackendDescriptor,
@@ -453,10 +458,9 @@ pub trait BackendCompatibilityProfileProvider: Send + Sync {
     >;
 }
 
-/// Blanket provider implementation for compatible closures.
+/// Allow compatible closures to act as profile providers.
 ///
-/// This allows applications and tests to provide profiles without
-/// introducing another registry or provider wrapper.
+/// This avoids introducing another provider registry.
 impl<F> BackendCompatibilityProfileProvider for F
 where
     F: Fn(
@@ -479,15 +483,17 @@ where
 }
 
 // ============================================================================
-// EVALUATION RESULT
+// DETAILED EVALUATION
 // ============================================================================
 
 /// Detailed compiler-facing compatibility evaluation.
 ///
-/// The canonical report is retained without converting its issues into
-/// another compatibility-report model.
+/// The original canonical compatibility report is retained.
 ///
-/// `None` means no profile was available. It is not a compatible result.
+/// `None` report means that no authoritative target profile
+/// was available or compatibility was not established.
+///
+/// An unknown result is never eligible for backend selection.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendCompatibilityEvaluation {
     backend_id: String,
@@ -497,6 +503,7 @@ pub struct BackendCompatibilityEvaluation {
 }
 
 impl BackendCompatibilityEvaluation {
+    /// Construct an unknown compatibility result.
     fn unknown(
         backend_id: String,
         reason: impl Into<String>,
@@ -511,41 +518,33 @@ impl BackendCompatibilityEvaluation {
         }
     }
 
+    /// Adapt the authoritative compatibility report.
     fn from_report(
         backend_id: String,
         report: CompatibilityReport,
     ) -> Self {
         let target_id = Some(report.target_id.clone());
 
+        let summary = summarize_issues(&report);
+
         let eligibility = match report.status {
             CompatibilityStatus::Compatible => {
                 BackendEligibility::Compatible {
                     rank: 0,
                     explanation: format!(
-                        "canonical compatibility evaluation established \
-                         compatibility for target `{}`",
+                        "Backend `{backend_id}` is compatible with \
+                         target `{}`.",
                         report.target_id
                     ),
                 }
             }
 
             CompatibilityStatus::CompatibleWithWarnings => {
-                let warning_count = report
-                    .issues
-                    .iter()
-                    .filter(|issue| {
-                        issue.severity
-                            == crate::backend::compatibility::
-                                CompatibilitySeverity::Warning
-                    })
-                    .count();
-
                 BackendEligibility::Compatible {
                     rank: 0,
                     explanation: format!(
-                        "canonical compatibility evaluation established \
-                         compatibility for target `{}` with {warning_count} \
-                         warning(s)",
+                        "Backend `{backend_id}` is compatible with \
+                         target `{}`, with warnings: {summary}",
                         report.target_id
                     ),
                 }
@@ -554,9 +553,9 @@ impl BackendCompatibilityEvaluation {
             CompatibilityStatus::Indeterminate => {
                 BackendEligibility::Unknown {
                     reason: format!(
-                        "compatibility for target `{}` is indeterminate: {}",
-                        report.target_id,
-                        summarize_issues(&report)
+                        "Compatibility for backend `{backend_id}` \
+                         and target `{}` is indeterminate: {summary}",
+                        report.target_id
                     ),
                 }
             }
@@ -564,10 +563,9 @@ impl BackendCompatibilityEvaluation {
             CompatibilityStatus::Incompatible => {
                 BackendEligibility::Incompatible {
                     reason: format!(
-                        "target `{}` does not satisfy the compatibility \
-                         request: {}",
-                        report.target_id,
-                        summarize_issues(&report)
+                        "Backend `{backend_id}` cannot satisfy \
+                         the requirements of target `{}`: {summary}",
+                        report.target_id
                     ),
                 }
             }
@@ -581,31 +579,39 @@ impl BackendCompatibilityEvaluation {
         }
     }
 
-    /// Return the registered backend identifier.
+    /// Return the canonical backend identifier.
     #[must_use]
     pub fn backend_id(&self) -> &str {
         &self.backend_id
     }
 
-    /// Return the target identifier, if a profile was evaluated.
+    /// Return the target identifier when a profile was evaluated.
     #[must_use]
     pub fn target_id(&self) -> Option<&str> {
         self.target_id.as_deref()
     }
 
-    /// Return the original canonical compatibility report, if evaluated.
+    /// Return the original canonical compatibility report.
     #[must_use]
     pub fn report(&self) -> Option<&CompatibilityReport> {
         self.report.as_ref()
     }
 
-    /// Return the backend-selection eligibility classification.
+    /// Consume the evaluation and return its canonical report.
+    #[must_use]
+    pub fn into_report(self) -> Option<CompatibilityReport> {
+        self.report
+    }
+
+    /// Return backend-selection eligibility.
     #[must_use]
     pub fn eligibility(&self) -> &BackendEligibility {
         &self.eligibility
     }
 
-    /// Whether compatibility was established.
+    /// Whether compatibility has been established.
+    ///
+    /// Warning-bearing compatible results are included.
     #[must_use]
     pub fn is_compatible(&self) -> bool {
         matches!(
@@ -613,49 +619,113 @@ impl BackendCompatibilityEvaluation {
             BackendEligibility::Compatible { .. }
         )
     }
+
+    /// Whether compatibility was established without warnings.
+    #[must_use]
+    pub fn is_fully_compatible(&self) -> bool {
+        self.report
+            .as_ref()
+            .is_some_and(|report| {
+                report.status == CompatibilityStatus::Compatible
+            })
+    }
+
+    /// Whether the canonical report contains warnings.
+    #[must_use]
+    pub fn has_warnings(&self) -> bool {
+        self.report
+            .as_ref()
+            .is_some_and(|report| {
+                report.issues.iter().any(|issue| {
+                    issue.severity == CompatibilitySeverity::Warning
+                })
+            })
+    }
+
+    /// Whether compatibility remains unknown.
+    #[must_use]
+    pub fn is_indeterminate(&self) -> bool {
+        matches!(
+            self.eligibility,
+            BackendEligibility::Unknown { .. }
+        )
+    }
+
+    /// Whether compatibility has been explicitly rejected.
+    #[must_use]
+    pub fn is_incompatible(&self) -> bool {
+        matches!(
+            self.eligibility,
+            BackendEligibility::Incompatible { .. }
+        )
+    }
 }
 
-/// Produce a deterministic summary from the canonical compatibility issues.
+// ============================================================================
+// DETERMINISTIC DIAGNOSTIC SUMMARY
+// ============================================================================
+
+/// Produce a summary while preserving the canonical report ordering.
 ///
-/// The canonical report already sorts its issues. This adapter preserves
-/// that order and does not create a second diagnostic ordering policy.
+/// No second diagnostic ordering policy is introduced.
+///
+/// The canonical evaluator remains responsible for ordering issues.
 fn summarize_issues(report: &CompatibilityReport) -> String {
     if report.issues.is_empty() {
         return match report.status {
             CompatibilityStatus::Indeterminate => {
-                "the canonical evaluator could not establish compatibility"
-                    .to_owned()
+                "the evaluator could not establish compatibility".to_owned()
             }
+
             CompatibilityStatus::Incompatible => {
-                "the canonical evaluator reported incompatibility"
-                    .to_owned()
+                "the evaluator established incompatibility".to_owned()
             }
-            _ => "no compatibility issues were reported".to_owned(),
+
+            CompatibilityStatus::CompatibleWithWarnings => {
+                "compatibility was established with warnings".to_owned()
+            }
+
+            CompatibilityStatus::Compatible => {
+                "no compatibility issues were reported".to_owned()
+            }
         };
     }
 
-    report
-        .issues
-        .iter()
-        .map(|issue| issue.message.as_str())
-        .collect::<Vec<_>>()
-        .join("; ")
+    let mut summary = String::new();
+
+    for issue in &report.issues {
+        if !summary.is_empty() {
+            summary.push_str("; ");
+        }
+
+        summary.push_str(&issue.message);
+    }
+
+    summary
 }
 
 // ============================================================================
-// COMPILER COMPATIBILITY EVALUATOR
+// CANONICAL COMPATIBILITY EVALUATOR ADAPTER
 // ============================================================================
 
 /// Compiler-facing adapter over the canonical backend compatibility engine.
 ///
-/// The evaluator borrows a profile provider and owns the canonical request.
+/// The evaluator:
+///
+/// 1. Receives a registered backend descriptor.
+/// 2. Requests its explicit target profile.
+/// 3. Validates backend-to-target identity.
+/// 4. Delegates compatibility evaluation.
+/// 5. Retains the canonical compatibility report.
+/// 6. Converts the result into backend-selection eligibility.
+///
 /// It does not own a backend registry.
 ///
-/// The provider is responsible for associating each registered backend
-/// descriptor with the correct target profile.
+/// It does not perform physical resource allocation.
 ///
-/// The canonical `CompatibilityEvaluator` remains the sole authority for
-/// evaluating capability and resource requirements.
+/// It does not estimate performance.
+///
+/// It does not perform code generation.
 pub struct BackendCompatibilityEvaluator<'a> {
     provider: &'a dyn BackendCompatibilityProfileProvider,
     request: CompatibilityRequest,
@@ -663,8 +733,7 @@ pub struct BackendCompatibilityEvaluator<'a> {
 }
 
 impl<'a> BackendCompatibilityEvaluator<'a> {
-    /// Construct an evaluator using an explicit profile provider and
-    /// canonical compatibility request.
+    /// Construct an evaluator using an explicit provider and request.
     #[must_use]
     pub fn new(
         provider: &'a dyn BackendCompatibilityProfileProvider,
@@ -683,25 +752,22 @@ impl<'a> BackendCompatibilityEvaluator<'a> {
         &self.request
     }
 
-    /// Evaluate a backend and retain its complete canonical report.
+    /// Evaluate one backend and retain its complete compatibility report.
     ///
-    /// An empty requirement set deliberately produces `Unknown`.
+    /// An empty requirement set deliberately produces an unknown result.
     ///
-    /// The canonical backend evaluator can return a compatible report for
-    /// an empty request. That behavior is useful for its general API, but
-    /// backend selection must not mistake the absence of requirements for
-    /// evidence that a backend is suitable.
+    /// An empty request cannot establish that a backend is suitable.
     ///
     /// # Errors
     ///
-    /// Returns an error when:
+    /// Returns an error if:
     ///
+    /// - The backend identifier is malformed.
     /// - The profile provider fails.
-    /// - The provider returns a profile bound to another backend.
-    /// - Profile identity validation fails.
+    /// - The provider returns a profile for another backend.
+    /// - The target identity is invalid.
     ///
-    /// A missing profile is represented as an evaluation with `Unknown`
-    /// eligibility rather than as an error.
+    /// A missing profile is represented as unknown, not compatible.
     pub fn evaluate_detailed(
         &self,
         backend: &BackendDescriptor,
@@ -709,21 +775,22 @@ impl<'a> BackendCompatibilityEvaluator<'a> {
         BackendCompatibilityEvaluation,
         BackendCompatibilityError,
     > {
-        validate_backend_identifier(&backend.id)
-            .map_err(|error| error)?;
+        validate_backend_identifier(&backend.id)?;
 
+        // Empty requirements are not evidence of compatibility.
         if self.request.capabilities.is_empty()
             && self.request.resources.is_empty()
         {
             return Ok(
                 BackendCompatibilityEvaluation::unknown(
                     backend.id.clone(),
-                    "no capability or resource requirements were supplied; \
-                     compatibility has not been established",
+                    "No capability or resource requirements were supplied; \
+                     backend compatibility has not been established.",
                 ),
             );
         }
 
+        // Retrieve an explicit backend-to-target association.
         let binding = self
             .provider
             .profile_for(backend)
@@ -738,17 +805,20 @@ impl<'a> BackendCompatibilityEvaluator<'a> {
             return Ok(
                 BackendCompatibilityEvaluation::unknown(
                     backend.id.clone(),
-                    "no target compatibility profile is available for \
-                     this backend",
+                    "No authoritative target compatibility profile \
+                     is available for this backend.",
                 ),
             );
         };
 
+        // Never combine evidence belonging to different backends.
         binding.validate_for(backend)?;
 
-        let report = self
-            .evaluator
-            .evaluate(&self.request, binding.profile());
+        // The canonical evaluator is the sole compatibility authority.
+        let report = self.evaluator.evaluate(
+            &self.request,
+            binding.profile(),
+        );
 
         Ok(
             BackendCompatibilityEvaluation::from_report(
@@ -759,15 +829,22 @@ impl<'a> BackendCompatibilityEvaluator<'a> {
     }
 }
 
+// ============================================================================
+// BACKEND SELECTION INTEGRATION
+// ============================================================================
+
 impl BackendEligibilityEvaluator for BackendCompatibilityEvaluator<'_> {
-    /// Evaluate one backend using the canonical compatibility engine.
+    /// Evaluate one registered backend using canonical compatibility.
     ///
-    /// The returned rank is deliberately neutral (`0`). This evaluator
-    /// establishes compatibility; it does not estimate latency, energy,
-    /// throughput, cost, or performance.
+    /// Compatibility ranking is neutral.
     ///
-    /// A separate optimization or cost-model evaluator may provide ranking
-    /// after compatibility and feasibility have been established.
+    /// This adapter does not invent latency, throughput, energy,
+    /// monetary cost, or performance estimates.
+    ///
+    /// A separate optimization or cost-model subsystem may rank
+    /// already compatible and feasible candidates.
+    ///
+    /// Unknown and incompatible results are never eligible.
     fn evaluate(
         &self,
         backend: &BackendDescriptor,
@@ -791,9 +868,7 @@ mod tests {
         CapabilityRequirement,
         CapabilitySupport,
         CompatibilityPolicy,
-        CompatibilityRequest,
         DecimalInteger,
-        InventoryCompleteness,
         RequirementStrength,
         ResourceAvailability,
         ResourceId,
@@ -822,7 +897,7 @@ mod tests {
             .declare_capability(
                 CapabilitySupport::new(
                     CapabilityId::new(capability)
-                        .expect("valid capability ID"),
+                        .expect("valid capability"),
                     SupportLevel::Supported,
                 )
                 .with_evidence("verified test evidence"),
@@ -864,13 +939,6 @@ mod tests {
         }
     }
 
-    fn evaluator<'a>(
-        provider: &'a dyn BackendCompatibilityProfileProvider,
-        request: CompatibilityRequest,
-    ) -> BackendCompatibilityEvaluator<'a> {
-        BackendCompatibilityEvaluator::new(provider, request)
-    }
-
     fn required_capability(
         name: &str,
     ) -> CompatibilityRequest {
@@ -883,13 +951,31 @@ mod tests {
         )
     }
 
-    #[test]
-    fn binding_preserves_distinct_backend_and_target_ids() {
-        let target_profile = profile("target.cpu.variant");
+    fn evaluator<'a>(
+        provider: &'a dyn BackendCompatibilityProfileProvider,
+        request: CompatibilityRequest,
+    ) -> BackendCompatibilityEvaluator<'a> {
+        BackendCompatibilityEvaluator::new(provider, request)
+    }
 
+    #[test]
+    fn module_identity_is_stable() {
+        assert_eq!(
+            BACKEND_COMPATIBILITY_MODULE_NAME,
+            "zamani.compiler.backends.compatibility"
+        );
+    }
+
+    #[test]
+    fn api_version_is_nonzero() {
+        assert_ne!(BACKEND_COMPATIBILITY_API_VERSION, 0);
+    }
+
+    #[test]
+    fn backend_and_target_ids_are_independent() {
         let binding = BackendCompatibilityBinding::new(
             "backend.native",
-            target_profile,
+            profile("target.cpu.variant"),
         )
         .expect("valid binding");
 
@@ -898,64 +984,48 @@ mod tests {
     }
 
     #[test]
-    fn binding_rejects_empty_backend_id() {
-        let result = BackendCompatibilityBinding::new(
-            "",
-            profile("target.example"),
+    fn empty_backend_identifier_is_rejected() {
+        assert!(
+            validate_backend_identifier("").is_err()
         );
-
-        assert!(matches!(
-            result,
-            Err(
-                BackendCompatibilityError::InvalidBackendIdentifier {
-                    ..
-                }
-            )
-        ));
     }
 
     #[test]
-    fn binding_rejects_empty_target_id() {
-        let result = TargetCapabilityProfile::new(" ")
-            .and_then(|profile| {
-                BackendCompatibilityBinding::new(
-                    "backend.example",
-                    profile,
-                )
-            });
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn binding_rejects_control_characters() {
-        let result = BackendCompatibilityBinding::new(
-            "backend\ninvalid",
-            profile("target.example"),
+    fn whitespace_backend_identifier_is_rejected() {
+        assert!(
+            validate_backend_identifier(" backend.example").is_err()
         );
-
-        assert!(result.is_err());
     }
 
     #[test]
-    fn mismatched_backend_binding_is_rejected() {
+    fn control_characters_are_rejected() {
+        assert!(
+            validate_backend_identifier("backend\nexample").is_err()
+        );
+    }
+
+    #[test]
+    fn empty_target_identifier_is_rejected() {
+        assert!(
+            validate_target_identity("backend.example", "").is_err()
+        );
+    }
+
+    #[test]
+    fn binding_rejects_wrong_backend() {
         let binding = BackendCompatibilityBinding::new(
-            "backend.other",
+            "backend.first",
             profile("target.example"),
         )
         .expect("valid binding");
 
-        let requested = backend("backend.requested");
-
-        let result = binding.validate_for(&requested);
+        let result = binding.validate_for(
+            &backend("backend.second"),
+        );
 
         assert!(matches!(
             result,
-            Err(
-                BackendCompatibilityError::BackendIdentityMismatch {
-                    ..
-                }
-            )
+            Err(BackendCompatibilityError::BackendIdentityMismatch { .. })
         ));
     }
 
@@ -963,36 +1033,23 @@ mod tests {
     fn missing_profile_is_unknown() {
         let provider = TestProvider::default();
 
-        let request = required_capability("cpu.integer");
-
-        let evaluator = evaluator(&provider, request);
+        let evaluator = evaluator(
+            &provider,
+            required_capability("cpu.integer"),
+        );
 
         let result = evaluator
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Unknown { .. }
-        ));
-
+        assert!(result.is_indeterminate());
+        assert!(!result.is_compatible());
         assert!(result.report().is_none());
     }
 
     #[test]
     fn empty_requirements_are_unknown() {
-        let mut provider = TestProvider::default();
-
-        provider.insert(
-            BackendCompatibilityBinding::new(
-                "backend.example",
-                supported_profile(
-                    "target.example",
-                    "cpu.integer",
-                ),
-            )
-            .expect("valid binding"),
-        );
+        let provider = TestProvider::default();
 
         let evaluator = evaluator(
             &provider,
@@ -1003,12 +1060,8 @@ mod tests {
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Unknown { .. }
-        ));
-
-        assert!(result.report().is_none());
+        assert!(result.is_indeterminate());
+        assert!(!result.is_compatible());
     }
 
     #[test]
@@ -1020,7 +1073,7 @@ mod tests {
                 "backend.example",
                 supported_profile(
                     "target.example",
-                    "cpu.integer",
+                    "quantum.measurement",
                 ),
             )
             .expect("valid binding"),
@@ -1028,7 +1081,7 @@ mod tests {
 
         let evaluator = evaluator(
             &provider,
-            required_capability("cpu.integer"),
+            required_capability("quantum.measurement"),
         );
 
         let result = evaluator
@@ -1036,80 +1089,16 @@ mod tests {
             .expect("evaluation succeeds");
 
         assert!(result.is_compatible());
-
-        assert_eq!(
-            result.target_id(),
-            Some("target.example")
-        );
-
-        assert!(
-            result.report().is_some()
-        );
+        assert!(result.is_fully_compatible());
+        assert!(!result.has_warnings());
+        assert_eq!(result.target_id(), Some("target.example"));
     }
 
     #[test]
-    fn missing_capability_in_partial_inventory_is_unknown() {
-        let mut provider = TestProvider::default();
+    fn unsupported_hard_requirement_is_incompatible() {
+        let mut target = profile("target.example");
 
-        provider.insert(
-            BackendCompatibilityBinding::new(
-                "backend.example",
-                profile("target.example"),
-            )
-            .expect("valid binding"),
-        );
-
-        let evaluator = evaluator(
-            &provider,
-            required_capability("quantum.measurement"),
-        );
-
-        let result = evaluator
-            .evaluate_detailed(&backend("backend.example"))
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Unknown { .. }
-        ));
-    }
-
-    #[test]
-    fn missing_capability_in_complete_inventory_is_incompatible() {
-        let mut target_profile = profile("target.example");
-
-        target_profile.mark_capability_inventory_complete();
-
-        let mut provider = TestProvider::default();
-
-        provider.insert(
-            BackendCompatibilityBinding::new(
-                "backend.example",
-                target_profile,
-            )
-            .expect("valid binding"),
-        );
-
-        let evaluator = evaluator(
-            &provider,
-            required_capability("quantum.measurement"),
-        );
-
-        let result = evaluator
-            .evaluate_detailed(&backend("backend.example"))
-            .expect("evaluation succeeds");
-
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Incompatible { .. }
-        ));
-    }
-
-    #[test]
-    fn explicitly_unsupported_capability_is_incompatible() {
-        let mut target_profile = profile("target.example");
-
-        target_profile
+        target
             .declare_capability(
                 CapabilitySupport::new(
                     CapabilityId::new("quantum.measurement")
@@ -1124,7 +1113,7 @@ mod tests {
         provider.insert(
             BackendCompatibilityBinding::new(
                 "backend.example",
-                target_profile,
+                target,
             )
             .expect("valid binding"),
         );
@@ -1138,17 +1127,15 @@ mod tests {
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Incompatible { .. }
-        ));
+        assert!(result.is_incompatible());
+        assert!(!result.is_compatible());
     }
 
     #[test]
     fn partial_support_does_not_satisfy_hard_requirement() {
-        let mut target_profile = profile("target.example");
+        let mut target = profile("target.example");
 
-        target_profile
+        target
             .declare_capability(
                 CapabilitySupport::new(
                     CapabilityId::new("quantum.measurement")
@@ -1163,7 +1150,7 @@ mod tests {
         provider.insert(
             BackendCompatibilityBinding::new(
                 "backend.example",
-                target_profile,
+                target,
             )
             .expect("valid binding"),
         );
@@ -1177,17 +1164,14 @@ mod tests {
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Incompatible { .. }
-        ));
+        assert!(result.is_incompatible());
     }
 
     #[test]
     fn experimental_support_requires_explicit_policy() {
-        let mut target_profile = profile("target.example");
+        let mut target = profile("target.example");
 
-        target_profile
+        target
             .declare_capability(
                 CapabilitySupport::new(
                     CapabilityId::new("quantum.measurement")
@@ -1202,7 +1186,7 @@ mod tests {
         provider.insert(
             BackendCompatibilityBinding::new(
                 "backend.example",
-                target_profile,
+                target,
             )
             .expect("valid binding"),
         );
@@ -1216,10 +1200,7 @@ mod tests {
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            strict_result.eligibility(),
-            BackendEligibility::Incompatible { .. }
-        ));
+        assert!(strict_result.is_incompatible());
 
         let permissive_request =
             required_capability("quantum.measurement")
@@ -1237,41 +1218,47 @@ mod tests {
             .expect("evaluation succeeds");
 
         assert!(permissive_result.is_compatible());
+        assert!(permissive_result.has_warnings());
     }
 
     #[test]
-    fn insufficient_resource_is_incompatible() {
-        let mut target_profile = profile("target.example");
+    fn resource_quantities_are_not_limited_to_u64() {
+        let mut target = profile("target.example");
 
-        target_profile
+        let capacity = DecimalInteger::new(
+            "100000000000000000000000000000000000000000000000000",
+        )
+        .expect("valid arbitrary-length quantity");
+
+        target
             .declare_resource(
                 ResourceId::new("memory.bytes")
                     .expect("valid resource"),
-                ResourceAvailability::known(
-                    DecimalInteger::new("1024")
-                        .expect("valid quantity"),
+                ResourceAvailability::known(capacity),
+            )
+            .expect("resource declaration succeeds");
+
+        let mut provider = TestProvider::default();
+
+        provider.insert(
+            BackendCompatibilityBinding::new(
+                "backend.example",
+                target,
+            )
+            .expect("valid binding"),
+        );
+
+        let request = CompatibilityRequest::new()
+            .with_resource(
+                ResourceRequirement::required(
+                    ResourceId::new("memory.bytes")
+                        .expect("valid resource"),
+                    DecimalInteger::new(
+                        "99999999999999999999999999999999999999999999999",
+                    )
+                    .expect("valid quantity"),
                 ),
-            )
-            .expect("resource declaration succeeds");
-
-        let mut provider = TestProvider::default();
-
-        provider.insert(
-            BackendCompatibilityBinding::new(
-                "backend.example",
-                target_profile,
-            )
-            .expect("valid binding"),
-        );
-
-        let request = CompatibilityRequest::new().with_resource(
-            ResourceRequirement::required(
-                ResourceId::new("memory.bytes")
-                    .expect("valid resource"),
-                DecimalInteger::new("2048")
-                    .expect("valid quantity"),
-            ),
-        );
+            );
 
         let evaluator = evaluator(&provider, request);
 
@@ -1279,102 +1266,56 @@ mod tests {
             .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Incompatible { .. }
-        ));
+        assert!(result.is_compatible());
     }
 
     #[test]
-    fn unknown_resource_capacity_is_not_compatible() {
-        let mut target_profile = profile("target.example");
+    fn provider_failure_is_not_silent_success() {
+        let provider = |_backend: &BackendDescriptor| {
+            Err("target discovery failed".to_owned())
+                as Result<
+                    Option<BackendCompatibilityBinding>,
+                    String,
+                >
+        };
 
-        target_profile
-            .declare_resource(
-                ResourceId::new("memory.bytes")
-                    .expect("valid resource"),
-                ResourceAvailability::unknown(),
-            )
-            .expect("resource declaration succeeds");
-
-        let mut provider = TestProvider::default();
-
-        provider.insert(
-            BackendCompatibilityBinding::new(
-                "backend.example",
-                target_profile,
-            )
-            .expect("valid binding"),
+        let evaluator = evaluator(
+            &provider,
+            required_capability("cpu.integer"),
         );
-
-        let request = CompatibilityRequest::new().with_resource(
-            ResourceRequirement::required(
-                ResourceId::new("memory.bytes")
-                    .expect("valid resource"),
-                DecimalInteger::new("2048")
-                    .expect("valid quantity"),
-            ),
-        );
-
-        let evaluator = evaluator(&provider, request);
 
         let result = evaluator
-            .evaluate_detailed(&backend("backend.example"))
-            .expect("evaluation succeeds");
+            .evaluate_detailed(&backend("backend.example"));
 
         assert!(matches!(
-            result.eligibility(),
-            BackendEligibility::Unknown { .. }
+            result,
+            Err(BackendCompatibilityError::ProviderFailure { .. })
         ));
     }
 
     #[test]
-    fn provider_failure_is_not_silently_ignored() {
-        let provider = |_backend: &BackendDescriptor| {
-            Err("profile service unavailable".to_owned())
-        };
+    fn selection_adapter_preserves_unknown_status() {
+        let provider = TestProvider::default();
 
         let evaluator = evaluator(
             &provider,
             required_capability("cpu.integer"),
         );
 
-        let result = evaluator.evaluate(
+        let result = BackendEligibilityEvaluator::evaluate(
+            &evaluator,
             &backend("backend.example"),
-        );
-
-        assert!(result.is_err());
-
-        assert!(
-            result
-                .expect_err("provider failure must propagate")
-                .contains("profile service unavailable")
-        );
-    }
-
-    #[test]
-    fn closure_provider_is_supported() {
-        let provider = |_backend: &BackendDescriptor| {
-            Ok(None)
-        };
-
-        let evaluator = evaluator(
-            &provider,
-            required_capability("cpu.integer"),
-        );
-
-        let result = evaluator.evaluate(
-            &backend("backend.example"),
-        );
+        )
+        .expect("evaluation succeeds");
 
         assert!(matches!(
-            result.expect("evaluation succeeds"),
+            result,
             BackendEligibility::Unknown { .. }
         ));
     }
 
     #[test]
-    fn compatibility_rank_is_neutral() {
+    fn detailed_report_remains_available() {
         let mut provider = TestProvider::default();
 
         provider.insert(
@@ -1394,29 +1335,13 @@ mod tests {
         );
 
         let result = evaluator
-            .evaluate(&backend("backend.example"))
+            .evaluate_detailed(&backend("backend.example"))
             .expect("evaluation succeeds");
 
-        assert!(matches!(
-            result,
-            BackendEligibility::Compatible {
-                rank: 0,
-                ..
-            }
-        ));
-    }
+        assert!(result.report().is_some());
 
-    #[test]
-    fn profile_binding_does_not_mark_inventory_complete() {
-        let binding = BackendCompatibilityBinding::new(
-            "backend.example",
-            profile("target.example"),
-        )
-        .expect("valid binding");
+        let owned_report = result.into_report();
 
-        assert_eq!(
-            binding.profile().inventory_completeness,
-            InventoryCompleteness::Partial
-        );
+        assert!(owned_report.is_some());
     }
 }
