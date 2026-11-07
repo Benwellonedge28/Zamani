@@ -5,97 +5,47 @@
 
 //! Zamani Universal Meta-Compiler — Compilation Dependency Context.
 //!
-//! Path:
-//!     src/compiler/context/dependency_context.rs
+//! Path: src/compiler/context/dependency_context.rs
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum version: Rust 1.97
-//!
-//! Safety:
-//!     Safe Rust only. Unsafe Rust is forbidden.
+//! Rust edition: 2021
+//! Minimum Rust version: 1.97
 //!
 //! # Purpose
 //!
-//! Provides an immutable, shareable dependency snapshot for the compilation
-//! units participating in one compilation operation.
+//! Owns the immutable dependency graph for one compilation operation.
 //!
-//! This module records:
-//!
-//! - Compilation-unit identities.
-//! - Extensible compilation-unit kinds.
+//! The graph records:
+//! - Compilation-unit identities and descriptive metadata.
 //! - Typed relationships between compilation units.
-//! - Direct dependencies.
-//! - Direct dependents.
-//! - Compilation-order dependencies.
+//! - Direct and transitive dependencies.
+//! - Direct and transitive dependents.
+//! - Compile-order dependencies.
 //! - Non-ordering relationships.
 //! - Deterministic dependency-first ordering.
-//! - Dependency-graph validation.
-//! - Explicit ordering-cycle detection.
+//! - Dependency impact queries.
+//! - Ordering-cycle validation.
 //!
-//! # Ownership boundaries
+//! # Architectural ownership
 //!
-//! This module owns the dependency snapshot used by compiler stages.
+//! This module owns the compiler's compilation-unit dependency snapshot.
 //!
 //! It does not own:
-//!
-//! - Source parsing or AST construction.
-//! - Name or module resolution.
-//! - Semantic dependency discovery.
-//! - Type or ownership analysis.
-//! - Source-file content hashing.
-//! - Incremental cache invalidation.
-//! - Dirty-file propagation.
-//! - Persistent build-cache storage.
-//! - Parallel job execution.
+//! - Source parsing, AST construction or source-map storage.
+//! - Name resolution or semantic dependency discovery.
+//! - Type, ownership, effect or capability analysis.
+//! - Source fingerprints or incremental cache invalidation.
+//! - Dirty-unit propagation or persistent build-cache storage.
+//! - Parallel worker execution or runtime scheduling.
 //! - Pipeline orchestration.
-//! - IR definitions.
-//! - Hardware discovery or allocation.
-//! - Backend selection.
-//! - Runtime execution.
-//! - Distributed scheduling.
+//! - IR definitions or domain-specific semantics.
+//! - Hardware discovery, allocation or backend selection.
+//! - Distributed execution or runtime communication.
 //!
-//! Existing authorities:
+//! Dependency discovery belongs to the frontend and semantic authorities.
+//! Fingerprints and invalidation belong to incremental compilation.
+//! Parallel execution belongs to the parallel compiler subsystem.
 //!
-//! `crate::compiler::incremental`
-//!     File-level fingerprints, dependency invalidation, dirty propagation,
-//!     and incremental compilation planning.
-//!
-//! `crate::compiler::parallel_build`
-//!     Parallel execution of independent compilation jobs.
-//!
-//! `crate::compiler::context::compilation_context`
-//!     Shared configuration, resource budgets, source identity,
-//!     and cancellation.
-//!
-//! `crate::compiler::context::compilation_state`
-//!     Compilation lifecycle and progress.
-//!
-//! `crate::frontend` and the semantic implementation
-//!     Source-level declarations, imports, names, and semantic validity.
-//!
-//! # Dependency direction
-//!
-//! Frontend / semantic dependency discovery
-//!                 |
-//!                 v
-//!       DependencyContextBuilder
-//!                 |
-//!                 v
-//!         DependencyContext
-//!                 |
-//!          +------+-------+
-//!          |              |
-//!          v              v
-//!     Pipeline order   Build planning
-//!          |              |
-//!          v              v
-//!     Compiler stages  Incremental compiler
-//!                         |
-//!                         v
-//!                   Parallel build engine
-//!
-//! # Relationship direction
+//! # Edge direction
 //!
 //! An edge is expressed as:
 //!
@@ -105,112 +55,74 @@
 //!
 //!     application -> library
 //!
-//! means that `application` depends on `library`.
+//! means that application requires library.
 //!
-//! Dependency-first compilation order is therefore:
+//! Dependency-first compilation order is:
 //!
 //!     library, application
 //!
-//! # Ordering versus non-ordering relationships
+//! # Ordering semantics
 //!
-//! Not every program relationship imposes compilation order.
+//! Only relationships whose `requires_ordering()` method returns true
+//! participate in dependency-first compilation ordering.
 //!
-//! Compile-time imports, macro expansion inputs, generated-source inputs,
-//! and required build inputs impose ordering.
+//! Data flow, control flow, completion, feedback and synchronization
+//! relationships are retained without automatically imposing compile order.
 //!
-//! Data flow, control flow, completion, feedback, and synchronization
-//! relationships are recorded but do not automatically impose compilation
-//! order.
+//! # Scalability
 //!
-//! This distinction allows hybrid, cyclic, concurrent, and feedback-based
-//! computation relationships to be represented without incorrectly treating
-//! every relationship as a compile-time dependency.
-//!
-//! # POCO-REAF
-//!
-//! This module has no fixed limits on:
-//!
+//! This module imposes no universal maximum on:
 //! - Compilation units.
-//! - Dependencies.
+//! - Dependency relationships.
 //! - Dependents.
-//! - Modules.
-//! - Functions.
+//! - Modules or functions.
 //! - Computing domains.
-//! - Hardware types.
-//! - Devices.
-//! - Nodes.
-//! - CPUs.
-//! - GPUs.
-//! - QPUs.
-//! - FPGAs.
-//! - Tensor dimensions.
-//! - IR operations.
+//! - Hardware types or devices.
+//! - CPUs, GPUs, QPUs or FPGAs.
+//! - Distributed nodes.
+//! - Tensor dimensions or IR operations.
 //!
-//! Actual memory and execution constraints remain subject to available
-//! resources and the compilation context's configured resource budgets.
+//! Actual limits are determined by available memory, host representation
+//! limits, execution time and explicitly configured operational budgets.
 //!
-//! No finite implementation can promise infinite physical memory.
+//! No finite implementation promises infinite physical resources.
 //!
 //! # Determinism
 //!
-//! Ordered maps and sets provide deterministic iteration.
-//!
-//! The dependency-first ordering algorithm uses stable identifiers to
-//! resolve otherwise independent units deterministically.
-//!
-//! This module does not calculate source fingerprints. Fingerprint
-//! ownership remains with the incremental compiler.
+//! Ordered maps and sets provide stable iteration.
+//! Independent compilation units are ordered by stable identifiers.
+//! Transitive queries return identifiers in deterministic order.
 //!
 //! # Concurrency
 //!
-//! A built DependencyContext is immutable.
-//!
-//! Cloning it shares the underlying graph through Arc.
-//!
-//! Concurrent readers require no additional locking.
-//!
-//! Construction is isolated in DependencyContextBuilder.
+//! A built context is immutable and shared through `Arc`.
+//! Concurrent readers require no additional graph lock.
+//! Mutation is performed through an independently owned builder.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
-// ============================================================================
-// API VERSION
-// ============================================================================
-
 /// Public API version for the dependency-context contract.
 ///
-/// This version is independent of the Zamani language, grammar, compiler,
-/// semantic-model, IR, and backend ABI versions.
+/// Independent of the Zamani language, grammar, semantic-model, IR,
+/// backend and runtime versions.
 pub const DEPENDENCY_CONTEXT_API_VERSION: u16 = 1;
 
 // ============================================================================
-// COMPILATION UNIT IDENTITY
+// IDENTITIES
 // ============================================================================
 
 /// Stable logical identity of a compilation unit.
 ///
-/// The identifier is independent of:
-///
-/// - Filesystem location.
-/// - Physical machine.
-/// - Operating system.
-/// - Backend.
-/// - Device.
-/// - Runtime allocation.
-/// - Compilation worker.
-///
-/// A frontend, module resolver, build system, or generated-source provider
-/// supplies the identity.
-///
-/// No arbitrary identifier-length ceiling is imposed.
+/// The identity is independent of filesystem paths, machines, operating
+/// systems, backends, devices and compilation workers.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompilationUnitId(Arc<str>);
 
 impl CompilationUnitId {
-    /// Creates a compilation-unit identifier.
+    /// Creates a compilation-unit identity.
     pub fn new(value: impl Into<Arc<str>>) -> Result<Self, DependencyGraphError> {
         let value = value.into();
 
@@ -225,7 +137,7 @@ impl CompilationUnitId {
         Ok(Self(value))
     }
 
-    /// Returns the stable identifier.
+    /// Returns the identity string.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -238,37 +150,16 @@ impl fmt::Display for CompilationUnitId {
     }
 }
 
-// ============================================================================
-// OPEN COMPILATION UNIT KIND
-// ============================================================================
-
-/// Extensible classification of a compilation unit.
+/// Extensible compilation-unit classification.
 ///
-/// This is intentionally an open string identifier rather than a closed
-/// enum of every possible computing domain.
-///
-/// Examples:
-///
-/// - `source`
-— `module`
-— `library`
-— `classical`
-— `quantum`
-— `hdl`
-— `ai`
-— `tensor`
-— `distributed`
-— `generated`
-— `interface`
-— `plugin:vendor.extension`
-///
-/// The compiler does not need a source change merely because a new
-/// compilation-unit category is introduced.
+/// This is an open identifier rather than a closed enum of computing
+/// domains. New domains and provider-defined unit kinds do not require
+/// changes to this module.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CompilationUnitKind(Arc<str>);
 
 impl CompilationUnitKind {
-    /// Creates an extensible compilation-unit kind.
+    /// Creates a compilation-unit kind.
     pub fn new(value: impl Into<Arc<str>>) -> Result<Self, DependencyGraphError> {
         let value = value.into();
 
@@ -302,9 +193,7 @@ impl fmt::Display for CompilationUnitKind {
 
 /// Immutable description of a compilation unit.
 ///
-/// `logical_name` is descriptive metadata. It is not a filesystem path
-/// and is not used as a substitute for canonical source-map identity.
-///
+/// `logical_name` is descriptive metadata, not a filesystem path.
 /// Source locations remain owned by the source-map subsystem.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationUnit {
@@ -337,19 +226,19 @@ impl CompilationUnit {
         })
     }
 
-    /// Returns the stable compilation-unit identifier.
+    /// Returns the stable identity.
     #[must_use]
     pub fn id(&self) -> &CompilationUnitId {
         &self.id
     }
 
-    /// Returns the extensible compilation-unit kind.
+    /// Returns the extensible unit kind.
     #[must_use]
     pub fn kind(&self) -> &CompilationUnitKind {
         &self.kind
     }
 
-    /// Returns the logical display name.
+    /// Returns the descriptive logical name.
     #[must_use]
     pub fn logical_name(&self) -> &str {
         &self.logical_name
@@ -357,7 +246,7 @@ impl CompilationUnit {
 }
 
 // ============================================================================
-// DEPENDENCY RELATIONSHIPS
+// RELATIONSHIPS
 // ============================================================================
 
 /// Typed relationship between compilation units.
@@ -365,21 +254,21 @@ impl CompilationUnit {
 /// Ordering relationships require the dependency to be processed before
 /// the dependent unit.
 ///
-/// Non-ordering relationships are preserved as graph information but do
-/// not participate in the dependency-first topological order.
+/// Non-ordering relationships remain represented in the graph but do not
+/// participate in dependency-first topological ordering.
 ///
-/// The `Custom` variant permits extensions to introduce relationships
-/// without modifying this module's public enum.
+/// Custom relationships permit extensions to introduce new relationship
+/// identifiers without modifying this module.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum DependencyKind {
-    /// A source unit imports another source unit.
+    /// Source unit imports another source unit.
     ModuleImport,
 
-    /// A compilation unit requires another unit during compile time.
+    /// A compilation unit requires another unit at compile time.
     CompileTime,
 
-    /// A macro or compile-time expansion requires another unit.
+    /// Macro or compile-time expansion input.
     MacroExpansion,
 
     /// A type or interface definition must be available first.
@@ -388,13 +277,13 @@ pub enum DependencyKind {
     /// A unit is generated from another compilation unit.
     GeneratedFrom,
 
-    /// A unit requires another unit as a build input.
+    /// A required build input.
     BuildInput,
 
-    /// A unit requires another artifact as an input.
+    /// A required artifact input.
     ArtifactInput,
 
-    /// A unit requires an interface declaration before compilation.
+    /// An interface declaration must be available first.
     Interface,
 
     /// Runtime or semantic data-flow relationship.
@@ -403,32 +292,27 @@ pub enum DependencyKind {
     /// Control-flow relationship.
     ControlFlow,
 
-    /// Completion dependency or completion notification.
+    /// Completion relationship.
     Completion,
 
     /// Feedback relationship.
-    ///
-    /// Feedback does not automatically impose compile-time ordering.
     Feedback,
 
     /// Synchronization relationship.
     Synchronization,
 
-    /// Extensible relationship.
-    ///
-    /// `requires_ordering` explicitly determines whether this relationship
-    /// participates in dependency-first compilation ordering.
+    /// Provider-defined relationship.
     Custom {
         /// Stable extension-defined relationship identifier.
         identifier: Arc<str>,
 
-        /// Whether the relationship imposes compilation ordering.
+        /// Whether the relationship imposes compile ordering.
         requires_ordering: bool,
     },
 }
 
 impl DependencyKind {
-    /// Returns whether this relationship imposes compilation ordering.
+    /// Returns whether this relationship imposes compile ordering.
     #[must_use]
     pub const fn requires_ordering(&self) -> bool {
         match self {
@@ -454,7 +338,7 @@ impl DependencyKind {
         }
     }
 
-    /// Returns a stable relationship identifier.
+    /// Returns the stable relationship identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         match self {
@@ -476,18 +360,9 @@ impl DependencyKind {
     }
 }
 
-// ============================================================================
-// DEPENDENCY EDGE
-// ============================================================================
-
 /// Directed dependency relationship.
 ///
-/// Direction:
-///
-///     dependent -> dependency
-///
-/// The dependency must be processed before the dependent when
-/// `kind.requires_ordering()` is true.
+/// Direction is `dependent -> dependency`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DependencyEdge {
     dependent: CompilationUnitId,
@@ -496,7 +371,7 @@ pub struct DependencyEdge {
 }
 
 impl DependencyEdge {
-    /// Creates a dependency edge.
+    /// Creates a typed dependency edge.
     pub fn new(
         dependent: CompilationUnitId,
         dependency: CompilationUnitId,
@@ -525,7 +400,7 @@ impl DependencyEdge {
         })
     }
 
-    /// Returns the unit that depends on another unit.
+    /// Returns the dependent unit.
     #[must_use]
     pub fn dependent(&self) -> &CompilationUnitId {
         &self.dependent
@@ -543,7 +418,7 @@ impl DependencyEdge {
         &self.kind
     }
 
-    /// Returns whether this edge imposes compilation ordering.
+    /// Returns whether this edge imposes compile ordering.
     #[must_use]
     pub fn requires_ordering(&self) -> bool {
         self.kind.requires_ordering()
@@ -554,7 +429,7 @@ impl DependencyEdge {
 // ERRORS
 // ============================================================================
 
-/// Errors produced by dependency-context construction and validation.
+/// Errors produced while constructing or validating a dependency graph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DependencyGraphError {
@@ -584,10 +459,11 @@ pub enum DependencyGraphError {
         unit: CompilationUnitId,
     },
 
-    /// Units blocked by a cycle in ordering relationships.
+    /// Units blocked by an ordering cycle.
     ///
-    /// This is the set of nodes that cannot be emitted by topological
-    /// ordering. It can include units downstream of the actual cycle.
+    /// This includes units in the cycle and units that depend on the cycle.
+    /// It is the set of units that cannot be emitted by topological ordering,
+    /// not necessarily the minimal strongly connected component.
     OrderingCycle {
         blocked_units: Vec<CompilationUnitId>,
     },
@@ -599,51 +475,41 @@ impl fmt::Display for DependencyGraphError {
             Self::EmptyIdentifier => {
                 formatter.write_str("compilation-unit identifier is empty")
             }
-
             Self::InvalidIdentifier => {
                 formatter.write_str(
                     "compilation-unit identifier contains control characters",
                 )
             }
-
             Self::EmptyUnitKind => {
                 formatter.write_str("compilation-unit kind is empty")
             }
-
             Self::InvalidUnitKind => {
                 formatter.write_str(
                     "compilation-unit kind contains control characters",
                 )
             }
-
             Self::EmptyLogicalName => {
                 formatter.write_str("compilation-unit logical name is empty")
             }
-
             Self::InvalidLogicalName => {
                 formatter.write_str(
                     "compilation-unit logical name contains control characters",
                 )
             }
-
             Self::EmptyRelationshipIdentifier => {
                 formatter.write_str("custom relationship identifier is empty")
             }
-
             Self::InvalidRelationshipIdentifier => {
                 formatter.write_str(
                     "custom relationship identifier contains control characters",
                 )
             }
-
             Self::DuplicateUnit { unit } => {
                 write!(formatter, "duplicate compilation unit: {unit}")
             }
-
             Self::UnknownDependent { unit } => {
                 write!(formatter, "unknown dependent compilation unit: {unit}")
             }
-
             Self::UnknownDependency {
                 dependent,
                 dependency,
@@ -653,18 +519,15 @@ impl fmt::Display for DependencyGraphError {
                     "compilation unit '{dependent}' references unknown dependency '{dependency}'"
                 )
             }
-
             Self::SelfOrderingDependency { unit } => {
                 write!(
                     formatter,
                     "compilation unit '{unit}' has an invalid self-ordering dependency"
                 )
             }
-
             Self::OrderingCycle { blocked_units } => {
                 formatter.write_str(
-                    "compilation dependency ordering contains a cycle; \
-                     blocked units: ",
+                    "compilation dependency ordering contains a cycle; blocked units: ",
                 )?;
 
                 for (index, unit) in blocked_units.iter().enumerate() {
@@ -692,27 +555,45 @@ struct DependencyGraphData {
     units: BTreeMap<CompilationUnitId, CompilationUnit>,
     edges: BTreeSet<DependencyEdge>,
 
-    /// All direct dependencies:
-    ///
-    /// dependent -> dependencies
+    /// Direct dependencies, including all relationship kinds:
+    /// dependent -> dependencies.
     dependencies: BTreeMap<CompilationUnitId, BTreeSet<CompilationUnitId>>,
 
-    /// All direct dependents:
-    ///
-    /// dependency -> dependents
+    /// Direct dependents, including all relationship kinds:
+    /// dependency -> dependents.
     dependents: BTreeMap<CompilationUnitId, BTreeSet<CompilationUnitId>>,
 
-    /// Ordering dependencies only:
-    ///
-    /// dependent -> dependencies
+    /// Direct compile-order dependencies:
+    /// dependent -> dependencies.
     ordering_dependencies:
         BTreeMap<CompilationUnitId, BTreeSet<CompilationUnitId>>,
 
-    /// Reverse ordering dependencies:
-    ///
-    /// dependency -> dependents
+    /// Reverse compile-order relationships:
+    /// dependency -> dependents.
     ordering_dependents:
         BTreeMap<CompilationUnitId, BTreeSet<CompilationUnitId>>,
+
+    /// Relationships indexed by (dependent, dependency).
+    ///
+    /// This avoids scanning the entire edge set for a pair query.
+    relationships: BTreeMap<
+        (CompilationUnitId, CompilationUnitId),
+        BTreeSet<DependencyKind>,
+    >,
+}
+
+impl DependencyGraphData {
+    fn empty() -> Self {
+        Self {
+            units: BTreeMap::new(),
+            edges: BTreeSet::new(),
+            dependencies: BTreeMap::new(),
+            dependents: BTreeMap::new(),
+            ordering_dependencies: BTreeMap::new(),
+            ordering_dependents: BTreeMap::new(),
+            relationships: BTreeMap::new(),
+        }
+    }
 }
 
 // ============================================================================
@@ -721,9 +602,8 @@ struct DependencyGraphData {
 
 /// Immutable dependency snapshot for a compilation operation.
 ///
-/// Clones share the graph data through `Arc`.
-///
-/// The context is safe for concurrent reads and requires no reader locks.
+/// Cloning shares graph data through `Arc`. The graph can therefore be
+/// consumed by concurrent compiler stages without reader locks.
 #[derive(Debug, Clone)]
 pub struct DependencyContext {
     data: Arc<DependencyGraphData>,
@@ -740,14 +620,7 @@ impl DependencyContext {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            data: Arc::new(DependencyGraphData {
-                units: BTreeMap::new(),
-                edges: BTreeSet::new(),
-                dependencies: BTreeMap::new(),
-                dependents: BTreeMap::new(),
-                ordering_dependencies: BTreeMap::new(),
-                ordering_dependents: BTreeMap::new(),
-            }),
+            data: Arc::new(DependencyGraphData::empty()),
         }
     }
 
@@ -757,49 +630,49 @@ impl DependencyContext {
         self.data.units.len()
     }
 
-    /// Returns the number of registered dependency relationships.
+    /// Returns the number of unique typed relationships.
     #[must_use]
     pub fn edge_count(&self) -> usize {
         self.data.edges.len()
     }
 
-    /// Returns whether the context contains no compilation units.
+    /// Returns whether the graph contains no units.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.data.units.is_empty()
     }
 
-    /// Returns a compilation unit by stable identity.
+    /// Returns a unit by stable identity.
     #[must_use]
     pub fn unit(&self, id: &CompilationUnitId) -> Option<&CompilationUnit> {
         self.data.units.get(id)
     }
 
-    /// Returns all units in deterministic identifier order.
-    pub fn units(
-        &self,
-    ) -> impl ExactSizeIterator<Item = &CompilationUnit> {
+    /// Returns units in deterministic identifier order.
+    pub fn units(&self) -> impl ExactSizeIterator<Item = &CompilationUnit> {
         self.data.units.values()
     }
 
-    /// Returns all dependency edges in deterministic order.
-    pub fn edges(
-        &self,
-    ) -> impl ExactSizeIterator<Item = &DependencyEdge> {
+    /// Returns unit identities in deterministic order.
+    pub fn unit_ids(&self) -> impl ExactSizeIterator<Item = &CompilationUnitId> {
+        self.data.units.keys()
+    }
+
+    /// Returns all typed edges in deterministic order.
+    pub fn edges(&self) -> impl ExactSizeIterator<Item = &DependencyEdge> {
         self.data.edges.iter()
     }
 
-    /// Returns whether a compilation unit is registered.
+    /// Returns whether a unit is registered.
     #[must_use]
     pub fn contains_unit(&self, id: &CompilationUnitId) -> bool {
         self.data.units.contains_key(id)
     }
 
-    /// Returns the direct dependencies of a unit.
+    /// Returns direct dependencies of a unit.
     ///
-    /// All relationship kinds are included.
-    ///
-    /// The returned identifiers are deterministically ordered.
+    /// All relationship kinds are included. `None` means the requested
+    /// compilation unit is not present in this graph.
     #[must_use]
     pub fn dependencies_of(
         &self,
@@ -808,12 +681,13 @@ impl DependencyContext {
         self.data
             .dependencies
             .get(id)
-            .map(|dependencies| dependencies.iter().cloned().collect())
+            .map(|items| items.iter().cloned().collect())
     }
 
-    /// Returns the direct dependents of a unit.
+    /// Returns direct dependents of a unit.
     ///
-    /// All relationship kinds are included.
+    /// All relationship kinds are included. `None` means the requested
+    /// compilation unit is not present in this graph.
     #[must_use]
     pub fn dependents_of(
         &self,
@@ -822,10 +696,10 @@ impl DependencyContext {
         self.data
             .dependents
             .get(id)
-            .map(|dependents| dependents.iter().cloned().collect())
+            .map(|items| items.iter().cloned().collect())
     }
 
-    /// Returns direct ordering dependencies of a unit.
+    /// Returns direct compile-order dependencies.
     #[must_use]
     pub fn ordering_dependencies_of(
         &self,
@@ -834,10 +708,10 @@ impl DependencyContext {
         self.data
             .ordering_dependencies
             .get(id)
-            .map(|dependencies| dependencies.iter().cloned().collect())
+            .map(|items| items.iter().cloned().collect())
     }
 
-    /// Returns direct ordering dependents of a unit.
+    /// Returns direct compile-order dependents.
     #[must_use]
     pub fn ordering_dependents_of(
         &self,
@@ -846,10 +720,12 @@ impl DependencyContext {
         self.data
             .ordering_dependents
             .get(id)
-            .map(|dependents| dependents.iter().cloned().collect())
+            .map(|items| items.iter().cloned().collect())
     }
 
     /// Returns all relationship kinds between two units.
+    ///
+    /// Results are in deterministic `DependencyKind` order.
     #[must_use]
     pub fn relationships_between(
         &self,
@@ -857,35 +733,135 @@ impl DependencyContext {
         dependency: &CompilationUnitId,
     ) -> Vec<DependencyKind> {
         self.data
-            .edges
-            .iter()
-            .filter(|edge| {
-                &edge.dependent == dependent
-                    && &edge.dependency == dependency
-            })
-            .map(|edge| edge.kind.clone())
-            .collect()
+            .relationships
+            .get(&(dependent.clone(), dependency.clone()))
+            .map(|items| items.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
-    /// Returns a deterministic dependency-first compilation order.
+    /// Returns whether a typed relationship exists.
+    #[must_use]
+    pub fn contains_edge(&self, edge: &DependencyEdge) -> bool {
+        self.data.edges.contains(edge)
+    }
+
+    /// Returns the transitive dependency closure of a unit.
+    ///
+    /// All relationship kinds are followed. The starting unit is excluded
+    /// from the result, even if non-ordering relationships form a cycle.
+    ///
+    /// The returned identifiers are sorted and unique.
+    ///
+    /// `None` means the requested unit is unknown.
+    pub fn transitive_dependencies_of(
+        &self,
+        id: &CompilationUnitId,
+    ) -> Option<Vec<CompilationUnitId>> {
+        if !self.contains_unit(id) {
+            return None;
+        }
+
+        Some(self.transitive_closure(
+            id,
+            &self.data.dependencies,
+        ))
+    }
+
+    /// Returns all transitive dependents of a unit.
+    ///
+    /// All relationship kinds are followed. The starting unit is excluded.
+    /// The returned identifiers are sorted and unique.
+    ///
+    /// `None` means the requested unit is unknown.
+    pub fn transitive_dependents_of(
+        &self,
+        id: &CompilationUnitId,
+    ) -> Option<Vec<CompilationUnitId>> {
+        if !self.contains_unit(id) {
+            return None;
+        }
+
+        Some(self.transitive_closure(
+            id,
+            &self.data.dependents,
+        ))
+    }
+
+    /// Returns transitive compile-order dependencies.
+    ///
+    /// Non-ordering relationships are excluded.
+    pub fn transitive_ordering_dependencies_of(
+        &self,
+        id: &CompilationUnitId,
+    ) -> Option<Vec<CompilationUnitId>> {
+        if !self.contains_unit(id) {
+            return None;
+        }
+
+        Some(self.transitive_closure(
+            id,
+            &self.data.ordering_dependencies,
+        ))
+    }
+
+    /// Returns transitive compile-order dependents.
+    ///
+    /// Non-ordering relationships are excluded.
+    pub fn transitive_ordering_dependents_of(
+        &self,
+        id: &CompilationUnitId,
+    ) -> Option<Vec<CompilationUnitId>> {
+        if !self.contains_unit(id) {
+            return None;
+        }
+
+        Some(self.transitive_closure(
+            id,
+            &self.data.ordering_dependents,
+        ))
+    }
+
+    fn transitive_closure(
+        &self,
+        start: &CompilationUnitId,
+        adjacency: &BTreeMap<
+            CompilationUnitId,
+            BTreeSet<CompilationUnitId>,
+        >,
+    ) -> Vec<CompilationUnitId> {
+        let mut visited = BTreeSet::new();
+        let mut pending = Vec::new();
+
+        if let Some(neighbors) = adjacency.get(start) {
+            pending.extend(neighbors.iter().cloned());
+        }
+
+        while let Some(current) = pending.pop() {
+            if &current == start || !visited.insert(current.clone()) {
+                continue;
+            }
+
+            if let Some(neighbors) = adjacency.get(&current) {
+                pending.extend(neighbors.iter().cloned());
+            }
+        }
+
+        visited.into_iter().collect()
+    }
+
+    /// Returns deterministic dependency-first compilation order.
     ///
     /// Only ordering relationships participate.
     ///
-    /// Non-ordering relationships such as feedback and data flow remain
-    /// represented in the graph but do not create false compilation cycles.
+    /// The algorithm is iterative Kahn topological sorting. It does not
+    /// recurse and therefore does not consume call-stack space proportional
+    /// to dependency depth.
     ///
-    /// Independent units are ordered by their stable identifiers.
-    ///
-    /// The implementation uses Kahn's algorithm and does not recurse,
-    /// avoiding call-stack growth proportional to graph depth.
+    /// Independent units are selected by stable identifier order.
     pub fn dependency_first_order(
         &self,
     ) -> Result<Vec<CompilationUnitId>, DependencyGraphError> {
-        let mut remaining_dependencies: BTreeMap<
-            CompilationUnitId,
-            usize,
-        > = BTreeMap::new();
-
+        let mut remaining_dependencies = BTreeMap::new();
         let mut ready = BTreeSet::new();
 
         for id in self.data.units.keys() {
@@ -902,7 +878,7 @@ impl DependencyContext {
             }
         }
 
-        let mut order = Vec::with_capacity(self.data.units.len());
+        let mut order = Vec::new();
 
         while let Some(next) = ready.pop_first() {
             order.push(next.clone());
@@ -946,10 +922,9 @@ impl DependencyContext {
         Ok(order)
     }
 
-    /// Validates the graph and its compilation-order constraints.
+    /// Validates all graph endpoints and compile-order constraints.
     ///
-    /// A feedback or data-flow cycle is permitted because it is not
-    /// automatically a compile-time ordering cycle.
+    /// Non-ordering cycles are permitted.
     pub fn validate(&self) -> Result<(), DependencyGraphError> {
         for edge in &self.data.edges {
             if !self.data.units.contains_key(&edge.dependent) {
@@ -971,16 +946,15 @@ impl DependencyContext {
 
     /// Returns the number of strong references to the shared graph.
     ///
-    /// This is informational only and must not be used for synchronization.
+    /// Informational only; do not use for synchronization.
     #[must_use]
     pub fn shared_reference_count(&self) -> usize {
         Arc::strong_count(&self.data)
     }
 
-    /// Returns a builder for a modified graph.
+    /// Creates a builder initialized from this graph.
     ///
-    /// The existing context remains immutable. The builder starts with
-    /// a copy of its logical graph and creates a new snapshot on build.
+    /// The original graph remains immutable.
     #[must_use]
     pub fn to_builder(&self) -> DependencyContextBuilder {
         DependencyContextBuilder {
@@ -991,13 +965,13 @@ impl DependencyContext {
 }
 
 // ============================================================================
-// DEPENDENCY CONTEXT BUILDER
+// BUILDER
 // ============================================================================
 
 /// Mutable builder for an immutable dependency context.
 ///
-/// A builder is intended to be owned by one graph-construction operation.
-/// Build the immutable context before sharing it between compiler stages.
+/// A builder should be owned by one graph-construction operation.
+/// Build the context before sharing it with concurrent compiler stages.
 #[derive(Debug, Default)]
 pub struct DependencyContextBuilder {
     units: BTreeMap<CompilationUnitId, CompilationUnit>,
@@ -1005,7 +979,7 @@ pub struct DependencyContextBuilder {
 }
 
 impl DependencyContextBuilder {
-    /// Creates an empty dependency-context builder.
+    /// Creates an empty builder.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -1013,8 +987,8 @@ impl DependencyContextBuilder {
 
     /// Registers a compilation unit.
     ///
-    /// Duplicate identifiers are rejected rather than silently replacing
-    /// an existing unit with potentially different metadata.
+    /// Duplicate identities are rejected; existing metadata is never
+    /// silently overwritten.
     pub fn add_unit(
         &mut self,
         unit: CompilationUnit,
@@ -1029,35 +1003,43 @@ impl DependencyContextBuilder {
         Ok(())
     }
 
-    /// Registers a typed relationship.
+    /// Registers a typed dependency relationship.
     ///
-    /// Both endpoint units must already have been registered.
-    ///
-    /// Duplicate identical relationships are idempotent.
+    /// Both endpoints must already exist. Identical edges are idempotent.
     pub fn add_dependency(
         &mut self,
         dependent: CompilationUnitId,
         dependency: CompilationUnitId,
         kind: DependencyKind,
     ) -> Result<(), DependencyGraphError> {
-        if !self.units.contains_key(&dependent) {
-            return Err(DependencyGraphError::UnknownDependent {
-                unit: dependent,
-            });
-        }
-
-        if !self.units.contains_key(&dependency) {
-            return Err(DependencyGraphError::UnknownDependency {
-                dependent,
-                dependency,
-            });
-        }
-
         let edge = DependencyEdge::new(
             dependent,
             dependency,
             kind,
         )?;
+
+        self.add_edge(edge)
+    }
+
+    /// Registers a preconstructed edge.
+    ///
+    /// Endpoint validation is performed before insertion.
+    pub fn add_edge(
+        &mut self,
+        edge: DependencyEdge,
+    ) -> Result<(), DependencyGraphError> {
+        if !self.units.contains_key(&edge.dependent) {
+            return Err(DependencyGraphError::UnknownDependent {
+                unit: edge.dependent,
+            });
+        }
+
+        if !self.units.contains_key(&edge.dependency) {
+            return Err(DependencyGraphError::UnknownDependency {
+                dependent: edge.dependent,
+                dependency: edge.dependency,
+            });
+        }
 
         self.edges.insert(edge);
         Ok(())
@@ -1069,7 +1051,7 @@ impl DependencyContextBuilder {
         self.units.len()
     }
 
-    /// Returns the number of unique registered relationships.
+    /// Returns the number of unique typed relationships.
     #[must_use]
     pub fn edge_count(&self) -> usize {
         self.edges.len()
@@ -1077,29 +1059,13 @@ impl DependencyContextBuilder {
 
     /// Builds and validates an immutable dependency context.
     ///
-    /// Ordering cycles are rejected.
-    ///
-    /// Non-ordering cycles are permitted.
+    /// Ordering cycles are rejected. Non-ordering cycles are permitted.
     pub fn build(self) -> Result<DependencyContext, DependencyGraphError> {
-        let mut dependencies: BTreeMap<
-            CompilationUnitId,
-            BTreeSet<CompilationUnitId>,
-        > = BTreeMap::new();
-
-        let mut dependents: BTreeMap<
-            CompilationUnitId,
-            BTreeSet<CompilationUnitId>,
-        > = BTreeMap::new();
-
-        let mut ordering_dependencies: BTreeMap<
-            CompilationUnitId,
-            BTreeSet<CompilationUnitId>,
-        > = BTreeMap::new();
-
-        let mut ordering_dependents: BTreeMap<
-            CompilationUnitId,
-            BTreeSet<CompilationUnitId>,
-        > = BTreeMap::new();
+        let mut dependencies = BTreeMap::new();
+        let mut dependents = BTreeMap::new();
+        let mut ordering_dependencies = BTreeMap::new();
+        let mut ordering_dependents = BTreeMap::new();
+        let mut relationships = BTreeMap::new();
 
         for id in self.units.keys() {
             dependencies.insert(id.clone(), BTreeSet::new());
@@ -1131,16 +1097,35 @@ impl DependencyContextBuilder {
             unit_dependents.insert(edge.dependent.clone());
 
             if edge.requires_ordering() {
-                ordering_dependencies
-                    .get_mut(&edge.dependent)
-                    .expect("registered unit must have an ordering entry")
-                    .insert(edge.dependency.clone());
+                let Some(items) =
+                    ordering_dependencies.get_mut(&edge.dependent)
+                else {
+                    return Err(DependencyGraphError::UnknownDependent {
+                        unit: edge.dependent.clone(),
+                    });
+                };
 
-                ordering_dependents
-                    .get_mut(&edge.dependency)
-                    .expect("registered unit must have an ordering entry")
-                    .insert(edge.dependent.clone());
+                items.insert(edge.dependency.clone());
+
+                let Some(items) =
+                    ordering_dependents.get_mut(&edge.dependency)
+                else {
+                    return Err(DependencyGraphError::UnknownDependency {
+                        dependent: edge.dependent.clone(),
+                        dependency: edge.dependency.clone(),
+                    });
+                };
+
+                items.insert(edge.dependent.clone());
             }
+
+            relationships
+                .entry((
+                    edge.dependent.clone(),
+                    edge.dependency.clone(),
+                ))
+                .or_insert_with(BTreeSet::new)
+                .insert(edge.kind.clone());
         }
 
         let context = DependencyContext {
@@ -1151,11 +1136,11 @@ impl DependencyContextBuilder {
                 dependents,
                 ordering_dependencies,
                 ordering_dependents,
+                relationships,
             }),
         };
 
         context.validate()?;
-
         Ok(context)
     }
 }
@@ -1191,7 +1176,9 @@ mod tests {
         let mut builder = DependencyContextBuilder::new();
 
         for identifier in identifiers {
-            builder.add_unit(unit(identifier)).expect("unit registration");
+            builder
+                .add_unit(unit(identifier))
+                .expect("unit registration");
         }
 
         builder
@@ -1233,6 +1220,19 @@ mod tests {
         assert_eq!(
             CompilationUnitKind::new("source\tkind"),
             Err(DependencyGraphError::InvalidUnitKind)
+        );
+    }
+
+    #[test]
+    fn logical_names_are_validated() {
+        assert_eq!(
+            CompilationUnit::new(id("unit"), kind("source"), " "),
+            Err(DependencyGraphError::EmptyLogicalName)
+        );
+
+        assert_eq!(
+            CompilationUnit::new(id("unit"), kind("source"), "bad\nname"),
+            Err(DependencyGraphError::InvalidLogicalName)
         );
     }
 
@@ -1303,10 +1303,8 @@ mod tests {
 
     #[test]
     fn dependency_direction_is_dependent_to_dependency() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "library",
-        ]);
+        let mut builder =
+            graph_with_units(&["application", "library"]);
 
         builder
             .add_dependency(
@@ -1331,11 +1329,8 @@ mod tests {
 
     #[test]
     fn compilation_order_is_dependency_first() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "library",
-            "foundation",
-        ]);
+        let mut builder =
+            graph_with_units(&["application", "library", "foundation"]);
 
         builder
             .add_dependency(
@@ -1367,30 +1362,20 @@ mod tests {
 
     #[test]
     fn independent_units_have_deterministic_order() {
-        let mut builder = graph_with_units(&[
-            "zeta",
-            "alpha",
-            "middle",
-        ]);
+        let mut builder =
+            graph_with_units(&["zeta", "alpha", "middle"]);
 
         let context = builder.build().expect("context");
 
         assert_eq!(
             context.dependency_first_order().expect("order"),
-            vec![
-                id("alpha"),
-                id("middle"),
-                id("zeta"),
-            ]
+            vec![id("alpha"), id("middle"), id("zeta")]
         );
     }
 
     #[test]
     fn ordering_cycle_is_rejected() {
-        let mut builder = graph_with_units(&[
-            "first",
-            "second",
-        ]);
+        let mut builder = graph_with_units(&["first", "second"]);
 
         builder
             .add_dependency(
@@ -1431,11 +1416,30 @@ mod tests {
     }
 
     #[test]
-    fn feedback_relationship_does_not_create_ordering_cycle() {
-        let mut builder = graph_with_units(&[
-            "controller",
-            "processor",
-        ]);
+    fn non_ordering_self_relationship_is_permitted() {
+        let mut builder = graph_with_units(&["unit"]);
+
+        builder
+            .add_dependency(
+                id("unit"),
+                id("unit"),
+                DependencyKind::Feedback,
+            )
+            .expect("feedback relationship");
+
+        let context = builder.build().expect("valid non-ordering graph");
+
+        assert_eq!(context.edge_count(), 1);
+        assert_eq!(
+            context.dependency_first_order().expect("order"),
+            vec![id("unit")]
+        );
+    }
+
+    #[test]
+    fn feedback_cycle_does_not_create_ordering_cycle() {
+        let mut builder =
+            graph_with_units(&["controller", "processor"]);
 
         builder
             .add_dependency(
@@ -1453,7 +1457,7 @@ mod tests {
             )
             .expect("reverse feedback edge");
 
-        let context = builder.build().expect("feedback graph is valid");
+        let context = builder.build().expect("feedback graph");
 
         assert_eq!(context.edge_count(), 2);
         assert_eq!(
@@ -1464,10 +1468,8 @@ mod tests {
 
     #[test]
     fn data_flow_does_not_impose_compilation_order() {
-        let mut builder = graph_with_units(&[
-            "producer",
-            "consumer",
-        ]);
+        let mut builder =
+            graph_with_units(&["producer", "consumer"]);
 
         builder
             .add_dependency(
@@ -1489,10 +1491,8 @@ mod tests {
 
     #[test]
     fn custom_ordering_relationship_is_supported() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "provider",
-        ]);
+        let mut builder =
+            graph_with_units(&["application", "provider"]);
 
         builder
             .add_dependency(
@@ -1509,19 +1509,32 @@ mod tests {
 
         assert_eq!(
             context.dependency_first_order().expect("order"),
-            vec![
-                id("provider"),
+            vec![id("provider"), id("application")]
+        );
+    }
+
+    #[test]
+    fn invalid_custom_relationship_identifiers_are_rejected() {
+        let mut builder =
+            graph_with_units(&["application", "provider"]);
+
+        assert_eq!(
+            builder.add_dependency(
                 id("application"),
-            ]
+                id("provider"),
+                DependencyKind::Custom {
+                    identifier: Arc::from(" "),
+                    requires_ordering: false,
+                },
+            ),
+            Err(DependencyGraphError::EmptyRelationshipIdentifier)
         );
     }
 
     #[test]
     fn duplicate_identical_edges_are_idempotent() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "library",
-        ]);
+        let mut builder =
+            graph_with_units(&["application", "library"]);
 
         for _ in 0..2 {
             builder
@@ -1538,10 +1551,8 @@ mod tests {
 
     #[test]
     fn distinct_relationships_between_same_units_are_preserved() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "library",
-        ]);
+        let mut builder =
+            graph_with_units(&["application", "library"]);
 
         builder
             .add_dependency(
@@ -1557,7 +1568,7 @@ mod tests {
                 id("library"),
                 DependencyKind::Interface,
             )
-            .expect("interface dependency");
+            .expect("interface");
 
         let context = builder.build().expect("context");
 
@@ -1575,9 +1586,137 @@ mod tests {
     }
 
     #[test]
+    fn relationship_lookup_uses_the_pair_index() {
+        let mut builder =
+            graph_with_units(&["application", "library", "other"]);
+
+        builder
+            .add_dependency(
+                id("application"),
+                id("library"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        let context = builder.build().expect("context");
+
+        assert_eq!(
+            context.relationships_between(
+                &id("application"),
+                &id("library"),
+            ),
+            vec![DependencyKind::ModuleImport]
+        );
+
+        assert!(context.relationships_between(
+            &id("application"),
+            &id("other"),
+        ).is_empty());
+    }
+
+    #[test]
+    fn transitive_dependencies_are_deterministic_and_unique() {
+        let mut builder = graph_with_units(&[
+            "application",
+            "library-a",
+            "library-b",
+            "foundation",
+        ]);
+
+        builder
+            .add_dependency(
+                id("application"),
+                id("library-a"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        builder
+            .add_dependency(
+                id("application"),
+                id("library-b"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        builder
+            .add_dependency(
+                id("library-a"),
+                id("foundation"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        builder
+            .add_dependency(
+                id("library-b"),
+                id("foundation"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        let context = builder.build().expect("context");
+
+        assert_eq!(
+            context.transitive_dependencies_of(&id("application")),
+            Some(vec![
+                id("foundation"),
+                id("library-a"),
+                id("library-b"),
+            ])
+        );
+    }
+
+    #[test]
+    fn transitive_dependents_support_impact_analysis() {
+        let mut builder = graph_with_units(&[
+            "application",
+            "library",
+            "foundation",
+        ]);
+
+        builder
+            .add_dependency(
+                id("application"),
+                id("library"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        builder
+            .add_dependency(
+                id("library"),
+                id("foundation"),
+                DependencyKind::ModuleImport,
+            )
+            .expect("edge");
+
+        let context = builder.build().expect("context");
+
+        assert_eq!(
+            context.transitive_dependents_of(&id("foundation")),
+            Some(vec![id("application"), id("library")])
+        );
+    }
+
+    #[test]
+    fn unknown_unit_queries_return_none() {
+        let context = DependencyContext::new();
+
+        assert_eq!(
+            context.transitive_dependencies_of(&id("missing")),
+            None
+        );
+
+        assert_eq!(
+            context.transitive_dependents_of(&id("missing")),
+            None
+        );
+    }
+
+    #[test]
     fn cloned_contexts_share_immutable_graph() {
         let mut builder = graph_with_units(&["module"]);
-
         let context = builder.build().expect("context");
         let clone = context.clone();
 
@@ -1588,10 +1727,12 @@ mod tests {
 
     #[test]
     fn builder_from_context_does_not_mutate_original() {
-        let mut original_builder = graph_with_units(&["first"]);
-        let original = original_builder.build().expect("original");
+        let original = graph_with_units(&["first"])
+            .build()
+            .expect("original");
 
         let mut modified_builder = original.to_builder();
+
         modified_builder
             .add_unit(unit("second"))
             .expect("second unit");
@@ -1637,22 +1778,35 @@ mod tests {
     }
 
     #[test]
-    fn empty_custom_relationship_identifier_is_rejected() {
-        let mut builder = graph_with_units(&[
-            "application",
-            "provider",
-        ]);
+    fn non_ordering_cycles_are_safe_for_transitive_queries() {
+        let mut builder = graph_with_units(&["first", "second"]);
+
+        builder
+            .add_dependency(
+                id("first"),
+                id("second"),
+                DependencyKind::Feedback,
+            )
+            .expect("edge");
+
+        builder
+            .add_dependency(
+                id("second"),
+                id("first"),
+                DependencyKind::Feedback,
+            )
+            .expect("edge");
+
+        let context = builder.build().expect("context");
 
         assert_eq!(
-            builder.add_dependency(
-                id("application"),
-                id("provider"),
-                DependencyKind::Custom {
-                    identifier: Arc::from(" "),
-                    requires_ordering: false,
-                },
-            ),
-            Err(DependencyGraphError::EmptyRelationshipIdentifier)
+            context.transitive_dependencies_of(&id("first")),
+            Some(vec![id("second")])
+        );
+
+        assert_eq!(
+            context.transitive_dependents_of(&id("first")),
+            Some(vec![id("second")])
         );
     }
 }
