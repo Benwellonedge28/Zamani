@@ -1,6 +1,7 @@
 
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
 
 //! # Zamani Compiler Diagnostic Reporting
 //!
@@ -10,118 +11,101 @@
 //!
 //! # Purpose
 //!
-//! Publish compiler diagnostic aggregates through a stable, structured,
-//! machine-readable reporting interface.
+//! Publish finalized compiler diagnostic aggregates through a stable,
+//! deterministic, machine-readable JSON reporting interface.
 //!
-//! The reporting layer converts an existing `AggregatedDiagnostics` result
-//! into a versioned JSON document.
+//! This module provides:
 //!
-//! It preserves:
+//! - a versioned JSON report envelope;
+//! - complete aggregation status;
+//! - diagnostic summary statistics;
+//! - canonical diagnostic serialization;
+//! - canonical source-span serialization;
+//! - structured labels, notes, help and fix-it serialization;
+//! - deterministic structured metadata serialization;
+//! - direct writer-based serialization;
+//! - owned-string serialization for callers that request it.
 //!
-//! - stable diagnostic codes;
-//! - diagnostic severity;
-//! - diagnostic category;
-//! - emitting phase;
-//! - primary source spans;
-//! - secondary source labels;
-//! - explanatory notes;
-//! - help text;
-//! - structured fix-it edits;
-//! - recovery classification;
-//! - machine-readable metadata;
-//! - aggregation completeness;
-//! - aggregation statistics.
+//! # Canonical authorities
+//!
+//! Diagnostic records:
+//! `crate::frontend::semantic::diagnostics`
+//!
+//! Source coordinates:
+//! `crate::frontend::ast::node::source::span`
+//!
+//! Aggregation:
+//! `crate::compiler::diagnostics::aggregation`
+//!
+//! Human-readable presentation:
+//! `crate::compiler::diagnostics::rendering`
+//!
+//! Normative specifications:
+//! `grammar/spec/diagnostics.md`
+//! `grammar/spec/source-spans.md`
 //!
 //! # Ownership
 //!
-//! This module owns:
+//! This module owns the report envelope, summary calculation,
+//! serialization and reporting errors.
 //!
-//! - the public diagnostic-reporting API;
-//! - the versioned JSON report envelope;
-//! - report summary calculation;
-//! - structured serialization;
-//! - serialization error propagation.
+//! It does not own diagnostic construction, identity, ordering,
+//! deduplication, suppression, source storage, source-map lookup,
+//! source-coordinate conversion, human-readable rendering,
+//! semantic validity, or compilation-stage execution.
 //!
-//! This module does not own:
+//! # Source-coordinate contract
 //!
-//! - diagnostic records;
-//! - diagnostic identity;
-//! - diagnostic ordering;
-//! - diagnostic deduplication;
-//! - diagnostic aggregation;
-//! - diagnostic suppression;
-//! - source maps;
-//! - source-file storage;
-//! - source-coordinate conversion;
-//! - human-readable source rendering;
-//! - compiler validity;
-//! - compilation-stage execution.
+//! Serialized spans contain:
 //!
-//! Canonical diagnostic record:
+//! - source_id;
+//! - start_byte;
+//! - end_byte.
 //!
-//! `crate::frontend::semantic::diagnostics::Diagnostic`
+//! Offsets are zero-based UTF-8 byte offsets.
+//! Spans are half-open: [start_byte, end_byte).
 //!
-//! Canonical source span:
-//!
-//! `crate::frontend::ast::node::source::Span`
-//!
-//! Canonical aggregation result:
-//!
-//! `crate::compiler::diagnostics::aggregation::AggregatedDiagnostics`
-//!
-//! # Output contract
-//!
-//! The report is a JSON object with:
-//!
-//! - schema_version;
-//! - status;
-//! - summary;
-//! - diagnostics.
-//!
-//! Source locations are serialized as source IDs and UTF-8 byte offsets.
-//! They are not converted into line/column positions here. That conversion
-//! belongs to the canonical source-map infrastructure and presentation layer.
+//! They are not line/column positions.
+//! Consumers must resolve source IDs against the matching source-map
+//! snapshot before displaying or editing source.
 //!
 //! # Determinism
 //!
-//! - Diagnostic order is inherited from the canonical aggregate.
-//! - Metadata is serialized from its ordered BTreeMap.
-//! - Object fields are emitted in a stable, declared order.
-//! - No timestamps, process IDs, addresses, random values, or worker IDs
+//! - Diagnostic ordering is inherited from AggregatedDiagnostics.
+//! - Diagnostic labels, notes and fixes retain producer order.
+//! - Metadata objects use the canonical ordered map.
+//! - JSON object fields have an explicitly declared order.
+//! - No timestamps, process IDs, random values, addresses or worker IDs
 //!   are introduced.
-//! - No hash-map iteration is used.
 //!
 //! # Scalability
 //!
-//! No fixed diagnostic-count, source-size, hardware-count, or domain-count
-//! ceiling is introduced.
+//! No arbitrary diagnostic-count, source-size, hardware-count,
+//! computational-domain or target-count ceiling is introduced.
 //!
-//! `write_json` serializes directly into a caller-provided writer instead of
-//! first constructing a second complete JSON document in memory.
+//! `write_json` and `write_json_to` serialize through a caller-provided
+//! writer and do not construct a second complete report string.
 //!
-//! `to_json_string` is provided for callers that explicitly want an owned
-//! string and therefore accept its memory cost.
+//! `to_json_string` intentionally allocates an owned output string.
 //!
-//! Unlimited reporting does not promise infinite physical memory or output
-//! capacity. Actual resource availability and caller-configured budgets
-//! remain authoritative.
+//! Actual output capacity and memory availability remain physical and
+//! operational constraints. This module does not promise literal infinite
+//! memory or infinite output capacity.
 //!
-//! # Error handling
+//! # Failure contract
 //!
-//! Serialization failures are returned to the caller.
-//! No serialization failure is silently converted into an empty report.
-//! Incomplete aggregation remains explicitly marked incomplete.
+//! A serialization failure is returned to the caller.
+//! A writer may have received a partial JSON document when an error occurs.
+//! Such output must not be treated as a complete report.
+//!
+//! An incomplete aggregate remains explicitly marked incomplete.
+//! Reporting never upgrades an incomplete aggregate to complete.
 //!
 //! # Security
 //!
-//! This module does not execute fix-its, open source files, interpret metadata
-//! as instructions, or perform filesystem/network operations.
-//!
-//! # Rust and safety
-//!
-//! Rust 2021, Rust 1.97+.
-//! Safe Rust only.
-//! No global mutable state.
+//! This module serializes data only.
+//! It does not execute fix-its, open source files, interpret metadata
+//! as instructions, or perform filesystem, network or process operations.
 
 use core::fmt;
 use serde::ser::{
@@ -131,11 +115,11 @@ use serde::ser::{
     SerializeStruct,
     Serializer,
 };
+use std::io::Write;
 
 use crate::compiler::diagnostics::aggregation::{
     AggregatedDiagnostics,
     AggregationStatus,
-    AggregationStatistics,
 };
 
 use crate::frontend::semantic::diagnostics::{
@@ -146,14 +130,15 @@ use crate::frontend::semantic::diagnostics::{
     FixItEdit,
 };
 
-use crate::frontend::ast::node::source::Span;
+use crate::frontend::ast::node::source::span::Span;
 
 /// Stable identifier for the diagnostic-report JSON schema.
 ///
-/// A schema change that is not backward-compatible must use a new version.
+/// Backward-compatible additions may be made to this schema.
+/// An incompatible change requires a new schema identifier.
 pub const DIAGNOSTIC_REPORT_SCHEMA: &str = "zamani.diagnostics.v1";
 
-/// Status of a published diagnostic report.
+/// Completion status of a published diagnostic report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReportStatus {
     /// Aggregation retained or merged all submitted diagnostics.
@@ -173,6 +158,12 @@ impl ReportStatus {
             Self::Incomplete => "incomplete",
         }
     }
+
+    /// Whether the report represents complete aggregation.
+    #[must_use]
+    pub const fn is_complete(self) -> bool {
+        matches!(self, Self::Complete)
+    }
 }
 
 impl From<AggregationStatus> for ReportStatus {
@@ -184,26 +175,35 @@ impl From<AggregationStatus> for ReportStatus {
     }
 }
 
-/// Summary information included in every report.
+/// Summary information included in every diagnostic report.
 ///
-/// Counts use `u128` in the report model so that they are not tied to the
-/// pointer width of the host on which the report is generated.
+/// Counts use u128 for the report representation so that the report model
+/// is not tied to the pointer width of the host.
+///
+/// `unclassified` counts diagnostic severities introduced by a future
+/// non-exhaustive DiagnosticSeverity implementation that this version
+/// does not recognize.
+///
+/// It prevents future severity variants from silently disappearing from
+/// the summary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReportSummary {
     submitted: u64,
     retained: u128,
     dropped: u64,
     duplicates: u64,
+
     hints: u128,
     notes: u128,
     information: u128,
     warnings: u128,
     errors: u128,
     fatal: u128,
+    unclassified: u128,
 }
 
 impl ReportSummary {
-    /// Build a summary from an already finalized aggregate.
+    /// Build a summary from a finalized diagnostic aggregate.
     ///
     /// This method does not mutate the aggregate or alter diagnostic order.
     #[must_use]
@@ -217,12 +217,14 @@ impl ReportSummary {
             retained: aggregate.diagnostics().len() as u128,
             dropped: statistics.dropped(),
             duplicates: statistics.duplicates(),
+
             hints: 0,
             notes: 0,
             information: 0,
             warnings: 0,
             errors: 0,
             fatal: 0,
+            unclassified: 0,
         };
 
         for diagnostic in aggregate.diagnostics() {
@@ -246,8 +248,10 @@ impl ReportSummary {
                     summary.fatal += 1;
                 }
                 _ => {
-                    // The canonical severity enum is non-exhaustive.
-                    // Unknown future variants are not misclassified.
+                    // DiagnosticSeverity is non-exhaustive.
+                    // Future variants must remain visible in the report
+                    // summary without being incorrectly classified.
+                    summary.unclassified += 1;
                 }
             }
         }
@@ -255,7 +259,7 @@ impl ReportSummary {
         summary
     }
 
-    /// Number of diagnostic submissions.
+    /// Number of diagnostic submissions accounted for by aggregation.
     #[must_use]
     pub const fn submitted(&self) -> u64 {
         self.submitted
@@ -273,7 +277,7 @@ impl ReportSummary {
         self.dropped
     }
 
-    /// Number of duplicate submissions merged during aggregation.
+    /// Number of duplicate diagnostic submissions merged.
     #[must_use]
     pub const fn duplicates(&self) -> u64 {
         self.duplicates
@@ -315,6 +319,12 @@ impl ReportSummary {
         self.fatal
     }
 
+    /// Number of diagnostics with an unclassified future severity.
+    #[must_use]
+    pub const fn unclassified(&self) -> u128 {
+        self.unclassified
+    }
+
     /// Whether a retained diagnostic has error or fatal severity.
     #[must_use]
     pub const fn has_errors(&self) -> bool {
@@ -328,10 +338,10 @@ impl ReportSummary {
     }
 }
 
-/// A borrowed report over a finalized diagnostic aggregate.
+/// Borrowed view of a finalized diagnostic aggregate.
 ///
-/// The report does not clone the diagnostic collection. Its lifetime is
-/// bounded by the aggregate supplied to `new`.
+/// No diagnostic collection is cloned.
+/// The report cannot outlive the aggregate from which it was created.
 #[derive(Debug, Clone, Copy)]
 pub struct DiagnosticReport<'a> {
     aggregate: &'a AggregatedDiagnostics,
@@ -364,42 +374,74 @@ impl<'a> DiagnosticReport<'a> {
         ReportSummary::from_aggregate(self.aggregate)
     }
 
-    /// Return the diagnostics in canonical reporting order.
+    /// Return diagnostics in canonical reporting order.
     #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         self.aggregate.diagnostics()
     }
 
-    /// Return whether the aggregate is complete.
+    /// Whether aggregation completed without dropping diagnostics.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.aggregate.is_complete()
     }
 
-    /// Serialize this report directly to a caller-provided writer.
+    /// Whether the aggregate contains error or fatal diagnostics.
     ///
-    /// This is the preferred API for large reports because it avoids
-    /// constructing an additional complete JSON string.
+    /// This is diagnostic information, not a substitute for the compiler
+    /// pipeline's authoritative compilation outcome.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.aggregate.has_errors()
+    }
+
+    /// Whether the aggregate contains fatal diagnostics.
+    #[must_use]
+    pub fn has_fatal_errors(&self) -> bool {
+        self.aggregate.has_fatal_errors()
+    }
+
+    /// Serialize directly to a caller-provided writer.
     ///
-    /// The writer is owned by the caller. This method does not flush or close
-    /// it; those lifecycle decisions belong to the caller.
+    /// This is the preferred API for large reports.
     ///
-    /// A serialization or writer failure is returned explicitly.
+    /// The writer is not flushed or closed.
+    ///
+    /// If serialization fails, the writer may contain a partial JSON
+    /// document. The caller must discard or otherwise mark that output
+    /// as incomplete.
     pub fn write_json<W>(
         &self,
         writer: W,
     ) -> Result<(), ReportError>
     where
-        W: std::io::Write,
+        W: Write,
     {
         serde_json::to_writer(writer, self)
             .map_err(ReportError::Serialization)
     }
 
-    /// Serialize this report into an owned JSON string.
+    /// Serialize directly to a borrowed writer.
     ///
-    /// This method allocates memory proportional to the resulting JSON
-    /// document. Prefer `write_json` when reporting large diagnostic sets.
+    /// This variant makes it explicit that the caller retains ownership
+    /// of the writer after the operation.
+    ///
+    /// No complete intermediate JSON string is constructed.
+    pub fn write_json_to<W>(
+        &self,
+        writer: &mut W,
+    ) -> Result<(), ReportError>
+    where
+        W: Write + ?Sized,
+    {
+        serde_json::to_writer(writer, self)
+            .map_err(ReportError::Serialization)
+    }
+
+    /// Serialize into an owned JSON string.
+    ///
+    /// This allocates memory proportional to the resulting document.
+    /// Prefer `write_json` or `write_json_to` for large reports.
     pub fn to_json_string(&self) -> Result<String, ReportError> {
         serde_json::to_string(self)
             .map_err(ReportError::Serialization)
@@ -414,8 +456,31 @@ pub enum ReportError {
     Serialization(serde_json::Error),
 }
 
+impl ReportError {
+    /// Return the underlying JSON serialization error.
+    #[must_use]
+    pub const fn serialization_error(
+        &self,
+    ) -> &serde_json::Error {
+        match self {
+            Self::Serialization(error) => error,
+        }
+    }
+
+    /// Whether the failure originated from the output writer.
+    #[must_use]
+    pub fn is_writer_error(&self) -> bool {
+        match self {
+            Self::Serialization(error) => error.is_io(),
+        }
+    }
+}
+
 impl fmt::Display for ReportError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::Serialization(error) => {
                 write!(
@@ -428,7 +493,9 @@ impl fmt::Display for ReportError {
 }
 
 impl std::error::Error for ReportError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(
+        &self,
+    ) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Serialization(error) => Some(error),
         }
@@ -488,7 +555,7 @@ impl Serialize for ReportSummary {
     {
         let mut state = serializer.serialize_struct(
             "DiagnosticReportSummary",
-            11,
+            13,
         )?;
 
         state.serialize_field("submitted", &self.submitted)?;
@@ -502,16 +569,23 @@ impl Serialize for ReportSummary {
         state.serialize_field("warnings", &self.warnings)?;
         state.serialize_field("errors", &self.errors)?;
         state.serialize_field("fatal", &self.fatal)?;
+        state.serialize_field("unclassified", &self.unclassified)?;
 
         state.serialize_field("has_errors", &self.has_errors())?;
+        state.serialize_field(
+            "has_fatal_errors",
+            &self.has_fatal_errors(),
+        )?;
+
         state.end()
     }
 }
 
-/// A source span serialized in canonical source coordinates.
+/// Canonical source span serialized as source identity and UTF-8 byte offsets.
 ///
-/// These are source IDs and UTF-8 byte offsets. They are not line/column
-/// coordinates and must not be interpreted as display positions.
+/// These are not line/column coordinates.
+/// Consumers must resolve the source identity against the source-map
+/// snapshot associated with the compilation.
 #[derive(Debug, Clone, Copy, serde::Serialize)]
 struct SpanRecord {
     source_id: u64,
@@ -529,7 +603,7 @@ impl From<Span> for SpanRecord {
     }
 }
 
-/// Serialize one diagnostic span.
+/// Serialize an optional canonical source span.
 #[derive(Debug, Clone, Copy)]
 struct OptionalSpan(Option<Span>);
 
@@ -548,7 +622,7 @@ impl Serialize for OptionalSpan {
     }
 }
 
-/// Borrowed view of the diagnostic sequence.
+/// Borrowed view of the canonical diagnostic sequence.
 struct DiagnosticsRef<'a>(&'a [Diagnostic]);
 
 impl Serialize for DiagnosticsRef<'_> {
@@ -564,14 +638,16 @@ impl Serialize for DiagnosticsRef<'_> {
         )?;
 
         for diagnostic in self.0 {
-            sequence.serialize_element(&DiagnosticRecord(diagnostic))?;
+            sequence.serialize_element(
+                &DiagnosticRecord(diagnostic),
+            )?;
         }
 
         sequence.end()
     }
 }
 
-/// Borrowed view of one canonical diagnostic.
+/// Borrowed view of one canonical frontend diagnostic.
 struct DiagnosticRecord<'a>(&'a Diagnostic);
 
 impl Serialize for DiagnosticRecord<'_> {
@@ -584,9 +660,10 @@ impl Serialize for DiagnosticRecord<'_> {
     {
         let diagnostic = self.0;
 
+        // Twelve fields are serialized below.
         let mut state = serializer.serialize_struct(
             "Diagnostic",
-            11,
+            12,
         )?;
 
         state.serialize_field(
@@ -653,9 +730,11 @@ impl Serialize for DiagnosticRecord<'_> {
     }
 }
 
-/// Borrowed view of secondary source labels.
+/// Borrowed view of secondary diagnostic labels.
 struct LabelsRef<'a>(
-    &'a [crate::frontend::semantic::diagnostics::DiagnosticLabel],
+    &'a [
+        crate::frontend::semantic::diagnostics::diagnostic::DiagnosticLabel
+    ],
 );
 
 impl Serialize for LabelsRef<'_> {
@@ -710,6 +789,7 @@ impl Serialize for FixesRef<'_> {
     }
 }
 
+/// Borrowed view of one fix-it.
 struct FixRecord<'a>(&'a FixIt);
 
 impl Serialize for FixRecord<'_> {
@@ -729,12 +809,16 @@ impl Serialize for FixRecord<'_> {
 
         state.serialize_field("title", fix.title())?;
         state.serialize_field("is_safe", &fix.is_safe())?;
-        state.serialize_field("edits", &FixEditsRef(fix.edits()))?;
+        state.serialize_field(
+            "edits",
+            &FixEditsRef(fix.edits()),
+        )?;
 
         state.end()
     }
 }
 
+/// Borrowed view of fix-it edits.
 struct FixEditsRef<'a>(&'a [FixItEdit]);
 
 impl Serialize for FixEditsRef<'_> {
@@ -814,11 +898,21 @@ impl Serialize for DiagnosticValue {
                     Some(values.len()),
                 )?;
 
+                // DiagnosticValue::Object uses BTreeMap, so this iteration
+                // has deterministic key order.
                 for (key, value) in values {
                     map.serialize_entry(key, value)?;
                 }
 
                 map.end()
+            }
+
+            _ => {
+                // DiagnosticValue is non-exhaustive. A future variant
+                // must not be silently serialized as an unrelated value.
+                Err(serde::ser::Error::custom(
+                    "unsupported diagnostic metadata value variant",
+                ))
             }
         }
     }
@@ -833,8 +927,8 @@ mod tests {
     use super::*;
 
     use crate::compiler::diagnostics::aggregation::{
-        DiagnosticAggregator,
         AggregationPolicy,
+        DiagnosticAggregator,
     };
 
     use crate::frontend::semantic::diagnostics::{
@@ -845,6 +939,8 @@ mod tests {
         DiagnosticValue,
     };
 
+    use std::io;
+
     fn sample_diagnostic() -> Diagnostic {
         Diagnostic::new(
             "ZMN-TYPE-MISMATCH",
@@ -854,8 +950,12 @@ mod tests {
             "incompatible types",
             None,
         )
-        .with_note("the expression has an incompatible type")
-        .with_help("provide a compatible value")
+        .with_note(
+            "the expression has an incompatible type",
+        )
+        .with_help(
+            "provide a compatible value",
+        )
         .with_metadata(
             "expected",
             DiagnosticValue::Text("Int".to_owned()),
@@ -887,7 +987,14 @@ mod tests {
             .to_json_string()
             .expect("report should serialize");
 
-        assert!(json.contains(DIAGNOSTIC_REPORT_SCHEMA));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json)
+                .expect("report should be valid JSON");
+
+        assert_eq!(
+            parsed["schema_version"],
+            DIAGNOSTIC_REPORT_SCHEMA,
+        );
     }
 
     #[test]
@@ -899,10 +1006,31 @@ mod tests {
             .to_json_string()
             .expect("report should serialize");
 
-        assert!(json.contains("ZMN-TYPE-MISMATCH"));
-        assert!(json.contains("type_analysis"));
-        assert!(json.contains("incompatible types"));
-        assert!(json.contains("\"severity\":\"error\""));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json)
+                .expect("report should be valid JSON");
+
+        let diagnostic = &parsed["diagnostics"][0];
+
+        assert_eq!(
+            diagnostic["code"],
+            "ZMN-TYPE-MISMATCH",
+        );
+
+        assert_eq!(
+            diagnostic["phase"],
+            "type_analysis",
+        );
+
+        assert_eq!(
+            diagnostic["severity"],
+            "error",
+        );
+
+        assert_eq!(
+            diagnostic["message"],
+            "incompatible types",
+        );
     }
 
     #[test]
@@ -914,8 +1042,14 @@ mod tests {
             .to_json_string()
             .expect("report should serialize");
 
-        assert!(json.contains("\"expected\":\"Int\""));
-        assert!(json.contains("\"actual\":\"Float\""));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json)
+                .expect("report should be valid JSON");
+
+        let metadata = &parsed["diagnostics"][0]["metadata"];
+
+        assert_eq!(metadata["expected"], "Int");
+        assert_eq!(metadata["actual"], "Float");
     }
 
     #[test]
@@ -928,8 +1062,30 @@ mod tests {
         assert_eq!(summary.submitted(), 1);
         assert_eq!(summary.retained(), 1);
         assert_eq!(summary.errors(), 1);
+
         assert!(summary.has_errors());
+        assert!(!summary.has_fatal_errors());
         assert!(report.is_complete());
+        assert!(report.has_errors());
+    }
+
+    #[test]
+    fn report_contains_fatal_summary_field() {
+        let aggregate = sample_report();
+        let report = DiagnosticReport::new(&aggregate);
+
+        let json = report
+            .to_json_string()
+            .expect("report should serialize");
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json)
+                .expect("report should be valid JSON");
+
+        let summary = &parsed["summary"];
+
+        assert!(summary.get("has_fatal_errors").is_some());
+        assert!(summary.get("unclassified").is_some());
     }
 
     #[test]
@@ -959,14 +1115,28 @@ mod tests {
         let aggregate = aggregator.finish();
         let report = DiagnosticReport::new(&aggregate);
 
-        assert_eq!(report.status(), ReportStatus::Incomplete);
+        assert_eq!(
+            report.status(),
+            ReportStatus::Incomplete,
+        );
 
         let json = report
             .to_json_string()
             .expect("incomplete report should still serialize");
 
-        assert!(json.contains("\"status\":\"incomplete\""));
-        assert!(json.contains("\"dropped\":1"));
+        let parsed: serde_json::Value =
+            serde_json::from_str(&json)
+                .expect("report should be valid JSON");
+
+        assert_eq!(
+            parsed["status"],
+            "incomplete",
+        );
+
+        assert_eq!(
+            parsed["summary"]["dropped"],
+            1,
+        );
     }
 
     #[test]
@@ -991,7 +1161,60 @@ mod tests {
     }
 
     #[test]
-    fn metadata_objects_are_serialized_deterministically() {
+    fn borrowed_writer_api_preserves_writer_ownership() {
+        let aggregate = sample_report();
+        let report = DiagnosticReport::new(&aggregate);
+
+        let mut output = Vec::new();
+
+        report
+            .write_json_to(&mut output)
+            .expect("borrowed writer serialization should succeed");
+
+        assert!(!output.is_empty());
+
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&output)
+                .expect("output should be valid JSON");
+
+        assert_eq!(
+            parsed["status"],
+            "complete",
+        );
+    }
+
+    struct FailingWriter;
+
+    impl Write for FailingWriter {
+        fn write(
+            &mut self,
+            _buffer: &[u8],
+        ) -> io::Result<usize> {
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "simulated writer failure",
+            ))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn writer_failure_is_returned() {
+        let aggregate = sample_report();
+        let report = DiagnosticReport::new(&aggregate);
+
+        let error = report
+            .write_json(FailingWriter)
+            .expect_err("writer failure must be returned");
+
+        assert!(error.is_writer_error());
+    }
+
+    #[test]
+    fn repeated_serialization_is_deterministic() {
         let aggregate = sample_report();
         let report = DiagnosticReport::new(&aggregate);
 
@@ -1004,5 +1227,25 @@ mod tests {
             .expect("second serialization");
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn metadata_objects_are_serialized_in_key_order() {
+        let aggregate = sample_report();
+        let report = DiagnosticReport::new(&aggregate);
+
+        let json = report
+            .to_json_string()
+            .expect("report should serialize");
+
+        let expected_position = json
+            .find("\"actual\"")
+            .expect("actual key should exist");
+
+        let later_position = json
+            .find("\"expected\"")
+            .expect("expected key should exist");
+
+        assert!(expected_position < later_position);
     }
 }
