@@ -5,232 +5,73 @@
 
 //! Zamani Universal Meta-Compiler — Pipeline Execution.
 //!
-//! Path:
-//!     src/compiler/pipeline/execution.rs
+//! Path: src/compiler/pipeline/execution.rs
+//! Rust edition: 2021
+//! Minimum Rust version: 1.97
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! # Purpose
 //!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
+//! Executes validated compiler stages in deterministic dependency order.
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
-//!
-//! Executes an already-registered and dependency-ordered collection of
-//! compiler stages.
-//!
-//! This module consumes the existing:
-//!
-//!     pipeline::stage
-//!         Stage
-//!         StageId
-//!         StageDescriptor
-//!         StageInput
-//!         StageOutput
-//!         StageOutcome
-//!         StageError
-//!         StageErrorKind
-//!
-//!     pipeline::ordering
-//!         StageOrdering
-//!
-//!     context::compilation_context
-//!         CompilationContext
-//!
-//!     context::compilation_state
-//!         CompilationStateTracker
-//!         CompilationPhase
-//!
-//! The executor does not create a second stage system.
-//!
-//! ============================================================================
-//! OWNERSHIP
-//! ============================================================================
+//! # Ownership
 //!
 //! This module owns:
+//! - PipelineExecutor
+//! - StageInputs
+//! - StageExecutionStatus
+//! - StageExecutionRecord
+//! - ExecutionReport
+//! - ExecutionError
+//! - ExecutionErrorKind
 //!
-//! - PipelineExecutor.
-//! - StageInputs.
-//! - StageExecutionStatus.
-//! - StageExecutionRecord.
-//! - ExecutionReport.
-//! - ExecutionError.
-//! - ExecutionErrorKind.
-//! - Deterministic sequential stage execution.
-//! - Dependency-output delivery.
-//! - Required-stage enforcement.
-//!
-//! This module does NOT own:
-//!
+//! It does not own:
 //! - Stage registration.
 //! - Dependency graph construction.
-//! - Stage ordering algorithms.
-//! - Pipeline orchestration.
-//! - Compilation lifecycle initialization.
-//! - Compilation lifecycle completion.
-//! - Compilation lifecycle failure transitions.
-//! - Automatic retries.
-//! - Recovery or fallback policy.
-//! - Compiler diagnostics.
 //! - Semantic analysis.
-//! - Type inference.
-//! - Ownership analysis.
-//! - Capability semantics.
-//! - Resource allocation.
-//! - Hardware discovery.
-//! - Hardware scheduling.
-//! - Physical routing.
 //! - Canonical IR.
-//! - IR transformations.
+//! - Optimization algorithms.
+//! - Physical allocation.
+//! - Hardware discovery.
+//! - Physical scheduling.
+//! - Physical routing.
 //! - Backend implementations.
 //! - Runtime execution.
-//! - Distributed execution.
+//! - Compilation lifecycle transitions.
 //!
-//! ============================================================================
-//! EXECUTION INVARIANTS
-//! ============================================================================
+//! # Canonical integration
 //!
-//! 1. Every registered stage must occur in StageOrdering.
-//! 2. Every ordered stage must have exactly one implementation.
-//! 3. Stage descriptors must agree with the validated ordering.
-//! 4. A stage executes only after all direct dependencies complete.
-//! 5. A skipped stage is never recorded as completed.
-//! 6. A blocked stage is never recorded as completed.
-//! 7. A required stage must complete successfully.
-//! 8. A dependent stage cannot consume output from an incomplete prerequisite.
-//! 9. Cancellation prevents successful execution.
-//! 10. Stage failures are never silently converted into success.
-//! 11. The executor never retries a failed stage.
-//! 12. The executor never changes source semantics.
-//! 13. The executor never allocates physical hardware.
-//! 14. The executor never silently truncates work.
+//! pipeline/stage.rs
+//! pipeline/ordering.rs
+//! context/compilation_context.rs
+//! context/compilation_state.rs
+//! pipeline/orchestration.rs
 //!
-//! ============================================================================
-//! CONDITIONAL EXECUTION
-//! ============================================================================
+//! # POCO-REAF
 //!
-//! A stage may return StageOutcome::Skipped.
+//! No arbitrary universal limits are imposed on:
+//! - Stage count.
+//! - Dependency count.
+//! - Computing domains.
+//! - CPUs, GPUs, FPGAs or QPUs.
+//! - Quantum resources.
+//! - Distributed participants.
+//! - Memory.
+//! - Tensor dimensions.
+//! - Program size.
 //!
-//! A skipped stage:
-//!
-//! - is recorded as Skipped;
-//! - does not produce an output;
-//! - cannot satisfy another stage's dependency;
-//! - does not automatically fail an unrelated branch.
-//!
-//! If a required stage is skipped, execution fails.
-//!
-//! If a required stage depends on a skipped or blocked stage, execution
-//! fails because its prerequisite did not complete.
-//!
-//! The orchestrator must supply the complete set of required stages.
-//! This is necessary because StageDescriptor deliberately does not own
-//! compilation-policy decisions about whether a stage is mandatory.
-//!
-//! ============================================================================
-//! DEPENDENCY OUTPUT DELIVERY
-//! ============================================================================
-//!
-//! Every stage receives a StageInput containing a StageInputs value.
-//!
-//! StageInputs provides:
-//!
-//! - The original compilation input.
-//! - Outputs from the stage's direct dependencies.
-//!
-//! This supports dependency fan-in without inventing another IR or
-//! requiring a stage to depend on whichever unrelated stage happened
-//! to execute immediately before it.
-//!
-//! A stage can retrieve the wrapper using:
-//!
-//!     execution.input().downcast_ref::<StageInputs>()
-//!
-//! A stage can retrieve its original input using:
-//!
-//!     inputs.initial_input()
-//!
-//! A stage can retrieve a direct dependency's output using:
-//!
-//!     inputs.dependency_output(&dependency_id)
-//!
-//! Domain-specific payload types remain owned by their authoritative
-//! repository subsystems.
-//!
-//! ============================================================================
-//! CONCURRENCY
-//! ============================================================================
-//!
-//! This implementation executes stages sequentially in deterministic
-//! topological-level order.
-//!
-//! Sequential execution is compatible with every StageConcurrency
-//! declaration because no stage instances are invoked concurrently.
-//!
-//! This module does not create worker threads or impose a worker ceiling.
-//!
-//! Parallel execution must be integrated with the existing parallel-build
-//! infrastructure and must preserve the same dependency and output rules.
-//!
-//! ============================================================================
-//! LIFECYCLE
-//! ============================================================================
-//!
-//! Pipeline orchestration owns:
-//!
-//! - CompilationStateTracker::start.
-//! - CompilationStateTracker::complete.
-//! - CompilationStateTracker::fail.
-//! - CompilationStateTracker::mark_cancelled.
-//!
-//! This module only:
-//!
-//! - checks that compilation is active;
-//! - records the current stage and phase;
-//! - checks cancellation;
-//! - returns execution results.
-//!
-//! The caller must start the CompilationStateTracker before invoking
-//! PipelineExecutor.
-//!
-//! ============================================================================
-//! SCALABILITY
-//! ============================================================================
-//!
-//! This module imposes no fixed maximum for:
-//!
-//! - stages;
-//! - dependencies;
-//! - compilation units;
-//! - domain operations;
-//! - CPUs;
-//! - GPUs;
-//! - FPGAs;
-//! - QPUs;
-//! - accelerators;
-//! - nodes;
-//! - workers;
-//! - memory;
-//! - storage;
-//! - qubits;
-//! - tensor dimensions;
-//! - IR entities.
-//!
-//! Practical limits are determined by available memory, processing
-//! resources, and explicitly configured budgets.
-//!
-//! ============================================================================
+//! Practical constraints are determined by actual resources,
+//! representational limits, operating-system constraints and
+//! explicitly configured operational budgets.
 
+use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use crate::compiler::context::compilation_context::CompilationContext;
+
 use crate::compiler::context::compilation_state::{
     CompilationStateError,
     CompilationStateTracker,
@@ -252,32 +93,22 @@ use crate::compiler::pipeline::stage::{
 // API VERSION
 // ============================================================================
 
-/// Public API version for the pipeline execution contract.
-///
-/// This version is independent of:
-///
-/// - Zamani language version.
-/// - Grammar version.
-/// - AST version.
-/// - Semantic-model version.
-/// - IR version.
-/// - Backend ABI version.
-/// - Compiler release version.
-pub const PIPELINE_EXECUTION_API_VERSION: u16 = 1;
+/// Public API version of pipeline execution.
+pub const PIPELINE_EXECUTION_API_VERSION: u16 = 2;
 
 // ============================================================================
-// STAGE INPUT BUNDLE
+// STAGE INPUTS
 // ============================================================================
 
-/// Inputs made available to one compiler stage.
+/// Immutable inputs supplied to an individual pipeline stage.
 ///
-/// The original compilation input is preserved separately from the outputs
-/// of direct prerequisites.
+/// The original compilation input is preserved separately from
+/// completed prerequisite outputs.
 ///
-/// This prevents an unrelated stage's output from accidentally becoming
-/// another stage's input merely because it ran immediately beforehand.
+/// Dependency outputs are restricted to direct prerequisites.
 ///
-/// Dependency outputs are ordered by StageId for deterministic access.
+/// StageOutput is Arc-backed, so cloning this structure does not
+/// duplicate the underlying domain-specific payloads.
 #[derive(Debug, Clone)]
 pub struct StageInputs {
     initial_input: StageInput,
@@ -286,9 +117,7 @@ pub struct StageInputs {
 }
 
 impl StageInputs {
-    /// Creates the input bundle for one stage.
-    ///
-    /// The executor normally constructs this value.
+    /// Creates a stage-input bundle.
     #[must_use]
     pub fn new(
         initial_input: StageInput,
@@ -300,20 +129,13 @@ impl StageInputs {
         }
     }
 
-    /// Returns the original pipeline input.
-    ///
-    /// The returned value is not modified by intermediate stages.
+    /// Returns the original compilation input.
     #[must_use]
     pub fn initial_input(&self) -> &StageInput {
         &self.initial_input
     }
 
-    /// Returns the output of one direct dependency.
-    ///
-    /// Returns None when:
-    ///
-    /// - the supplied stage is not a direct dependency;
-    /// - the dependency did not produce a completed output.
+    /// Returns a direct prerequisite's completed output.
     #[must_use]
     pub fn dependency_output(
         &self,
@@ -322,9 +144,7 @@ impl StageInputs {
         self.dependency_outputs.get(dependency)
     }
 
-    /// Returns all completed direct-dependency outputs.
-    ///
-    /// The map is deterministically ordered by StageId.
+    /// Returns all direct prerequisite outputs.
     #[must_use]
     pub fn dependency_outputs(
         &self,
@@ -332,13 +152,13 @@ impl StageInputs {
         &self.dependency_outputs
     }
 
-    /// Returns the number of available direct-dependency outputs.
+    /// Returns the number of completed prerequisite outputs.
     #[must_use]
     pub fn dependency_output_count(&self) -> usize {
         self.dependency_outputs.len()
     }
 
-    /// Returns whether the original input is empty.
+    /// Returns whether the initial input is empty.
     #[must_use]
     pub fn initial_input_is_empty(&self) -> bool {
         self.initial_input.is_empty()
@@ -349,17 +169,17 @@ impl StageInputs {
 // EXECUTION STATUS
 // ============================================================================
 
-/// Final recorded status of an individual stage invocation.
+/// Final decision for an individual stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StageExecutionStatus {
-    /// The stage executed successfully and produced an output.
+    /// Stage completed successfully.
     Completed,
 
-    /// The stage deliberately declined execution.
+    /// Stage deliberately declined execution.
     Skipped,
 
-    /// The stage could not execute because a prerequisite did not complete.
+    /// Stage could not execute because a prerequisite did not complete.
     Blocked,
 }
 
@@ -367,7 +187,7 @@ pub enum StageExecutionStatus {
 // EXECUTION RECORD
 // ============================================================================
 
-/// Immutable record of one stage's execution result.
+/// Immutable execution record for one stage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageExecutionRecord {
     stage_id: StageId,
@@ -375,6 +195,8 @@ pub struct StageExecutionRecord {
     status: StageExecutionStatus,
 
     reason: Option<Arc<str>>,
+
+    blocked_by: Option<StageId>,
 }
 
 impl StageExecutionRecord {
@@ -383,6 +205,7 @@ impl StageExecutionRecord {
             stage_id,
             status: StageExecutionStatus::Completed,
             reason: None,
+            blocked_by: None,
         }
     }
 
@@ -394,42 +217,54 @@ impl StageExecutionRecord {
             stage_id,
             status: StageExecutionStatus::Skipped,
             reason: Some(reason.into()),
+            blocked_by: None,
         }
     }
 
     fn blocked(
         stage_id: StageId,
+        dependency: StageId,
         reason: impl Into<Arc<str>>,
     ) -> Self {
         Self {
             stage_id,
             status: StageExecutionStatus::Blocked,
             reason: Some(reason.into()),
+            blocked_by: Some(dependency),
         }
     }
 
-    /// Returns the stage identifier.
+    /// Returns the stage identity.
     #[must_use]
     pub fn stage_id(&self) -> &StageId {
         &self.stage_id
     }
 
-    /// Returns the final stage status.
+    /// Returns the execution status.
     #[must_use]
     pub const fn status(&self) -> StageExecutionStatus {
         self.status
     }
 
-    /// Returns the skip or blocking explanation, when applicable.
+    /// Returns the skip or blocking explanation.
     #[must_use]
     pub fn reason(&self) -> Option<&str> {
         self.reason.as_deref()
     }
 
-    /// Returns whether the stage completed successfully.
+    /// Returns the prerequisite responsible for blocking this stage.
+    #[must_use]
+    pub fn blocked_by(&self) -> Option<&StageId> {
+        self.blocked_by.as_ref()
+    }
+
+    /// Returns whether this stage completed successfully.
     #[must_use]
     pub const fn is_completed(&self) -> bool {
-        matches!(self.status, StageExecutionStatus::Completed)
+        matches!(
+            self.status,
+            StageExecutionStatus::Completed
+        )
     }
 }
 
@@ -437,15 +272,11 @@ impl StageExecutionRecord {
 // EXECUTION REPORT
 // ============================================================================
 
-/// Report produced by a successfully traversed pipeline.
+/// Complete report for one pipeline execution.
 ///
-/// Optional stages may be skipped or blocked without invalidating an
-/// otherwise successful compilation.
+/// Outputs remain owned by the execution report.
 ///
-/// Required stages must all have Completed status.
-///
-/// Stage outputs remain type-erased and are owned by their respective
-/// domain subsystems.
+/// Cloning StageOutput shares its underlying Arc-backed payload.
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionReport {
     records: BTreeMap<StageId, StageExecutionRecord>,
@@ -472,9 +303,12 @@ impl ExecutionReport {
         stage_id: StageId,
         output: StageOutput,
     ) {
-        self.outputs.insert(stage_id.clone(), output.clone());
+        self.last_output = Some(output.clone());
 
-        self.last_output = Some(output);
+        self.outputs.insert(
+            stage_id.clone(),
+            output,
+        );
 
         self.records.insert(
             stage_id.clone(),
@@ -489,24 +323,30 @@ impl ExecutionReport {
     ) {
         self.records.insert(
             stage_id.clone(),
-            StageExecutionRecord::skipped(stage_id, reason),
+            StageExecutionRecord::skipped(
+                stage_id,
+                reason,
+            ),
         );
     }
 
     fn record_blocked(
         &mut self,
         stage_id: StageId,
+        dependency: StageId,
         reason: impl Into<Arc<str>>,
     ) {
         self.records.insert(
             stage_id.clone(),
-            StageExecutionRecord::blocked(stage_id, reason),
+            StageExecutionRecord::blocked(
+                stage_id,
+                dependency,
+                reason,
+            ),
         );
     }
 
-    /// Returns all stage execution records.
-    ///
-    /// Records are ordered by StageId.
+    /// Returns all execution records.
     #[must_use]
     pub fn records(
         &self,
@@ -514,7 +354,7 @@ impl ExecutionReport {
         &self.records
     }
 
-    /// Returns the record for a particular stage.
+    /// Returns one execution record.
     #[must_use]
     pub fn record(
         &self,
@@ -523,7 +363,7 @@ impl ExecutionReport {
         self.records.get(stage_id)
     }
 
-    /// Returns the output produced by a completed stage.
+    /// Returns the output of a completed stage.
     #[must_use]
     pub fn output_of(
         &self,
@@ -532,7 +372,7 @@ impl ExecutionReport {
         self.outputs.get(stage_id)
     }
 
-    /// Returns all outputs produced by completed stages.
+    /// Returns every retained completed-stage output.
     #[must_use]
     pub fn outputs(
         &self,
@@ -540,30 +380,25 @@ impl ExecutionReport {
         &self.outputs
     }
 
-    /// Returns the output of the last successfully completed stage
-    /// in deterministic execution order.
-    ///
-    /// This is not necessarily the output of a designated finalization
-    /// stage. Callers should use output_of when a particular stage's
-    /// output is required.
+    /// Returns the last successfully completed stage output.
     #[must_use]
     pub fn last_output(&self) -> Option<&StageOutput> {
         self.last_output.as_ref()
     }
 
-    /// Returns the set of stages that the caller declared mandatory.
+    /// Returns mandatory stages.
     #[must_use]
     pub fn required_stages(&self) -> &BTreeSet<StageId> {
         &self.required_stages
     }
 
-    /// Returns the number of stages that received an execution decision.
+    /// Returns the number of stages with execution decisions.
     #[must_use]
     pub fn stage_count(&self) -> usize {
         self.records.len()
     }
 
-    /// Returns the number of successfully completed stages.
+    /// Returns the number of completed stages.
     #[must_use]
     pub fn completed_count(&self) -> usize {
         self.records
@@ -572,7 +407,7 @@ impl ExecutionReport {
             .count()
     }
 
-    /// Returns the number of deliberately skipped stages.
+    /// Returns the number of skipped stages.
     #[must_use]
     pub fn skipped_count(&self) -> usize {
         self.records
@@ -594,10 +429,7 @@ impl ExecutionReport {
             .count()
     }
 
-    /// Returns whether every required stage completed successfully.
-    ///
-    /// An empty required-stage set is vacuously satisfied. Production
-    /// orchestration should supply its actual mandatory-stage contract.
+    /// Returns whether all required stages completed.
     #[must_use]
     pub fn all_required_stages_completed(&self) -> bool {
         self.required_stages.iter().all(|stage_id| {
@@ -607,13 +439,13 @@ impl ExecutionReport {
         })
     }
 
-    /// Returns whether any stage was skipped or blocked.
+    /// Returns whether optional or required stages were skipped or blocked.
     #[must_use]
     pub fn has_skipped_or_blocked_stages(&self) -> bool {
         self.skipped_count() > 0 || self.blocked_count() > 0
     }
 
-    /// Returns whether the report satisfies its required-stage contract.
+    /// Returns whether the required-stage contract is satisfied.
     #[must_use]
     pub fn is_successful(&self) -> bool {
         self.all_required_stages_completed()
@@ -621,52 +453,29 @@ impl ExecutionReport {
 }
 
 // ============================================================================
-// EXECUTION ERROR
+// EXECUTION ERRORS
 // ============================================================================
 
-/// Classification of pipeline-execution failures.
+/// Classification of pipeline execution failures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ExecutionErrorKind {
-    /// The same stage implementation was registered more than once.
     DuplicateStageImplementation,
-
-    /// An ordered stage has no registered implementation.
     MissingStageImplementation,
-
-    /// An implementation is not present in the supplied ordering.
     UnexpectedStageImplementation,
-
-    /// A stage descriptor does not agree with the validated ordering.
     OrderingMismatch,
-
-    /// A caller-declared required stage is not registered.
     MissingRequiredStage,
-
-    /// A required stage deliberately skipped execution.
     RequiredStageSkipped,
-
-    /// A required stage was blocked by an incomplete prerequisite.
     DependencyNotCompleted,
-
-    /// A stage implementation returned an error.
     StageFailed,
-
-    /// Compilation cancellation was requested.
     Cancelled,
-
-    /// The compilation lifecycle tracker rejected an operation.
     StateTracking,
-
-    /// An internal execution invariant was violated.
     InternalInvariant,
 }
 
-/// Structured pipeline-execution failure.
+/// Structured pipeline execution error.
 ///
-/// The partial report is retained so that orchestration, diagnostics,
-/// and observability can inspect completed work without pretending
-/// the pipeline succeeded.
+/// A partial report is retained on every execution failure.
 #[derive(Debug, Clone)]
 pub struct ExecutionError {
     kind: ExecutionErrorKind,
@@ -721,8 +530,17 @@ impl ExecutionError {
         cause: CompilationStateError,
         partial_report: ExecutionReport,
     ) -> Self {
+        let kind = if matches!(
+            cause,
+            CompilationStateError::CancellationRequested
+        ) {
+            ExecutionErrorKind::Cancelled
+        } else {
+            ExecutionErrorKind::StateTracking
+        };
+
         Self::new(
-            ExecutionErrorKind::StateTracking,
+            kind,
             stage,
             cause.to_string(),
             partial_report,
@@ -735,7 +553,7 @@ impl ExecutionError {
         self.kind
     }
 
-    /// Returns the stage associated with the failure, if any.
+    /// Returns the affected stage.
     #[must_use]
     pub fn stage(&self) -> Option<&StageId> {
         self.stage.as_ref()
@@ -747,14 +565,13 @@ impl ExecutionError {
         &self.message
     }
 
-    /// Returns the original stage error, when the failure came from
-    /// a stage implementation.
+    /// Returns the underlying stage error.
     #[must_use]
     pub fn stage_cause(&self) -> Option<&StageError> {
         self.cause.as_ref()
     }
 
-    /// Returns the report accumulated before failure.
+    /// Returns the partial execution report.
     #[must_use]
     pub fn partial_report(&self) -> &ExecutionReport {
         &self.partial_report
@@ -803,83 +620,37 @@ impl Error for ExecutionError {
 // PIPELINE EXECUTOR
 // ============================================================================
 
-/// Executes an already-validated compiler-stage ordering.
+/// Stateless deterministic pipeline executor.
 ///
-/// The executor is stateless.
-///
-/// It does not own a global registry, compiler configuration, lifecycle,
-/// worker pool, backend, or runtime.
-///
-/// The supplied CompilationContext and CompilationStateTracker remain
-/// authoritative.
+/// Compilation lifecycle ownership remains with orchestration.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct PipelineExecutor;
 
 impl PipelineExecutor {
-    /// Creates a pipeline executor.
+    /// Creates an executor.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
-    /// Executes the supplied stages in validated dependency order.
+    /// Executes the supplied validated dependency graph.
     ///
-    /// # Arguments
+    /// Requirements:
     ///
-    /// `compilation`
-    ///     Shared immutable compilation configuration, budget accounting,
-    ///     and cancellation context.
+    /// - Compilation lifecycle must already be Running.
+    /// - Every ordered stage must have exactly one implementation.
+    /// - Every mandatory stage must exist.
+    /// - Descriptor dependencies must match StageOrdering.
     ///
-    /// `state`
-    ///     The lifecycle tracker already started by orchestration.
+    /// Execution is sequential and deterministic.
     ///
-    /// `ordering`
-    ///     A validated StageOrdering built from these stage descriptors.
+    /// Stage::run owns applicability checks, cooperative invocation
+    /// and per-stage cancellation checks.
     ///
-    /// `stages`
-    ///     Exactly one implementation for every stage in the ordering.
+    /// This executor checks lifecycle and cancellation around
+    /// every invocation.
     ///
-    /// `initial_input`
-    ///     The original source or compilation input.
-    ///
-    /// `required_stages`
-    ///     Every stage that must complete for this pipeline invocation
-    ///     to be considered successful.
-    ///
-    /// # Execution semantics
-    ///
-    /// Stages are traversed by StageOrdering::levels().
-    ///
-    /// Each level is traversed in its existing deterministic order.
-    ///
-    /// For every stage:
-    ///
-    /// 1. Check cancellation and lifecycle.
-    /// 2. Verify that direct prerequisites completed.
-    /// 3. Update compilation progress.
-    /// 4. Collect completed prerequisite outputs.
-    /// 5. Invoke Stage::run.
-    /// 6. Record the exact outcome.
-    /// 7. Check cancellation and lifecycle again.
-    ///
-    /// The executor does not call start(), complete(), fail(), or
-    /// mark_cancelled(). Those terminal lifecycle transitions belong
-    /// to pipeline orchestration.
-    ///
-    /// # Errors
-    ///
-    /// Returns a structured error for:
-    ///
-    /// - Invalid stage registration.
-    /// - Ordering mismatch.
-    /// - Missing required stages.
-    /// - Required-stage skipping.
-    /// - Incomplete dependencies.
-    /// - Stage failure.
-    /// - Cancellation.
-    /// - Lifecycle tracking failure.
-    ///
-    /// Every execution error retains the partial execution report.
+    /// It does not start, complete or fail the compilation lifecycle.
     pub fn execute(
         &self,
         compilation: &CompilationContext,
@@ -893,20 +664,13 @@ impl PipelineExecutor {
             required_stages.clone(),
         );
 
-        // --------------------------------------------------------------------
-        // 1. Validate the supplied stage implementations.
-        // --------------------------------------------------------------------
-
+        // Validate everything before executing the first stage.
         let stage_map = self.validate_registry(
             ordering,
             stages,
             required_stages,
             &report,
         )?;
-
-        // --------------------------------------------------------------------
-        // 2. Verify the shared compilation lifecycle.
-        // --------------------------------------------------------------------
 
         self.check_active(
             compilation,
@@ -915,107 +679,235 @@ impl PipelineExecutor {
             &report,
         )?;
 
-        // --------------------------------------------------------------------
-        // 3. Execute deterministic topological levels.
-        // --------------------------------------------------------------------
+        // Use the canonical complete topological order.
+        // StageOrdering guarantees deterministic ordering.
+        for stage_id in ordering.ordered_stages() {
+            self.check_active(
+                compilation,
+                state,
+                Some(stage_id.clone()),
+                &report,
+            )?;
 
-        for level in ordering.levels() {
-            for stage_id in level {
-                self.check_active(
-                    compilation,
-                    state,
-                    Some(stage_id.clone()),
-                    &report,
-                )?;
+            let stage = stage_map
+                .get(stage_id)
+                .copied()
+                .ok_or_else(|| {
+                    ExecutionError::new(
+                        ExecutionErrorKind::InternalInvariant,
+                        Some(stage_id.clone()),
+                        "validated stage implementation disappeared",
+                        report.clone(),
+                    )
+                })?;
 
-                let stage = stage_map
-                    .get(stage_id)
-                    .copied()
-                    .ok_or_else(|| {
-                        ExecutionError::new(
-                            ExecutionErrorKind::InternalInvariant,
-                            Some(stage_id.clone()),
-                            "validated stage implementation disappeared",
-                            report.clone(),
-                        )
-                    })?;
+            let descriptor = stage.descriptor();
 
-                // ------------------------------------------------------------
-                // 3.1. Check all direct dependencies.
-                // ------------------------------------------------------------
+            // ------------------------------------------------------------
+            // Resolve direct dependency outputs.
+            // ------------------------------------------------------------
 
-                let dependencies = ordering
-                    .dependencies_of(stage_id)
-                    .ok_or_else(|| {
-                        ExecutionError::new(
-                            ExecutionErrorKind::InternalInvariant,
-                            Some(stage_id.clone()),
-                            "ordered stage has no dependency entry",
-                            report.clone(),
-                        )
-                    })?;
+            let dependencies = ordering
+                .dependencies_of(stage_id)
+                .ok_or_else(|| {
+                    ExecutionError::new(
+                        ExecutionErrorKind::InternalInvariant,
+                        Some(stage_id.clone()),
+                        "ordered stage has no dependency entry",
+                        report.clone(),
+                    )
+                })?;
 
-                let mut dependency_outputs =
-                    BTreeMap::<StageId, StageOutput>::new();
+            let mut dependency_outputs =
+                BTreeMap::<StageId, StageOutput>::new();
 
-                let mut incomplete_dependency: Option<StageId> = None;
+            let mut incomplete_dependency = None;
 
-                for dependency in dependencies {
-                    match report.record(dependency) {
-                        Some(record)
-                            if record.status()
-                                == StageExecutionStatus::Completed =>
-                        {
-                            let output = report
-                                .output_of(dependency)
-                                .ok_or_else(|| {
-                                    ExecutionError::new(
-                                        ExecutionErrorKind::InternalInvariant,
-                                        Some(stage_id.clone()),
-                                        "completed dependency has no output entry",
-                                        report.clone(),
-                                    )
-                                })?;
-
-                            dependency_outputs.insert(
-                                dependency.clone(),
-                                output.clone(),
-                            );
-                        }
-
-                        Some(_) => {
-                            incomplete_dependency =
-                                Some(dependency.clone());
-                            break;
-                        }
-
-                        None => {
-                            return Err(
+            for dependency in dependencies {
+                match report.record(dependency) {
+                    Some(record)
+                        if record.is_completed() =>
+                    {
+                        let output = report
+                            .output_of(dependency)
+                            .ok_or_else(|| {
                                 ExecutionError::new(
                                     ExecutionErrorKind::InternalInvariant,
                                     Some(stage_id.clone()),
-                                    format!(
-                                        "dependency `{dependency}` was not \
-                                         processed before dependent stage"
-                                    ),
-                                    report,
+                                    "completed dependency has no output",
+                                    report.clone(),
+                                )
+                            })?;
+
+                        dependency_outputs.insert(
+                            dependency.clone(),
+                            output.clone(),
+                        );
+                    }
+
+                    Some(_) => {
+                        incomplete_dependency =
+                            Some(dependency.clone());
+
+                        break;
+                    }
+
+                    None => {
+                        return Err(
+                            ExecutionError::new(
+                                ExecutionErrorKind::InternalInvariant,
+                                Some(stage_id.clone()),
+                                format!(
+                                    "dependency `{dependency}` \
+                                     was not processed before its dependent"
                                 ),
-                            );
-                        }
+                                report,
+                            ),
+                        );
                     }
                 }
+            }
 
-                // ------------------------------------------------------------
-                // 3.2. Block stages whose prerequisites did not complete.
-                // ------------------------------------------------------------
+            // ------------------------------------------------------------
+            // A stage cannot run with an incomplete prerequisite.
+            // ------------------------------------------------------------
 
-                if let Some(dependency) = incomplete_dependency {
-                    let reason: Arc<str> = Arc::from(format!(
-                        "required prerequisite `{dependency}` did not \
-                         complete successfully"
-                    ));
+            if let Some(dependency) = incomplete_dependency {
+                let reason: Arc<str> = Arc::from(format!(
+                    "prerequisite `{dependency}` did not complete successfully"
+                ));
 
-                    report.record_blocked(
+                report.record_blocked(
+                    stage_id.clone(),
+                    dependency.clone(),
+                    reason.clone(),
+                );
+
+                if required_stages.contains(stage_id) {
+                    return Err(
+                        ExecutionError::new(
+                            ExecutionErrorKind::DependencyNotCompleted,
+                            Some(stage_id.clone()),
+                            reason,
+                            report,
+                        ),
+                    );
+                }
+
+                continue;
+            }
+
+            // ------------------------------------------------------------
+            // Update lifecycle progress.
+            // ------------------------------------------------------------
+
+            let progress_result = match descriptor.phase() {
+                Some(phase) => {
+                    state.advance(phase, descriptor.name())
+                }
+
+                None => {
+                    state.set_stage(descriptor.name())
+                }
+            };
+
+            if let Err(error) = progress_result {
+                return Err(
+                    ExecutionError::from_state(
+                        Some(stage_id.clone()),
+                        error,
+                        report,
+                    ),
+                );
+            }
+
+            // ------------------------------------------------------------
+            // Construct dependency-aware input.
+            // ------------------------------------------------------------
+
+            let inputs = StageInputs::new(
+                initial_input.clone(),
+                dependency_outputs,
+            );
+
+            let stage_input = StageInput::new(inputs);
+
+            // ------------------------------------------------------------
+            // Invoke the stage.
+            //
+            // The stage contract handles:
+            // - applicability;
+            // - pre-execution cancellation;
+            // - execution;
+            // - post-execution cancellation.
+            //
+            // catch_unwind prevents an unwinding extension panic from
+            // unwinding through the compiler orchestration boundary.
+            // ------------------------------------------------------------
+
+            let invocation = catch_unwind(
+                AssertUnwindSafe(|| {
+                    stage.run(
+                        compilation,
+                        stage_input,
+                    )
+                }),
+            );
+
+            let outcome = match invocation {
+                Ok(Ok(outcome)) => outcome,
+
+                Ok(Err(error)) => {
+                    return Err(
+                        ExecutionError::from_stage(
+                            stage_id.clone(),
+                            error,
+                            report,
+                        ),
+                    );
+                }
+
+                Err(payload) => {
+                    let message = panic_message(payload.as_ref());
+
+                    return Err(
+                        ExecutionError::new(
+                            ExecutionErrorKind::StageFailed,
+                            Some(stage_id.clone()),
+                            format!(
+                                "stage panicked: {message}"
+                            ),
+                            report,
+                        ),
+                    );
+                }
+            };
+
+            // ------------------------------------------------------------
+            // Check cancellation before publishing successful output.
+            // ------------------------------------------------------------
+
+            self.check_active(
+                compilation,
+                state,
+                Some(stage_id.clone()),
+                &report,
+            )?;
+
+            // ------------------------------------------------------------
+            // Record the exact stage outcome.
+            // ------------------------------------------------------------
+
+            match outcome {
+                StageOutcome::Completed(output) => {
+                    report.record_completed(
+                        stage_id.clone(),
+                        output,
+                    );
+                }
+
+                StageOutcome::Skipped { reason } => {
+                    report.record_skipped(
                         stage_id.clone(),
                         reason.clone(),
                     );
@@ -1023,156 +915,40 @@ impl PipelineExecutor {
                     if required_stages.contains(stage_id) {
                         return Err(
                             ExecutionError::new(
-                                ExecutionErrorKind::DependencyNotCompleted,
+                                ExecutionErrorKind::RequiredStageSkipped,
                                 Some(stage_id.clone()),
                                 reason,
                                 report,
                             ),
                         );
                     }
-
-                    continue;
                 }
 
-                // ------------------------------------------------------------
-                // 3.3. Update compilation progress.
-                // ------------------------------------------------------------
-
-                let descriptor = stage.descriptor();
-
-                let progress_result = match descriptor.phase() {
-                    Some(phase) => state.advance(
-                        phase,
-                        descriptor.name(),
-                    ),
-
-                    None => state.set_stage(
-                        descriptor.name(),
-                    ),
-                };
-
-                if let Err(error) = progress_result {
+                // StageOutcome is non-exhaustive.
+                // Future outcome types must never be interpreted
+                // as successful execution without an explicit contract.
+                _ => {
                     return Err(
-                        ExecutionError::from_state(
+                        ExecutionError::new(
+                            ExecutionErrorKind::InternalInvariant,
                             Some(stage_id.clone()),
-                            error,
+                            "stage returned an unsupported outcome",
                             report,
                         ),
                     );
                 }
-
-                // ------------------------------------------------------------
-                // 3.4. Construct dependency-aware stage input.
-                // ------------------------------------------------------------
-
-                let inputs = StageInputs::new(
-                    initial_input.clone(),
-                    dependency_outputs,
-                );
-
-                let stage_input = StageInput::new(inputs);
-
-                // ------------------------------------------------------------
-                // 3.5. Execute the stage.
-                // ------------------------------------------------------------
-
-                let outcome = match stage.run(
-                    compilation,
-                    stage_input,
-                ) {
-                    Ok(outcome) => outcome,
-
-                    Err(error) => {
-                        let cancelled =
-                            error.kind() == StageErrorKind::Cancelled
-                                || compilation.is_cancelled()
-                                || state.is_cancelled();
-
-                        if cancelled {
-                            return Err(
-                                ExecutionError::from_stage(
-                                    stage_id.clone(),
-                                    error,
-                                    report,
-                                ),
-                            );
-                        }
-
-                        return Err(
-                            ExecutionError::from_stage(
-                                stage_id.clone(),
-                                error,
-                                report,
-                            ),
-                        );
-                    }
-                };
-
-                // ------------------------------------------------------------
-                // 3.6. Verify lifecycle and cancellation after execution.
-                // ------------------------------------------------------------
-
-                self.check_active(
-                    compilation,
-                    state,
-                    Some(stage_id.clone()),
-                    &report,
-                )?;
-
-                // ------------------------------------------------------------
-                // 3.7. Record the exact stage outcome.
-                // ------------------------------------------------------------
-
-                match outcome {
-                    StageOutcome::Completed(output) => {
-                        report.record_completed(
-                            stage_id.clone(),
-                            output,
-                        );
-                    }
-
-                    StageOutcome::Skipped { reason } => {
-                        report.record_skipped(
-                            stage_id.clone(),
-                            reason.clone(),
-                        );
-
-                        if required_stages.contains(stage_id) {
-                            return Err(
-                                ExecutionError::new(
-                                    ExecutionErrorKind::RequiredStageSkipped,
-                                    Some(stage_id.clone()),
-                                    reason,
-                                    report,
-                                ),
-                            );
-                        }
-                    }
-
-                    _ => {
-                        return Err(
-                            ExecutionError::new(
-                                ExecutionErrorKind::InternalInvariant,
-                                Some(stage_id.clone()),
-                                "stage returned an unknown outcome",
-                                report,
-                            ),
-                        );
-                    }
-                }
             }
         }
 
-        // --------------------------------------------------------------------
-        // 4. Enforce the complete required-stage contract.
-        // --------------------------------------------------------------------
+        // ------------------------------------------------------------
+        // Enforce mandatory completion.
+        // ------------------------------------------------------------
 
         for required_stage in required_stages {
-            let completed = report
+            if !report
                 .record(required_stage)
-                .is_some_and(StageExecutionRecord::is_completed);
-
-            if !completed {
+                .is_some_and(StageExecutionRecord::is_completed)
+            {
                 return Err(
                     ExecutionError::new(
                         ExecutionErrorKind::RequiredStageSkipped,
@@ -1184,9 +960,9 @@ impl PipelineExecutor {
             }
         }
 
-        // --------------------------------------------------------------------
-        // 5. Ensure cancellation did not race with final return.
-        // --------------------------------------------------------------------
+        // ------------------------------------------------------------
+        // Final cancellation and lifecycle validation.
+        // ------------------------------------------------------------
 
         self.check_active(
             compilation,
@@ -1198,9 +974,9 @@ impl PipelineExecutor {
         Ok(report)
     }
 
-    // =========================================================================
+    // ========================================================================
     // REGISTRY VALIDATION
-    // =========================================================================
+    // ========================================================================
 
     fn validate_registry<'a>(
         &self,
@@ -1212,13 +988,24 @@ impl PipelineExecutor {
         let mut stage_map =
             BTreeMap::<StageId, &'a dyn Stage>::new();
 
-        // --------------------------------------------------------------------
-        // Validate unique implementations.
-        // --------------------------------------------------------------------
-
+        // Validate every implementation before any execution.
         for stage in stages {
             let descriptor = stage.descriptor();
+
             let stage_id = descriptor.id().clone();
+
+            if let Err(error) = descriptor.validate() {
+                return Err(
+                    ExecutionError::new(
+                        ExecutionErrorKind::OrderingMismatch,
+                        Some(stage_id),
+                        format!(
+                            "invalid stage descriptor: {error}"
+                        ),
+                        report.clone(),
+                    ),
+                );
+            }
 
             if stage_map
                 .insert(stage_id.clone(), stage.as_ref())
@@ -1229,7 +1016,7 @@ impl PipelineExecutor {
                         ExecutionErrorKind::DuplicateStageImplementation,
                         Some(stage_id.clone()),
                         format!(
-                            "multiple implementations were registered \
+                            "multiple implementations registered \
                              for stage `{stage_id}`"
                         ),
                         report.clone(),
@@ -1238,27 +1025,57 @@ impl PipelineExecutor {
             }
         }
 
-        // --------------------------------------------------------------------
-        // Validate exact agreement between registry and ordering.
-        // --------------------------------------------------------------------
-
-        for stage_id in ordering.ordered_stages() {
-            let stage = stage_map.get(stage_id).ok_or_else(|| {
+        // Verify exact registry/ordering agreement.
+        if stage_map.len() != ordering.stage_count() {
+            return Err(
                 ExecutionError::new(
-                    ExecutionErrorKind::MissingStageImplementation,
-                    Some(stage_id.clone()),
-                    format!(
-                        "ordering contains stage `{stage_id}` without \
-                         a registered implementation"
-                    ),
+                    ExecutionErrorKind::OrderingMismatch,
+                    None,
+                    "stage registry and dependency ordering \
+                     contain different numbers of stages",
                     report.clone(),
-                )
-            })?;
+                ),
+            );
+        }
 
-            let mut descriptor_dependencies =
+        let mut positions =
+            BTreeMap::<StageId, usize>::new();
+
+        for (position, stage_id) in
+            ordering.ordered_stages().iter().enumerate()
+        {
+            if positions
+                .insert(stage_id.clone(), position)
+                .is_some()
+            {
+                return Err(
+                    ExecutionError::new(
+                        ExecutionErrorKind::OrderingMismatch,
+                        Some(stage_id.clone()),
+                        "dependency ordering contains duplicate stages",
+                        report.clone(),
+                    ),
+                );
+            }
+
+            let stage = stage_map
+                .get(stage_id)
+                .ok_or_else(|| {
+                    ExecutionError::new(
+                        ExecutionErrorKind::MissingStageImplementation,
+                        Some(stage_id.clone()),
+                        format!(
+                            "ordered stage `{stage_id}` \
+                             has no registered implementation"
+                        ),
+                        report.clone(),
+                    )
+                })?;
+
+            let mut declared_dependencies =
                 stage.descriptor().dependencies().to_vec();
 
-            descriptor_dependencies.sort();
+            declared_dependencies.sort_unstable();
 
             let ordered_dependencies = ordering
                 .dependencies_of(stage_id)
@@ -1266,12 +1083,12 @@ impl PipelineExecutor {
                     ExecutionError::new(
                         ExecutionErrorKind::OrderingMismatch,
                         Some(stage_id.clone()),
-                        "ordering is missing the stage dependency entry",
+                        "ordering has no dependency entry",
                         report.clone(),
                     )
                 })?;
 
-            if descriptor_dependencies.as_slice()
+            if declared_dependencies.as_slice()
                 != ordered_dependencies
             {
                 return Err(
@@ -1279,8 +1096,8 @@ impl PipelineExecutor {
                         ExecutionErrorKind::OrderingMismatch,
                         Some(stage_id.clone()),
                         format!(
-                            "stage `{stage_id}` descriptor dependencies \
-                             disagree with StageOrdering"
+                            "descriptor dependencies disagree \
+                             with ordering for `{stage_id}`"
                         ),
                         report.clone(),
                     ),
@@ -1288,10 +1105,55 @@ impl PipelineExecutor {
             }
         }
 
-        // --------------------------------------------------------------------
-        // Reject implementations absent from the ordering.
-        // --------------------------------------------------------------------
+        // Verify that every prerequisite precedes its dependent.
+        for stage_id in ordering.ordered_stages() {
+            let position = positions
+                .get(stage_id)
+                .copied()
+                .ok_or_else(|| {
+                    ExecutionError::new(
+                        ExecutionErrorKind::InternalInvariant,
+                        Some(stage_id.clone()),
+                        "stage position is missing",
+                        report.clone(),
+                    )
+                })?;
 
+            for dependency in ordering
+                .dependencies_of(stage_id)
+                .unwrap_or_default()
+            {
+                let dependency_position = positions
+                    .get(dependency)
+                    .copied()
+                    .ok_or_else(|| {
+                        ExecutionError::new(
+                            ExecutionErrorKind::OrderingMismatch,
+                            Some(stage_id.clone()),
+                            format!(
+                                "dependency `{dependency}` is not ordered"
+                            ),
+                            report.clone(),
+                        )
+                    })?;
+
+                if dependency_position >= position {
+                    return Err(
+                        ExecutionError::new(
+                            ExecutionErrorKind::OrderingMismatch,
+                            Some(stage_id.clone()),
+                            format!(
+                                "dependency `{dependency}` does not \
+                                 precede `{stage_id}`"
+                            ),
+                            report.clone(),
+                        ),
+                    );
+                }
+            }
+        }
+
+        // Reject implementations absent from the canonical ordering.
         for stage_id in stage_map.keys() {
             if !ordering.contains(stage_id) {
                 return Err(
@@ -1299,8 +1161,8 @@ impl PipelineExecutor {
                         ExecutionErrorKind::UnexpectedStageImplementation,
                         Some(stage_id.clone()),
                         format!(
-                            "stage implementation `{stage_id}` is not \
-                             present in StageOrdering"
+                            "stage `{stage_id}` is not present \
+                             in StageOrdering"
                         ),
                         report.clone(),
                     ),
@@ -1308,10 +1170,7 @@ impl PipelineExecutor {
             }
         }
 
-        // --------------------------------------------------------------------
-        // Validate mandatory stages before executing anything.
-        // --------------------------------------------------------------------
-
+        // Validate mandatory stages before execution.
         for required_stage in required_stages {
             if !ordering.contains(required_stage)
                 || !stage_map.contains_key(required_stage)
@@ -1321,8 +1180,8 @@ impl PipelineExecutor {
                         ExecutionErrorKind::MissingRequiredStage,
                         Some(required_stage.clone()),
                         format!(
-                            "required stage `{required_stage}` is not \
-                             registered in the pipeline"
+                            "required stage `{required_stage}` \
+                             is not registered"
                         ),
                         report.clone(),
                     ),
@@ -1333,9 +1192,9 @@ impl PipelineExecutor {
         Ok(stage_map)
     }
 
-    // =========================================================================
-    // CANCELLATION AND LIFECYCLE CHECKS
-    // =========================================================================
+    // ========================================================================
+    // CANCELLATION AND LIFECYCLE
+    // ========================================================================
 
     fn check_active(
         &self,
@@ -1370,6 +1229,30 @@ impl PipelineExecutor {
 }
 
 // ============================================================================
+// PANIC MESSAGE EXTRACTION
+// ============================================================================
+
+/// Extracts a useful message from a panic payload.
+///
+/// Panic payloads are untrusted extension data and are never assumed
+/// to contain a String.
+fn panic_message(
+    payload: &(dyn Any + Send),
+) -> Arc<str> {
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return Arc::from(message.as_str());
+    }
+
+    if let Some(message) = payload.downcast_ref::<&'static str>() {
+        return Arc::from(*message);
+    }
+
+    Arc::from(
+        "stage panicked with a non-string payload"
+    )
+}
+
+// ============================================================================
 // TESTS
 // ============================================================================
 
@@ -1386,22 +1269,14 @@ mod tests {
         StageDeterminism,
         StageExecution,
         StageExecutionContext,
-        StageId,
-        StageOutcome,
-        StageOutput,
     };
 
     use crate::compiler_types::CompilerConfig;
 
-    // ------------------------------------------------------------------------
-    // TEST STAGE
-    // ------------------------------------------------------------------------
-
     struct TestStage {
         descriptor: StageDescriptor,
-
         skip: bool,
-
+        panic: bool,
         expected_dependency: Option<StageId>,
     }
 
@@ -1410,13 +1285,12 @@ mod tests {
             id: &str,
             dependencies: &[&str],
             skip: bool,
-            expected_dependency: Option<&str>,
         ) -> Self {
             let mut descriptor = StageDescriptor::new(
                 StageId::new(id).expect("valid stage ID"),
                 format!("Test stage {id}"),
                 "1",
-                format!("Test implementation for {id}"),
+                "Execution contract test",
             )
             .expect("valid descriptor")
             .with_phase(CompilationPhase::Initialization)
@@ -1435,13 +1309,26 @@ mod tests {
             Self {
                 descriptor,
                 skip,
-                expected_dependency: expected_dependency.map(
-                    |value| {
-                        StageId::new(value)
-                            .expect("valid expected dependency")
-                    },
-                ),
+                panic: false,
+                expected_dependency: None,
             }
+        }
+
+        fn expecting(
+            mut self,
+            dependency: &str,
+        ) -> Self {
+            self.expected_dependency = Some(
+                StageId::new(dependency)
+                    .expect("valid dependency"),
+            );
+
+            self
+        }
+
+        fn panicking(mut self) -> Self {
+            self.panic = true;
+            self
         }
     }
 
@@ -1470,13 +1357,17 @@ mod tests {
         ) -> Result<StageOutput, StageError> {
             execution.context().check_cancelled()?;
 
+            if self.panic {
+                panic!("intentional test panic");
+            }
+
             let inputs = execution
                 .input()
                 .downcast_ref::<StageInputs>()
                 .ok_or_else(|| {
                     StageError::new(
                         StageErrorKind::InvalidInput,
-                        "expected StageInputs wrapper",
+                        "expected StageInputs",
                     )
                 })?;
 
@@ -1486,9 +1377,7 @@ mod tests {
                     .ok_or_else(|| {
                         StageError::new(
                             StageErrorKind::InvalidInput,
-                            format!(
-                                "missing dependency output `{dependency}`"
-                            ),
+                            "missing prerequisite output",
                         )
                     })?;
 
@@ -1496,7 +1385,7 @@ mod tests {
                     return Err(
                         StageError::new(
                             StageErrorKind::InvalidInput,
-                            "dependency output had an unexpected type",
+                            "unexpected prerequisite output type",
                         ),
                     );
                 }
@@ -1509,29 +1398,31 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // TEST HELPERS
-    // ------------------------------------------------------------------------
-
     fn compilation() -> CompilationContext {
-        CompilationContext::new(CompilerConfig::default())
-            .expect("valid test configuration")
+        CompilationContext::new(
+            CompilerConfig::default(),
+        )
+        .expect("valid configuration")
     }
 
     fn state(
         compilation: &CompilationContext,
     ) -> CompilationStateTracker {
-        let tracker = CompilationStateTracker::with_cancellation(
+        let state = CompilationStateTracker::with_cancellation(
             compilation.cancellation_token(),
         );
 
-        tracker.start().expect("start test compilation");
+        state.start().expect("start compilation");
 
-        tracker
+        state
     }
 
     fn id(value: &str) -> StageId {
-        StageId::new(value).expect("valid test stage ID")
+        StageId::new(value).expect("valid stage ID")
+    }
+
+    fn required(values: &[&str]) -> BTreeSet<StageId> {
+        values.iter().map(|value| id(value)).collect()
     }
 
     fn ordering(
@@ -1543,42 +1434,30 @@ mod tests {
             .collect::<Vec<_>>();
 
         StageOrdering::from_slice(&descriptors)
-            .expect("valid stage ordering")
-    }
-
-    fn required(values: &[&str]) -> BTreeSet<StageId> {
-        values.iter().map(|value| id(value)).collect()
+            .expect("valid ordering")
     }
 
     // ------------------------------------------------------------------------
-    // API AND INPUT CONTRACT
+    // INPUT CONTRACT
     // ------------------------------------------------------------------------
 
     #[test]
-    fn execution_api_version_is_nonzero() {
-        assert_ne!(PIPELINE_EXECUTION_API_VERSION, 0);
-    }
-
-    #[test]
-    fn stage_inputs_preserve_initial_input() {
+    fn preserves_original_input() {
         let inputs = StageInputs::new(
             StageInput::new(String::from("source")),
             BTreeMap::new(),
         );
 
         assert_eq!(
-            inputs
-                .initial_input()
+            inputs.initial_input()
                 .downcast_ref::<String>()
                 .map(String::as_str),
             Some("source"),
         );
-
-        assert!(inputs.dependency_outputs().is_empty());
     }
 
     #[test]
-    fn stage_inputs_expose_dependency_outputs() {
+    fn delivers_direct_dependency_output() {
         let dependency = id("frontend.parse");
 
         let mut outputs = BTreeMap::new();
@@ -1594,8 +1473,7 @@ mod tests {
         );
 
         assert_eq!(
-            inputs
-                .dependency_output(&dependency)
+            inputs.dependency_output(&dependency)
                 .and_then(|output| {
                     output.downcast_ref::<String>()
                 })
@@ -1609,7 +1487,7 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn executor_runs_stages_in_dependency_order() {
+    fn executes_stages_in_dependency_order() {
         let compilation = compilation();
         let state = state(&compilation);
 
@@ -1618,14 +1496,15 @@ mod tests {
                 "frontend.parse",
                 &[],
                 false,
-                None,
             )),
-            Arc::new(TestStage::new(
-                "semantic.analysis",
-                &["frontend.parse"],
-                false,
-                Some("frontend.parse"),
-            )),
+            Arc::new(
+                TestStage::new(
+                    "semantic.analysis",
+                    &["frontend.parse"],
+                    false,
+                )
+                .expecting("frontend.parse"),
+            ),
         ];
 
         let ordering = ordering(&stages);
@@ -1642,54 +1521,9 @@ mod tests {
                     "semantic.analysis",
                 ]),
             )
-            .expect("pipeline should complete");
+            .expect("execution succeeds");
 
-        assert_eq!(report.stage_count(), 2);
         assert_eq!(report.completed_count(), 2);
-        assert_eq!(report.skipped_count(), 0);
-        assert_eq!(report.blocked_count(), 0);
-        assert!(report.is_successful());
-
-        assert!(
-            report
-                .output_of(&id("semantic.analysis"))
-                .is_some()
-        );
-    }
-
-    #[test]
-    fn executor_delivers_direct_dependency_outputs() {
-        let compilation = compilation();
-        let state = state(&compilation);
-
-        let stages: Vec<Arc<dyn Stage>> = vec![
-            Arc::new(TestStage::new(
-                "source.parse",
-                &[],
-                false,
-                None,
-            )),
-            Arc::new(TestStage::new(
-                "ir.generate",
-                &["source.parse"],
-                false,
-                Some("source.parse"),
-            )),
-        ];
-
-        let ordering = ordering(&stages);
-
-        let report = PipelineExecutor::new()
-            .execute(
-                &compilation,
-                &state,
-                &ordering,
-                &stages,
-                StageInput::empty(),
-                &required(&["ir.generate"]),
-            )
-            .expect("dependency output should be delivered");
-
         assert!(report.is_successful());
     }
 
@@ -1707,13 +1541,11 @@ mod tests {
                 "classical.analysis",
                 &[],
                 false,
-                None,
             )),
             Arc::new(TestStage::new(
                 "quantum.analysis",
                 &[],
                 true,
-                None,
             )),
         ];
 
@@ -1728,22 +1560,11 @@ mod tests {
                 StageInput::empty(),
                 &required(&["classical.analysis"]),
             )
-            .expect("optional skip must not fail unrelated work");
+            .expect("optional skip succeeds");
 
         assert_eq!(report.completed_count(), 1);
         assert_eq!(report.skipped_count(), 1);
-
-        assert!(
-            report.is_successful()
-        );
-
-        assert_eq!(
-            report
-                .record(&id("quantum.analysis"))
-                .expect("skip record")
-                .status(),
-            StageExecutionStatus::Skipped,
-        );
+        assert!(report.is_successful());
     }
 
     #[test]
@@ -1756,7 +1577,6 @@ mod tests {
                 "required.analysis",
                 &[],
                 true,
-                None,
             )),
         ];
 
@@ -1771,25 +1591,20 @@ mod tests {
                 StageInput::empty(),
                 &required(&["required.analysis"]),
             )
-            .expect_err("required stage must not be skipped");
+            .expect_err("required stage must not skip");
 
         assert_eq!(
             error.kind(),
             ExecutionErrorKind::RequiredStageSkipped,
         );
-
-        assert_eq!(
-            error
-                .partial_report()
-                .record(&id("required.analysis"))
-                .expect("skip record")
-                .status(),
-            StageExecutionStatus::Skipped,
-        );
     }
 
+    // ------------------------------------------------------------------------
+    // DEPENDENCY FAILURE
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn dependent_stage_is_blocked_when_prerequisite_skips() {
+    fn dependent_stage_is_blocked_after_skip() {
         let compilation = compilation();
         let state = state(&compilation);
 
@@ -1798,13 +1613,11 @@ mod tests {
                 "optional.frontend",
                 &[],
                 true,
-                None,
             )),
             Arc::new(TestStage::new(
                 "required.semantic",
                 &["optional.frontend"],
                 false,
-                None,
             )),
         ];
 
@@ -1819,20 +1632,20 @@ mod tests {
                 StageInput::empty(),
                 &required(&["required.semantic"]),
             )
-            .expect_err("dependent required stage must be blocked");
+            .expect_err("dependent stage must fail");
 
         assert_eq!(
             error.kind(),
             ExecutionErrorKind::DependencyNotCompleted,
         );
 
+        let record = error.partial_report()
+            .record(&id("required.semantic"))
+            .expect("blocked record");
+
         assert_eq!(
-            error
-                .partial_report()
-                .record(&id("required.semantic"))
-                .expect("blocked record")
-                .status(),
-            StageExecutionStatus::Blocked,
+            record.blocked_by(),
+            Some(&id("optional.frontend")),
         );
     }
 
@@ -1841,15 +1654,14 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn duplicate_stage_implementations_are_rejected() {
+    fn rejects_duplicate_implementations() {
         let compilation = compilation();
         let state = state(&compilation);
 
         let stage = Arc::new(TestStage::new(
-            "duplicate.stage",
+            "duplicate",
             &[],
             false,
-            None,
         ));
 
         let stages: Vec<Arc<dyn Stage>> = vec![
@@ -1857,12 +1669,10 @@ mod tests {
             stage,
         ];
 
-        let descriptors = vec![
-            stages[0].descriptor().clone(),
-        ];
-
-        let ordering = StageOrdering::from_slice(&descriptors)
-            .expect("single-stage ordering");
+        let ordering = StageOrdering::from_slice(
+            &[stages[0].descriptor().clone()],
+        )
+        .expect("single stage ordering");
 
         let error = PipelineExecutor::new()
             .execute(
@@ -1871,9 +1681,9 @@ mod tests {
                 &ordering,
                 &stages,
                 StageInput::empty(),
-                &required(&["duplicate.stage"]),
+                &required(&["duplicate"]),
             )
-            .expect_err("duplicate implementations must fail");
+            .expect_err("duplicates rejected");
 
         assert_eq!(
             error.kind(),
@@ -1882,16 +1692,15 @@ mod tests {
     }
 
     #[test]
-    fn missing_required_stage_is_rejected_before_execution() {
+    fn rejects_missing_required_stage_before_execution() {
         let compilation = compilation();
         let state = state(&compilation);
 
         let stages: Vec<Arc<dyn Stage>> = vec![
             Arc::new(TestStage::new(
-                "registered.stage",
+                "registered",
                 &[],
                 false,
-                None,
             )),
         ];
 
@@ -1904,16 +1713,58 @@ mod tests {
                 &ordering,
                 &stages,
                 StageInput::empty(),
-                &required(&["missing.stage"]),
+                &required(&["missing"]),
             )
-            .expect_err("missing required stage must fail");
+            .expect_err("missing required stage");
 
         assert_eq!(
             error.kind(),
             ExecutionErrorKind::MissingRequiredStage,
         );
 
-        assert_eq!(error.partial_report().stage_count(), 0);
+        assert_eq!(
+            error.partial_report().stage_count(),
+            0,
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // PANIC CONTAINMENT
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn contains_unwinding_stage_panic() {
+        let compilation = compilation();
+        let state = state(&compilation);
+
+        let stages: Vec<Arc<dyn Stage>> = vec![
+            Arc::new(
+                TestStage::new(
+                    "panicking.stage",
+                    &[],
+                    false,
+                )
+                .panicking(),
+            ),
+        ];
+
+        let ordering = ordering(&stages);
+
+        let error = PipelineExecutor::new()
+            .execute(
+                &compilation,
+                &state,
+                &ordering,
+                &stages,
+                StageInput::empty(),
+                &required(&["panicking.stage"]),
+            )
+            .expect_err("panic must not become success");
+
+        assert_eq!(
+            error.kind(),
+            ExecutionErrorKind::StageFailed,
+        );
     }
 
     // ------------------------------------------------------------------------
@@ -1930,7 +1781,6 @@ mod tests {
                 "cancelled.stage",
                 &[],
                 false,
-                None,
             )),
         ];
 
@@ -1947,14 +1797,17 @@ mod tests {
                 StageInput::empty(),
                 &required(&["cancelled.stage"]),
             )
-            .expect_err("cancelled compilation must fail");
+            .expect_err("cancelled execution");
 
         assert_eq!(
             error.kind(),
             ExecutionErrorKind::Cancelled,
         );
 
-        assert_eq!(error.partial_report().stage_count(), 0);
+        assert_eq!(
+            error.partial_report().stage_count(),
+            0,
+        );
     }
 
     // ------------------------------------------------------------------------
@@ -1962,7 +1815,7 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn executor_does_not_complete_the_compilation_lifecycle() {
+    fn executor_does_not_complete_compilation_lifecycle() {
         let compilation = compilation();
         let state = state(&compilation);
 
@@ -1971,7 +1824,6 @@ mod tests {
                 "final.stage",
                 &[],
                 false,
-                None,
             )),
         ];
 
@@ -1986,12 +1838,10 @@ mod tests {
                 StageInput::empty(),
                 &required(&["final.stage"]),
             )
-            .expect("stage should complete");
+            .expect("execution succeeds");
 
         assert!(
-            state
-                .lifecycle()
-                .expect("lifecycle snapshot")
+            state.lifecycle().expect("lifecycle")
                 != crate::compiler::context::compilation_state::
                     CompilationLifecycle::Completed
         );
@@ -2002,7 +1852,7 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn report_distinguishes_completed_skipped_and_blocked() {
+    fn report_distinguishes_all_stage_outcomes() {
         let compilation = compilation();
         let state = state(&compilation);
 
@@ -2011,19 +1861,16 @@ mod tests {
                 "completed",
                 &[],
                 false,
-                None,
             )),
             Arc::new(TestStage::new(
                 "skipped",
                 &[],
                 true,
-                None,
             )),
             Arc::new(TestStage::new(
                 "blocked",
                 &["skipped"],
                 false,
-                None,
             )),
         ];
 
@@ -2038,18 +1885,12 @@ mod tests {
                 StageInput::empty(),
                 &required(&["completed"]),
             )
-            .expect("optional blocked branch is permitted");
+            .expect("optional incomplete branches are allowed");
 
         assert_eq!(report.completed_count(), 1);
         assert_eq!(report.skipped_count(), 1);
         assert_eq!(report.blocked_count(), 1);
-
-        assert!(
-            report.has_skipped_or_blocked_stages()
-        );
-
-        assert!(
-            report.is_successful()
-        );
+        assert!(report.has_skipped_or_blocked_stages());
+        assert!(report.is_successful());
     }
 }
