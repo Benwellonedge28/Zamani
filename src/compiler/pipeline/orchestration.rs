@@ -1,67 +1,102 @@
-
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
 //! Zamani Universal Meta-Compiler — Pipeline Orchestration.
 //!
-//! This module owns the lifecycle and coordination of one compiler-pipeline
-//! invocation. It composes the existing stage, ordering, execution,
-//! compilation-context, compilation-state and failure contracts.
+//! Path: src/compiler/pipeline/orchestration.rs
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
 //!
-//! It does not define another stage system or executor.
+//! # Purpose
 //!
-//! # Architectural ownership
+//! Coordinates one complete compiler-pipeline invocation.
 //!
 //! This module owns:
 //! - PipelineOrchestrator.
-//! - PipelineOrchestrationError and its classification.
-//! - OrchestrationExecutionReport and its stage records.
-//! - Compilation lifecycle transitions around pipeline execution.
-//! - Conversion of execution results into orchestration results.
+//! - Orchestration-level execution reports.
+//! - Orchestration-level stage records.
+//! - Orchestration error classification.
+//! - Compilation lifecycle transitions around execution.
+//! - Conversion of executor reports and errors.
 //!
-//! Existing modules remain authoritative for:
-//! - Stage contracts: pipeline::stage.
-//! - Dependency graph validation: pipeline::ordering.
-//! - Stage execution: pipeline::execution.
-//! - Failure normalization: pipeline::failure.
-//! - Recovery policy: pipeline::recovery.
-//! - Compilation configuration and budgets: compiler::context and
-//!   compiler::configuration.
-//! - Domain semantics, IR, optimization, hardware and runtime execution.
+//! It delegates:
+//! - Stage contracts to pipeline::stage.
+//! - Dependency validation to pipeline::ordering.
+//! - Stage execution to pipeline::execution.
+//! - Failure normalization to pipeline::failure.
+//! - Recovery policy to pipeline::recovery.
+//! - Budgets and cancellation to CompilationContext.
+//! - Lifecycle transitions to CompilationStateTracker.
 //!
-//! # Scalability
+//! # Architectural boundaries
 //!
-//! No fixed stage-count, device-count, worker-count, memory, operation-count,
-//! or hardware-capacity limit is imposed here.
+//! This module MUST NOT implement:
+//! - Source parsing or grammar interpretation.
+//! - Semantic analysis or type inference.
+//! - A competing AST or semantic model.
+//! - A competing universal or domain IR.
+//! - Optimization algorithms.
+//! - Physical resource allocation.
+//! - Hardware discovery.
+//! - Physical scheduling or routing.
+//! - Backend code generation.
+//! - Linking implementation.
+//! - Runtime execution.
+//! - Automatic retries or fallbacks.
 //!
-//! The pipeline uses the resource budgets and cancellation state supplied
-//! through CompilationContext. Unlimited configured budgets do not imply
-//! infinite physical resources.
+//! # POCO-REAF
+//!
+//! No arbitrary universal limits are imposed on:
+//! - Pipeline stages.
+//! - Stage dependencies.
+//! - Compilation units.
+//! - Computing domains.
+//! - CPUs, GPUs, FPGAs or QPUs.
+//! - Distributed participants.
+//! - Memory or storage.
+//! - Qubits.
+//! - Tensor dimensions or rank.
+//! - IR operations.
+//!
+//! Operational budgets are supplied through CompilationContext.
+//!
+//! Physical limitations belong to the relevant target, provider,
+//! resource-management and runtime authorities.
+//!
+//! No finite implementation can promise infinite physical resources.
 //!
 //! # Determinism
 //!
-//! The existing StageOrdering defines deterministic topological order.
-//! The existing PipelineExecutor executes that order deterministically.
-//! This orchestrator does not introduce nondeterministic concurrent execution.
+//! StageOrdering owns deterministic dependency ordering.
+//! PipelineExecutor owns deterministic sequential execution.
+//! This module does not introduce another ordering or scheduling policy.
 //!
 //! # Conditional stages
 //!
-//! A skipped stage is not a completed stage. Its dependents cannot consume
-//! its output. Required stages must complete successfully.
+//! A skipped stage is not completed.
+//! A dependent stage cannot consume a skipped prerequisite's output.
+//! Required stages must complete successfully.
 //!
 //! # Grammar boundary
 //!
-//! Source-level compilation declarations belong to the grammar, frontend
-//! and semantic authorities. This module coordinates compiler implementation
-//! stages only. It does not interpret grammar declarations or source intent.
+//! Source-level compilation intent is defined by:
+//! - grammar/Zamani.g4
+//! - grammar/compile/compile.g4
+//! - grammar/specification/compilation-model.md
+//! - grammar/specification/execution-model.md
+//! - grammar/specification/poco-reaf.md
+//!
+//! The frontend semantic authority determines source meaning.
+//! This module coordinates compiler implementation stages only.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 
 use crate::compiler::context::compilation_context::CompilationContext;
+
 use crate::compiler::context::compilation_state::{
     CompilationLifecycle,
     CompilationStateError,
@@ -93,16 +128,19 @@ use crate::compiler::pipeline::stage::{
 // ============================================================================
 
 /// Public API version for pipeline orchestration.
+///
+/// Independent of the Zamani language, grammar, semantic-model,
+/// IR, backend and runtime versions.
 pub const PIPELINE_ORCHESTRATION_API_VERSION: u16 = 1;
 
 // ============================================================================
-// ORCHESTRATION STAGE STATUS
+// STAGE STATUS
 // ============================================================================
 
-/// Final orchestration-level status of a stage.
+/// Final orchestration-level status of one pipeline stage.
 ///
-/// This is an immutable reporting representation. The execution subsystem
-/// remains the authority for actual stage invocation and output ownership.
+/// This is a reporting representation. The execution subsystem
+/// remains authoritative for stage invocation and output ownership.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StageExecutionStatus {
@@ -127,10 +165,10 @@ pub enum StageExecutionStatus {
 }
 
 // ============================================================================
-// ORCHESTRATION STAGE RECORD
+// STAGE RECORD
 // ============================================================================
 
-/// Immutable record of one stage's orchestration outcome.
+/// Immutable orchestration record for one stage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageExecutionRecord {
     stage_id: StageId,
@@ -197,7 +235,7 @@ impl StageExecutionRecord {
         &self.stage_id
     }
 
-    /// Returns the final stage status.
+    /// Returns the stage status.
     #[must_use]
     pub fn status(&self) -> &StageExecutionStatus {
         &self.status
@@ -206,111 +244,138 @@ impl StageExecutionRecord {
     /// Returns whether the stage completed successfully.
     #[must_use]
     pub fn is_completed(&self) -> bool {
-        matches!(self.status, StageExecutionStatus::Completed)
+        matches!(
+            self.status,
+            StageExecutionStatus::Completed
+        )
     }
 }
 
 // ============================================================================
-// ORCHESTRATION EXECUTION REPORT
+// EXECUTION REPORT
 // ============================================================================
 
 /// Immutable summary of one pipeline invocation.
 ///
-/// The report owns orchestration-level stage records and the set of required
-/// stages. Actual stage outputs remain owned by the execution report.
+/// This report retains orchestration records and the mandatory-stage
+/// contract. Actual stage outputs remain owned by PipelineExecutionReport.
 ///
-/// Keeping the two responsibilities separate avoids copying or duplicating
-/// domain-specific IR, artifacts or other stage payloads.
+/// Stage outputs are deliberately not copied into this report.
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionReport {
-    records: std::collections::BTreeMap<StageId, StageExecutionRecord>,
+    records: BTreeMap<StageId, StageExecutionRecord>,
     required_stages: BTreeSet<StageId>,
 }
 
 impl ExecutionReport {
-    /// Creates an empty report with the caller's mandatory-stage contract.
+    /// Creates an empty report with the supplied required-stage contract.
     #[must_use]
     pub fn new(required_stages: BTreeSet<StageId>) -> Self {
         Self {
-            records: std::collections::BTreeMap::new(),
+            records: BTreeMap::new(),
             required_stages,
         }
     }
 
-    /// Converts the existing executor report without taking ownership.
+    /// Converts an executor report while preserving stage outcomes.
     ///
-    /// Completed, skipped and blocked states are preserved exactly.
+    /// In particular, the actual blocking prerequisite is retained.
     #[must_use]
-    pub fn from_execution(report: &PipelineExecutionReport) -> Self {
-        let mut result = Self::new(report.required_stages().clone());
+    pub fn from_execution(
+        report: &PipelineExecutionReport,
+    ) -> Self {
+        let mut result = Self::new(
+            report.required_stages().clone(),
+        );
 
         for (stage_id, record) in report.records() {
             let converted = match record.status() {
                 PipelineStageExecutionStatus::Completed => {
-                    StageExecutionRecord::completed(stage_id.clone())
+                    StageExecutionRecord::completed(
+                        stage_id.clone(),
+                    )
                 }
 
                 PipelineStageExecutionStatus::Skipped => {
                     StageExecutionRecord::skipped(
                         stage_id.clone(),
-                        record.reason().unwrap_or("stage was skipped"),
+                        record.reason().unwrap_or(
+                            "stage was skipped",
+                        ),
                     )
                 }
 
                 PipelineStageExecutionStatus::Blocked => {
-                    // The executor records the blocking explanation.
-                    // The precise prerequisite is resolved by orchestration
-                    // when it is known; it is not fabricated here.
-                    StageExecutionRecord {
-                        stage_id: stage_id.clone(),
-                        status: StageExecutionStatus::Blocked {
-                            dependency: stage_id.clone(),
-                            reason: Arc::from(
-                                record.reason().unwrap_or(
-                                    "a prerequisite did not complete",
-                                ),
-                            ),
-                        },
-                    }
+                    // execution.rs records the exact prerequisite.
+                    //
+                    // The fallback is defensive against an invalid
+                    // executor report. It does not claim that the stage
+                    // actually depends on itself.
+                    let dependency = record
+                        .blocked_by()
+                        .cloned()
+                        .unwrap_or_else(|| stage_id.clone());
+
+                    let reason = match record.blocked_by() {
+                        Some(_) => record.reason().unwrap_or(
+                            "a prerequisite did not complete",
+                        ),
+
+                        None => {
+                            "executor reported a blocked stage \
+                             without identifying its prerequisite"
+                        }
+                    };
+
+                    StageExecutionRecord::blocked(
+                        stage_id.clone(),
+                        dependency,
+                        reason,
+                    )
                 }
             };
 
-            result.records.insert(stage_id.clone(), converted);
+            result.records.insert(
+                stage_id.clone(),
+                converted,
+            );
         }
 
         result
     }
 
-    /// Adds or replaces one stage record.
-    ///
-    /// This is used by orchestration when an executor error identifies
-    /// the failed stage after the executor has returned its partial report.
+    /// Adds or replaces a stage record.
     fn insert(&mut self, record: StageExecutionRecord) {
-        self.records
-            .insert(record.stage_id().clone(), record);
+        self.records.insert(
+            record.stage_id().clone(),
+            record,
+        );
     }
 
-    /// Returns all stage records in deterministic identifier order.
+    /// Returns all records in deterministic identifier order.
     #[must_use]
     pub fn records(
         &self,
-    ) -> &std::collections::BTreeMap<StageId, StageExecutionRecord> {
+    ) -> &BTreeMap<StageId, StageExecutionRecord> {
         &self.records
     }
 
-    /// Returns a stage record.
+    /// Returns one stage record.
     #[must_use]
-    pub fn record(&self, stage: &StageId) -> Option<&StageExecutionRecord> {
+    pub fn record(
+        &self,
+        stage: &StageId,
+    ) -> Option<&StageExecutionRecord> {
         self.records.get(stage)
     }
 
-    /// Returns the required stages.
+    /// Returns the required-stage contract.
     #[must_use]
     pub fn required_stages(&self) -> &BTreeSet<StageId> {
         &self.required_stages
     }
 
-    /// Returns the number of stages represented in the report.
+    /// Returns the number of stages represented.
     #[must_use]
     pub fn stage_count(&self) -> usize {
         self.records.len()
@@ -369,7 +434,7 @@ impl ExecutionReport {
 
     /// Returns whether every required stage completed successfully.
     ///
-    /// A missing, skipped, blocked or failed stage never counts as complete.
+    /// A missing, skipped, blocked or failed stage is incomplete.
     #[must_use]
     pub fn all_required_stages_completed(&self) -> bool {
         self.required_stages.iter().all(|stage| {
@@ -379,15 +444,17 @@ impl ExecutionReport {
         })
     }
 
-    /// Returns whether the report contains any incomplete stage.
+    /// Returns whether any recorded stage did not complete.
     #[must_use]
     pub fn has_incomplete_stages(&self) -> bool {
-        self.records.values().any(|record| !record.is_completed())
+        self.records
+            .values()
+            .any(|record| !record.is_completed())
     }
 
-    /// Returns whether all required stages completed.
+    /// Returns whether the mandatory-stage contract is satisfied.
     ///
-    /// This does not replace the lifecycle tracker's success state.
+    /// This is not a substitute for successful lifecycle completion.
     #[must_use]
     pub fn is_successful(&self) -> bool {
         self.all_required_stages_completed()
@@ -395,28 +462,46 @@ impl ExecutionReport {
 }
 
 // ============================================================================
-// ORCHESTRATION ERROR CLASSIFICATION
+// ERROR CLASSIFICATION
 // ============================================================================
 
 /// Stable classification of orchestration failures.
-///
-/// The variants are deliberately aligned with the failure conversion
-/// contract in pipeline::failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum PipelineOrchestrationErrorKind {
+    /// The stage dependency graph is invalid.
     InvalidStageGraph,
+
+    /// A required stage is not registered.
     MissingRequiredStage,
+
+    /// A required stage was skipped.
     RequiredStageSkipped,
+
+    /// A required stage was blocked.
     RequiredStageBlocked,
+
+    /// A stage failed.
     StageFailed,
+
+    /// Compilation was cancelled.
     Cancelled,
+
+    /// Lifecycle tracking failed.
     LifecycleFailure,
+
+    /// Required work was not completed.
     IncompleteRequiredWork,
+
+    /// An internal orchestration or executor invariant failed.
+    InternalInvariant,
 }
 
 impl fmt::Display for PipelineOrchestrationErrorKind {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(match self {
             Self::InvalidStageGraph => "invalid stage graph",
             Self::MissingRequiredStage => "missing required stage",
@@ -426,6 +511,7 @@ impl fmt::Display for PipelineOrchestrationErrorKind {
             Self::Cancelled => "pipeline cancelled",
             Self::LifecycleFailure => "lifecycle failure",
             Self::IncompleteRequiredWork => "incomplete required work",
+            Self::InternalInvariant => "internal invariant failure",
         })
     }
 }
@@ -434,18 +520,21 @@ impl fmt::Display for PipelineOrchestrationErrorKind {
 // ORCHESTRATION ERROR
 // ============================================================================
 
-/// A typed failure produced while coordinating a pipeline invocation.
+/// Structured failure produced by pipeline orchestration.
 ///
-/// The original StageError is retained whenever one exists. The partial
-/// report is always available, including for failures before stage execution.
+/// Partial stage records are retained for failures occurring before,
+/// during or after stage execution.
+///
+/// Original stage, graph and lifecycle errors are retained where available.
 #[derive(Debug, Clone)]
 pub struct PipelineOrchestrationError {
     kind: PipelineOrchestrationErrorKind,
     stage: Option<StageId>,
     message: Arc<str>,
     stage_error: Option<StageError>,
-    partial_report: ExecutionReport,
     ordering_error: Option<OrderingError>,
+    lifecycle_error: Option<CompilationStateError>,
+    partial_report: ExecutionReport,
 }
 
 impl PipelineOrchestrationError {
@@ -460,8 +549,9 @@ impl PipelineOrchestrationError {
             stage,
             message: message.into(),
             stage_error: None,
-            partial_report,
             ordering_error: None,
+            lifecycle_error: None,
+            partial_report,
         }
     }
 
@@ -474,8 +564,9 @@ impl PipelineOrchestrationError {
             stage: None,
             message: Arc::from(error.to_string()),
             stage_error: None,
-            partial_report: report,
             ordering_error: Some(error),
+            lifecycle_error: None,
+            partial_report: report,
         }
     }
 
@@ -495,7 +586,8 @@ impl PipelineOrchestrationError {
                 PipelineOrchestrationErrorKind::RequiredStageBlocked
             }
 
-            ExecutionErrorKind::MissingRequiredStage => {
+            ExecutionErrorKind::MissingRequiredStage
+            | ExecutionErrorKind::MissingStageImplementation => {
                 PipelineOrchestrationErrorKind::MissingRequiredStage
             }
 
@@ -507,17 +599,36 @@ impl PipelineOrchestrationError {
                 PipelineOrchestrationErrorKind::LifecycleFailure
             }
 
-            _ => PipelineOrchestrationErrorKind::InvalidStageGraph,
+            ExecutionErrorKind::InternalInvariant => {
+                PipelineOrchestrationErrorKind::InternalInvariant
+            }
+
+            ExecutionErrorKind::DuplicateStageImplementation
+            | ExecutionErrorKind::UnexpectedStageImplementation
+            | ExecutionErrorKind::OrderingMismatch => {
+                PipelineOrchestrationErrorKind::InvalidStageGraph
+            }
         };
 
-        let mut report = ExecutionReport::from_execution(error.partial_report());
+        let mut report = ExecutionReport::from_execution(
+            error.partial_report(),
+        );
 
         if let Some(stage) = error.stage() {
             if let Some(cause) = error.stage_cause() {
-                report.insert(StageExecutionRecord::failed(
-                    stage.clone(),
-                    cause.to_string(),
-                ));
+                report.insert(
+                    StageExecutionRecord::failed(
+                        stage.clone(),
+                        cause.to_string(),
+                    ),
+                );
+            } else if kind == PipelineOrchestrationErrorKind::InternalInvariant {
+                report.insert(
+                    StageExecutionRecord::failed(
+                        stage.clone(),
+                        error.message(),
+                    ),
+                );
             }
         }
 
@@ -526,8 +637,9 @@ impl PipelineOrchestrationError {
             stage: error.stage().cloned(),
             message: Arc::from(error.message()),
             stage_error: error.stage_cause().cloned(),
-            partial_report: report,
             ordering_error: None,
+            lifecycle_error: None,
+            partial_report: report,
         }
     }
 
@@ -543,10 +655,32 @@ impl PipelineOrchestrationError {
             _ => PipelineOrchestrationErrorKind::LifecycleFailure,
         };
 
-        Self::new(kind, None, error.to_string(), report)
+        Self {
+            kind,
+            stage: None,
+            message: Arc::from(error.to_string()),
+            stage_error: None,
+            ordering_error: None,
+            lifecycle_error: Some(error),
+            partial_report: report,
+        }
     }
 
-    /// Returns the error classification.
+    fn with_lifecycle_error(
+        mut self,
+        error: CompilationStateError,
+    ) -> Self {
+        self.message = Arc::from(format!(
+            "{}; additionally, lifecycle finalization failed: {}",
+            self.message,
+            error,
+        ));
+
+        self.lifecycle_error = Some(error);
+        self
+    }
+
+    /// Returns the failure classification.
     #[must_use]
     pub const fn kind(&self) -> PipelineOrchestrationErrorKind {
         self.kind
@@ -558,16 +692,28 @@ impl PipelineOrchestrationError {
         self.stage.as_ref()
     }
 
-    /// Returns the error message.
+    /// Returns the failure message.
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
     }
 
-    /// Returns the original stage error, when available.
+    /// Returns the original stage error, if any.
     #[must_use]
     pub fn stage_error(&self) -> Option<&StageError> {
         self.stage_error.as_ref()
+    }
+
+    /// Returns the original graph-ordering error, if any.
+    #[must_use]
+    pub fn ordering_error(&self) -> Option<&OrderingError> {
+        self.ordering_error.as_ref()
+    }
+
+    /// Returns the lifecycle error, if any.
+    #[must_use]
+    pub fn lifecycle_error(&self) -> Option<&CompilationStateError> {
+        self.lifecycle_error.as_ref()
     }
 
     /// Returns the partial orchestration report.
@@ -575,16 +721,13 @@ impl PipelineOrchestrationError {
     pub fn partial_report(&self) -> &ExecutionReport {
         &self.partial_report
     }
-
-    /// Returns the original graph-ordering error, when available.
-    #[must_use]
-    pub fn ordering_error(&self) -> Option<&OrderingError> {
-        self.ordering_error.as_ref()
-    }
 }
 
 impl fmt::Display for PipelineOrchestrationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self.stage.as_ref() {
             Some(stage) => write!(
                 formatter,
@@ -610,7 +753,11 @@ impl Error for PipelineOrchestrationError {
             return Some(error);
         }
 
-        self.ordering_error
+        if let Some(error) = self.ordering_error.as_ref() {
+            return Some(error);
+        }
+
+        self.lifecycle_error
             .as_ref()
             .map(|error| error as &(dyn Error + 'static))
     }
@@ -622,8 +769,9 @@ impl Error for PipelineOrchestrationError {
 
 /// Coordinates one complete compiler-pipeline invocation.
 ///
-/// The orchestrator is stateless. All per-compilation state is supplied
-/// by the caller or created locally for the invocation.
+/// The orchestrator is stateless. Each invocation receives its own
+/// compilation context, stage implementations, input and required-stage
+/// contract.
 ///
 /// It does not own a global stage registry, worker pool, backend or runtime.
 #[derive(Debug, Default, Clone, Copy)]
@@ -636,18 +784,19 @@ impl PipelineOrchestrator {
         Self
     }
 
-    /// Executes a complete pipeline using the existing stage and executor
-    /// contracts.
+    /// Executes one validated compiler pipeline.
     ///
-    /// The supplied stage list must contain exactly one implementation for
-    /// every stage in the validated graph.
+    /// The stage graph is validated before any stage is invoked.
     ///
-    /// Every required stage must be present and complete successfully.
+    /// Every required stage must be registered and complete successfully.
     ///
-    /// The CompilationContext is shared by all stages. The state tracker
-    /// created here uses the context's existing cancellation token.
+    /// The state tracker shares the CompilationContext cancellation token.
     ///
-    /// No retries or fallbacks are performed by this method.
+    /// This method never retries a stage or substitutes a fallback.
+    ///
+    /// An empty pipeline with no required stages is permitted by this
+    /// generic orchestration API. A production compiler driver must supply
+    /// the required stages for the selected compilation route.
     pub fn execute(
         &self,
         compilation: &CompilationContext,
@@ -655,11 +804,28 @@ impl PipelineOrchestrator {
         initial_input: StageInput,
         required_stages: &BTreeSet<StageId>,
     ) -> Result<ExecutionReport, PipelineOrchestrationError> {
-        let mut report = ExecutionReport::new(required_stages.clone());
+        let mut report = ExecutionReport::new(
+            required_stages.clone(),
+        );
 
-        // Build the canonical dependency graph from the registered
-        // implementations. StageOrdering validates duplicates, missing
-        // dependencies and cycles.
+        // Create the lifecycle before preflight so that graph-validation
+        // failures and missing required stages follow the same terminal
+        // failure path as execution failures.
+        let state = CompilationStateTracker::with_cancellation(
+            compilation.cancellation_token(),
+        );
+
+        if let Err(error) = state.start() {
+            return Err(
+                PipelineOrchestrationError::from_lifecycle(
+                    error,
+                    report,
+                ),
+            );
+        }
+
+        // Do not execute any stage until the entire dependency graph
+        // and required-stage contract have been validated.
         let ordering = match StageOrdering::build(
             stages.iter().map(|stage| stage.descriptor()),
         ) {
@@ -672,35 +838,55 @@ impl PipelineOrchestrator {
                         report,
                     );
 
-                return Err(orchestration_error);
+                return Err(
+                    self.finalize_failure(
+                        compilation,
+                        &state,
+                        orchestration_error,
+                    ),
+                );
             }
         };
 
-        // A required stage must be registered. Do not let an empty required
-        // set or an incomplete registry accidentally imply success.
+        // Validate that every required stage is present before execution.
         for required in required_stages {
             if !ordering.contains(required) {
-                return Err(PipelineOrchestrationError::new(
+                let error = PipelineOrchestrationError::new(
                     PipelineOrchestrationErrorKind::MissingRequiredStage,
                     Some(required.clone()),
                     format!(
                         "required stage `{required}` is not registered"
                     ),
                     report,
-                ));
+                );
+
+                return Err(
+                    self.finalize_failure(
+                        compilation,
+                        &state,
+                        error,
+                    ),
+                );
             }
         }
 
-        // Share the compilation context's cancellation authority.
-        let state = CompilationStateTracker::with_cancellation(
-            compilation.cancellation_token(),
-        );
+        // Cancellation may have been requested during preflight.
+        if let Err(error) = compilation.check_cancelled() {
+            let orchestration_error =
+                PipelineOrchestrationError::new(
+                    PipelineOrchestrationErrorKind::Cancelled,
+                    None,
+                    error.to_string(),
+                    report,
+                );
 
-        if let Err(error) = state.start() {
-            return Err(PipelineOrchestrationError::from_lifecycle(
-                error,
-                report,
-            ));
+            return Err(
+                self.finalize_failure(
+                    compilation,
+                    &state,
+                    orchestration_error,
+                ),
+            );
         }
 
         let executor = PipelineExecutor::new();
@@ -714,11 +900,12 @@ impl PipelineOrchestrator {
             required_stages,
         ) {
             Ok(execution_report) => {
-                report = ExecutionReport::from_execution(&execution_report);
+                report = ExecutionReport::from_execution(
+                    &execution_report,
+                );
 
-                // Enforce the mandatory-stage contract again at the
-                // orchestration boundary. This is intentional defence
-                // in depth; the executor remains the primary enforcer.
+                // Defence in depth: the executor enforces this contract,
+                // and orchestration verifies it before lifecycle success.
                 if !report.all_required_stages_completed() {
                     let error = PipelineOrchestrationError::new(
                         PipelineOrchestrationErrorKind::IncompleteRequiredWork,
@@ -727,24 +914,54 @@ impl PipelineOrchestrator {
                         report,
                     );
 
-                    self.fail_state(&state, &error);
-
-                    return Err(error);
+                    return Err(
+                        self.finalize_failure(
+                            compilation,
+                            &state,
+                            error,
+                        ),
+                    );
                 }
 
-                if let Err(error) = state.complete() {
+                // Do not publish a successful lifecycle if cancellation
+                // arrived after the executor's final stage check.
+                if let Err(error) = compilation.check_cancelled() {
                     let orchestration_error =
-                        PipelineOrchestrationError::from_lifecycle(
-                            error,
+                        PipelineOrchestrationError::new(
+                            PipelineOrchestrationErrorKind::Cancelled,
+                            None,
+                            error.to_string(),
                             report,
                         );
 
-                    self.fail_state(&state, &orchestration_error);
-
-                    return Err(orchestration_error);
+                    return Err(
+                        self.finalize_failure(
+                            compilation,
+                            &state,
+                            orchestration_error,
+                        ),
+                    );
                 }
 
-                Ok(report)
+                match state.complete() {
+                    Ok(()) => Ok(report),
+
+                    Err(error) => {
+                        let orchestration_error =
+                            PipelineOrchestrationError::from_lifecycle(
+                                error,
+                                report,
+                            );
+
+                        Err(
+                            self.finalize_failure(
+                                compilation,
+                                &state,
+                                orchestration_error,
+                            ),
+                        )
+                    }
+                }
             }
 
             Err(execution_error) => {
@@ -753,51 +970,52 @@ impl PipelineOrchestrator {
                         &execution_error,
                     );
 
-                self.finish_failed_invocation(
-                    compilation,
-                    &state,
-                    &orchestration_error,
-                );
-
-                Err(orchestration_error)
+                Err(
+                    self.finalize_failure(
+                        compilation,
+                        &state,
+                        orchestration_error,
+                    ),
+                )
             }
         }
     }
 
-    /// Marks a non-cancellation failure in the shared lifecycle tracker.
-    fn fail_state(
-        &self,
-        state: &CompilationStateTracker,
-        error: &PipelineOrchestrationError,
-    ) {
-        if error.kind() == PipelineOrchestrationErrorKind::Cancelled {
-            let _ = self.mark_cancelled(state);
-        } else {
-            let _ = state.fail(error.to_string());
-        }
-    }
-
-    /// Completes the appropriate terminal transition after executor failure.
-    fn finish_failed_invocation(
+    /// Finalizes the lifecycle after an orchestration failure.
+    ///
+    /// Lifecycle-finalization errors are retained rather than discarded.
+    fn finalize_failure(
         &self,
         compilation: &CompilationContext,
         state: &CompilationStateTracker,
-        error: &PipelineOrchestrationError,
-    ) {
-        if error.kind() == PipelineOrchestrationErrorKind::Cancelled
-            || compilation.is_cancelled()
-            || state.is_cancelled()
-        {
-            let _ = self.mark_cancelled(state);
+        error: PipelineOrchestrationError,
+    ) -> PipelineOrchestrationError {
+        let cancellation_requested =
+            error.kind() == PipelineOrchestrationErrorKind::Cancelled
+                || compilation.is_cancelled()
+                || state.is_cancelled();
+
+        let transition = if cancellation_requested {
+            self.mark_cancelled(state)
         } else {
-            let _ = state.fail(error.to_string());
+            state.fail(error.to_string())
+        };
+
+        match transition {
+            Ok(()) => error,
+
+            Err(lifecycle_error) => {
+                // A terminal lifecycle state must not be overwritten.
+                // Preserve the original failure and the transition error.
+                error.with_lifecycle_error(lifecycle_error)
+            }
         }
     }
 
-    /// Requests and acknowledges cancellation using the existing tracker.
+    /// Synchronizes cancellation with the lifecycle tracker.
     ///
-    /// The state tracker and CompilationContext share the same cancellation
-    /// token. This method does not introduce another cancellation mechanism.
+    /// This uses the context's existing cancellation authority.
+    /// No independent cancellation token is created.
     fn mark_cancelled(
         &self,
         state: &CompilationStateTracker,
@@ -810,17 +1028,23 @@ impl PipelineOrchestrator {
 
             CompilationLifecycle::CancellationRequested => {}
 
-            CompilationLifecycle::Cancelled => return Ok(()),
+            CompilationLifecycle::Cancelled => {
+                return Ok(());
+            }
 
             CompilationLifecycle::Completed
             | CompilationLifecycle::Failed => {
-                return Err(CompilationStateError::TerminalState {
-                    state: state.lifecycle()?,
-                });
+                return Err(
+                    CompilationStateError::TerminalState {
+                        state: state.lifecycle()?,
+                    },
+                );
             }
         }
 
-        if state.lifecycle()? == CompilationLifecycle::CancellationRequested {
+        if state.lifecycle()?
+            == CompilationLifecycle::CancellationRequested
+        {
             state.mark_cancelled()?;
         }
 
@@ -829,7 +1053,7 @@ impl PipelineOrchestrator {
 }
 
 // ============================================================================
-// REGRESSION TESTS
+// TESTS
 // ============================================================================
 
 #[cfg(test)]
@@ -837,14 +1061,21 @@ mod tests {
     use super::*;
 
     use crate::compiler::configuration::budget::CompilationBudget;
-    use crate::compiler::context::compilation_context::CompilationContextBuilder;
+
+    use crate::compiler::context::compilation_context::{
+        CompilationContextBuilder,
+    };
+
     use crate::compiler::pipeline::stage::{
+        StageDecision,
         StageDescriptor,
         StageError,
         StageErrorKind,
         StageExecution,
+        StageExecutionContext,
         StageOutput,
     };
+
     use crate::compiler_types::CompilerConfig;
 
     struct TestStage {
@@ -861,7 +1092,7 @@ mod tests {
             output: &'static str,
         ) -> Self {
             let descriptor = StageDescriptor::new(
-                StageId::new(id).expect("valid stage identifier"),
+                StageId::new(id).expect("valid stage ID"),
                 id,
                 "1",
                 "orchestration test stage",
@@ -894,6 +1125,20 @@ mod tests {
             &self.descriptor
         }
 
+        fn should_execute(
+            &self,
+            _context: &StageExecutionContext<'_>,
+            _input: &StageInput,
+        ) -> Result<StageDecision, StageError> {
+            if self.should_skip {
+                StageDecision::skip(
+                    "not applicable to this test",
+                )
+            } else {
+                Ok(StageDecision::Run)
+            }
+        }
+
         fn execute(
             &self,
             execution: &StageExecution<'_>,
@@ -907,38 +1152,19 @@ mod tests {
                 ));
             }
 
-            if self.should_skip {
-                // A stage's skip decision belongs in should_execute.
-                // This branch is deliberately unreachable in this test
-                // helper; the default decision is Run.
-            }
-
-            Ok(StageOutput::new(self.output.to_owned()))
-        }
-
-        fn should_execute(
-            &self,
-            _context: &crate::compiler::pipeline::stage::StageExecutionContext<'_>,
-            _input: &crate::compiler::pipeline::stage::StageInput,
-        ) -> Result<
-            crate::compiler::pipeline::stage::StageDecision,
-            StageError,
-        > {
-            if self.should_skip {
-                crate::compiler::pipeline::stage::StageDecision::skip(
-                    "not applicable to this test",
-                )
-            } else {
-                Ok(crate::compiler::pipeline::stage::StageDecision::Run)
-            }
+            Ok(StageOutput::new(
+                self.output.to_owned(),
+            ))
         }
     }
 
     fn context() -> CompilationContext {
-        CompilationContextBuilder::new(CompilerConfig::default())
-            .budget(CompilationBudget::unlimited())
-            .build()
-            .expect("valid compilation context")
+        CompilationContextBuilder::new(
+            CompilerConfig::default(),
+        )
+        .budget(CompilationBudget::unlimited())
+        .build()
+        .expect("valid compilation context")
     }
 
     fn id(value: &str) -> StageId {
@@ -946,7 +1172,10 @@ mod tests {
     }
 
     fn required(values: &[&str]) -> BTreeSet<StageId> {
-        values.iter().map(|value| id(value)).collect()
+        values
+            .iter()
+            .map(|value| id(value))
+            .collect()
     }
 
     fn stage(value: TestStage) -> Arc<dyn Stage> {
@@ -955,11 +1184,14 @@ mod tests {
 
     #[test]
     fn api_version_is_stable() {
-        assert_eq!(PIPELINE_ORCHESTRATION_API_VERSION, 1);
+        assert_eq!(
+            PIPELINE_ORCHESTRATION_API_VERSION,
+            1,
+        );
     }
 
     #[test]
-    fn empty_pipeline_can_complete_when_no_stages_are_required() {
+    fn empty_optional_pipeline_is_permitted() {
         let result = PipelineOrchestrator::new().execute(
             &context(),
             &[],
@@ -967,8 +1199,12 @@ mod tests {
             &BTreeSet::new(),
         );
 
-        assert!(result.is_ok());
-        assert!(result.expect("successful report").is_successful());
+        let report = result.expect(
+            "empty optional pipeline should succeed",
+        );
+
+        assert!(report.is_successful());
+        assert_eq!(report.stage_count(), 0);
     }
 
     #[test]
@@ -980,57 +1216,86 @@ mod tests {
             &required(&["frontend"]),
         );
 
-        let error = result.expect_err("missing stage must fail");
+        let error = result.expect_err(
+            "missing required stage must fail",
+        );
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::MissingRequiredStage
+            PipelineOrchestrationErrorKind::MissingRequiredStage,
         );
     }
 
     #[test]
     fn stages_execute_in_dependency_order() {
         let stages = vec![
-            stage(TestStage::new("backend", vec![id("ir")], "binary")),
-            stage(TestStage::new("ir", vec![id("frontend")], "ir")),
-            stage(TestStage::new("frontend", vec![], "ast")),
+            stage(TestStage::new(
+                "backend",
+                vec![id("ir")],
+                "binary",
+            )),
+            stage(TestStage::new(
+                "ir",
+                vec![id("frontend")],
+                "ir",
+            )),
+            stage(TestStage::new(
+                "frontend",
+                vec![],
+                "ast",
+            )),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["frontend", "ir", "backend"]),
-        );
-
-        let report = result.expect("pipeline should succeed");
+        let report = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&[
+                    "frontend",
+                    "ir",
+                    "backend",
+                ]),
+            )
+            .expect("pipeline should succeed");
 
         assert_eq!(report.completed_count(), 3);
         assert!(report.all_required_stages_completed());
     }
 
     #[test]
-    fn stage_failure_preserves_partial_report_and_typed_cause() {
+    fn stage_failure_preserves_partial_report_and_cause() {
         let stages = vec![
-            stage(TestStage::new("frontend", vec![], "ast")),
+            stage(TestStage::new(
+                "frontend",
+                vec![],
+                "ast",
+            )),
             stage(
-                TestStage::new("semantic", vec![id("frontend")], "typed")
-                    .failing(),
+                TestStage::new(
+                    "semantic",
+                    vec![id("frontend")],
+                    "typed",
+                )
+                .failing(),
             ),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["frontend", "semantic"]),
-        );
-
-        let error = result.expect_err("stage failure must propagate");
+        let error = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&[
+                    "frontend",
+                    "semantic",
+                ]),
+            )
+            .expect_err("stage failure must propagate");
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::StageFailed
+            PipelineOrchestrationErrorKind::StageFailed,
         );
 
         assert_eq!(error.stage(), Some(&id("semantic")));
@@ -1042,112 +1307,166 @@ mod tests {
     #[test]
     fn required_stage_skip_is_not_success() {
         let stages = vec![
-            stage(TestStage::new("frontend", vec![], "ast").skipping()),
+            stage(
+                TestStage::new(
+                    "frontend",
+                    vec![],
+                    "ast",
+                )
+                .skipping(),
+            ),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["frontend"]),
-        );
-
-        let error = result.expect_err("required skip must fail");
+        let error = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&["frontend"]),
+            )
+            .expect_err("required stage cannot be skipped");
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::RequiredStageSkipped
+            PipelineOrchestrationErrorKind::RequiredStageSkipped,
         );
 
         assert_eq!(error.partial_report().skipped_count(), 1);
-        assert!(!error.partial_report().all_required_stages_completed());
+        assert!(!error.partial_report().is_successful());
     }
 
     #[test]
-    fn skipped_prerequisite_blocks_dependent_stage() {
+    fn blocked_stage_preserves_actual_prerequisite() {
         let stages = vec![
-            stage(TestStage::new("frontend", vec![], "ast").skipping()),
-            stage(TestStage::new("semantic", vec![id("frontend")], "typed")),
+            stage(
+                TestStage::new(
+                    "frontend",
+                    vec![],
+                    "ast",
+                )
+                .skipping(),
+            ),
+            stage(TestStage::new(
+                "semantic",
+                vec![id("frontend")],
+                "typed",
+            )),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["semantic"]),
-        );
-
-        let error = result.expect_err("dependent required work must fail");
+        let error = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&["semantic"]),
+            )
+            .expect_err("dependent required stage must fail");
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::RequiredStageBlocked
+            PipelineOrchestrationErrorKind::RequiredStageBlocked,
         );
 
-        assert!(!error.partial_report().all_required_stages_completed());
+        let record = error
+            .partial_report()
+            .record(&id("semantic"))
+            .expect("blocked stage record");
+
+        match record.status() {
+            StageExecutionStatus::Blocked {
+                dependency,
+                ..
+            } => {
+                assert_eq!(dependency, &id("frontend"));
+            }
+
+            other => {
+                panic!("expected blocked status, got {other:?}");
+            }
+        }
     }
 
     #[test]
     fn duplicate_stage_identifiers_are_rejected() {
         let stages = vec![
-            stage(TestStage::new("frontend", vec![], "ast")),
-            stage(TestStage::new("frontend", vec![], "another ast")),
+            stage(TestStage::new(
+                "frontend",
+                vec![],
+                "ast",
+            )),
+            stage(TestStage::new(
+                "frontend",
+                vec![],
+                "another ast",
+            )),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["frontend"]),
-        );
-
-        let error = result.expect_err("duplicate stages must fail");
+        let error = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&["frontend"]),
+            )
+            .expect_err("duplicate stages must fail");
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::InvalidStageGraph
+            PipelineOrchestrationErrorKind::InvalidStageGraph,
         );
     }
 
     #[test]
     fn dependency_cycles_are_rejected() {
         let stages = vec![
-            stage(TestStage::new("a", vec![id("b")], "a")),
-            stage(TestStage::new("b", vec![id("a")], "b")),
+            stage(TestStage::new(
+                "a",
+                vec![id("b")],
+                "a",
+            )),
+            stage(TestStage::new(
+                "b",
+                vec![id("a")],
+                "b",
+            )),
         ];
 
-        let result = PipelineOrchestrator::new().execute(
-            &context(),
-            &stages,
-            StageInput::empty(),
-            &required(&["a"]),
-        );
-
-        let error = result.expect_err("cycle must fail");
+        let error = PipelineOrchestrator::new()
+            .execute(
+                &context(),
+                &stages,
+                StageInput::empty(),
+                &required(&["a"]),
+            )
+            .expect_err("dependency cycle must fail");
 
         assert_eq!(
             error.kind(),
-            PipelineOrchestrationErrorKind::InvalidStageGraph
+            PipelineOrchestrationErrorKind::InvalidStageGraph,
         );
     }
 
     #[test]
-    fn no_required_stage_is_inferred_from_an_empty_registry() {
+    fn cancelled_compilation_does_not_publish_success() {
+        let compilation = context();
+
+        compilation.cancellation_token().cancel();
+
         let result = PipelineOrchestrator::new().execute(
-            &context(),
+            &compilation,
             &[],
             StageInput::empty(),
             &BTreeSet::new(),
         );
 
-        let report = result.expect("empty optional pipeline is valid");
-
-        assert!(report.all_required_stages_completed());
+        assert!(result.is_err());
     }
 
     #[test]
-    fn failure_report_conversion_keeps_required_stage_contract() {
-        let report = ExecutionReport::new(required(&["backend"]));
+    fn report_keeps_required_stage_contract() {
+        let report = ExecutionReport::new(
+            required(&["backend"]),
+        );
 
         assert!(!report.all_required_stages_completed());
         assert!(!report.is_successful());
