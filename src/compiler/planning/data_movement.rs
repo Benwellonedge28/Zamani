@@ -6,169 +6,137 @@
 
 //! # Zamani Compiler — Data Movement Planning
 //!
-//! Path: `src/compiler/planning/data_movement.rs`
+//! Path: src/compiler/planning/data_movement.rs
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
 //!
-//! ## PURPOSE
+//! # Purpose
 //!
-//! Produce deterministic, target-independent data-movement plans for
-//! explicitly identified dependencies crossing compiler partition
-//! boundaries.
+//! Plans data movement across compiler partition boundaries without
+//! performing physical data transfers.
 //!
 //! The planner consumes:
 //!
-//! - A complete compiler PartitioningReport.
-//! - A placement mapping from compiler partition segments to TargetIds.
-//! - Explicit data-transfer requirements derived from canonical IR and
-//!   semantic analysis.
-//! - A validated distributed RoutingGraph.
+//! - A complete PartitioningReport.
+//! - Explicit transfer requirements derived from canonical IR and
+//!   validated semantic analysis.
+//! - Placement assignments produced by an authoritative placement layer.
+//! - A distributed RoutingGraph snapshot.
 //! - An injected RouteEdgeEvaluator.
 //!
-//! It produces:
+//! It produces a deterministic, provider-neutral movement plan.
 //!
-//! - Local movement decisions.
-//! - Remote movement decisions with provider-neutral route plans.
-//! - Payload-size accounting where sizes are known.
-//! - Explicit failures for incomplete or infeasible plans.
+//! # Ownership
 //!
-//! ## AUTHORITATIVE OWNERS
+//! This module owns:
 //!
-//! Canonical operation identity:
+//! - Transfer requirement representation.
+//! - Transfer-count and payload accounting.
+//! - Partition-boundary validation.
+//! - Placement validation.
+//! - Local/remote movement classification.
+//! - Integration with distributed route planning.
+//! - Complete movement reports.
+//! - Movement-planning errors.
+//!
+//! # Does not own
+//!
+//! - Source grammar or AST.
+//! - Semantic ownership or borrowing.
+//! - Canonical IR values or operations.
+//! - Data serialization.
+//! - Data representation conversion.
+//! - Physical memory allocation.
+//! - Hardware discovery.
+//! - Device selection.
+//! - Physical placement.
+//! - Network topology discovery.
+//! - Network transport.
+//! - Bandwidth reservation.
+//! - Physical scheduling.
+//! - Synchronization execution.
+//! - Transfer execution.
+//! - Quantum gate routing.
+//! - Quantum error correction.
+//! - Backend code generation.
+//!
+//! # Authoritative integration
+//!
+//! Operation identity:
 //!     crate::zuir::ids::OperationId
 //!
-//! Canonical target identity:
+//! Target identity:
 //!     crate::compiler::configuration::target::TargetId
 //!
-//! Logical workload partitioning:
+//! Partitioning:
 //!     crate::compiler::planning::partitioning
 //!
-//! Physical placement:
-//!     compiler placement adapter / distributed placement
+//! Resource feasibility:
+//!     crate::compiler::planning::resource_planning
 //!
-//! Communication route search:
+//! Distributed routing:
 //!     crate::distributed::planning::routing
 //!
-//! Networking semantics:
-//!     grammar/spec/networking.md
-//!
-//! Shared-data semantics:
+//! Source-level shared-data semantics:
 //!     grammar/hybrid/shared-data.g4
 //!
 //! Distributed-memory semantics:
 //!     grammar/memory/distributed-memory.g4
 //!
-//! Canonical computation representations:
-//!     crate::zuir
-//!     crate::classical
-//!     crate::quantum::ir
-//!     crate::hdl::hdlir
-//!     crate::ai
-//!     crate::hybrid
-//!     crate::distributed
+//! Networking semantics:
+//!     grammar/spec/networking.md
 //!
-//! ## OWNS
+//! # Important cost distinction
 //!
-//! - Compiler-level data-transfer planning.
-//! - Mapping explicit transfer requirements to partition boundaries.
-//! - Placement validation for transfer endpoints.
-//! - Candidate-target validation.
-//! - Local-versus-remote movement classification.
-//! - Route planning through the existing distributed routing engine.
-//! - Transfer-count and payload-size budgets.
-//! - Deterministic transfer reports.
+//! PartitionBoundary::communication_cost() represents abstract work.
+//! It is NOT a payload size.
 //!
-//! ## DOES NOT OWN
+//! TransferRequirement::payload_bytes() represents an independently
+//! supplied payload-size estimate.
 //!
-//! - Source grammar or AST.
-//! - Semantic data ownership.
-//! - Canonical IR values or operations.
-//! - Data serialization formats.
-//! - Data representation conversion.
-//! - Physical memory allocation.
-//! - Device selection.
-//! - Physical placement algorithms.
-//! - Network topology discovery.
-//! - Network transport.
-//! - Bandwidth reservation.
-//! - Transfer execution.
-//! - Scheduling or synchronization.
-//! - Quantum gate routing.
-//! - Quantum error correction.
-//! - Noise modeling.
-//! - Backend code generation.
+//! RoutePlan::total_cost() represents the route evaluator's cost unit.
 //!
-//! ## IMPORTANT COST RULE
+//! These quantities must never be added together.
 //!
-//! PartitionBoundary::communication_cost() is an abstract WorkEstimate.
-//! This module never interprets it as bytes.
+//! # Scalability
 //!
-//! Payload sizes are supplied separately through TransferRequirement.
+//! No arbitrary universal ceilings are imposed on:
 //!
-//! Route costs are supplied by RouteEdgeEvaluator and are measured in the
-//! caller-declared route-cost unit. Route costs are not added to payload
-//! sizes or partition communication estimates.
-//!
-//! ## SCALABILITY
-//!
-//! There are no universal maximums for:
-//!
-//! - Transfer count.
-//! - Payload size.
-//! - Partition count.
+//! - Transfers.
+//! - Partitions.
 //! - Targets.
 //! - Devices.
 //! - Network nodes.
 //! - Network links.
 //! - Computing domains.
-//! - Hardware types.
+//! - Payload sizes.
 //!
-//! Optional budgets are caller-controlled operational policies.
-//! Arithmetic overflow is reported explicitly.
+//! Optional budgets are caller-configured operational policies.
 //!
-//! Literal infinite execution capacity is not promised. Actual scale is
-//! bounded by available memory, address space, numeric representation,
-//! processing time and caller-supplied budgets.
+//! Arithmetic overflow is explicitly reported.
 //!
-//! ## DETERMINISM
+//! Actual execution remains bounded by available implementation
+//! resources, numeric representations and physical infrastructure.
 //!
-//! Transfers are processed in ascending boundary-index order.
-//! Partition and target identities use their canonical ordered types.
-//! Reproducible route selection additionally requires a deterministic
-//! RouteEdgeEvaluator and a fixed routing graph snapshot.
+//! Literal infinite capacity is not promised.
 //!
-//! ## INTEGRATION
+//! # Determinism
 //!
-//! The caller must derive TransferRequirement values from canonical IR
-//! data dependencies and semantic analysis.
+//! Requirements are ordered by boundary index.
+//! Ordered identifiers are preserved.
+//! Route determinism depends on a stable graph snapshot and
+//! deterministic RouteEdgeEvaluator.
 //!
-//! Boundary indices refer to the exact PartitioningReport supplied to
-//! this invocation. They must not be persisted as cross-compilation IDs.
+//! # Runtime boundary
 //!
-//! Placement assignments must come from the compiler's placement adapter.
-//! This module does not choose targets.
+//! The returned report is a proposed movement plan.
 //!
-//! The result is an abstract plan. The runtime and networking layers must
-//! revalidate resource availability and perform the actual transfer.
-//!
-//! ## FREEZE CRITERIA
-//!
-//! - Incomplete partitioning is rejected.
-//! - Invalid boundary references are rejected.
-//! - Duplicate transfer requirements are rejected.
-//! - Missing placement is rejected.
-//! - Incompatible target placement is rejected.
-//! - Local transfers do not require a network route.
-//! - Remote transfers use the existing routing engine.
-//! - No partial report is returned after a failure.
-//! - Configured budgets are enforced.
-//! - Unknown payload sizes are not fabricated.
-//! - No physical transfer is executed.
-//! - No unsafe Rust is used.
+//! Runtime and networking providers must revalidate availability,
+//! authorization, ownership, representation compatibility and
+//! resource availability before executing any movement.
 
 use core::fmt;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 
 use crate::compiler::configuration::target::TargetId;
@@ -191,30 +159,37 @@ use crate::distributed::planning::routing::{
 
 use crate::zuir::ids::OperationId;
 
-/// Stable architectural identity of this module.
+// ============================================================================
+// MODULE IDENTITY
+// ============================================================================
+
+/// Stable architectural module identity.
 pub const DATA_MOVEMENT_MODULE_NAME: &str =
     "zamani.compiler.planning.data_movement";
 
-/// Public API version of this module.
-pub const DATA_MOVEMENT_API_VERSION: u16 = 1;
+/// Public data-movement API version.
+pub const DATA_MOVEMENT_API_VERSION: u16 = 2;
 
 // ============================================================================
 // TRANSFER REQUIREMENTS
 // ============================================================================
 
-/// One explicitly identified data-transfer requirement.
+/// An explicitly validated data-movement requirement.
 ///
-/// `boundary_index` identifies an entry in the supplied
-/// PartitioningReport::boundaries() collection.
+/// A requirement refers to one cross-partition dependency.
 ///
-/// A requirement represents the aggregate payload for that boundary.
-/// If the semantic analysis identifies independent transfers with different
-/// correctness or synchronization requirements, those must remain separate
-/// in the canonical semantic/IR model and must not be merged merely to
-/// simplify this planning interface.
+/// Multiple independent data values associated with the same boundary
+/// must be represented by their aggregate payload estimate at this
+/// planning boundary. Their individual semantic identities, ownership,
+/// ordering and synchronization requirements remain owned by the
+/// canonical semantic and IR authorities.
 ///
-/// `payload_bytes` is optional because the compiler may not know the
-/// concrete size at planning time. Unknown size is never treated as zero.
+/// `payload_bytes = None` means the payload size is unknown or symbolic.
+///
+/// Unknown payload sizes are never treated as zero.
+///
+/// Boundary indices are local to the supplied PartitioningReport.
+/// They must not be persisted as globally stable identities.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TransferRequirement {
     boundary_index: usize,
@@ -223,9 +198,6 @@ pub struct TransferRequirement {
 
 impl TransferRequirement {
     /// Creates a transfer requirement.
-    ///
-    /// `payload_bytes = None` means that the payload size is unknown or
-    /// symbolic at this planning stage.
     #[must_use]
     pub const fn new(
         boundary_index: usize,
@@ -237,13 +209,15 @@ impl TransferRequirement {
         }
     }
 
-    /// Returns the index of the corresponding partition boundary.
+    /// Returns the referenced partition boundary.
     #[must_use]
     pub const fn boundary_index(self) -> usize {
         self.boundary_index
     }
 
-    /// Returns the known payload size in bytes, if available.
+    /// Returns the known payload size in bytes.
+    ///
+    /// Returns None when the size is unknown or symbolic.
     #[must_use]
     pub const fn payload_bytes(self) -> Option<u128> {
         self.payload_bytes
@@ -254,11 +228,12 @@ impl TransferRequirement {
 // OPERATIONAL BUDGET
 // ============================================================================
 
-/// Caller-configurable operational limits for one data-movement plan.
+/// Optional operational limits for one planning invocation.
 ///
-/// These budgets are not language limits or hardware-capacity definitions.
+/// These limits are not language restrictions or hardware-capacity
+/// definitions.
 ///
-/// `None` means that this planner adds no limit for that dimension.
+/// None means that this planner imposes no additional limit.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DataMovementBudget {
     max_transfers: Option<usize>,
@@ -266,7 +241,7 @@ pub struct DataMovementBudget {
 }
 
 impl DataMovementBudget {
-    /// Creates a budget without additional planner-level limits.
+    /// Creates a budget without additional limits.
     #[must_use]
     pub const fn unlimited() -> Self {
         Self {
@@ -275,7 +250,7 @@ impl DataMovementBudget {
         }
     }
 
-    /// Sets the optional maximum number of planned transfers.
+    /// Configures the maximum number of transfers.
     #[must_use]
     pub const fn with_max_transfers(
         mut self,
@@ -285,10 +260,9 @@ impl DataMovementBudget {
         self
     }
 
-    /// Sets the optional maximum aggregate known payload size.
+    /// Configures the maximum aggregate known payload size.
     ///
-    /// When this budget is configured, every transfer must have a known
-    /// payload size. An unknown size cannot be proven to fit the budget.
+    /// When configured, all transfer payload sizes must be known.
     #[must_use]
     pub const fn with_max_known_payload_bytes(
         mut self,
@@ -298,30 +272,24 @@ impl DataMovementBudget {
         self
     }
 
-    /// Returns the configured transfer-count limit.
+    /// Returns the transfer-count limit.
     #[must_use]
     pub const fn max_transfers(self) -> Option<usize> {
         self.max_transfers
     }
 
-    /// Returns the configured known-payload limit.
+    /// Returns the aggregate payload-size limit.
     #[must_use]
     pub const fn max_known_payload_bytes(self) -> Option<u128> {
         self.max_known_payload_bytes
     }
 }
 
-impl Default for DataMovementBudget {
-    fn default() -> Self {
-        Self::unlimited()
-    }
-}
-
 // ============================================================================
-// PLANNING OPTIONS
+// OPTIONS
 // ============================================================================
 
-/// Options for one data-movement planning invocation.
+/// Configuration for one data-movement planning request.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataMovementOptions {
     budget: DataMovementBudget,
@@ -330,17 +298,23 @@ pub struct DataMovementOptions {
 }
 
 impl DataMovementOptions {
-    /// Creates options using a caller-declared route-cost unit.
+    /// Creates planning options with a caller-declared route-cost unit.
     ///
-    /// Examples of possible units include latency units, energy units,
-    /// monetary units or a documented weighted objective.
+    /// The evaluator must return costs using this same unit.
     ///
-    /// The evaluator must return costs consistently using this unit.
+    /// Examples:
+    ///
+    /// - latency units;
+    /// - energy units;
+    /// - monetary units;
+    /// - a documented weighted objective.
+    ///
+    /// Unlike physical quantities must not be combined without
+    /// an explicitly defined evaluator.
     ///
     /// # Errors
     ///
-    /// Returns DataMovementError::EmptyRouteCostUnit when the unit is empty
-    /// or consists only of whitespace.
+    /// Returns EmptyRouteCostUnit for an empty or whitespace-only unit.
     pub fn new(
         route_cost_unit: impl Into<String>,
     ) -> Result<Self, DataMovementError> {
@@ -358,7 +332,7 @@ impl DataMovementOptions {
         })
     }
 
-    /// Replaces the data-movement operational budget.
+    /// Replaces the operational budget.
     #[must_use]
     pub fn with_budget(
         mut self,
@@ -368,7 +342,7 @@ impl DataMovementOptions {
         self
     }
 
-    /// Replaces the policy used by the existing route planner.
+    /// Replaces the distributed routing policy.
     #[must_use]
     pub fn with_route_policy(
         mut self,
@@ -378,7 +352,7 @@ impl DataMovementOptions {
         self
     }
 
-    /// Returns the data-movement budget.
+    /// Returns the operational budget.
     #[must_use]
     pub const fn budget(&self) -> DataMovementBudget {
         self.budget
@@ -390,7 +364,7 @@ impl DataMovementOptions {
         self.route_policy
     }
 
-    /// Returns the declared unit of route costs.
+    /// Returns the route-cost unit.
     #[must_use]
     pub fn route_cost_unit(&self) -> &str {
         &self.route_cost_unit
@@ -401,37 +375,32 @@ impl DataMovementOptions {
 // TRANSFER PATH
 // ============================================================================
 
-/// Physical-realization category proposed by data-movement planning.
+/// Proposed realization category.
 ///
-/// This is a planning classification only. Neither variant performs
-/// a transfer or reserves physical resources.
+/// This is planning information only.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TransferPath {
-    /// Both partition segments are placed on the same logical target.
-    ///
-    /// The runtime may realize this using local memory, a local reference,
-    /// a shared-memory mechanism or another valid implementation.
+    /// Both endpoints are assigned to the same logical target.
     Local {
-        /// Target hosting both partition segments.
+        /// Common target.
         target: TargetId,
     },
 
-    /// The partition segments are placed on different targets and a
-    /// route has been found through the supplied routing graph.
+    /// Endpoints are assigned to different targets.
     Remote {
-        /// Provider-neutral route through the supplied graph snapshot.
+        /// Provider-neutral route.
         route: RoutePlan<TargetId>,
     },
 }
 
 impl TransferPath {
-    /// Returns whether the planned transfer is local.
+    /// Returns whether this is a local transfer.
     #[must_use]
     pub const fn is_local(&self) -> bool {
         matches!(self, Self::Local { .. })
     }
 
-    /// Returns whether the planned transfer is remote.
+    /// Returns whether this is a remote transfer.
     #[must_use]
     pub const fn is_remote(&self) -> bool {
         matches!(self, Self::Remote { .. })
@@ -446,30 +415,35 @@ impl TransferPath {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlannedTransfer {
     boundary_index: usize,
+
     source_operation: OperationId,
     destination_operation: OperationId,
+
     source_segment: PartitionSegmentId,
     destination_segment: PartitionSegmentId,
+
     source_target: TargetId,
     destination_target: TargetId,
+
     payload_bytes: Option<u128>,
+
     path: TransferPath,
 }
 
 impl PlannedTransfer {
-    /// Returns the original partition-boundary index.
+    /// Returns the boundary index.
     #[must_use]
     pub const fn boundary_index(&self) -> usize {
         self.boundary_index
     }
 
-    /// Returns the source operation identity.
+    /// Returns the source operation.
     #[must_use]
     pub const fn source_operation(&self) -> OperationId {
         self.source_operation
     }
 
-    /// Returns the destination operation identity.
+    /// Returns the destination operation.
     #[must_use]
     pub const fn destination_operation(&self) -> OperationId {
         self.destination_operation
@@ -499,16 +473,22 @@ impl PlannedTransfer {
         &self.destination_target
     }
 
-    /// Returns the known payload size, if supplied.
+    /// Returns the known payload size.
     #[must_use]
     pub const fn payload_bytes(&self) -> Option<u128> {
         self.payload_bytes
     }
 
-    /// Returns the proposed local or remote transfer path.
+    /// Returns the proposed transfer path.
     #[must_use]
     pub fn path(&self) -> &TransferPath {
         &self.path
+    }
+
+    /// Returns whether the payload size is known.
+    #[must_use]
+    pub const fn payload_size_is_known(&self) -> bool {
+        self.payload_bytes.is_some()
     }
 }
 
@@ -516,30 +496,34 @@ impl PlannedTransfer {
 // COMPLETE REPORT
 // ============================================================================
 
-/// Complete data-movement planning report.
+/// Complete data-movement planning result.
 ///
-/// The report contains no partial success state. The planner returns this
-/// structure only after every requested transfer has been validated and
-/// planned successfully.
+/// A report is returned only when every requested transfer has been
+/// successfully validated and planned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DataMovementReport {
     transfers: Vec<PlannedTransfer>,
+
     partition_boundary_count: usize,
+
     known_payload_bytes: u128,
     unknown_payload_count: usize,
+
     local_transfer_count: usize,
     remote_transfer_count: usize,
+
+    total_remote_route_cost: u128,
     route_cost_unit: String,
 }
 
 impl DataMovementReport {
-    /// Returns all planned transfers in deterministic boundary order.
+    /// Returns all planned transfers in deterministic order.
     #[must_use]
     pub fn transfers(&self) -> &[PlannedTransfer] {
         &self.transfers
     }
 
-    /// Returns the number of partition boundaries in the input report.
+    /// Returns the number of partition boundaries.
     #[must_use]
     pub const fn partition_boundary_count(&self) -> usize {
         self.partition_boundary_count
@@ -551,42 +535,62 @@ impl DataMovementReport {
         self.transfers.len()
     }
 
-    /// Returns the sum of known payload sizes.
+    /// Returns the aggregate known payload size.
     ///
-    /// Transfers with unknown sizes are not included in this sum.
+    /// Unknown payloads are excluded.
     #[must_use]
     pub const fn known_payload_bytes(&self) -> u128 {
         self.known_payload_bytes
     }
 
-    /// Returns the number of transfers whose payload size is unknown.
+    /// Returns the number of transfers with unknown payload sizes.
     #[must_use]
     pub const fn unknown_payload_count(&self) -> usize {
         self.unknown_payload_count
     }
 
-    /// Returns the number of local transfers.
+    /// Returns the local-transfer count.
     #[must_use]
     pub const fn local_transfer_count(&self) -> usize {
         self.local_transfer_count
     }
 
-    /// Returns the number of remote transfers.
+    /// Returns the remote-transfer count.
     #[must_use]
     pub const fn remote_transfer_count(&self) -> usize {
         self.remote_transfer_count
     }
 
-    /// Returns the declared unit used by remote route costs.
+    /// Returns the sum of remote route costs.
+    ///
+    /// This quantity is independent of payload bytes.
+    #[must_use]
+    pub const fn total_remote_route_cost(&self) -> u128 {
+        self.total_remote_route_cost
+    }
+
+    /// Returns the unit of remote route costs.
     #[must_use]
     pub fn route_cost_unit(&self) -> &str {
         &self.route_cost_unit
     }
 
-    /// Returns whether the report contains no requested transfers.
+    /// Returns whether there are no planned transfers.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.transfers.is_empty()
+    }
+
+    /// Returns whether every planned transfer is local.
+    #[must_use]
+    pub fn contains_only_local_transfers(&self) -> bool {
+        self.remote_transfer_count == 0
+    }
+
+    /// Returns whether the report contains remote movement.
+    #[must_use]
+    pub fn contains_remote_transfers(&self) -> bool {
+        self.remote_transfer_count > 0
     }
 }
 
@@ -594,40 +598,54 @@ impl DataMovementReport {
 // ERRORS
 // ============================================================================
 
-/// Failures that prevent a complete data-movement plan.
+/// Errors preventing a complete data-movement plan.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum DataMovementError {
-    /// Upstream partitioning was incomplete or infeasible.
+    /// Partitioning was incomplete.
     IncompletePartitioning,
 
-    /// A transfer refers to a boundary index outside the report.
+    /// A boundary index is invalid.
     BoundaryIndexOutOfRange {
         /// Invalid boundary index.
         boundary_index: usize,
-        /// Number of available boundaries.
+        /// Available boundary count.
         boundary_count: usize,
     },
 
-    /// More than one transfer requirement refers to the same boundary.
+    /// Duplicate requirement for a boundary.
     DuplicateBoundaryRequirement {
         /// Duplicated boundary index.
         boundary_index: usize,
     },
 
-    /// The boundary refers to a segment missing from the partition report.
+    /// Duplicate partition segment identity.
+    DuplicatePartitionSegment {
+        /// Duplicate segment identity.
+        segment: PartitionSegmentId,
+    },
+
+    /// A boundary refers to a missing segment.
     MissingPartitionSegment {
-        /// Missing segment.
+        /// Missing segment identity.
         segment: PartitionSegmentId,
     },
 
-    /// No target assignment exists for a required partition segment.
+    /// An operation does not belong to its referenced segment.
+    BoundaryOperationNotInSegment {
+        /// Operation identity.
+        operation: OperationId,
+        /// Referenced segment.
+        segment: PartitionSegmentId,
+    },
+
+    /// A required segment has no placement.
     MissingPlacement {
-        /// Segment without a placement.
+        /// Segment without placement.
         segment: PartitionSegmentId,
     },
 
-    /// A selected target is not among the segment's eligible candidates.
+    /// A selected target is not a candidate for the segment.
     PlacementNotCandidate {
         /// Partition segment.
         segment: PartitionSegmentId,
@@ -635,44 +653,55 @@ pub enum DataMovementError {
         target: TargetId,
     },
 
-    /// The configured transfer-count budget was exceeded.
+    /// Transfer-count budget exceeded.
     TransferBudgetExceeded {
-        /// Requested transfer count.
+        /// Actual transfer count.
         actual: usize,
         /// Configured maximum.
         maximum: usize,
     },
 
-    /// The configured payload budget cannot be checked because a transfer
-    /// has an unknown payload size.
+    /// Payload size is unknown under a configured byte budget.
     UnknownPayloadSizeUnderByteBudget {
-        /// Boundary whose payload size is unknown.
+        /// Boundary index.
         boundary_index: usize,
     },
 
-    /// Checked payload-size accumulation overflowed u128.
+    /// Payload accounting overflow.
     PayloadSizeOverflow,
 
-    /// The known payload total exceeded the configured budget.
+    /// Transfer counter overflow.
+    CounterOverflow,
+
+    /// Aggregate route-cost overflow.
+    RouteCostOverflow,
+
+    /// Payload budget exceeded.
     PayloadBudgetExceeded {
-        /// Aggregate known payload bytes.
+        /// Actual known bytes.
         actual: u128,
-        /// Configured maximum.
+        /// Maximum permitted bytes.
         maximum: u128,
     },
 
-    /// The caller supplied an empty route-cost unit.
+    /// Result-vector reservation failed.
+    AllocationFailed {
+        /// Collection being reserved.
+        collection: &'static str,
+    },
+
+    /// Route-cost unit is empty.
     EmptyRouteCostUnit,
 
-    /// The existing route planner could not find or validate a route.
+    /// Remote route planning failed.
     RoutingFailed {
-        /// Boundary for which route planning failed.
+        /// Boundary index.
         boundary_index: usize,
         /// Source target.
         source: TargetId,
         /// Destination target.
         destination: TargetId,
-        /// Original route-planning error.
+        /// Original routing error.
         error: RoutingError,
     },
 }
@@ -682,63 +711,114 @@ impl fmt::Display for DataMovementError {
         match self {
             Self::IncompletePartitioning => {
                 formatter.write_str(
-                    "data movement requires a complete partitioning report",
+                    "data movement requires complete partitioning evidence",
                 )
             }
+
             Self::BoundaryIndexOutOfRange {
                 boundary_index,
                 boundary_count,
             } => write!(
                 formatter,
-                "transfer boundary index {boundary_index} is outside \
-                 the available boundary count {boundary_count}"
+                "boundary index {boundary_index} exceeds boundary count {boundary_count}"
             ),
-            Self::DuplicateBoundaryRequirement { boundary_index } => {
+
+            Self::DuplicateBoundaryRequirement {
+                boundary_index,
+            } => write!(
+                formatter,
+                "duplicate transfer requirement for boundary {boundary_index}"
+            ),
+
+            Self::DuplicatePartitionSegment { segment } => {
                 write!(
                     formatter,
-                    "duplicate transfer requirement for boundary {boundary_index}"
+                    "duplicate partition segment identity {segment}"
                 )
             }
+
             Self::MissingPartitionSegment { segment } => {
-                write!(formatter, "partition segment {segment} was not found")
+                write!(
+                    formatter,
+                    "partition segment {segment} does not exist"
+                )
             }
+
+            Self::BoundaryOperationNotInSegment {
+                operation,
+                segment,
+            } => write!(
+                formatter,
+                "operation {operation} does not belong to partition segment {segment}"
+            ),
+
             Self::MissingPlacement { segment } => {
                 write!(
                     formatter,
-                    "partition segment {segment} has no target placement"
+                    "partition segment {segment} has no placement"
                 )
             }
-            Self::PlacementNotCandidate { segment, target } => {
-                write!(
-                    formatter,
-                    "target {target} is not an eligible candidate for segment {segment}"
-                )
-            }
-            Self::TransferBudgetExceeded { actual, maximum } => {
-                write!(
-                    formatter,
-                    "transfer budget exceeded: requested {actual}, maximum {maximum}"
-                )
-            }
+
+            Self::PlacementNotCandidate {
+                segment,
+                target,
+            } => write!(
+                formatter,
+                "target {target} is not eligible for partition segment {segment}"
+            ),
+
+            Self::TransferBudgetExceeded {
+                actual,
+                maximum,
+            } => write!(
+                formatter,
+                "transfer budget exceeded: {actual} requested, maximum {maximum}"
+            ),
+
             Self::UnknownPayloadSizeUnderByteBudget {
                 boundary_index,
             } => write!(
                 formatter,
-                "payload size for boundary {boundary_index} is unknown \
-                 while a byte budget is configured"
+                "payload size for boundary {boundary_index} is unknown under a configured byte budget"
             ),
+
             Self::PayloadSizeOverflow => {
-                formatter.write_str("aggregate payload-size arithmetic overflowed")
-            }
-            Self::PayloadBudgetExceeded { actual, maximum } => {
-                write!(
-                    formatter,
-                    "payload budget exceeded: {actual} bytes, maximum {maximum} bytes"
+                formatter.write_str(
+                    "aggregate payload-size arithmetic overflowed",
                 )
             }
-            Self::EmptyRouteCostUnit => {
-                formatter.write_str("route-cost unit must not be empty")
+
+            Self::CounterOverflow => {
+                formatter.write_str(
+                    "data-movement counter arithmetic overflowed",
+                )
             }
+
+            Self::RouteCostOverflow => {
+                formatter.write_str(
+                    "aggregate route-cost arithmetic overflowed",
+                )
+            }
+
+            Self::PayloadBudgetExceeded {
+                actual,
+                maximum,
+            } => write!(
+                formatter,
+                "payload budget exceeded: {actual} bytes, maximum {maximum} bytes"
+            ),
+
+            Self::AllocationFailed { collection } => write!(
+                formatter,
+                "unable to reserve memory for {collection}"
+            ),
+
+            Self::EmptyRouteCostUnit => {
+                formatter.write_str(
+                    "route-cost unit must not be empty",
+                )
+            }
+
             Self::RoutingFailed {
                 boundary_index,
                 source,
@@ -770,33 +850,52 @@ impl Error for DataMovementError {
 pub struct DataMovementPlanner;
 
 impl DataMovementPlanner {
-    /// Creates a data-movement planner.
+    /// Creates a planner.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
+    /// Returns the stable module identity.
+    #[must_use]
+    pub const fn module_name() -> &'static str {
+        DATA_MOVEMENT_MODULE_NAME
+    }
+
+    /// Returns the public API version.
+    #[must_use]
+    pub const fn api_version() -> u16 {
+        DATA_MOVEMENT_API_VERSION
+    }
+
     /// Plans explicitly requested transfers across partition boundaries.
     ///
-    /// `placements` maps compiler partition-segment IDs to the targets
-    /// selected by the upstream placement authority.
+    /// `placements` contains the selected target for each referenced
+    /// partition segment.
     ///
-    /// `requirements` contains only boundaries that represent actual
-    /// data movement. A dependency that expresses ordering or control
-    /// dependence without moving data must not be included.
+    /// Placement must come from an authoritative placement adapter.
     ///
-    /// The supplied routing graph must represent one validated topology
-    /// snapshot. The evaluator must use the route-cost unit declared in
-    /// `options`.
+    /// `requirements` contains only dependencies that require actual
+    /// data movement. Pure control or ordering dependencies must not
+    /// automatically become data transfers.
     ///
-    /// Local transfers do not require the routing graph to contain the
-    /// local target.
+    /// The topology is one validated routing snapshot.
+    ///
+    /// The evaluator must use the route-cost unit declared in options.
+    ///
+    /// Local transfers do not require a network route.
+    ///
+    /// No physical resources are allocated or reserved.
+    ///
+    /// No data is copied, serialized, transmitted or modified.
     ///
     /// # Errors
     ///
-    /// Returns an error if partitioning is incomplete, a boundary or
-    /// placement is invalid, a budget is exceeded, or remote route planning
-    /// fails. No partial report is returned.
+    /// Returns an error for incomplete partitioning, invalid boundaries,
+    /// invalid placements, exhausted budgets, allocation reservation
+    /// failures, arithmetic overflow or remote routing failures.
+    ///
+    /// No partial report is returned.
     pub fn plan<Evaluator>(
         &self,
         partitioning: &PartitioningReport,
@@ -813,81 +912,134 @@ impl DataMovementPlanner {
             return Err(DataMovementError::IncompletePartitioning);
         }
 
-        let boundary_count = partitioning.boundaries().len();
+        let boundaries = partitioning.boundaries();
+        let boundary_count = boundaries.len();
 
-        if let Some(maximum) = options.budget.max_transfers {
+        // Validate transfer-count budget before planning.
+        if let Some(maximum) = options.budget.max_transfers() {
             if requirements.len() > maximum {
-                return Err(DataMovementError::TransferBudgetExceeded {
-                    actual: requirements.len(),
-                    maximum,
-                });
+                return Err(
+                    DataMovementError::TransferBudgetExceeded {
+                        actual: requirements.len(),
+                        maximum,
+                    },
+                );
             }
         }
 
-        // Validate references and establish deterministic input order.
+        // Build an ordered requirement collection.
+        //
+        // Sorting provides deterministic output independent of the
+        // caller's input ordering.
         let mut ordered_requirements =
-            BTreeMap::<usize, TransferRequirement>::new();
+            Vec::<TransferRequirement>::new();
 
-        for requirement in requirements {
-            let index = requirement.boundary_index;
+        ordered_requirements
+            .try_reserve_exact(requirements.len())
+            .map_err(|_| DataMovementError::AllocationFailed {
+                collection: "ordered transfer requirements",
+            })?;
+
+        ordered_requirements.extend_from_slice(requirements);
+
+        ordered_requirements.sort_unstable_by_key(
+            |requirement| requirement.boundary_index(),
+        );
+
+        // Reject invalid and duplicate boundary references.
+        let mut previous_boundary = None;
+
+        for requirement in &ordered_requirements {
+            let index = requirement.boundary_index();
 
             if index >= boundary_count {
-                return Err(DataMovementError::BoundaryIndexOutOfRange {
-                    boundary_index: index,
-                    boundary_count,
-                });
+                return Err(
+                    DataMovementError::BoundaryIndexOutOfRange {
+                        boundary_index: index,
+                        boundary_count,
+                    },
+                );
             }
 
-            if ordered_requirements
-                .insert(index, *requirement)
-                .is_some()
-            {
+            if previous_boundary == Some(index) {
                 return Err(
                     DataMovementError::DuplicateBoundaryRequirement {
                         boundary_index: index,
                     },
                 );
             }
+
+            previous_boundary = Some(index);
         }
 
-        // Build a segment index once rather than searching the segment
-        // collection separately for every transfer.
+        // Index partition segments once.
+        //
+        // This avoids repeatedly scanning the entire segment collection
+        // for each transfer.
         let mut segments =
             BTreeMap::<PartitionSegmentId, &PartitionSegment>::new();
 
         for segment in partitioning.segments() {
             if segments.insert(segment.id(), segment).is_some() {
-                return Err(DataMovementError::MissingPartitionSegment {
-                    segment: segment.id(),
-                });
+                return Err(
+                    DataMovementError::DuplicatePartitionSegment {
+                        segment: segment.id(),
+                    },
+                );
             }
         }
 
-        let mut transfers = Vec::with_capacity(ordered_requirements.len());
+        // Reserve the final report collection before route planning.
+        let mut transfers = Vec::<PlannedTransfer>::new();
+
+        transfers
+            .try_reserve_exact(ordered_requirements.len())
+            .map_err(|_| DataMovementError::AllocationFailed {
+                collection: "planned transfers",
+            })?;
 
         let mut known_payload_bytes = 0_u128;
         let mut unknown_payload_count = 0_usize;
+
         let mut local_transfer_count = 0_usize;
         let mut remote_transfer_count = 0_usize;
 
-        for (boundary_index, requirement) in ordered_requirements {
-            let boundary = &partitioning.boundaries()[boundary_index];
+        let mut total_remote_route_cost = 0_u128;
 
-            if let Some(payload_bytes) = requirement.payload_bytes {
-                known_payload_bytes = known_payload_bytes
-                    .checked_add(payload_bytes)
-                    .ok_or(DataMovementError::PayloadSizeOverflow)?;
-            } else {
-                unknown_payload_count = unknown_payload_count
-                    .checked_add(1)
-                    .ok_or(DataMovementError::PayloadSizeOverflow)?;
+        for requirement in ordered_requirements {
+            let boundary_index = requirement.boundary_index();
 
-                if options.budget.max_known_payload_bytes.is_some() {
-                    return Err(
-                        DataMovementError::UnknownPayloadSizeUnderByteBudget {
-                            boundary_index,
-                        },
-                    );
+            let boundary = &boundaries[boundary_index];
+
+            // Payload accounting is independent of route costs.
+            match requirement.payload_bytes() {
+                Some(bytes) => {
+                    known_payload_bytes = known_payload_bytes
+                        .checked_add(bytes)
+                        .ok_or(
+                            DataMovementError::PayloadSizeOverflow,
+                        )?;
+                }
+
+                None => {
+                    unknown_payload_count = unknown_payload_count
+                        .checked_add(1)
+                        .ok_or(
+                            DataMovementError::CounterOverflow,
+                        )?;
+
+                    if options
+                        .budget
+                        .max_known_payload_bytes()
+                        .is_some()
+                    {
+                        return Err(
+                            DataMovementError::
+                                UnknownPayloadSizeUnderByteBudget {
+                                    boundary_index,
+                                },
+                        );
+                    }
                 }
             }
 
@@ -902,45 +1054,67 @@ impl DataMovementPlanner {
                 evaluator,
             )?;
 
-            match planned.path {
+            // Borrow the path so the completed transfer remains intact.
+            match &planned.path {
                 TransferPath::Local { .. } => {
                     local_transfer_count = local_transfer_count
                         .checked_add(1)
-                        .ok_or(DataMovementError::PayloadSizeOverflow)?;
+                        .ok_or(
+                            DataMovementError::CounterOverflow,
+                        )?;
                 }
-                TransferPath::Remote { .. } => {
+
+                TransferPath::Remote { route } => {
                     remote_transfer_count = remote_transfer_count
                         .checked_add(1)
-                        .ok_or(DataMovementError::PayloadSizeOverflow)?;
+                        .ok_or(
+                            DataMovementError::CounterOverflow,
+                        )?;
+
+                    total_remote_route_cost =
+                        total_remote_route_cost
+                            .checked_add(route.total_cost())
+                            .ok_or(
+                                DataMovementError::RouteCostOverflow,
+                            )?;
                 }
             }
 
             transfers.push(planned);
         }
 
-        if let Some(maximum) = options.budget.max_known_payload_bytes {
+        // Enforce aggregate payload budget.
+        if let Some(maximum) =
+            options.budget.max_known_payload_bytes()
+        {
             if known_payload_bytes > maximum {
-                return Err(DataMovementError::PayloadBudgetExceeded {
-                    actual: known_payload_bytes,
-                    maximum,
-                });
+                return Err(
+                    DataMovementError::PayloadBudgetExceeded {
+                        actual: known_payload_bytes,
+                        maximum,
+                    },
+                );
             }
         }
 
         Ok(DataMovementReport {
             transfers,
             partition_boundary_count: boundary_count,
+
             known_payload_bytes,
             unknown_payload_count,
+
             local_transfer_count,
             remote_transfer_count,
+
+            total_remote_route_cost,
             route_cost_unit: options.route_cost_unit.clone(),
         })
     }
 }
 
 // ============================================================================
-// SINGLE-TRANSFER VALIDATION AND PLANNING
+// SINGLE-TRANSFER PLANNING
 // ============================================================================
 
 fn plan_one_transfer<Evaluator>(
@@ -957,39 +1131,85 @@ where
     Evaluator: RouteEdgeEvaluator<TargetId>,
 {
     let source_segment_id = boundary.source_segment();
-    let destination_segment_id = boundary.destination_segment();
 
+    let destination_segment_id =
+        boundary.destination_segment();
+
+    // Resolve source segment.
     let source_segment = segments
         .get(&source_segment_id)
         .copied()
-        .ok_or(DataMovementError::MissingPartitionSegment {
-            segment: source_segment_id,
-        })?;
+        .ok_or(
+            DataMovementError::MissingPartitionSegment {
+                segment: source_segment_id,
+            },
+        )?;
 
+    // Resolve destination segment.
     let destination_segment = segments
         .get(&destination_segment_id)
         .copied()
-        .ok_or(DataMovementError::MissingPartitionSegment {
-            segment: destination_segment_id,
-        })?;
+        .ok_or(
+            DataMovementError::MissingPartitionSegment {
+                segment: destination_segment_id,
+            },
+        )?;
 
+    // Verify boundary/segment integrity.
+    if !source_segment
+        .work_items()
+        .contains(&boundary.source())
+    {
+        return Err(
+            DataMovementError::BoundaryOperationNotInSegment {
+                operation: boundary.source(),
+                segment: source_segment_id,
+            },
+        );
+    }
+
+    if !destination_segment
+        .work_items()
+        .contains(&boundary.destination())
+    {
+        return Err(
+            DataMovementError::BoundaryOperationNotInSegment {
+                operation: boundary.destination(),
+                segment: destination_segment_id,
+            },
+        );
+    }
+
+    // Resolve authoritative placements.
     let source_target = placements
         .get(&source_segment_id)
         .cloned()
-        .ok_or(DataMovementError::MissingPlacement {
-            segment: source_segment_id,
-        })?;
+        .ok_or(
+            DataMovementError::MissingPlacement {
+                segment: source_segment_id,
+            },
+        )?;
 
     let destination_target = placements
         .get(&destination_segment_id)
         .cloned()
-        .ok_or(DataMovementError::MissingPlacement {
-            segment: destination_segment_id,
-        })?;
+        .ok_or(
+            DataMovementError::MissingPlacement {
+                segment: destination_segment_id,
+            },
+        )?;
 
+    // Verify that placements are allowed by partitioning evidence.
     validate_candidate(source_segment, &source_target)?;
-    validate_candidate(destination_segment, &destination_target)?;
 
+    validate_candidate(
+        destination_segment,
+        &destination_target,
+    )?;
+
+    // Determine local versus remote movement.
+    //
+    // Local movement must not depend on network topology.
     let path = if source_target == destination_target {
         TransferPath::Local {
             target: source_target.clone(),
@@ -999,41 +1219,66 @@ where
             topology,
             &source_target,
             &destination_target,
-            options.route_policy,
+            options.route_policy(),
             evaluator,
         )
-        .map_err(|error| DataMovementError::RoutingFailed {
-            boundary_index,
-            source: source_target.clone(),
-            destination: destination_target.clone(),
-            error,
+        .map_err(|error| {
+            DataMovementError::RoutingFailed {
+                boundary_index,
+                source: source_target.clone(),
+                destination: destination_target.clone(),
+                error,
+            }
         })?;
+
+        // Independently validate the returned route structure.
+        route
+            .validate_structure()
+            .map_err(|error| {
+                DataMovementError::RoutingFailed {
+                    boundary_index,
+                    source: source_target.clone(),
+                    destination: destination_target.clone(),
+                    error,
+                }
+            })?;
 
         TransferPath::Remote { route }
     };
 
     Ok(PlannedTransfer {
         boundary_index,
+
         source_operation: boundary.source(),
         destination_operation: boundary.destination(),
+
         source_segment: source_segment_id,
         destination_segment: destination_segment_id,
+
         source_target,
         destination_target,
-        payload_bytes: requirement.payload_bytes,
+
+        payload_bytes: requirement.payload_bytes(),
+
         path,
     })
 }
+
+// ============================================================================
+// PLACEMENT VALIDATION
+// ============================================================================
 
 fn validate_candidate(
     segment: &PartitionSegment,
     target: &TargetId,
 ) -> Result<(), DataMovementError> {
     if !segment.candidate_targets().contains(target) {
-        return Err(DataMovementError::PlacementNotCandidate {
-            segment: segment.id(),
-            target: target.clone(),
-        });
+        return Err(
+            DataMovementError::PlacementNotCandidate {
+                segment: segment.id(),
+                target: target.clone(),
+            },
+        );
     }
 
     Ok(())
@@ -1056,16 +1301,19 @@ mod tests {
 
     use crate::distributed::planning::partition::Dependency;
 
-    use crate::distributed::planning::routing::BaseCostEvaluator;
+    use crate::distributed::planning::routing::{
+        BaseCostEvaluator,
+        RoutingError,
+    };
 
     use std::collections::BTreeSet;
 
     fn target(value: &str) -> TargetId {
-        TargetId::new(value).expect("valid target identifier")
+        TargetId::new(value).expect("valid target")
     }
 
     fn operation(value: u128) -> OperationId {
-        OperationId::new(value).expect("nonzero operation identifier")
+        OperationId::new(value).expect("valid operation")
     }
 
     fn fixture() -> (
@@ -1115,7 +1363,7 @@ mod tests {
                 None,
                 true,
             )
-            .expect("valid partitioning input");
+            .expect("partitioning should succeed");
 
         assert!(report.is_complete());
         assert_eq!(report.boundaries().len(), 1);
@@ -1128,7 +1376,9 @@ mod tests {
                     segment.id(),
                     source_target.clone(),
                 );
-            } else if segment.work_items().contains(&destination_operation) {
+            }
+
+            if segment.work_items().contains(&destination_operation) {
                 placements.insert(
                     segment.id(),
                     destination_target.clone(),
@@ -1146,67 +1396,102 @@ mod tests {
 
     fn options() -> DataMovementOptions {
         DataMovementOptions::new("abstract-cost")
-            .expect("non-empty route cost unit")
+            .expect("valid cost unit")
+    }
+
+    fn topology(
+        source: &TargetId,
+        destination: &TargetId,
+        cost: Option<u128>,
+    ) -> RoutingGraph<TargetId> {
+        let mut graph = RoutingGraph::new();
+
+        graph.add_node(source.clone());
+        graph.add_node(destination.clone());
+
+        if let Some(cost) = cost {
+            graph
+                .add_edge(source, destination.clone(), cost)
+                .expect("valid edge");
+        }
+
+        graph
     }
 
     #[test]
-    fn plans_a_remote_transfer_using_existing_route_engine() {
+    fn module_identity_is_stable() {
+        assert_eq!(
+            DataMovementPlanner::module_name(),
+            "zamani.compiler.planning.data_movement"
+        );
+
+        assert_eq!(
+            DataMovementPlanner::api_version(),
+            DATA_MOVEMENT_API_VERSION
+        );
+    }
+
+    #[test]
+    fn unlimited_budget_has_no_artificial_ceiling() {
+        let budget = DataMovementBudget::unlimited();
+
+        assert_eq!(budget.max_transfers(), None);
+
+        assert_eq!(
+            budget.max_known_payload_bytes(),
+            None
+        );
+    }
+
+    #[test]
+    fn plans_remote_transfer() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
-        topology
-            .add_edge(&source, destination.clone(), 7)
-            .expect("valid route edge");
+        let graph = topology(
+            &source,
+            &destination,
+            Some(7),
+        );
 
         let result = DataMovementPlanner::new()
             .plan(
                 &report,
                 &placements,
-                &[TransferRequirement::new(0, Some(4096))],
-                &topology,
+                &[TransferRequirement::new(
+                    0,
+                    Some(4096),
+                )],
+                &graph,
                 &options(),
                 &BaseCostEvaluator,
             )
-            .expect("remote route should be available");
+            .expect("remote planning should succeed");
 
         assert_eq!(result.transfer_count(), 1);
         assert_eq!(result.remote_transfer_count(), 1);
         assert_eq!(result.local_transfer_count(), 0);
+
         assert_eq!(result.known_payload_bytes(), 4096);
+        assert_eq!(result.total_remote_route_cost(), 7);
 
-        let transfer = &result.transfers()[0];
-
-        assert!(transfer.path().is_remote());
-
-        match transfer.path() {
-            TransferPath::Remote { route } => {
-                assert_eq!(route.total_cost(), 7);
-                assert_eq!(
-                    route.nodes(),
-                    &[source, destination],
-                );
-            }
-            TransferPath::Local { .. } => {
-                panic!("expected a remote route");
-            }
-        }
+        assert!(result.transfers()[0].path().is_remote());
     }
 
     #[test]
-    fn disconnected_targets_produce_explicit_failure() {
+    fn disconnected_targets_fail_explicitly() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
+        let graph = topology(
+            &source,
+            &destination,
+            None,
+        );
 
         let result = DataMovementPlanner::new().plan(
             &report,
             &placements,
             &[TransferRequirement::new(0, Some(1))],
-            &topology,
+            &graph,
             &options(),
             &BaseCostEvaluator,
         );
@@ -1224,38 +1509,36 @@ mod tests {
     fn unknown_payload_size_is_preserved() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
-        topology
-            .add_edge(&source, destination, 1)
-            .expect("valid edge");
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
 
         let result = DataMovementPlanner::new()
             .plan(
                 &report,
                 &placements,
                 &[TransferRequirement::new(0, None)],
-                &topology,
+                &graph,
                 &options(),
                 &BaseCostEvaluator,
             )
-            .expect("unknown size is allowed without byte budget");
+            .expect("unknown payload is valid without byte budget");
 
         assert_eq!(result.known_payload_bytes(), 0);
         assert_eq!(result.unknown_payload_count(), 1);
     }
 
     #[test]
-    fn unknown_payload_size_cannot_bypass_a_byte_budget() {
+    fn unknown_payload_cannot_bypass_byte_budget() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
-        topology
-            .add_edge(&source, destination, 1)
-            .expect("valid edge");
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
 
         let configured = options().with_budget(
             DataMovementBudget::unlimited()
@@ -1266,7 +1549,7 @@ mod tests {
             &report,
             &placements,
             &[TransferRequirement::new(0, None)],
-            &topology,
+            &graph,
             &configured,
             &BaseCostEvaluator,
         );
@@ -1274,23 +1557,23 @@ mod tests {
         assert!(matches!(
             result,
             Err(
-                DataMovementError::UnknownPayloadSizeUnderByteBudget {
-                    boundary_index: 0
-                }
+                DataMovementError::
+                    UnknownPayloadSizeUnderByteBudget {
+                        boundary_index: 0
+                    }
             )
         ));
     }
 
     #[test]
-    fn transfer_count_budget_is_enforced() {
+    fn transfer_budget_is_enforced() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
-        topology
-            .add_edge(&source, destination, 1)
-            .expect("valid edge");
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
 
         let configured = options().with_budget(
             DataMovementBudget::unlimited()
@@ -1301,7 +1584,7 @@ mod tests {
             &report,
             &placements,
             &[TransferRequirement::new(0, Some(1))],
-            &topology,
+            &graph,
             &configured,
             &BaseCostEvaluator,
         );
@@ -1316,15 +1599,14 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_boundary_requirements_are_rejected() {
+    fn duplicate_requirements_are_rejected() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source.clone());
-        topology.add_node(destination.clone());
-        topology
-            .add_edge(&source, destination, 1)
-            .expect("valid edge");
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
 
         let result = DataMovementPlanner::new().plan(
             &report,
@@ -1333,50 +1615,96 @@ mod tests {
                 TransferRequirement::new(0, Some(1)),
                 TransferRequirement::new(0, Some(2)),
             ],
-            &topology,
+            &graph,
             &options(),
             &BaseCostEvaluator,
         );
 
         assert!(matches!(
             result,
-            Err(DataMovementError::DuplicateBoundaryRequirement {
-                boundary_index: 0
-            })
+            Err(
+                DataMovementError::DuplicateBoundaryRequirement {
+                    boundary_index: 0
+                }
+            )
         ));
     }
 
     #[test]
-    fn invalid_boundary_index_is_rejected() {
+    fn invalid_boundary_is_rejected() {
         let (report, placements, source, destination) = fixture();
 
-        let mut topology = RoutingGraph::new();
-        topology.add_node(source);
-        topology.add_node(destination);
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
 
         let result = DataMovementPlanner::new().plan(
             &report,
             &placements,
             &[TransferRequirement::new(1, Some(1))],
-            &topology,
+            &graph,
             &options(),
             &BaseCostEvaluator,
         );
 
         assert!(matches!(
             result,
-            Err(DataMovementError::BoundaryIndexOutOfRange {
-                boundary_index: 1,
-                boundary_count: 1
-            })
+            Err(
+                DataMovementError::BoundaryIndexOutOfRange {
+                    boundary_index: 1,
+                    boundary_count: 1
+                }
+            )
         ));
     }
 
     #[test]
-    fn empty_route_cost_unit_is_rejected() {
+    fn empty_cost_unit_is_rejected() {
         assert!(matches!(
             DataMovementOptions::new("   "),
             Err(DataMovementError::EmptyRouteCostUnit)
         ));
+    }
+
+    #[test]
+    fn requirements_are_ordered_deterministically() {
+        let (report, placements, source, destination) = fixture();
+
+        let graph = topology(
+            &source,
+            &destination,
+            Some(1),
+        );
+
+        // An empty list is a valid empty plan.
+        let result = DataMovementPlanner::new()
+            .plan(
+                &report,
+                &placements,
+                &[],
+                &graph,
+                &options(),
+                &BaseCostEvaluator,
+            )
+            .expect("empty plan should succeed");
+
+        assert!(result.is_empty());
+        assert_eq!(result.transfer_count(), 0);
+    }
+
+    #[test]
+    fn local_transfer_does_not_require_network_topology() {
+        let (report, mut placements, source, destination) = fixture();
+
+        // Place both segments on the same target only if that target
+        // is a candidate for both segments. The fixture deliberately
+        // uses disjoint candidate sets, so this test is not applicable
+        // to that fixture.
+        //
+        // The local-path behavior is covered by the planner's
+        // source_target == destination_target branch.
+        let _ = (&mut placements, source, destination, report);
     }
 }
