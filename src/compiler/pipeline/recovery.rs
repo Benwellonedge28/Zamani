@@ -5,174 +5,68 @@
 
 //! Zamani Universal Meta-Compiler — Pipeline Recovery.
 //!
-//! Path:
-//!     src/compiler/pipeline/recovery.rs
+//! Path: src/compiler/pipeline/recovery.rs
+//! Edition: 2021
+//! Minimum Rust version: 1.97
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! # Purpose
 //!
-//! Safety:
-//!     Unsafe Rust is forbidden.
+//! Evaluates whether a failed compiler-pipeline operation may be:
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! - retried;
+//! - replaced by an explicitly verified fallback;
+//! - or stopped.
 //!
-//! Defines the policy and decision layer for recovering from compiler
-//! pipeline failures.
+//! This module produces decisions only. It never executes stages,
+//! invokes backends, changes compilation lifecycle state, allocates
+//! resources or modifies program semantics.
 //!
-//! Recovery decisions include:
+//! # Canonical authorities
 //!
-//! - Retrying a failed stage.
-//! - Selecting an explicitly authorized fallback.
-//! - Stopping compilation.
+//! - pipeline::failure: PipelineFailure and failure classification.
+//! - pipeline::stage: StageId and stage execution contracts.
+//! - pipeline::execution: actual stage execution.
+//! - pipeline::orchestration: lifecycle and recovery coordination.
+//! - compiler::context: cancellation and compilation context.
+//! - compiler::configuration::budget: operational budgets.
+//! - compiler::planning: feasibility and realization evidence.
+//! - compiler::backends: backend compatibility.
 //!
-//! A retry or fallback must never silently change program semantics.
+//! # Recovery invariants
 //!
-//! This module consumes the canonical failure representation from:
+//! 1. Cancellation is never automatically retried.
+//! 2. Internal correctness failures are never automatically retried.
+//! 3. Retryability declared by a stage is not retry authorization.
+//! 4. Replay safety must be explicitly established.
+//! 5. Retry policy must authorize the failure category.
+//! 6. Resource and external failures require additional authorization.
+//! 7. A retry must identify the failed stage.
+//! 8. Retry accounting must not overflow.
+//! 9. Fallback must preserve semantic meaning, requirements and constraints.
+//! 10. Fallback must be verified and compatible with its realization.
+//! 11. Every fallback decision must retain verification provenance.
+//! 12. No recovery decision may claim compilation succeeded.
 //!
-//!     pipeline::failure::PipelineFailure
+//! # Scalability
 //!
-//! It does not create another failure representation.
+//! This module imposes no universal hardware or program-size limits.
 //!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
-//!
-//! This module owns:
-//!
-//! - RecoveryPolicy.
-//! - RecoveryPlanner.
-//! - RecoveryRequest.
-//! - RecoveryDecision.
-//! - RecoveryAction.
-//! - RetrySafety.
-//! - FallbackEvidence.
-//! - RecoveryReason.
-//! - RecoveryPolicyError.
-//! - Recovery API versioning.
-//!
-//! This module does NOT own:
-//!
-//! - StageError.
-//! - PipelineFailure.
-//! - StageId.
-//! - Stage registration.
-//! - Stage execution.
-//! - Pipeline orchestration.
-//! - Compilation lifecycle.
-//! - CancellationToken implementation.
-//! - CompilationBudget.
-//! - Semantic analysis.
-//! - Type checking.
-//! - Ownership analysis.
-//! - Canonical IR.
-//! - Optimization algorithms.
-//! - Hardware discovery.
-//! - Physical resource allocation.
-//! - Hardware scheduling.
-//! - Physical routing.
-//! - Backend implementations.
-//! - Runtime execution.
-//! - Distributed execution.
-//!
-//! Those responsibilities remain with their authoritative subsystems.
-//!
-//! ============================================================================
-//! RECOVERY SAFETY
-//! ============================================================================
-//!
-//! A retry is permitted only when:
-//!
-//! 1. The original stage declared the failure retryable.
-//! 2. The failure is not cancellation.
-//! 3. The failure is not an internal correctness invariant violation.
-//! 4. The caller establishes that replay is safe.
-//! 5. The failure category is authorized by policy.
-//! 6. The configured retry budget has not been exhausted.
-//!
-//! A fallback is permitted only when the caller establishes:
-//!
-//! 1. Semantic equivalence.
-//! 2. Preservation of required capabilities and constraints.
-//! 3. Verification of the fallback implementation.
-//! 4. Acceptance by the relevant realization contract.
-//!
-//! This module does not assume that a fallback is equivalent merely
-//! because it produces an output.
-//!
-//! ============================================================================
-//! IMPORTANT EXECUTION BOUNDARY
-//! ============================================================================
-//!
-//! RecoveryPlanner produces decisions.
-//!
-//! It does not independently execute stages or invoke another pipeline.
-//!
-//! Actual retry execution must be coordinated by pipeline orchestration,
-//! which owns lifecycle, cancellation, stage registration and execution.
-//!
-//! This separation prevents:
-//!
-//! - Recursive pipeline execution.
-//! - Duplicate lifecycle tracking.
-//! - Uncontrolled retry loops.
-//! - Replaying non-idempotent operations.
-//! - Hidden changes to compilation semantics.
-//!
-//! ============================================================================
-//! POCO-REAF
-//! ============================================================================
-//!
-//! No fixed hardware-capacity limits are imposed.
-//!
-//! No universal maximum is defined for:
-//!
-//! - CPUs.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Distributed nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Quantum resources.
-//! - Tensor dimensions.
-//! - Compilation stages.
-//! - Failure records.
-//!
-//! Retry limits are configurable operational policies.
-//!
-//! They are not hardware or language-level capacity restrictions.
-//!
-//! Physical resources, operating-system restrictions and configured
-//! compilation budgets remain applicable.
+//! Retry counts are configurable operational policy. They are not
+//! language-level or hardware-capacity restrictions.
 //!
 //! No finite implementation can promise infinite physical resources.
 //!
-//! ============================================================================
-//! GRAMMAR BOUNDARY
-//! ============================================================================
+//! # Grammar boundary
 //!
-//! The grammar describes source-language intent.
+//! Grammar and semantic authorities define source-level meaning.
+//! Recovery cannot weaken that meaning to make a compilation succeed.
 //!
-//! Semantic analysis determines the meaning of requirements, constraints,
-//! capabilities and effects.
+//! Relevant specifications:
 //!
-//! Recovery is an implementation-level compilation concern.
-//!
-//! A source-level requirement must never be silently weakened to make
-//! recovery succeed.
-//!
-//! Relevant authorities include:
-//!
-//!     grammar/Zamani.g4
-//!     grammar/specification/semantic-model.md
-//!     grammar/validation/semantic-boundaries.md
-//!
-//! ============================================================================
+//! - grammar/specification/compilation-model.md
+//! - grammar/specification/execution-model.md
+//! - grammar/specification/poco-reaf.md
+//! - grammar/validation/semantic-boundaries.md
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -195,38 +89,28 @@ use crate::compiler::pipeline::stage::StageId;
 
 /// Public API version of pipeline recovery.
 ///
-/// Independent of:
-///
-/// - Zamani language version.
-/// - Grammar version.
-/// - AST version.
-/// - Semantic-model version.
-/// - IR version.
-/// - Backend ABI version.
-/// - Compiler release version.
+/// Independent of language, grammar, AST, semantic-model, IR,
+/// backend ABI and runtime versions.
 pub const PIPELINE_RECOVERY_API_VERSION: u16 = 1;
 
 // ============================================================================
 // RESULT
 // ============================================================================
 
-/// Result type for recovery operations.
+/// Result type for recovery-policy operations.
 pub type RecoveryResult<T> = Result<T, RecoveryPolicyError>;
 
 // ============================================================================
 // RETRY SAFETY
 // ============================================================================
 
-/// Evidence supplied by the execution coordinator concerning whether
-/// replaying a failed stage is safe.
+/// Evidence supplied by the execution coordinator concerning replay safety.
 ///
-/// Retryability declared by StageError is not sufficient by itself.
+/// A stage's retryability declaration is insufficient on its own.
+/// A stage may have performed externally observable work before failing.
 ///
-/// A stage may have produced externally observable side effects before
-/// returning an error.
-///
-/// The orchestrator must establish replay safety using the stage's
-/// execution contract, transaction state, provenance and side effects.
+/// The orchestrator must establish replay safety using the stage contract,
+/// transaction state, side-effect guarantees and execution provenance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RetrySafety {
@@ -235,10 +119,7 @@ pub enum RetrySafety {
     /// This is the conservative default.
     NotEstablished,
 
-    /// The execution coordinator has established that replaying the
-    /// failed operation is safe.
-    ///
-    /// This declaration must be based on actual stage guarantees.
+    /// The execution coordinator has established replay safety.
     ReplaySafe,
 }
 
@@ -257,33 +138,29 @@ impl RetrySafety {
 /// Evidence required before an alternative implementation may replace
 /// a failed realization.
 ///
-/// The caller must obtain this evidence from authoritative verification,
-/// semantic analysis and target compatibility systems.
+/// The caller must obtain this evidence from the authoritative semantic,
+/// verification, feasibility and backend-compatibility systems.
 ///
-/// A boolean supplied by an untrusted source is not verification.
-///
-/// The orchestrator must construct this value only after the relevant
-/// verification procedures have succeeded.
+/// This structure records evidence; it does not independently verify
+/// the truth of the supplied assertions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FallbackEvidence {
     semantic_equivalence_verified: bool,
-
     requirements_preserved: bool,
-
     constraints_preserved: bool,
-
     fallback_verified: bool,
-
     realization_compatible: bool,
-
     provenance: Arc<str>,
 }
 
 impl FallbackEvidence {
     /// Creates fallback verification evidence.
     ///
-    /// All conditions are explicit to prevent an accidental assumption
-    /// that any alternative implementation is semantically equivalent.
+    /// All conditions are explicit. A fallback is not considered safe
+    /// merely because it can produce an output.
+    ///
+    /// The trusted orchestration layer must construct this value only
+    /// after the corresponding authoritative checks have succeeded.
     #[must_use]
     pub fn new(
         semantic_equivalence_verified: bool,
@@ -334,13 +211,13 @@ impl FallbackEvidence {
         self.realization_compatible
     }
 
-    /// Returns the verification provenance.
+    /// Returns verification provenance.
     #[must_use]
     pub fn provenance(&self) -> &str {
         self.provenance.as_ref()
     }
 
-    /// Returns whether all mandatory fallback conditions hold.
+    /// Returns whether every mandatory fallback condition holds.
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.semantic_equivalence_verified
@@ -358,28 +235,19 @@ impl FallbackEvidence {
 
 /// Immutable policy controlling permitted recovery decisions.
 ///
-/// The policy does not change program semantics.
+/// The default policy disables automatic retries and fallbacks.
 ///
-/// An empty retry-category set disables all retries.
+/// Retry counts are additional executions after the original failed
+/// execution. A configured count of zero disables retries.
 ///
-/// The default policy performs no automatic retries and permits no
-/// automatic fallback.
-///
-/// This conservative default prevents unexpected repeated execution.
-///
-/// Retry counts are configured by the application or compiler session.
-///
-/// They are operational limits, not universal hardware limits.
+/// Retry limits are operational safeguards, not hardware or language
+/// capacity limits.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecoveryPolicy {
     max_retries: usize,
-
     retryable_categories: BTreeSet<FailureCategory>,
-
     allow_fallback: bool,
-
     allow_retry_after_resource_failure: bool,
-
     allow_retry_after_external_failure: bool,
 }
 
@@ -402,22 +270,16 @@ impl RecoveryPolicy {
         Self::default()
     }
 
-    /// Sets the maximum number of retries permitted for one failed stage.
+    /// Sets the maximum additional retries for one failed stage.
     ///
-    /// Zero disables retry.
-    ///
-    /// The number represents additional executions after the initial
-    /// failed execution.
+    /// Zero disables retries.
     #[must_use]
     pub fn with_max_retries(mut self, retries: usize) -> Self {
         self.max_retries = retries;
         self
     }
 
-    /// Sets the maximum retries using a non-zero value.
-    ///
-    /// This is a convenience method for configurations that explicitly
-    /// require retries.
+    /// Sets the retry limit using a non-zero value.
     #[must_use]
     pub fn with_nonzero_max_retries(
         mut self,
@@ -429,8 +291,8 @@ impl RecoveryPolicy {
 
     /// Authorizes retry for a failure category.
     ///
-    /// The stage must still declare retryability and replay safety
-    /// must independently be established.
+    /// The stage must still declare retryability, replay safety must
+    /// be established, and the retry budget must remain available.
     #[must_use]
     pub fn allow_retry_category(
         mut self,
@@ -440,22 +302,19 @@ impl RecoveryPolicy {
         self
     }
 
-    /// Authorizes retry after a resource failure.
+    /// Enables or disables retry after a resource failure.
     ///
-    /// This does not mean the resource has become available.
-    ///
-    /// The orchestrator must establish that a changed resource condition
-    /// makes another execution meaningful.
+    /// This does not establish that a resource has become available.
+    /// The orchestrator must verify that retrying is meaningful.
     #[must_use]
     pub fn allow_resource_retry(mut self, allow: bool) -> Self {
         self.allow_retry_after_resource_failure = allow;
         self
     }
 
-    /// Authorizes retry after an external subsystem failure.
+    /// Enables or disables retry after an external subsystem failure.
     ///
-    /// Replay safety and the stage retryability declaration remain
-    /// mandatory.
+    /// Replay safety and category authorization remain mandatory.
     #[must_use]
     pub fn allow_external_retry(mut self, allow: bool) -> Self {
         self.allow_retry_after_external_failure = allow;
@@ -464,7 +323,7 @@ impl RecoveryPolicy {
 
     /// Enables or disables fallback selection.
     ///
-    /// Enabling this setting does not authorize an unverified fallback.
+    /// Enabling fallback does not authorize an unverified fallback.
     #[must_use]
     pub fn allow_fallback(mut self, allow: bool) -> Self {
         self.allow_fallback = allow;
@@ -483,7 +342,7 @@ impl RecoveryPolicy {
         self.allow_fallback
     }
 
-    /// Returns whether retry is enabled for a failure category.
+    /// Returns whether a failure category is authorized for retry.
     #[must_use]
     pub fn retry_category_allowed(
         &self,
@@ -497,32 +356,39 @@ impl RecoveryPolicy {
     pub fn retryable_categories(&self) -> &BTreeSet<FailureCategory> {
         &self.retryable_categories
     }
+
+    /// Returns whether resource-failure retry is explicitly enabled.
+    #[must_use]
+    pub const fn resource_retry_allowed(&self) -> bool {
+        self.allow_retry_after_resource_failure
+    }
+
+    /// Returns whether external-failure retry is explicitly enabled.
+    #[must_use]
+    pub const fn external_retry_allowed(&self) -> bool {
+        self.allow_retry_after_external_failure
+    }
 }
 
 // ============================================================================
 // RECOVERY REQUEST
 // ============================================================================
 
-/// Immutable information needed to evaluate a recovery decision.
+/// Immutable information required to evaluate a recovery decision.
 ///
-/// `retries_performed` counts retries already performed after the
-/// initial execution.
+/// `retries_performed` counts additional executions already attempted
+/// after the original execution.
 ///
-/// For example:
+/// Examples:
 ///
-/// - Initial execution fails: 0 retries performed.
-/// - First retry fails: 1 retry performed.
-/// - Second retry fails: 2 retries performed.
-///
-/// The failure object remains owned by the caller.
+/// - Original execution failed: zero retries performed.
+/// - First retry failed: one retry performed.
+/// - Second retry failed: two retries performed.
 #[derive(Debug)]
 pub struct RecoveryRequest<'a> {
     failure: &'a PipelineFailure,
-
     retries_performed: usize,
-
     retry_safety: RetrySafety,
-
     fallback_evidence: Option<&'a FallbackEvidence>,
 }
 
@@ -543,10 +409,7 @@ impl<'a> RecoveryRequest<'a> {
 
     /// Supplies explicit replay-safety evidence.
     #[must_use]
-    pub fn with_retry_safety(
-        mut self,
-        safety: RetrySafety,
-    ) -> Self {
+    pub fn with_retry_safety(mut self, safety: RetrySafety) -> Self {
         self.retry_safety = safety;
         self
     }
@@ -579,7 +442,7 @@ impl<'a> RecoveryRequest<'a> {
         self.retry_safety
     }
 
-    /// Returns the fallback evidence, if provided.
+    /// Returns fallback evidence, if supplied.
     #[must_use]
     pub fn fallback_evidence(&self) -> Option<&FallbackEvidence> {
         self.fallback_evidence
@@ -591,45 +454,34 @@ impl<'a> RecoveryRequest<'a> {
 // ============================================================================
 
 /// Machine-readable explanation for a recovery decision.
+///
+/// The string identifiers are stable diagnostic identifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum RecoveryReason {
     RetryAuthorized,
-
     RetryNotDeclared,
-
     RetryNotSafe,
-
     RetryBudgetExhausted,
-
     RetryCategoryNotAuthorized,
-
+    RetryStageMissing,
+    RetryAttemptOverflow,
+    ResourceRetryNotAuthorized,
+    ExternalRetryNotAuthorized,
     CancellationCannotBeRetried,
-
     InternalInvariantCannotBeRetried,
-
     FallbackAuthorized,
-
     FallbackDisabled,
-
     FallbackEvidenceMissing,
-
     FallbackNotEquivalent,
-
     RequirementsNotPreserved,
-
     ConstraintsNotPreserved,
-
     FallbackNotVerified,
-
     RealizationIncompatible,
-
     ProvenanceMissing,
-
     TerminalFailure,
-
     IncompleteRequiredWork,
-
+    CriticalFailure,
     NonRecoverableFailure,
 }
 
@@ -644,6 +496,14 @@ impl RecoveryReason {
             Self::RetryBudgetExhausted => "retry_budget_exhausted",
             Self::RetryCategoryNotAuthorized => {
                 "retry_category_not_authorized"
+            }
+            Self::RetryStageMissing => "retry_stage_missing",
+            Self::RetryAttemptOverflow => "retry_attempt_overflow",
+            Self::ResourceRetryNotAuthorized => {
+                "resource_retry_not_authorized"
+            }
+            Self::ExternalRetryNotAuthorized => {
+                "external_retry_not_authorized"
             }
             Self::CancellationCannotBeRetried => {
                 "cancellation_cannot_be_retried"
@@ -674,6 +534,7 @@ impl RecoveryReason {
             Self::IncompleteRequiredWork => {
                 "incomplete_required_work"
             }
+            Self::CriticalFailure => "critical_failure",
             Self::NonRecoverableFailure => "non_recoverable_failure",
         }
     }
@@ -689,15 +550,16 @@ impl fmt::Display for RecoveryReason {
 // RECOVERY ACTION
 // ============================================================================
 
-/// The recovery action recommended by the recovery planner.
+/// A recovery action recommended by the planner.
 ///
-/// These are decisions, not executed operations.
+/// These variants describe decisions. They do not execute operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RecoveryAction {
-    /// Retry the failed stage.
+    /// Retry the identified failed stage.
     ///
-    /// The orchestration subsystem must perform the actual retry.
+    /// `next_attempt` is one-based and counts retries after the
+    /// original execution.
     Retry {
         stage: StageId,
         next_attempt: usize,
@@ -705,8 +567,8 @@ pub enum RecoveryAction {
 
     /// Use an explicitly verified alternative realization.
     ///
-    /// The actual fallback implementation is selected and invoked
-    /// by the appropriate planning/backend orchestration subsystem.
+    /// The appropriate planning/backend orchestration subsystem
+    /// selects and invokes the actual fallback.
     UseFallback {
         stage: Option<StageId>,
         provenance: Arc<str>,
@@ -724,9 +586,7 @@ pub enum RecoveryAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecoveryDecision {
     action: RecoveryAction,
-
     reason: RecoveryReason,
-
     explanation: Arc<str>,
 }
 
@@ -760,16 +620,16 @@ impl RecoveryDecision {
     /// Returns the human-readable explanation.
     #[must_use]
     pub fn explanation(&self) -> &str {
-        &self.explanation
+        self.explanation.as_ref()
     }
 
-    /// Returns whether a retry was selected.
+    /// Returns whether retry was selected.
     #[must_use]
     pub fn should_retry(&self) -> bool {
         matches!(self.action, RecoveryAction::Retry { .. })
     }
 
-    /// Returns whether a fallback was selected.
+    /// Returns whether fallback was selected.
     #[must_use]
     pub fn should_use_fallback(&self) -> bool {
         matches!(self.action, RecoveryAction::UseFallback { .. })
@@ -783,14 +643,14 @@ impl RecoveryDecision {
 }
 
 // ============================================================================
-// RECOVERY POLICY ERROR
+// POLICY ERROR
 // ============================================================================
 
-/// Errors associated with invalid recovery-policy construction.
+/// Errors associated with recovery-policy construction or validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RecoveryPolicyError {
-    /// A recovery policy is internally inconsistent.
+    /// The recovery policy is internally inconsistent.
     InvalidPolicy {
         message: Arc<str>,
     },
@@ -817,7 +677,8 @@ impl Error for RecoveryPolicyError {}
 /// The planner evaluates a PipelineFailure against explicit policy
 /// and safety evidence.
 ///
-/// It does not mutate the pipeline, execute stages or change lifecycle.
+/// It does not mutate the pipeline, execute stages, change lifecycle
+/// state, allocate resources or invoke fallback implementations.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct RecoveryPlanner;
 
@@ -832,12 +693,14 @@ impl RecoveryPlanner {
     ///
     /// Decision precedence:
     ///
-    /// 1. Cancellation and correctness-invariant failures stop immediately.
-    /// 2. Authorized safe retries are preferred.
-    /// 3. Verified fallback may be selected if retry is unavailable.
-    /// 4. Otherwise compilation stops.
+    /// 1. Cancellation and internal correctness failures stop immediately.
+    /// 2. Critical failures stop immediately.
+    /// 3. Authorized, replay-safe retries are preferred.
+    /// 4. A verified fallback may be selected if retry is unavailable.
+    /// 5. Otherwise compilation stops.
     ///
-    /// A retry never occurs solely because the stage declared retryability.
+    /// The planner never treats a retry declaration as sufficient
+    /// authorization.
     #[must_use]
     pub fn plan(
         &self,
@@ -846,41 +709,34 @@ impl RecoveryPlanner {
     ) -> RecoveryDecision {
         let failure = request.failure();
 
-        // Cancellation must not be converted into a retry.
-        if failure.is_cancelled() {
+        if Self::is_cancellation(failure) {
             return Self::stop(
                 RecoveryReason::CancellationCannotBeRetried,
-                "Compilation was cancelled. Recovery cannot silently \
-                 override the cancellation request.",
+                "Compilation was cancelled. Recovery cannot override \
+                 the cancellation request.",
             );
         }
 
-        // Internal invariant violations indicate a correctness problem.
-        if failure.disposition()
-            == FailureDisposition::InternalFailure
-        {
+        if Self::is_internal_failure(failure) {
             return Self::stop(
                 RecoveryReason::InternalInvariantCannotBeRetried,
                 "An internal correctness invariant failed. The pipeline \
-                 must stop rather than retry potentially corrupted work.",
+                 must stop rather than replay potentially corrupted work.",
             );
         }
 
-        // Critical failures require explicit investigation.
         if failure.severity() == FailureSeverity::Critical {
             return Self::stop(
-                RecoveryReason::TerminalFailure,
-                "A critical pipeline failure cannot be automatically \
-                 recovered.",
+                RecoveryReason::CriticalFailure,
+                "A critical pipeline failure requires explicit \
+                 investigation and cannot be automatically recovered.",
             );
         }
 
-        // Evaluate retry eligibility.
         if let Some(decision) = Self::retry_decision(request, policy) {
             return decision;
         }
 
-        // A fallback is a separate realization, not an implicit retry.
         if let Some(decision) = Self::fallback_decision(request, policy) {
             return decision;
         }
@@ -890,6 +746,17 @@ impl RecoveryPlanner {
             "No recovery action satisfied the configured policy and \
              required safety conditions. Compilation remains unsuccessful.",
         )
+    }
+
+    fn is_cancellation(failure: &PipelineFailure) -> bool {
+        failure.is_cancelled()
+            || failure.disposition() == FailureDisposition::Cancelled
+            || failure.category() == FailureCategory::Cancellation
+    }
+
+    fn is_internal_failure(failure: &PipelineFailure) -> bool {
+        failure.disposition() == FailureDisposition::InternalFailure
+            || failure.category() == FailureCategory::Internal
     }
 
     fn retry_decision(
@@ -906,6 +773,10 @@ impl RecoveryPlanner {
             return None;
         }
 
+        if failure.stage().is_none() {
+            return None;
+        }
+
         if request.retries_performed() >= policy.max_retries() {
             return None;
         }
@@ -917,22 +788,22 @@ impl RecoveryPlanner {
         }
 
         if category == FailureCategory::Resource
-            && !policy.allow_retry_after_resource_failure
+            && !policy.resource_retry_allowed()
         {
             return None;
         }
 
         if category == FailureCategory::External
-            && !policy.allow_retry_after_external_failure
+            && !policy.external_retry_allowed()
         {
             return None;
         }
 
-        let stage = failure.stage()?.clone();
-
         let next_attempt = request
             .retries_performed()
             .checked_add(1)?;
+
+        let stage = failure.stage()?.clone();
 
         Some(RecoveryDecision::new(
             RecoveryAction::Retry {
@@ -940,8 +811,8 @@ impl RecoveryPlanner {
                 next_attempt,
             },
             RecoveryReason::RetryAuthorized,
-            "The original stage declared retryability, replay safety \
-             was established, the failure category is authorized, \
+            "The stage declared retryability, replay safety was \
+             established, the failure category is authorized, \
              and retry budget remains.",
         ))
     }
@@ -956,27 +827,7 @@ impl RecoveryPlanner {
 
         let evidence = request.fallback_evidence()?;
 
-        if !evidence.semantic_equivalence_verified() {
-            return None;
-        }
-
-        if !evidence.requirements_preserved() {
-            return None;
-        }
-
-        if !evidence.constraints_preserved() {
-            return None;
-        }
-
-        if !evidence.fallback_verified() {
-            return None;
-        }
-
-        if !evidence.realization_compatible() {
-            return None;
-        }
-
-        if evidence.provenance().trim().is_empty() {
+        if !evidence.is_valid() {
             return None;
         }
 
@@ -987,8 +838,8 @@ impl RecoveryPlanner {
             },
             RecoveryReason::FallbackAuthorized,
             "The fallback has verified semantic equivalence, preserves \
-             required capabilities and constraints, and satisfies \
-             the realization compatibility contract.",
+             required capabilities and constraints, has passed \
+             verification, and satisfies the realization contract.",
         ))
     }
 
@@ -998,50 +849,79 @@ impl RecoveryPlanner {
     ) -> RecoveryReason {
         let failure = request.failure();
 
-        if failure.is_cancelled() {
+        if Self::is_cancellation(failure) {
             return RecoveryReason::CancellationCannotBeRetried;
         }
 
-        if failure.disposition()
-            == FailureDisposition::Incomplete
-        {
+        if Self::is_internal_failure(failure) {
+            return RecoveryReason::InternalInvariantCannotBeRetried;
+        }
+
+        if failure.severity() == FailureSeverity::Critical {
+            return RecoveryReason::CriticalFailure;
+        }
+
+        if failure.disposition() == FailureDisposition::Incomplete {
             return RecoveryReason::IncompleteRequiredWork;
         }
 
-        if !failure.is_declared_retryable()
+        if failure.prevents_success()
+            && !failure.is_declared_retryable()
             && request.fallback_evidence().is_none()
+        {
+            return RecoveryReason::TerminalFailure;
+        }
+
+        if failure.is_declared_retryable() {
+            if request.retry_safety() != RetrySafety::ReplaySafe {
+                return RecoveryReason::RetryNotSafe;
+            }
+
+            if failure.stage().is_none() {
+                return RecoveryReason::RetryStageMissing;
+            }
+
+            if request.retries_performed() >= policy.max_retries() {
+                return RecoveryReason::RetryBudgetExhausted;
+            }
+
+            let category = failure.category();
+
+            if !policy.retry_category_allowed(category) {
+                return RecoveryReason::RetryCategoryNotAuthorized;
+            }
+
+            if category == FailureCategory::Resource
+                && !policy.resource_retry_allowed()
+            {
+                return RecoveryReason::ResourceRetryNotAuthorized;
+            }
+
+            if category == FailureCategory::External
+                && !policy.external_retry_allowed()
+            {
+                return RecoveryReason::ExternalRetryNotAuthorized;
+            }
+
+            if request.retries_performed().checked_add(1).is_none() {
+                return RecoveryReason::RetryAttemptOverflow;
+            }
+        } else if request.fallback_evidence().is_none()
+            && policy.fallback_allowed()
         {
             return RecoveryReason::RetryNotDeclared;
-        }
-
-        if failure.is_declared_retryable()
-            && !request.retry_safety().is_safe()
-        {
-            return RecoveryReason::RetryNotSafe;
-        }
-
-        if request.retries_performed() >= policy.max_retries()
-            && failure.is_declared_retryable()
-        {
-            return RecoveryReason::RetryBudgetExhausted;
-        }
-
-        if !policy.retry_category_allowed(failure.category())
-            && failure.is_declared_retryable()
-        {
-            return RecoveryReason::RetryCategoryNotAuthorized;
-        }
-
-        if policy.fallback_allowed()
-            && request.fallback_evidence().is_none()
-        {
-            return RecoveryReason::FallbackEvidenceMissing;
         }
 
         if !policy.fallback_allowed()
             && request.fallback_evidence().is_some()
         {
             return RecoveryReason::FallbackDisabled;
+        }
+
+        if policy.fallback_allowed()
+            && request.fallback_evidence().is_none()
+        {
+            return RecoveryReason::FallbackEvidenceMissing;
         }
 
         if let Some(evidence) = request.fallback_evidence() {
@@ -1104,12 +984,13 @@ mod tests {
         assert_eq!(policy.max_retries(), 0);
         assert!(!policy.fallback_allowed());
         assert!(policy.retryable_categories().is_empty());
+        assert!(!policy.resource_retry_allowed());
+        assert!(!policy.external_retry_allowed());
     }
 
     #[test]
     fn retry_limit_is_configurable() {
-        let policy = RecoveryPolicy::new()
-            .with_max_retries(7);
+        let policy = RecoveryPolicy::new().with_max_retries(7);
 
         assert_eq!(policy.max_retries(), 7);
     }
@@ -1126,7 +1007,15 @@ mod tests {
     }
 
     #[test]
-    fn custom_failure_categories_can_be_authorized() {
+    fn maximum_retry_limit_is_not_a_hardware_limit() {
+        let policy = RecoveryPolicy::new()
+            .with_max_retries(usize::MAX);
+
+        assert_eq!(policy.max_retries(), usize::MAX);
+    }
+
+    #[test]
+    fn retry_categories_are_extensible() {
         let policy = RecoveryPolicy::new()
             .allow_retry_category(FailureCategory::StageExecution)
             .allow_retry_category(FailureCategory::Resource);
@@ -1155,7 +1044,11 @@ mod tests {
         let policy = RecoveryPolicy::new()
             .allow_retry_category(FailureCategory::Resource);
 
-        assert!(!policy.allow_retry_after_resource_failure);
+        assert!(!policy.resource_retry_allowed());
+
+        let authorized = policy.allow_resource_retry(true);
+
+        assert!(authorized.resource_retry_allowed());
     }
 
     #[test]
@@ -1163,14 +1056,16 @@ mod tests {
         let policy = RecoveryPolicy::new()
             .allow_retry_category(FailureCategory::External);
 
-        assert!(!policy.allow_retry_after_external_failure);
+        assert!(!policy.external_retry_allowed());
+
+        let authorized = policy.allow_external_retry(true);
+
+        assert!(authorized.external_retry_allowed());
     }
 
     #[test]
     fn fallback_is_disabled_by_default() {
-        let policy = RecoveryPolicy::default();
-
-        assert!(!policy.fallback_allowed());
+        assert!(!RecoveryPolicy::default().fallback_allowed());
     }
 
     #[test]
@@ -1293,6 +1188,11 @@ mod tests {
             RecoveryReason::RetryBudgetExhausted.as_str(),
             "retry_budget_exhausted"
         );
+
+        assert_eq!(
+            RecoveryReason::CancellationCannotBeRetried.as_str(),
+            "cancellation_cannot_be_retried"
+        );
     }
 
     #[test]
@@ -1310,8 +1210,6 @@ mod tests {
 
     #[test]
     fn recovery_decision_reports_retry_correctly() {
-        // StageId construction and actual failure integration are tested
-        // in the pipeline integration test suite.
         let decision = RecoveryDecision::new(
             RecoveryAction::Stop,
             RecoveryReason::RetryNotSafe,
@@ -1340,14 +1238,6 @@ mod tests {
     }
 
     #[test]
-    fn retry_policy_does_not_impose_hardware_limits() {
-        let policy = RecoveryPolicy::new()
-            .with_max_retries(usize::MAX);
-
-        assert_eq!(policy.max_retries(), usize::MAX);
-    }
-
-    #[test]
     fn retry_policy_is_independent_of_fallback_policy() {
         let retry_only = RecoveryPolicy::new()
             .with_max_retries(4)
@@ -1361,5 +1251,28 @@ mod tests {
 
         assert_eq!(fallback_only.max_retries(), 0);
         assert!(fallback_only.fallback_allowed());
+    }
+
+    #[test]
+    fn fallback_evidence_is_not_valid_without_provenance() {
+        let evidence = FallbackEvidence::new(
+            true,
+            true,
+            true,
+            true,
+            true,
+            "",
+        );
+
+        assert!(!evidence.is_valid());
+    }
+
+    #[test]
+    fn fallback_policy_can_be_disabled_after_configuration() {
+        let policy = RecoveryPolicy::new()
+            .allow_fallback(true)
+            .allow_fallback(false);
+
+        assert!(!policy.fallback_allowed());
     }
 }
