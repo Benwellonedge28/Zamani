@@ -3,283 +3,334 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
 
-//! Zamani Universal Meta-Compiler — Pipeline Module.
+//! Zamani Universal Meta-Compiler — Pipeline Facade.
 //!
-//! Path:
-//!     src/compiler/pipeline/mod.rs
+//! Path: src/compiler/pipeline/mod.rs
+//! Edition: 2021
+//! Minimum supported Rust version: 1.97
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! # Purpose
 //!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
+//! This module is the public composition boundary for the compiler pipeline.
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! It exposes the existing pipeline subsystems without introducing competing
+//! implementations of their responsibilities.
 //!
-//! This module is the public composition boundary for the Zamani compiler
-//! pipeline.
+//! The pipeline coordinates compiler work. It does not define source-language
+//! semantics, own canonical IRs, allocate physical hardware, or execute
+//! compiled programs.
 //!
-//! It integrates the existing pipeline implementation modules:
+//! # Component ownership
 //!
-//!     stage.rs
-//!         Defines the canonical compiler-stage contract.
+//! | Module | Authoritative responsibility |
+//! |---|---|
+//! | stage | Stage identity, descriptors, contracts, inputs, outputs and errors |
+//! | stages | Standard stage definitions and domain-stage descriptors |
+//! | ordering | Dependency validation and deterministic topological ordering |
+//! | execution | Stage invocation, prerequisite outputs and execution records |
+//! | orchestration | Pipeline invocation lifecycle and coordination |
+//! | failure | Structured failure classification and reporting |
+//! | recovery | Recovery policy evaluation and safety evidence |
 //!
-//!     stages.rs
-//!         Defines standard pipeline stages and domain extension points.
+//! A declaration or descriptor is not proof that a stage implementation has
+//! been registered or that the corresponding functionality is operational.
 //!
-//!     ordering.rs
-//!         Validates stage dependencies and creates deterministic ordering.
+//! # Architectural boundaries
 //!
-//!     execution.rs
-//!         Executes stages and preserves their outputs and execution records.
+//! This facade owns:
 //!
-//!     failure.rs
-//!         Provides structured pipeline failure information.
-//!
-//!     recovery.rs
-//!         Evaluates retry and fallback policies.
-//!
-//!     orchestration.rs
-//!         Coordinates the lifecycle of a pipeline invocation.
-//!
-//! This module does not implement a second version of any of those systems.
-//!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
-//!
-//! This module owns:
-//!
-//! - Public composition of the pipeline subsystem.
+//! - Public pipeline module composition.
 //! - Public module visibility.
-//! - Stable, documented re-exports.
-//! - Public naming for potentially conflicting types.
-//! - Pipeline-level API discoverability.
+//! - Stable pipeline-level re-exports.
+//! - Disambiguated names for overlapping report types.
+//! - Facade-level API contract tests.
 //!
-//! This module does NOT own:
+//! It does not own:
 //!
-//! - Compiler-stage implementations.
-//! - Stage registration or dynamic plugin loading.
-//! - Stage dependency algorithms.
-//! - Stage execution.
-//! - Retry execution.
-//! - Recovery execution.
+//! - Stage implementation or dynamic extension loading.
+//! - Stage registration or provider discovery.
+//! - Dependency graph ownership outside the stage-ordering contract.
+//! - Stage execution algorithms.
 //! - Compilation lifecycle state.
-//! - Compilation configuration.
-//! - Resource-budget accounting.
-//! - Cancellation-token implementation.
-//! - Semantic analysis.
-//! - Type inference.
-//! - Ownership analysis.
-//! - Effect analysis.
-//! - Capability semantics.
-//! - Requirement semantics.
+//! - Cancellation implementation.
+//! - Budget accounting.
+//! - Semantic analysis or source-language meaning.
+//! - Type, ownership or effect semantics.
+//! - Capability and requirement semantics.
 //! - Canonical intermediate representations.
-//! - Optimization algorithms.
-//! - Hardware discovery.
-//! - Hardware allocation.
-//! - Physical scheduling.
-//! - Physical routing.
-//! - Backend implementations.
-//! - Artifact generation.
+//! - Optimization or transformation algorithms.
+//! - Physical resource discovery or allocation.
+//! - Physical scheduling or routing.
+//! - Backend implementation or code generation.
+//! - Artifact serialization or deployment.
 //! - Runtime execution.
 //!
-//! These responsibilities remain with their existing authoritative modules.
+//! Those responsibilities remain with their existing repository authorities.
 //!
-//! ============================================================================
-//! DEPENDENCY ARCHITECTURE
-//! ============================================================================
+//! # Dependency and integration model
 //!
-//! The intended dependency direction is:
+//! The conceptual integration is:
 //!
-//!     compiler::configuration
-//!                |
-//!                v
-//!     compiler::context
-//!                |
-//!                v
-//!       pipeline::stage
-//!                |
-//!                v
-//!       pipeline::stages
-//!                |
-//!                v
-//!       pipeline::ordering
-//!                |
-//!                v
-//!       pipeline::execution
-//!                |
-//!                v
-//!      pipeline::orchestration
+//! ```text
+//! compiler configuration
+//!          |
+//!          v
+//! compilation context and lifecycle
+//!          |
+//!          v
+//! stage contracts and stage definitions
+//!          |
+//!          v
+//! dependency validation and ordering
+//!          |
+//!          v
+//! stage execution
+//!          |
+//!          v
+//! pipeline orchestration
+//!          |
+//!          v
+//! compilation result / deployment handoff
+//! ```
 //!
-//!       pipeline::failure
-//!                |
-//!                v
-//!       pipeline::recovery
+//! Failure classification and recovery policy are cross-cutting:
 //!
-//! Failure normalization and recovery decisions are consumed by the
-//! orchestration layer when an explicit recovery integration is implemented.
+//! ```text
+//! stage / ordering / execution / orchestration
+//!                    |
+//!                    v
+//!              failure reporting
+//!                    |
+//!                    v
+//!             recovery evaluation
+//! ```
 //!
-//! This module only exposes these existing components.
+//! This diagram describes responsibility boundaries, not a requirement that
+//! every component directly imports the component immediately above it.
 //!
-//! ============================================================================
-//! POCO-REAF AND SCALABILITY
-//! ============================================================================
+//! The actual Rust dependencies are defined by the child modules.
 //!
-//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//! # Canonical repository integration
 //!
-//! This module introduces no fixed limits on:
+//! The pipeline coordinates the following authorities:
 //!
-//! - Pipeline stages.
-//! - Stage dependencies.
-//! - Compilation units.
-//! - Modules.
-//! - Functions.
-//! - CPUs.
-//! - CPU cores.
-//! - Workers.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Distributed nodes.
-//! - Memory.
-//! - Storage.
-//! - Qubits.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - IR operations.
-//! - Hardware capacity.
+//! - `compiler::configuration`: compiler configuration and operational budgets.
+//! - `compiler::context`: compilation context, cancellation and lifecycle.
+//! - `compiler::analysis`: compiler-facing analysis coordination.
+//! - `compiler::passes`: pass registration, ordering and execution contracts.
+//! - `compiler::optimization`: optimization planning and validation.
+//! - `compiler::planning`: target, capability and resource feasibility plans.
+//! - `compiler::lowering`: representation conversion and target legalization.
+//! - `compiler::backends`: compiler-facing backend integration.
+//! - `compiler::artifacts`: artifact validation and metadata.
+//! - `compiler::linking`: linking and composition.
+//! - `compiler::diagnostics`: structured compiler diagnostics.
+//! - `compiler::incremental`: fingerprints, invalidation and cache integration.
+//! - `compiler::parallel`: compiler-work parallelism.
+//! - `compiler::security`: verification and trust boundaries.
 //!
-//! The pipeline consumes configurable operational budgets through the
-//! existing CompilationContext and budget subsystem.
+//! The pipeline must consume these components through their established
+//! contracts. It must not create replacement authorities.
 //!
-//! An unlimited configured budget does not guarantee unlimited physical
-//! resources.
+//! # Frontend and grammar boundary
 //!
-//! Actual execution remains constrained by available memory, processor
-//! capacity, operating-system limits, backend capabilities and security
-//! policy.
+//! Source syntax and source-level compilation intent are owned by the grammar
+//! and frontend, not by this module.
 //!
-//! ============================================================================
-//! DETERMINISM
-//! ============================================================================
+//! Relevant grammar authorities include:
 //!
-//! Deterministic stage ordering is owned by pipeline::ordering.
+//! - `grammar/Zamani.g4`
+//! - `grammar/compile/compile.g4`
+//! - `grammar/specification/compilation-model.md`
+//! - `grammar/specification/execution-model.md`
+//! - `grammar/specification/poco-reaf.md`
+//! - `grammar/validation/semantic-boundaries.md`
 //!
-//! Deterministic sequential stage execution is owned by pipeline::execution.
+//! The frontend owns parsing, AST construction, structural validation and
+//! integration with the canonical semantic model.
 //!
-//! This composition module does not introduce concurrency or alter execution
-//! order.
+//! The semantic authority determines the meaning of source declarations,
+//! including requirements, capabilities, preferences, constraints, hints,
+//! effects and provenance.
 //!
-//! Parallel execution must be introduced through an explicitly designed
-//! executor that preserves dependency, output, cancellation and failure
-//! contracts.
+//! This pipeline consumes validated compiler inputs. It must not parse grammar
+//! productions, construct a second AST, or reinterpret source semantics.
 //!
-//! ============================================================================
-//! CONDITIONAL DOMAIN SUPPORT
-//! ============================================================================
+//! # Canonical representation boundaries
 //!
-//! The standard stage definitions distinguish:
+//! The pipeline coordinates existing representation authorities:
 //!
-//! - Required stages.
-//! - Conditional stages.
-//! - Policy-controlled stages.
+//! - `src/zuir/`: universal target-independent IR.
+//! - `src/classical/`: classical computation representations.
+//! - `src/quantum/ir/`: canonical quantum IR.
+//! - `src/hdl/hdlir/`: hardware-description IR.
+//! - `src/ai/`: AI computation integration.
+//! - `src/hybrid/`: cross-domain integration.
+//! - `src/distributed/`: distributed computation integration.
 //!
-//! Domain-specific stages can be registered using the existing Stage
-//! and StageDescriptor contracts.
+//! Compiler IR adapters and lowering components must preserve those ownership
+//! boundaries. This facade does not define another IR.
 //!
-//! A program that does not use a domain must not be forced through that
-//! domain's lowering or realization stages.
+//! # Conditional and domain-specific compilation
 //!
-//! A conditional stage must not be treated as successfully completed merely
-//! because it was skipped.
+//! A valid program need not use every computing domain.
 //!
-//! Required-stage completion remains mandatory for successful compilation.
+//! Consequently:
 //!
-//! ============================================================================
-//! FAILURE AND RECOVERY
-//! ============================================================================
+//! - Required stages must complete successfully.
+//! - Conditional stages may be inactive when their validated activation
+//!   conditions are not satisfied.
+//! - Policy-controlled stages must respect the applicable compilation policy.
+//! - A skipped stage is not a completed stage.
+//! - A dependent stage must not consume output from an incomplete prerequisite.
+//! - A required stage must not be silently omitted.
 //!
-//! Pipeline failures are represented by PipelineFailure.
+//! Domain activation must be based on validated compiler inputs and explicit
+//! stage contracts, not guesses based on target names or source text.
 //!
-//! Recovery decisions are represented by RecoveryDecision.
+//! Standard stage definitions describe the standard pipeline contract.
+//! They do not, by themselves, instantiate or register executable stages.
 //!
-//! RecoveryPlanner evaluates explicit policy and safety evidence.
+//! # Ordering, execution and determinism
 //!
-//! The recovery module does not itself execute retries or fallbacks.
+//! `ordering` owns dependency validation and deterministic ordering.
+//!
+//! `execution` owns stage invocation, direct prerequisite-output delivery,
+//! cancellation checks during execution and execution records.
+//!
+//! `orchestration` owns coordination of a pipeline invocation and its
+//! lifecycle transitions.
+//!
+//! This facade introduces no additional scheduler, worker pool or execution
+//! ordering policy.
+//!
+//! Any future parallel stage executor must explicitly preserve dependency
+//! ordering, output visibility, cancellation, failure propagation and the
+//! determinism contract of each stage.
+//!
+//! Compiler-work parallelism remains coordinated through the existing
+//! `compiler::parallel` subsystem.
+//!
+//! # Failure and recovery
+//!
+//! `failure` owns structured failure normalization and reporting.
+//!
+//! `recovery` owns recovery policy evaluation and the evidence required to
+//! consider retries or fallbacks.
+//!
+//! Exposing these APIs does not mean that recovery is automatically executed.
 //!
 //! In particular:
 //!
-//! - A retryable error does not prove that replay is safe.
-//! - Retrying must require explicit replay-safety evidence.
+//! - Retry permission is not proof that replay is safe.
+//! - Retry requires explicit policy and replay-safety evidence.
 //! - Cancellation must not be silently overridden.
-//! - Internal correctness-invariant failures must not be retried.
-//! - Fallbacks must preserve semantics, requirements and constraints.
-//! - An unverified fallback must never be reported as successful.
+//! - Internal correctness-invariant failures must not be treated as ordinary
+//!   transient failures.
+//! - A fallback must preserve the required semantics and constraints.
+//! - An unverified fallback must not be reported as successful.
 //!
-//! The actual retry or fallback execution must be implemented by the
-//! orchestration/execution integration, not by this module.
+//! Recovery execution must remain an explicit responsibility of the
+//! appropriate orchestration or higher-level recovery integration.
 //!
-//! ============================================================================
-//! GRAMMAR BOUNDARY
-//! ============================================================================
+//! # POCO-REAF and scalability
 //!
-//! The authoritative grammar composition roots include:
+//! Zamani's objective is:
 //!
-//!     grammar/Zamani.g4
-//!     grammar/antlr/ZamaniParser.g4
-//!     grammar/core/program.g4
-//!     grammar/compile/compile.g4
+//! `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever`
 //!
-//! The grammar defines source-level language constructs and compilation
-//! intent.
+//! This facade introduces no arbitrary universal ceilings on:
 //!
-//! This module exposes compiler implementation infrastructure.
+//! - Pipeline stages or dependencies.
+//! - Compilation units, modules or functions.
+//! - CPUs, cores or workers.
+//! - GPUs, FPGAs, ASICs or QPUs.
+//! - Accelerators or processing elements.
+//! - Distributed nodes or participants.
+//! - Memory or storage.
+//! - Physical or logical qubits.
+//! - Tensor dimensions or rank.
+//! - IR operations or transformations.
+//! - Targets, providers or computing domains.
 //!
-//! It does not parse grammar declarations, define language syntax, or
-//! interpret source-level compilation intent.
+//! The facade does not silently truncate collections or discard stage,
+//! dependency, failure or provenance information.
 //!
-//! The frontend and semantic authorities must validate source declarations
-//! before those declarations influence compiler execution.
+//! Operational budgets are consumed through the existing compilation
+//! context and configuration authorities.
 //!
-//! ============================================================================
-//! MODULE DECLARATIONS
-//! ============================================================================
+//! Configurable budgets are operational controls, not semantic hardware
+//! limits. An unlimited configured budget does not promise unlimited physical
+//! resources.
+//!
+//! Actual feasibility remains subject to available resources, target
+//! capabilities, operating-system limits, representation limits and policy.
+//!
+//! # Runtime boundary
+//!
+//! Compiler execution means executing compiler stages.
+//!
+//! It does not mean executing the compiled program.
+//!
+//! Physical resource acquisition, device allocation, physical scheduling,
+//! runtime dispatch and program execution remain responsibilities of the
+//! runtime, hardware and deployment authorities.
+//!
+//! # API compatibility
+//!
+//! Existing public module paths and re-export names are retained in this
+//! facade. Component APIs remain owned and versioned by their respective
+//! modules.
+//!
+//! Changes to a child component must be reflected here deliberately when its
+//! public API is intended to be part of the pipeline facade.
+//!
+//! This facade must not re-export private implementation details merely to
+//! make unrelated modules compile.
+//!
+//! # Safety
+//!
+//! Unsafe Rust is forbidden in this module and its implementation.
+//!
+//! No global mutable state, implicit worker pool, hidden retry loop or
+//! independent cancellation mechanism is introduced here.
+
+// ============================================================================
+// MODULE DECLARATIONS
+// ============================================================================
 
 /// Canonical compiler-stage contracts.
 pub mod stage;
 
-/// Standard compiler pipeline stages and domain extension points.
+/// Standard pipeline stage definitions and domain-stage descriptors.
 pub mod stages;
 
 /// Dependency validation and deterministic stage ordering.
 pub mod ordering;
 
-/// Stage execution and execution reports.
+/// Stage invocation and execution reports.
 pub mod execution;
 
-/// Structured pipeline failure representation and normalization.
+/// Structured pipeline failure classification and reporting.
 pub mod failure;
 
 /// Recovery policy evaluation and safety evidence.
 pub mod recovery;
 
-/// Pipeline lifecycle orchestration.
+/// Pipeline invocation lifecycle orchestration.
 pub mod orchestration;
 
 // ============================================================================
-// API VERSIONING
+// API VERSION
 // ============================================================================
 
-/// Version of the composed pipeline module API.
+/// Version of the public pipeline composition surface.
 ///
-/// Individual pipeline components retain their own API versions.
-/// This version identifies the public composition surface.
+/// This version is independent of the Zamani language version, grammar
+/// version, semantic-model version, IR versions, backend versions and runtime
+/// versions.
+///
+/// Child modules expose their own API versions.
 pub const PIPELINE_API_VERSION: u16 = 1;
 
 // ============================================================================
@@ -335,11 +386,8 @@ pub use ordering::{
 // EXECUTION RE-EXPORTS
 // ============================================================================
 
-// The execution subsystem and orchestration subsystem both define
-// execution-report-related public types.
-//
-// Explicit aliases avoid ambiguous names and preserve access to both
-// contracts without changing their original definitions.
+// Execution and orchestration have separate report types. Explicit aliases
+// preserve both public contracts without introducing ambiguous root names.
 
 pub use execution::{
     ExecutionError,
@@ -394,10 +442,8 @@ pub use recovery::{
 // ORCHESTRATION RE-EXPORTS
 // ============================================================================
 
-// These aliases deliberately distinguish orchestration records from
-// executor records.
-//
-// The underlying types remain owned by orchestration.rs.
+// These aliases distinguish orchestration-level reporting from executor-level
+// reporting. The original types remain owned by orchestration.rs.
 
 pub use orchestration::{
     ExecutionReport as OrchestrationExecutionReport,
@@ -410,16 +456,12 @@ pub use orchestration::{
 };
 
 // ============================================================================
-// PUBLIC API CONTRACT TESTS
+// FACADE CONTRACT TESTS
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ------------------------------------------------------------------------
-    // Module API
-    // ------------------------------------------------------------------------
 
     #[test]
     fn pipeline_api_version_is_available() {
@@ -437,14 +479,11 @@ mod tests {
         assert_eq!(PIPELINE_ORCHESTRATION_API_VERSION, 1);
     }
 
-    // ------------------------------------------------------------------------
-    // Stage contract
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn stage_identifiers_are_exposed_through_pipeline_root() {
-        let identifier = StageId::new("compiler.frontend.parse")
-            .expect("valid stage identifier");
+    fn stage_identifier_is_available_from_facade() {
+        let identifier =
+            StageId::new("compiler.frontend.parse")
+                .expect("valid stage identifier");
 
         assert_eq!(
             identifier.as_str(),
@@ -453,30 +492,26 @@ mod tests {
     }
 
     #[test]
-    fn stage_identifiers_do_not_have_an_arbitrary_length_limit() {
-        let identifier = format!(
+    fn stage_identifiers_are_not_subject_to_an_arbitrary_length_ceiling() {
+        let value = format!(
             "compiler.{}",
             "stage".repeat(10_000)
         );
 
-        let stage_id = StageId::new(identifier.clone())
-            .expect("dynamically sized stage identifiers are supported");
+        let identifier = StageId::new(value.clone())
+            .expect("dynamically sized stage identifier");
 
-        assert_eq!(stage_id.as_str(), identifier);
+        assert_eq!(identifier.as_str(), value);
     }
 
-    // ------------------------------------------------------------------------
-    // Standard stage definitions
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn standard_stage_definitions_are_available() {
+    fn standard_stage_definitions_are_available_and_valid() {
         let definitions = standard_stage_definitions()
-            .expect("standard stage definitions must be valid");
+            .expect("standard stage definitions");
 
         assert!(
             !definitions.is_empty(),
-            "the standard pipeline must define its standard stages"
+            "standard pipeline definitions must not be empty"
         );
 
         validate_standard_definitions(&definitions)
@@ -484,15 +519,15 @@ mod tests {
     }
 
     #[test]
-    fn standard_stage_definitions_preserve_activation_metadata() {
+    fn standard_definitions_include_required_and_conditional_activation() {
         let definitions = standard_stage_definitions()
-            .expect("standard stage definitions must be valid");
+            .expect("standard stage definitions");
 
         assert!(
             definitions.iter().any(|definition| {
                 definition.activation() == StageActivation::Required
             }),
-            "the standard pipeline must define required stages"
+            "the standard pipeline must describe required stages"
         );
 
         assert!(
@@ -503,14 +538,10 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------------
-    // Ordering
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn ordering_api_is_available_through_pipeline_root() {
+    fn standard_stage_dependencies_produce_a_valid_ordering() {
         let definitions = standard_stage_definitions()
-            .expect("standard stage definitions must be valid");
+            .expect("standard stage definitions");
 
         let descriptors = definitions
             .iter()
@@ -528,24 +559,12 @@ mod tests {
         assert!(!ordering.is_empty());
     }
 
-    // ------------------------------------------------------------------------
-    // Recovery API
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn recovery_defaults_are_conservative() {
+    fn recovery_is_conservative_by_default() {
         let policy = RecoveryPolicy::new();
 
-        assert_eq!(
-            policy.max_retries(),
-            0,
-            "retries must be explicitly enabled"
-        );
-
-        assert!(
-            !policy.fallback_allowed(),
-            "fallback must be explicitly enabled"
-        );
+        assert_eq!(policy.max_retries(), 0);
+        assert!(!policy.fallback_allowed());
     }
 
     #[test]
@@ -559,10 +578,6 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------------
-    // Orchestration API
-    // ------------------------------------------------------------------------
-
     #[test]
     fn orchestration_api_is_available() {
         let orchestrator = PipelineOrchestrator::new();
@@ -570,12 +585,8 @@ mod tests {
         let _ = orchestrator;
     }
 
-    // ------------------------------------------------------------------------
-    // Public type disambiguation
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn executor_and_orchestration_reports_have_distinct_public_names() {
+    fn executor_and_orchestration_report_names_are_unambiguous() {
         let _: Option<StageExecutionReport> = None;
         let _: Option<OrchestrationExecutionReport> = None;
 
