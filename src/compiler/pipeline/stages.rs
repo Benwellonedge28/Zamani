@@ -5,89 +5,71 @@
 
 //! Zamani Universal Meta-Compiler — Canonical Pipeline Stages.
 //!
-//! Path:
-//!     src/compiler/pipeline/stages.rs
+//! Path: src/compiler/pipeline/stages.rs
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! Rust: Edition 2021, Rust 1.97+
 //!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
+//! # Purpose
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! Defines stable, extensible identities and dependency contracts for
+//! the standard Zamani compiler pipeline.
 //!
-//! Defines canonical identifiers and dependency contracts for standard
-//! Zamani compiler pipeline stages.
+//! This module describes compiler responsibilities. It does not
+//! implement, register, order, execute or orchestrate stages.
 //!
-//! Individual stage implementations implement the Stage trait defined in:
-//!
-//!     compiler::pipeline::stage
-//!
-//! This module provides the stable names and construction contracts used
-//! by pipeline registration, ordering, execution, and orchestration.
-//!
-//! It does not implement the stages themselves.
-//!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
+//! # Ownership
 //!
 //! This module owns:
 //!
-//! - Standard compiler-stage identifiers.
+//! - Standard stage identifiers.
+//! - Standard domain integration identifiers.
+//! - Standard stage metadata.
+//! - Stage activation classification.
 //! - Standard stage descriptor construction.
-//! - Standard stage dependency declarations.
-//! - Stable identifiers for domain-extension integration points.
-//! - The standard stage API version.
+//! - Standard dependency declarations.
+//! - Standard-definition validation.
+//! - Standard-stage activation queries.
 //!
-//! This module does NOT own:
+//! This module does not own:
 //!
 //! - Stage implementations.
 //! - Stage registration.
-//! - Stage ordering algorithms.
+//! - Extension discovery.
+//! - Dependency ordering algorithms.
+//! - Pipeline execution.
 //! - Pipeline orchestration.
-//! - Stage execution.
-//! - Stage recovery.
 //! - Compilation lifecycle.
 //! - Semantic analysis.
 //! - Type inference.
-//! - Ownership analysis.
+//! - Ownership semantics.
 //! - Effect semantics.
 //! - Capability semantics.
-//! - Resource requirement semantics.
-//! - AST definitions.
-//! - ZUIR.
-//! - ZCIR.
-//! - Quantum IR.
-//! - HDLIR.
-//! - AI computation.
+//! - Canonical IR.
+//! - IR verification implementation.
+//! - Optimization algorithms.
 //! - Hardware discovery.
-//! - Physical resource allocation.
-//! - Runtime scheduling.
+//! - Physical allocation.
+//! - Physical scheduling.
+//! - Physical routing.
 //! - Backend implementation.
+//! - Runtime execution.
 //!
-//! ============================================================================
-//! REPOSITORY OWNERSHIP
-//! ============================================================================
-//!
-//! The canonical authorities remain:
+//! # Canonical authorities
 //!
 //! Source grammar:
 //!     grammar/Zamani.g4
+//!
+//! Parser composition:
 //!     grammar/antlr/ZamaniParser.g4
 //!
-//! Semantic model:
-//!     grammar/specification/semantic-model.md
+//! Compilation grammar:
+//!     grammar/compile/compile.g4
 //!
-//! Frontend:
-//!     src/frontend/
+//! Compilation semantics:
+//!     grammar/specification/compilation-model.md
 //!
-//! Semantic analysis:
-//!     Existing canonical semantic subsystem.
+//! Semantic authority:
+//!     src/frontend/semantic/
 //!
 //! Universal IR:
 //!     src/zuir/
@@ -98,7 +80,7 @@
 //! Quantum IR:
 //!     src/quantum/ir/
 //!
-//! Hardware IR:
+//! HDL:
 //!     src/hdl/hdlir/
 //!
 //! AI:
@@ -116,93 +98,59 @@
 //! Runtime:
 //!     src/runtime/
 //!
-//! Compiler orchestration:
-//!     src/compiler/
+//! # Dependency direction
 //!
-//! ============================================================================
-//! DEPENDENCY DIRECTION
-//! ============================================================================
+//! configuration/budget
+//!         |
+//! context/compilation_state
+//!         |
+//! pipeline/stage
+//!         |
+//! pipeline/stages
+//!         |
+//! pipeline/ordering
+//!         |
+//! pipeline/execution
+//!         |
+//! pipeline/orchestration
 //!
-//! This module depends on:
+//! # POCO-REAF
 //!
-//!     compiler::pipeline::stage
-//!         StageId
-//!         StageDescriptor
-//!         StageDescriptorError
-//!         StageDeterminism
-//!         StageConcurrency
+//! Stage identifiers are logical identities.
 //!
-//!     compiler::context::compilation_state
-//!         CompilationPhase
+//! They are not physical machine identifiers.
 //!
-//!     compiler::configuration::budget
-//!         BudgetDimension
+//! No universal limits are imposed on:
 //!
-//! Future consumers:
+//! - stages;
+//! - dependencies;
+//! - CPUs;
+//! - cores;
+//! - threads;
+//! - GPUs;
+//! - FPGAs;
+//! - QPUs;
+//! - qubits;
+//! - accelerators;
+//! - nodes;
+//! - devices;
+//! - memory;
+//! - storage;
+//! - tensor rank;
+//! - tensor dimensions;
+//! - modules;
+//! - functions;
+//! - operations;
+//! - compilation units;
+//! - domain extensions.
 //!
-//!     pipeline::ordering
-//!     pipeline::execution
-//!     pipeline::orchestration
-//!     pipeline::mod
+//! Operational budgets are owned by compiler configuration.
 //!
-//! No dependency on future pipeline modules is required.
+//! Actual physical capacity is determined by authoritative providers.
 //!
-//! ============================================================================
-//! POCO-REAF
-//! ============================================================================
+//! No implementation can guarantee infinite physical resources.
 //!
-//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
-//!
-//! Stage identifiers are logical compiler identities.
-//!
-//! They are not physical hardware identifiers.
-//!
-//! This module imposes no universal maximum on:
-//!
-//! - CPUs.
-//! - Cores.
-//! - Threads.
-//! - Workers.
-//! - GPUs.
-//! - FPGAs.
-//! - ASICs.
-//! - QPUs.
-//! - Qubits.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Tensor rank.
-//! - Tensor dimensions.
-//! - Modules.
-//! - Functions.
-//! - Operations.
-//! - Compilation units.
-//! - Compiler stages.
-//! - Domain extensions.
-//!
-//! Operational constraints are managed by the existing compilation
-//! configuration and budget authorities.
-//!
-//! No finite implementation can promise infinite physical resources.
-//!
-//! ============================================================================
-//! GRAMMAR BOUNDARY
-//! ============================================================================
-//!
-//! The grammar composition establishes source-language constructs.
-//!
-//! In particular:
-//!
-//!     grammar/Zamani.g4
-//!     grammar/antlr/ZamaniParser.g4
-//!     grammar/compile/compile.g4
-//!
-//! Compilation declarations are source-language intent.
-//!
-//! They must be interpreted by frontend and semantic analysis before
-//! influencing actual compilation policy.
+//! # Grammar boundary
 //!
 //! A source-level COMPILE declaration is not a StageId.
 //!
@@ -210,13 +158,11 @@
 //!
 //! A source-level RESOURCE requirement is not a physical allocation.
 //!
-//! A source-level quantum declaration does not automatically require
-//! every quantum compiler stage to execute.
+//! Source-level intent must be parsed and semantically validated before
+//! influencing compiler-stage activation.
 //!
-//! Domain-specific stages are activated by validated compilation input,
-//! registered implementations, and applicable compilation policy.
-//!
-//! ============================================================================
+//! Adding a new grammar production must not automatically add a
+//! compiler-stage implementation.
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -238,42 +184,25 @@ use crate::compiler::pipeline::stage::{
 // API VERSION
 // ============================================================================
 
-/// Public API version for canonical compiler-stage definitions.
-///
-/// This version is independent of:
-///
-/// - Zamani language version.
-/// - Grammar version.
-/// - Compiler release version.
-/// - Semantic-model version.
-/// - AST version.
-/// - ZUIR version.
-/// - Quantum IR version.
-/// - Backend ABI version.
-pub const PIPELINE_STAGES_API_VERSION: u16 = 1;
+/// Public API version of standard pipeline-stage definitions.
+pub const PIPELINE_STAGES_API_VERSION: u16 = 2;
 
 // ============================================================================
 // STANDARD STAGE IDENTIFIERS
 // ============================================================================
 
-/// Stable identifiers for the standard compiler pipeline.
+/// Stable identifiers for standard compiler responsibilities.
 ///
-/// These identifiers describe compiler responsibilities.
+/// These are dynamically sized string identifiers rather than closed
+/// hardware-specific enumerations.
 ///
-/// They do not identify a particular implementation.
+/// Their values are compatibility-sensitive.
 ///
-/// Custom extensions must use their own namespaced identifiers.
-///
-/// Identifiers are strings rather than closed hardware-specific enums.
-///
-/// This allows future computing domains to introduce new stages without
-/// changing this module.
+/// Existing identifiers must not be changed without an explicit
+/// compatibility migration.
 pub mod ids {
-    // ------------------------------------------------------------------------
-    // Initialization
-    // ------------------------------------------------------------------------
 
-    /// Compiler initialization and compilation preparation.
+    /// Compilation initialization.
     pub const INITIALIZATION: &str =
         "zamani.compiler.initialization";
 
@@ -281,63 +210,75 @@ pub mod ids {
     // Frontend
     // ------------------------------------------------------------------------
 
-    /// Lexical analysis and parsing.
+    /// Frontend lexing and parsing integration.
     pub const FRONTEND_PARSE: &str =
         "zamani.compiler.frontend.parse";
 
-    /// Structural validation of frontend output.
+    /// Structural validation.
     pub const STRUCTURAL_VALIDATION: &str =
         "zamani.compiler.frontend.structural_validation";
 
-    // ------------------------------------------------------------------------
-    // Semantic analysis
-    // ------------------------------------------------------------------------
+    /// Macro expansion and AST transformation.
+    pub const MACRO_EXPANSION: &str =
+        "zamani.compiler.frontend.macro_expansion";
 
     /// Name and symbol resolution.
     pub const NAME_RESOLUTION: &str =
         "zamani.compiler.semantic.name_resolution";
 
-    /// Canonical semantic analysis integration.
+    // ------------------------------------------------------------------------
+    // Semantic analysis
+    // ------------------------------------------------------------------------
+
+    /// Canonical semantic analysis.
     pub const SEMANTIC_ANALYSIS: &str =
         "zamani.compiler.semantic.analysis";
 
-    /// Ownership and borrow-analysis integration.
+    /// Ownership and borrow analysis.
     pub const OWNERSHIP_ANALYSIS: &str =
         "zamani.compiler.semantic.ownership";
 
-    /// Effect and dependency analysis integration.
+    /// Effect and dependency analysis.
     pub const EFFECT_DEPENDENCY_ANALYSIS: &str =
         "zamani.compiler.semantic.effects_dependencies";
 
+    /// Compile-time evaluation.
+    pub const COMPILE_TIME_EVALUATION: &str =
+        "zamani.compiler.compile_time.evaluation";
+
     // ------------------------------------------------------------------------
-    // Intermediate representation
+    // Intermediate representations
     // ------------------------------------------------------------------------
 
-    /// Construction of canonical intermediate representations.
+    /// Canonical IR construction and domain IR integration.
     pub const IR_CONSTRUCTION: &str =
         "zamani.compiler.ir.construction";
 
-    /// Verification of canonical intermediate representations.
+    /// Canonical IR verification.
     pub const IR_VERIFICATION: &str =
         "zamani.compiler.ir.verification";
+
+    /// Generic and other permitted specialization.
+    pub const SPECIALIZATION: &str =
+        "zamani.compiler.specialization";
 
     // ------------------------------------------------------------------------
     // Optimization
     // ------------------------------------------------------------------------
 
-    /// Optimization of canonical representations.
+    /// Registered optimization pipeline.
     pub const OPTIMIZATION: &str =
         "zamani.compiler.optimization";
 
     // ------------------------------------------------------------------------
-    // Capability and feasibility analysis
+    // Capability and feasibility
     // ------------------------------------------------------------------------
 
     /// Capability compatibility analysis.
     pub const CAPABILITY_ANALYSIS: &str =
         "zamani.compiler.analysis.capabilities";
 
-    /// Compilation and realization feasibility analysis.
+    /// Compilation and realization feasibility.
     pub const FEASIBILITY_ANALYSIS: &str =
         "zamani.compiler.analysis.feasibility";
 
@@ -345,15 +286,31 @@ pub mod ids {
     // Planning
     // ------------------------------------------------------------------------
 
-    /// Heterogeneous compilation planning.
+    /// Heterogeneous realization planning.
     pub const HETEROGENEOUS_PLANNING: &str =
         "zamani.compiler.planning.heterogeneous";
+
+    /// Computation partitioning.
+    pub const PARTITIONING: &str =
+        "zamani.compiler.planning.partitioning";
+
+    /// Data movement planning.
+    pub const DATA_MOVEMENT_PLANNING: &str =
+        "zamani.compiler.planning.data_movement";
+
+    /// Abstract routing planning.
+    pub const ROUTING_PLANNING: &str =
+        "zamani.compiler.planning.routing";
+
+    /// Abstract scheduling planning.
+    pub const SCHEDULING_PLANNING: &str =
+        "zamani.compiler.planning.scheduling";
 
     // ------------------------------------------------------------------------
     // Lowering
     // ------------------------------------------------------------------------
 
-    /// Target-independent and target-specific lowering.
+    /// Domain and target lowering.
     pub const LOWERING: &str =
         "zamani.compiler.lowering";
 
@@ -361,7 +318,7 @@ pub mod ids {
     // Linking
     // ------------------------------------------------------------------------
 
-    /// Module composition and linking.
+    /// Module and artifact linking.
     pub const LINKING: &str =
         "zamani.compiler.linking";
 
@@ -369,7 +326,7 @@ pub mod ids {
     // Backend
     // ------------------------------------------------------------------------
 
-    /// Target-specific code generation.
+    /// Target or portable artifact generation.
     pub const CODE_GENERATION: &str =
         "zamani.compiler.backend.code_generation";
 
@@ -377,79 +334,70 @@ pub mod ids {
     // Artifacts
     // ------------------------------------------------------------------------
 
-    /// Artifact integrity and validity verification.
+    /// Artifact integrity and compatibility validation.
     pub const ARTIFACT_VALIDATION: &str =
         "zamani.compiler.artifacts.validation";
+
+    /// Artifact portability validation.
+    pub const PORTABILITY_VALIDATION: &str =
+        "zamani.compiler.artifacts.portability_validation";
 
     // ------------------------------------------------------------------------
     // Finalization
     // ------------------------------------------------------------------------
 
-    /// Final compilation-result preparation.
+    /// Compilation result finalization.
     pub const FINALIZATION: &str =
         "zamani.compiler.finalization";
 }
 
 // ============================================================================
-// DOMAIN EXTENSION IDENTIFIERS
+// DOMAIN IDENTIFIERS
 // ============================================================================
 
-/// Namespaced identifiers for common computing-domain integration points.
+/// Common computational-domain namespaces.
 ///
-/// These are extension identifiers, not a closed inventory.
+/// These constants provide convenient identifiers.
 ///
-/// Additional domains must be able to introduce their own identifiers
-/// without modifying this module.
+/// They do not constitute a closed list of supported computing domains.
 ///
-/// The presence of an identifier does not imply that an implementation
-/// exists or that the stage must execute.
+/// New domains can introduce their own namespaces without modifying
+/// this module.
 pub mod domains {
 
-    /// Classical computation integration.
     pub const CLASSICAL: &str =
         "zamani.domain.classical";
 
-    /// Quantum computation integration.
     pub const QUANTUM: &str =
         "zamani.domain.quantum";
 
-    /// Artificial intelligence integration.
     pub const AI: &str =
         "zamani.domain.ai";
 
-    /// Tensor computation integration.
     pub const TENSOR: &str =
         "zamani.domain.tensor";
 
-    /// HDL and hardware-description integration.
     pub const HDL: &str =
         "zamani.domain.hdl";
 
-    /// Hardware acceleration integration.
     pub const HARDWARE: &str =
         "zamani.domain.hardware";
 
-    /// Hybrid computation integration.
     pub const HYBRID: &str =
         "zamani.domain.hybrid";
 
-    /// Distributed computation integration.
     pub const DISTRIBUTED: &str =
         "zamani.domain.distributed";
 
-    /// Networking integration.
     pub const NETWORKING: &str =
         "zamani.domain.networking";
 
-    /// Cryptographic computation integration.
     pub const CRYPTOGRAPHY: &str =
         "zamani.domain.cryptography";
 
-    /// Neuromorphic computation integration.
     pub const NEUROMORPHIC: &str =
         "zamani.domain.neuromorphic";
 
-    /// Photonic computation integration.
     pub const PHOTONIC: &str =
         "zamani.domain.photonic";
 }
@@ -458,141 +406,141 @@ pub mod domains {
 // DOMAIN STAGE IDENTIFIERS
 // ============================================================================
 
-/// Canonical extension points for domain-specific compilation stages.
+/// Well-known domain integration points.
 ///
-/// Each domain remains responsible for its own implementation.
+/// These identifiers do not imply that an implementation exists.
 ///
-/// These identifiers allow independently developed domain subsystems
-/// to integrate into the universal compiler pipeline.
-///
-/// A domain may introduce additional identifiers using StageId::new().
+/// Domain implementations remain owned by their respective subsystems.
 pub mod domain_stages {
 
-    /// Classical representation integration.
     pub const CLASSICAL_IR: &str =
         "zamani.compiler.domain.classical.ir";
 
-    /// Quantum representation integration.
     pub const QUANTUM_IR: &str =
         "zamani.compiler.domain.quantum.ir";
 
-    /// AI representation integration.
     pub const AI_IR: &str =
         "zamani.compiler.domain.ai.ir";
 
-    /// Tensor representation integration.
     pub const TENSOR_IR: &str =
         "zamani.compiler.domain.tensor.ir";
 
-    /// HDL representation integration.
     pub const HDL_IR: &str =
         "zamani.compiler.domain.hdl.ir";
 
-    /// Hybrid dependency integration.
     pub const HYBRID_ANALYSIS: &str =
         "zamani.compiler.domain.hybrid.analysis";
 
-    /// Distributed computation integration.
     pub const DISTRIBUTED_ANALYSIS: &str =
         "zamani.compiler.domain.distributed.analysis";
 
-    /// Networking integration.
     pub const NETWORKING_ANALYSIS: &str =
         "zamani.compiler.domain.networking.analysis";
 
-    /// Cryptographic computation integration.
     pub const CRYPTOGRAPHY_ANALYSIS: &str =
         "zamani.compiler.domain.cryptography.analysis";
 }
 
 // ============================================================================
-// STANDARD STAGE METADATA
+// STANDARD STAGE ROLE
 // ============================================================================
 
-/// Metadata describing the role of a standard pipeline stage.
+/// Organizational role of a standard compiler stage.
 ///
-/// This type is organizational.
-///
-/// It does not replace StageDescriptor.
+/// This is metadata, not an execution policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StandardStageRole {
 
-    /// Compiler initialization.
     Initialization,
 
-    /// Frontend processing.
     Frontend,
 
-    /// Semantic analysis.
     Semantic,
 
-    /// IR construction.
     IntermediateRepresentation,
 
-    /// IR verification.
     Verification,
 
-    /// Optimization.
+    CompileTime,
+
+    Specialization,
+
     Optimization,
 
-    /// Capability analysis.
     CapabilityAnalysis,
 
-    /// Feasibility analysis.
     FeasibilityAnalysis,
 
-    /// Compilation planning.
     Planning,
 
-    /// Lowering.
     Lowering,
 
-    /// Linking.
     Linking,
 
-    /// Code generation.
     CodeGeneration,
 
-    /// Artifact validation.
     ArtifactValidation,
 
-    /// Finalization.
+    PortabilityValidation,
+
     Finalization,
 }
 
-/// Describes whether a stage is part of the normal compiler path
-/// or is activated conditionally.
+// ============================================================================
+// ACTIVATION POLICY
+// ============================================================================
+
+/// Declares the default activation classification of a stage.
 ///
-/// Domain-specific implementations should generally be conditional.
+/// Activation metadata must be interpreted by pipeline orchestration.
 ///
-/// A conditional stage is activated only when the validated compilation
-/// input and registered implementation make it applicable.
+/// It does not automatically cause the executor to skip or execute a stage.
+///
+/// A stage marked Conditional can still be mandatory for a particular
+/// compilation after its applicability has been established.
+///
+/// A PolicyControlled stage requires explicit policy authorization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StageActivation {
 
-    /// Part of the standard compilation contract.
+    /// Required for every standard compilation.
     Required,
 
-    /// Executed only when its prerequisites and applicability conditions
-    /// are satisfied.
+    /// Activated when validated program characteristics require it.
     Conditional,
 
-    /// Activated by an explicit compilation or deployment policy.
+    /// Activated by explicit compilation policy.
     PolicyControlled,
+}
+
+impl StageActivation {
+
+    /// Whether the stage is unconditionally required.
+    #[must_use]
+    pub const fn is_required(self) -> bool {
+        matches!(self, Self::Required)
+    }
+
+    /// Whether the stage is conditionally activated.
+    #[must_use]
+    pub const fn is_conditional(self) -> bool {
+        matches!(self, Self::Conditional)
+    }
+
+    /// Whether explicit policy authorization is necessary.
+    #[must_use]
+    pub const fn is_policy_controlled(self) -> bool {
+        matches!(self, Self::PolicyControlled)
+    }
 }
 
 // ============================================================================
 // STANDARD STAGE DEFINITION
 // ============================================================================
 
-/// A standard stage definition.
-///
-/// The descriptor contains the executable-stage contract.
-///
-/// The role and activation classification provide additional
-/// pipeline-planning metadata.
+/// Immutable definition of a standard compiler stage.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StandardStageDefinition {
 
@@ -605,13 +553,14 @@ pub struct StandardStageDefinition {
 
 impl StandardStageDefinition {
 
-    /// Creates a standard stage definition.
+    /// Constructs a standard stage definition.
     #[must_use]
     pub fn new(
         descriptor: StageDescriptor,
         role: StandardStageRole,
         activation: StageActivation,
     ) -> Self {
+
         Self {
             descriptor,
             role,
@@ -625,7 +574,7 @@ impl StandardStageDefinition {
         &self.descriptor
     }
 
-    /// Returns the stage role.
+    /// Returns the organizational role.
     #[must_use]
     pub const fn role(&self) -> StandardStageRole {
         self.role
@@ -637,7 +586,25 @@ impl StandardStageDefinition {
         self.activation
     }
 
-    /// Consumes this definition and returns its descriptor.
+    /// Returns whether the stage is unconditionally required.
+    #[must_use]
+    pub const fn is_required(&self) -> bool {
+        self.activation.is_required()
+    }
+
+    /// Returns whether the stage is conditionally activated.
+    #[must_use]
+    pub const fn is_conditional(&self) -> bool {
+        self.activation.is_conditional()
+    }
+
+    /// Returns whether explicit policy activation is necessary.
+    #[must_use]
+    pub const fn is_policy_controlled(&self) -> bool {
+        self.activation.is_policy_controlled()
+    }
+
+    /// Consumes the definition and returns its descriptor.
     #[must_use]
     pub fn into_descriptor(self) -> StageDescriptor {
         self.descriptor
@@ -645,40 +612,44 @@ impl StandardStageDefinition {
 }
 
 // ============================================================================
-// STANDARD STAGE CONSTRUCTION ERRORS
+// STANDARD STAGE ERRORS
 // ============================================================================
 
-/// Errors encountered while constructing standard stage definitions.
+/// Errors encountered while constructing or validating standard stages.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum StandardStageError {
 
-    /// Invalid stage identifier.
     InvalidIdentifier {
         identifier: String,
         message: String,
     },
 
-    /// Invalid stage descriptor.
     InvalidDescriptor {
         identifier: String,
         source: StageDescriptorError,
     },
 
-    /// A standard stage identifier was declared more than once.
     DuplicateIdentifier {
         identifier: String,
     },
 
-    /// A standard stage depends on an identifier that is absent
-    /// from the standard definition set.
-    ///
-    /// This check is performed only for dependencies declared as
-    /// standard dependencies.
     MissingStandardDependency {
         stage: String,
         dependency: String,
     },
+
+    /// A required stage depends directly on a stage that is not
+    /// unconditionally required.
+    ///
+    /// This would allow a skipped optional stage to block the
+    /// mandatory compilation path.
+    RequiredStageDependsOnOptionalDependency {
+        stage: String,
+        dependency: String,
+    },
+
+    EmptyDefinitions,
 }
 
 impl fmt::Display for StandardStageError {
@@ -695,7 +666,7 @@ impl fmt::Display for StandardStageError {
                 message,
             } => write!(
                 formatter,
-                "invalid standard stage identifier `{identifier}`: {message}"
+                "invalid stage identifier `{identifier}`: {message}"
             ),
 
             Self::InvalidDescriptor {
@@ -710,7 +681,7 @@ impl fmt::Display for StandardStageError {
                 identifier,
             } => write!(
                 formatter,
-                "duplicate standard stage identifier `{identifier}`"
+                "duplicate standard stage `{identifier}`"
             ),
 
             Self::MissingStandardDependency {
@@ -718,8 +689,22 @@ impl fmt::Display for StandardStageError {
                 dependency,
             } => write!(
                 formatter,
-                "standard stage `{stage}` references missing dependency `{dependency}`"
+                "stage `{stage}` references missing dependency `{dependency}`"
             ),
+
+            Self::RequiredStageDependsOnOptionalDependency {
+                stage,
+                dependency,
+            } => write!(
+                formatter,
+                "required stage `{stage}` depends on non-required stage `{dependency}`"
+            ),
+
+            Self::EmptyDefinitions => {
+                formatter.write_str(
+                    "standard stage definitions cannot be empty"
+                )
+            }
         }
     }
 }
@@ -730,10 +715,9 @@ impl Error for StandardStageError {
 
         match self {
 
-            Self::InvalidDescriptor {
-                source,
-                ..
-            } => Some(source),
+            Self::InvalidDescriptor { source, .. } => {
+                Some(source)
+            }
 
             _ => None,
         }
@@ -741,7 +725,7 @@ impl Error for StandardStageError {
 }
 
 // ============================================================================
-// STANDARD STAGE BUILDER
+// INTERNAL STAGE CONSTRUCTION
 // ============================================================================
 
 fn create_stage(
@@ -754,7 +738,7 @@ fn create_stage(
     activation: StageActivation,
     determinism: StageDeterminism,
     concurrency: StageConcurrency,
-    budget_dimension: Option<(&str, &str)>,
+    budget_dimension: Option<BudgetDimension>,
 ) -> Result<StandardStageDefinition, StandardStageError> {
 
     let id = StageId::new(identifier)
@@ -803,17 +787,10 @@ fn create_stage(
             })?;
     }
 
-    if let Some((name, unit)) = budget_dimension {
+    if let Some(dimension) = budget_dimension {
 
-        let dimension = BudgetDimension::new(name, unit)
-            .map_err(|error| {
-                StandardStageError::InvalidIdentifier {
-                    identifier: identifier.to_owned(),
-                    message: error.to_string(),
-                }
-            })?;
-
-        descriptor = descriptor.with_budget_dimension(dimension);
+        descriptor = descriptor
+            .with_budget_dimension(dimension);
     }
 
     Ok(StandardStageDefinition::new(
@@ -827,38 +804,20 @@ fn create_stage(
 // STANDARD STAGE DEFINITIONS
 // ============================================================================
 
-/// Constructs the canonical standard compiler-stage definitions.
+/// Constructs the standard Zamani compilation-stage definitions.
 ///
-/// The returned collection describes the standard compilation path.
+/// This function creates descriptors only.
 ///
-/// It does not instantiate Stage implementations.
+/// It does not create implementations or register providers.
 ///
-/// It does not register stages.
+/// The standard mandatory path produces a validated compilation artifact.
+/// It does not require every optional heterogeneous-planning stage.
 ///
-/// It does not execute stages.
+/// Stages that have no applicable work must still have a valid,
+/// explicit execution outcome. The implementation must not silently
+/// fabricate an output or claim that an unperformed operation succeeded.
 ///
-/// It does not perform dependency ordering.
-///
-/// All stage implementations are supplied by their authoritative
-/// compiler subsystems.
-///
-/// The definitions are constructed in dependency order for readability,
-/// but actual scheduling is owned by pipeline::ordering.
-///
-/// Domain-specific stages are registered separately and are not forced
-/// into every compilation.
-///
-/// # Determinism
-///
-/// Identical calls return identical stage identifiers, metadata,
-/// activation classifications, and dependency declarations.
-///
-/// # Scalability
-///
-/// The returned collection has no language-level or hardware-level
-/// stage-count restriction.
-///
-/// Extensions can register additional StageDescriptor values.
+/// The returned graph is deterministic.
 pub fn standard_stage_definitions(
 ) -> Result<Vec<StandardStageDefinition>, StandardStageError> {
 
@@ -866,14 +825,14 @@ pub fn standard_stage_definitions(
 
     let mut definitions = Vec::new();
 
-    // ------------------------------------------------------------------------
-    // 1. Initialization
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 1. INITIALIZATION
+    // ========================================================================
 
     definitions.push(create_stage(
         INITIALIZATION,
         "Compiler initialization",
-        "Prepare shared compilation state, configuration and services.",
+        "Prepare compilation state, configuration and required compiler services.",
         CompilationPhase::Initialization,
         &[],
         StandardStageRole::Initialization,
@@ -883,27 +842,27 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 2. Frontend
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 2. FRONTEND
+    // ========================================================================
 
     definitions.push(create_stage(
         FRONTEND_PARSE,
         "Frontend parsing",
-        "Consume the canonical lexer and parser output and construct frontend representations.",
+        "Integrate the canonical lexer, parser and domain-neutral AST.",
         CompilationPhase::Parsing,
         &[INITIALIZATION],
         StandardStageRole::Frontend,
         StageActivation::Required,
         StageDeterminism::Deterministic,
         StageConcurrency::InstanceExclusive,
-        Some(("source_bytes_processed", "bytes")),
+        Some(BudgetDimension::input_bytes()),
     )?);
 
     definitions.push(create_stage(
         STRUCTURAL_VALIDATION,
         "Structural validation",
-        "Validate the frontend structure without redefining grammar or semantic authority.",
+        "Validate AST structural invariants without redefining language semantics.",
         CompilationPhase::Parsing,
         &[FRONTEND_PARSE],
         StandardStageRole::Frontend,
@@ -913,16 +872,29 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 3. Name resolution
-    // ------------------------------------------------------------------------
+    definitions.push(create_stage(
+        MACRO_EXPANSION,
+        "Macro expansion",
+        "Integrate hygienic macro expansion using the authoritative frontend AST.",
+        CompilationPhase::Parsing,
+        &[STRUCTURAL_VALIDATION],
+        StandardStageRole::Frontend,
+        StageActivation::Required,
+        StageDeterminism::Deterministic,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
+
+    // ========================================================================
+    // 3. SEMANTIC ANALYSIS
+    // ========================================================================
 
     definitions.push(create_stage(
         NAME_RESOLUTION,
-        "Name resolution",
-        "Resolve names and symbols using the canonical frontend and semantic contracts.",
+        "Name and symbol resolution",
+        "Resolve identifiers, scopes, namespaces and symbol references.",
         CompilationPhase::NameAnalysis,
-        &[STRUCTURAL_VALIDATION],
+        &[MACRO_EXPANSION],
         StandardStageRole::Semantic,
         StageActivation::Required,
         StageDeterminism::Deterministic,
@@ -930,14 +902,10 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 4. Semantic analysis
-    // ------------------------------------------------------------------------
-
     definitions.push(create_stage(
         SEMANTIC_ANALYSIS,
-        "Semantic analysis",
-        "Integrate authoritative semantic analysis, types, effects, capabilities and program meaning.",
+        "Canonical semantic analysis",
+        "Integrate authoritative types, effects, requirements, capabilities, constraints and program meaning.",
         CompilationPhase::SemanticAnalysis,
         &[NAME_RESOLUTION],
         StandardStageRole::Semantic,
@@ -947,10 +915,13 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
+    // These two analyses are independent after semantic validation.
+    // The IR construction stage consumes both results.
+
     definitions.push(create_stage(
         OWNERSHIP_ANALYSIS,
-        "Ownership analysis",
-        "Validate ownership and borrowing using the authoritative language ownership model.",
+        "Ownership and borrow analysis",
+        "Integrate the authoritative ownership and lifetime contracts.",
         CompilationPhase::OwnershipAnalysis,
         &[SEMANTIC_ANALYSIS],
         StandardStageRole::Semantic,
@@ -963,9 +934,9 @@ pub fn standard_stage_definitions(
     definitions.push(create_stage(
         EFFECT_DEPENDENCY_ANALYSIS,
         "Effect and dependency analysis",
-        "Analyze semantic effects and program dependencies without duplicating their domain authorities.",
+        "Integrate semantic effects and dependency evidence without duplicating semantic authority.",
         CompilationPhase::DependencyAnalysis,
-        &[OWNERSHIP_ANALYSIS],
+        &[SEMANTIC_ANALYSIS],
         StandardStageRole::Semantic,
         StageActivation::Required,
         StageDeterminism::Deterministic,
@@ -973,99 +944,139 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 5. Canonical IR construction
-    // ------------------------------------------------------------------------
+    definitions.push(create_stage(
+        COMPILE_TIME_EVALUATION,
+        "Compile-time evaluation",
+        "Evaluate permitted compile-time expressions under explicit evaluation policies and budgets.",
+        CompilationPhase::SemanticAnalysis,
+        &[
+            SEMANTIC_ANALYSIS,
+            OWNERSHIP_ANALYSIS,
+            EFFECT_DEPENDENCY_ANALYSIS,
+        ],
+        StandardStageRole::CompileTime,
+        StageActivation::Required,
+        StageDeterminism::Deterministic,
+        StageConcurrency::InstanceExclusive,
+        Some(BudgetDimension::constant_evaluation_work()),
+    )?);
+
+    // ========================================================================
+    // 4. CANONICAL IR
+    // ========================================================================
 
     definitions.push(create_stage(
         IR_CONSTRUCTION,
         "Canonical IR construction",
-        "Construct and integrate canonical intermediate representations owned by their domain subsystems.",
+        "Integrate ZUIR and authoritative classical, quantum, HDL and other domain IRs.",
         CompilationPhase::IrGeneration,
-        &[EFFECT_DEPENDENCY_ANALYSIS],
+        &[
+            SEMANTIC_ANALYSIS,
+            OWNERSHIP_ANALYSIS,
+            EFFECT_DEPENDENCY_ANALYSIS,
+            COMPILE_TIME_EVALUATION,
+        ],
         StandardStageRole::IntermediateRepresentation,
         StageActivation::Required,
         StageDeterminism::Deterministic,
         StageConcurrency::InstanceExclusive,
-        Some(("ir_entities_processed", "entities")),
+        Some(BudgetDimension::ir_entities()),
     )?);
-
-    // ------------------------------------------------------------------------
-    // 6. IR verification
-    // ------------------------------------------------------------------------
 
     definitions.push(create_stage(
         IR_VERIFICATION,
         "Canonical IR verification",
-        "Verify canonical IR invariants and domain-specific representation contracts.",
+        "Verify canonical IR invariants and applicable domain representation contracts.",
         CompilationPhase::IrVerification,
         &[IR_CONSTRUCTION],
         StandardStageRole::Verification,
         StageActivation::Required,
         StageDeterminism::Deterministic,
-        StageConcurrency::Concurrent,
+        StageConcurrency::InstanceExclusive,
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 7. Optimization
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 5. SPECIALIZATION AND OPTIMIZATION
+    // ========================================================================
+
+    definitions.push(create_stage(
+        SPECIALIZATION,
+        "Program specialization",
+        "Integrate generic specialization and monomorphization while preserving semantic contracts.",
+        CompilationPhase::Optimization,
+        &[IR_VERIFICATION],
+        StandardStageRole::Specialization,
+        StageActivation::Required,
+        StageDeterminism::Deterministic,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
 
     definitions.push(create_stage(
         OPTIMIZATION,
         "Program optimization",
-        "Apply registered, legal and semantics-preserving optimization transformations.",
+        "Execute registered legal transformations and semantics-preserving optimization passes.",
         CompilationPhase::Optimization,
-        &[IR_VERIFICATION],
+        &[SPECIALIZATION],
         StandardStageRole::Optimization,
         StageActivation::Required,
-        StageDeterminism::InputDependent,
+        StageDeterminism::Deterministic,
         StageConcurrency::InstanceExclusive,
-        Some(("optimization_work", "operations")),
+        Some(BudgetDimension::pass_applications()),
     )?);
 
-    // ------------------------------------------------------------------------
-    // 8. Capability analysis
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 6. CAPABILITY AND FEASIBILITY
+    // ========================================================================
 
     definitions.push(create_stage(
         CAPABILITY_ANALYSIS,
         "Capability analysis",
-        "Match validated program requirements against available abstract target capabilities.",
+        "Match validated requirements against registered abstract target and implementation capabilities.",
         CompilationPhase::CapabilityAnalysis,
-        &[OPTIMIZATION],
+        &[
+            SEMANTIC_ANALYSIS,
+            IR_VERIFICATION,
+            OPTIMIZATION,
+        ],
         StandardStageRole::CapabilityAnalysis,
         StageActivation::Required,
         StageDeterminism::InputDependent,
-        StageConcurrency::Concurrent,
+        StageConcurrency::InstanceExclusive,
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 9. Feasibility analysis
-    // ------------------------------------------------------------------------
-
     definitions.push(create_stage(
         FEASIBILITY_ANALYSIS,
-        "Compilation feasibility analysis",
-        "Determine whether candidate realizations satisfy requirements, constraints and available resources.",
+        "Compilation feasibility",
+        "Assess whether candidate realizations satisfy requirements, capabilities, constraints and available resource evidence.",
         CompilationPhase::FeasibilityAnalysis,
         &[CAPABILITY_ANALYSIS],
         StandardStageRole::FeasibilityAnalysis,
         StageActivation::Required,
         StageDeterminism::InputDependent,
-        StageConcurrency::Concurrent,
+        StageConcurrency::InstanceExclusive,
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 10. Heterogeneous planning
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 7. OPTIONAL REALIZATION PLANNING
+    // ========================================================================
+
+    // These stages form an optional planning branch.
+    //
+    // They are deliberately not mandatory prerequisites of the
+    // universal compilation path.
+    //
+    // If a selected realization requires them, orchestration must
+    // activate them and enforce their completion before the relevant
+    // realization stage consumes their results.
 
     definitions.push(create_stage(
         HETEROGENEOUS_PLANNING,
-        "Heterogeneous computation planning",
-        "Construct abstract execution and partition plans for compatible computational domains.",
+        "Heterogeneous realization planning",
+        "Construct abstract plans for computation spanning compatible computational domains.",
         CompilationPhase::Planning,
         &[FEASIBILITY_ANALYSIS],
         StandardStageRole::Planning,
@@ -1075,84 +1086,152 @@ pub fn standard_stage_definitions(
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 11. Lowering
-    // ------------------------------------------------------------------------
-
     definitions.push(create_stage(
-        LOWERING,
-        "Representation lowering",
-        "Perform legal IR conversion, decomposition and target-specific lowering.",
-        CompilationPhase::Lowering,
-        &[FEASIBILITY_ANALYSIS],
-        StandardStageRole::Lowering,
+        PARTITIONING,
+        "Computation partitioning",
+        "Produce abstract computation partitions using semantic dependencies and capability evidence.",
+        CompilationPhase::Planning,
+        &[HETEROGENEOUS_PLANNING],
+        StandardStageRole::Planning,
         StageActivation::Conditional,
         StageDeterminism::InputDependent,
         StageConcurrency::InstanceExclusive,
-        Some(("lowering_work", "operations")),
+        None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 12. Linking
-    // ------------------------------------------------------------------------
+    definitions.push(create_stage(
+        DATA_MOVEMENT_PLANNING,
+        "Data movement planning",
+        "Produce abstract data movement requirements and transfer plans.",
+        CompilationPhase::Planning,
+        &[PARTITIONING],
+        StandardStageRole::Planning,
+        StageActivation::Conditional,
+        StageDeterminism::InputDependent,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
+
+    definitions.push(create_stage(
+        ROUTING_PLANNING,
+        "Routing planning",
+        "Coordinate abstract routing requirements through the appropriate domain authorities.",
+        CompilationPhase::Planning,
+        &[PARTITIONING],
+        StandardStageRole::Planning,
+        StageActivation::Conditional,
+        StageDeterminism::InputDependent,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
+
+    definitions.push(create_stage(
+        SCHEDULING_PLANNING,
+        "Scheduling planning",
+        "Produce abstract scheduling constraints and proposals without performing runtime scheduling.",
+        CompilationPhase::Planning,
+        &[FEASIBILITY_ANALYSIS],
+        StandardStageRole::Planning,
+        StageActivation::Conditional,
+        StageDeterminism::InputDependent,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
+
+    // ========================================================================
+    // 8. LOWERING
+    // ========================================================================
+
+    definitions.push(create_stage(
+        LOWERING,
+        "Domain and target lowering",
+        "Perform verified representation conversion, legalization and domain-specific lowering.",
+        CompilationPhase::Lowering,
+        &[
+            FEASIBILITY_ANALYSIS,
+            OPTIMIZATION,
+        ],
+        StandardStageRole::Lowering,
+        StageActivation::Required,
+        StageDeterminism::InputDependent,
+        StageConcurrency::InstanceExclusive,
+        Some(BudgetDimension::ir_entities()),
+    )?);
+
+    // ========================================================================
+    // 9. LINKING
+    // ========================================================================
 
     definitions.push(create_stage(
         LINKING,
         "Compilation linking",
-        "Resolve symbols and compose compatible compilation artifacts and modules.",
+        "Resolve symbols and compose compatible modules and compilation artifacts.",
         CompilationPhase::Linking,
         &[LOWERING],
         StandardStageRole::Linking,
-        StageActivation::Conditional,
+        StageActivation::Required,
         StageDeterminism::InputDependent,
         StageConcurrency::InstanceExclusive,
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 13. Code generation
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 10. BACKEND REALIZATION
+    // ========================================================================
 
     definitions.push(create_stage(
         CODE_GENERATION,
-        "Target code generation",
-        "Invoke registered backend implementations to generate genuine target artifacts.",
+        "Code and artifact generation",
+        "Invoke registered backends or portable artifact providers to produce genuine compilation outputs.",
         CompilationPhase::CodeGeneration,
         &[LINKING],
         StandardStageRole::CodeGeneration,
-        StageActivation::Conditional,
+        StageActivation::Required,
         StageDeterminism::InputDependent,
         StageConcurrency::InstanceExclusive,
-        Some(("generated_artifact_bytes", "bytes")),
+        Some(BudgetDimension::artifact_bytes()),
     )?);
 
-    // ------------------------------------------------------------------------
-    // 14. Artifact validation
-    // ------------------------------------------------------------------------
+    // ========================================================================
+    // 11. ARTIFACT VALIDATION
+    // ========================================================================
 
     definitions.push(create_stage(
         ARTIFACT_VALIDATION,
         "Artifact validation",
-        "Validate artifact integrity, compatibility, provenance and declared portability.",
+        "Validate output integrity, compatibility, provenance and structural correctness.",
         CompilationPhase::ArtifactValidation,
         &[CODE_GENERATION],
         StandardStageRole::ArtifactValidation,
-        StageActivation::Conditional,
+        StageActivation::Required,
         StageDeterminism::Deterministic,
-        StageConcurrency::Concurrent,
+        StageConcurrency::InstanceExclusive,
         None,
     )?);
 
-    // ------------------------------------------------------------------------
-    // 15. Finalization
-    // ------------------------------------------------------------------------
+    definitions.push(create_stage(
+        PORTABILITY_VALIDATION,
+        "Portability validation",
+        "Validate declared source, semantic, IR and artifact portability guarantees.",
+        CompilationPhase::ArtifactValidation,
+        &[ARTIFACT_VALIDATION],
+        StandardStageRole::PortabilityValidation,
+        StageActivation::Required,
+        StageDeterminism::Deterministic,
+        StageConcurrency::InstanceExclusive,
+        None,
+    )?);
+
+    // ========================================================================
+    // 12. FINALIZATION
+    // ========================================================================
 
     definitions.push(create_stage(
         FINALIZATION,
         "Compilation finalization",
-        "Prepare the final compilation result and its verified output metadata.",
+        "Assemble the verified compilation result, diagnostics, artifacts and provenance.",
         CompilationPhase::Finalization,
-        &[ARTIFACT_VALIDATION],
+        &[PORTABILITY_VALIDATION],
         StandardStageRole::Finalization,
         StageActivation::Required,
         StageDeterminism::Deterministic,
@@ -1169,16 +1248,27 @@ pub fn standard_stage_definitions(
 // STANDARD DEFINITION VALIDATION
 // ============================================================================
 
-/// Validates uniqueness and standard dependency integrity.
+/// Validates standard stage definitions.
 ///
-/// This function does not perform topological sorting.
+/// Checks:
 ///
-/// Topological ordering and cycle detection belong to pipeline::ordering.
+/// - The definition set is not empty.
+/// - Identifiers are unique.
+/// - All standard dependencies exist.
+/// - Required stages do not directly depend on conditional or
+///   policy-controlled stages.
+///
+/// Cycle detection and topological ordering remain owned by
+/// pipeline::ordering.
 pub fn validate_standard_definitions(
     definitions: &[StandardStageDefinition],
 ) -> Result<(), StandardStageError> {
 
-    let mut identifiers = BTreeSet::new();
+    if definitions.is_empty() {
+        return Err(StandardStageError::EmptyDefinitions);
+    }
+
+    let mut identifiers = BTreeSet::<String>::new();
 
     for definition in definitions {
 
@@ -1209,14 +1299,42 @@ pub fn validate_standard_definitions(
             .dependencies()
         {
 
-            if !identifiers.contains(dependency.as_str()) {
+            let dependency_name = dependency.as_str();
+
+            if !identifiers.contains(dependency_name) {
 
                 return Err(
                     StandardStageError::MissingStandardDependency {
                         stage: stage.to_owned(),
-                        dependency: dependency.as_str().to_owned(),
+                        dependency: dependency_name.to_owned(),
                     }
                 );
+            }
+
+            if definition.is_required() {
+
+                let dependency_definition = definitions
+                    .iter()
+                    .find(|candidate| {
+                        candidate.descriptor().id()
+                            == dependency
+                    })
+                    .ok_or_else(|| {
+                        StandardStageError::MissingStandardDependency {
+                            stage: stage.to_owned(),
+                            dependency: dependency_name.to_owned(),
+                        }
+                    })?;
+
+                if !dependency_definition.is_required() {
+
+                    return Err(
+                        StandardStageError::RequiredStageDependsOnOptionalDependency {
+                            stage: stage.to_owned(),
+                            dependency: dependency_name.to_owned(),
+                        }
+                    );
+                }
             }
         }
     }
@@ -1225,35 +1343,76 @@ pub fn validate_standard_definitions(
 }
 
 // ============================================================================
-// DOMAIN EXTENSION DESCRIPTOR CONSTRUCTION
+// ACTIVATION QUERIES
 // ============================================================================
 
-/// Constructs a descriptor for an independently-owned domain stage.
+/// Returns identifiers of all unconditionally required standard stages.
 ///
-/// Domain implementations use this function to construct stable,
-/// namespaced integration descriptors.
+/// The returned order is deterministic and follows the definition order.
 ///
-/// The caller supplies the dependencies because domain dependencies
-/// are determined by the actual validated program and domain contracts.
+/// This function does not decide whether a conditional stage is
+/// applicable to a particular program.
+pub fn required_standard_stage_ids(
+    definitions: &[StandardStageDefinition],
+) -> Vec<StageId> {
+
+    definitions
+        .iter()
+        .filter(|definition| definition.is_required())
+        .map(|definition| {
+            definition.descriptor().id().clone()
+        })
+        .collect()
+}
+
+/// Returns identifiers of conditionally activated stages.
+pub fn conditional_standard_stage_ids(
+    definitions: &[StandardStageDefinition],
+) -> Vec<StageId> {
+
+    definitions
+        .iter()
+        .filter(|definition| definition.is_conditional())
+        .map(|definition| {
+            definition.descriptor().id().clone()
+        })
+        .collect()
+}
+
+/// Returns identifiers requiring explicit policy authorization.
+pub fn policy_controlled_standard_stage_ids(
+    definitions: &[StandardStageDefinition],
+) -> Vec<StageId> {
+
+    definitions
+        .iter()
+        .filter(|definition| {
+            definition.is_policy_controlled()
+        })
+        .map(|definition| {
+            definition.descriptor().id().clone()
+        })
+        .collect()
+}
+
+// ============================================================================
+// DOMAIN STAGE DESCRIPTOR CONSTRUCTION
+// ============================================================================
+
+/// Constructs an independently-owned domain stage descriptor.
 ///
-/// The function does not require modification when a new computing
-/// domain is introduced.
+/// The caller supplies its identifier and dependencies.
 ///
-/// # Example
+/// The domain subsystem owns:
 ///
-/// A quantum subsystem may construct a descriptor using:
+/// - Stage implementation.
+/// - Domain semantics.
+/// - Domain-specific IR.
+/// - Domain-specific verification.
+/// - Domain-specific legality.
+/// - Domain-specific realization.
 ///
-///     domains::QUANTUM
-///
-/// or:
-///
-///     domain_stages::QUANTUM_IR
-///
-/// A future photonic subsystem may use:
-///
-///     zamani.compiler.domain.photonic.lowering
-///
-/// No central enum modification is required.
+/// The compiler owns orchestration and integration.
 pub fn domain_stage_descriptor(
     identifier: &str,
     name: &str,
@@ -1312,10 +1471,12 @@ pub fn domain_stage_descriptor(
 }
 
 // ============================================================================
-// STAGE IDENTIFIER CONVENIENCE
+// STANDARD IDENTIFIER CONSTRUCTION
 // ============================================================================
 
-/// Constructs a validated StageId from a standard identifier.
+/// Constructs a validated StageId from a standard or extension identifier.
+///
+/// This function does not check whether the identifier is registered.
 pub fn standard_stage_id(
     identifier: &str,
 ) -> Result<StageId, StandardStageError> {
@@ -1339,7 +1500,7 @@ mod tests {
     use super::*;
 
     // ------------------------------------------------------------------------
-    // Standard definition construction
+    // Construction
     // ------------------------------------------------------------------------
 
     #[test]
@@ -1349,46 +1510,6 @@ mod tests {
             .expect("standard definitions must be valid");
 
         assert!(!definitions.is_empty());
-    }
-
-    #[test]
-    fn standard_identifiers_are_unique() {
-
-        let definitions = standard_stage_definitions()
-            .expect("standard definitions must be valid");
-
-        validate_standard_definitions(&definitions)
-            .expect("identifiers must be unique");
-    }
-
-    #[test]
-    fn every_standard_dependency_exists() {
-
-        let definitions = standard_stage_definitions()
-            .expect("standard definitions must be valid");
-
-        let identifiers: BTreeSet<String> = definitions
-            .iter()
-            .map(|definition| {
-                definition.descriptor().id().as_str().to_owned()
-            })
-            .collect();
-
-        for definition in &definitions {
-
-            for dependency in definition
-                .descriptor()
-                .dependencies()
-            {
-
-                assert!(
-                    identifiers.contains(dependency.as_str()),
-                    "missing dependency {} for {}",
-                    dependency,
-                    definition.descriptor().id()
-                );
-            }
-        }
     }
 
     #[test]
@@ -1403,24 +1524,208 @@ mod tests {
         assert_eq!(first, second);
     }
 
+    #[test]
+    fn standard_identifiers_are_unique() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        validate_standard_definitions(&definitions)
+            .expect("unique identifiers");
+    }
+
+    #[test]
+    fn every_standard_dependency_exists() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        let identifiers: BTreeSet<String> = definitions
+            .iter()
+            .map(|definition| {
+                definition.descriptor()
+                    .id()
+                    .as_str()
+                    .to_owned()
+            })
+            .collect();
+
+        for definition in &definitions {
+
+            for dependency in definition.descriptor().dependencies() {
+
+                assert!(
+                    identifiers.contains(dependency.as_str()),
+                    "missing dependency {} for {}",
+                    dependency,
+                    definition.descriptor().id()
+                );
+            }
+        }
+    }
+
     // ------------------------------------------------------------------------
-    // Stage identity
+    // Activation
     // ------------------------------------------------------------------------
 
     #[test]
-    fn standard_stage_ids_are_stable() {
+    fn mandatory_path_does_not_depend_on_optional_stages() {
 
-        let id = standard_stage_id(ids::SEMANTIC_ANALYSIS)
-            .expect("valid standard identifier");
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
 
-        assert_eq!(
-            id.as_str(),
-            "zamani.compiler.semantic.analysis"
+        for definition in &definitions {
+
+            if !definition.is_required() {
+                continue;
+            }
+
+            for dependency in definition.descriptor().dependencies() {
+
+                let prerequisite = definitions
+                    .iter()
+                    .find(|candidate| {
+                        candidate.descriptor().id() == dependency
+                    })
+                    .expect("dependency exists");
+
+                assert!(
+                    prerequisite.is_required(),
+                    "required stage {} depends on optional stage {}",
+                    definition.descriptor().id(),
+                    dependency
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn required_stage_query_returns_mandatory_stages() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        let required = required_standard_stage_ids(&definitions);
+
+        assert!(
+            required.iter().any(|id| {
+                id.as_str() == ids::INITIALIZATION
+            })
+        );
+
+        assert!(
+            required.iter().any(|id| {
+                id.as_str() == ids::FINALIZATION
+            })
+        );
+
+        assert!(
+            !required.iter().any(|id| {
+                id.as_str() == ids::HETEROGENEOUS_PLANNING
+            })
         );
     }
 
     #[test]
-    fn custom_domain_identifiers_are_supported() {
+    fn planning_stages_are_conditional() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        let conditional =
+            conditional_standard_stage_ids(&definitions);
+
+        assert!(
+            conditional.iter().any(|id| {
+                id.as_str() == ids::HETEROGENEOUS_PLANNING
+            })
+        );
+
+        assert!(
+            conditional.iter().any(|id| {
+                id.as_str() == ids::PARTITIONING
+            })
+        );
+    }
+
+    #[test]
+    fn no_standard_stage_requires_policy_authorization_by_default() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        assert!(
+            policy_controlled_standard_stage_ids(&definitions).is_empty()
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // Activation metadata
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn activation_classification_is_queryable() {
+
+        assert!(StageActivation::Required.is_required());
+
+        assert!(StageActivation::Conditional.is_conditional());
+
+        assert!(
+            StageActivation::PolicyControlled
+                .is_policy_controlled()
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // Stable identifiers
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn existing_standard_identifiers_remain_stable() {
+
+        assert_eq!(
+            ids::INITIALIZATION,
+            "zamani.compiler.initialization"
+        );
+
+        assert_eq!(
+            ids::FRONTEND_PARSE,
+            "zamani.compiler.frontend.parse"
+        );
+
+        assert_eq!(
+            ids::SEMANTIC_ANALYSIS,
+            "zamani.compiler.semantic.analysis"
+        );
+
+        assert_eq!(
+            ids::IR_CONSTRUCTION,
+            "zamani.compiler.ir.construction"
+        );
+
+        assert_eq!(
+            ids::IR_VERIFICATION,
+            "zamani.compiler.ir.verification"
+        );
+
+        assert_eq!(
+            ids::OPTIMIZATION,
+            "zamani.compiler.optimization"
+        );
+
+        assert_eq!(
+            ids::CODE_GENERATION,
+            "zamani.compiler.backend.code_generation"
+        );
+
+        assert_eq!(
+            ids::FINALIZATION,
+            "zamani.compiler.finalization"
+        );
+    }
+
+    #[test]
+    fn extension_identifiers_are_supported() {
 
         let id = standard_stage_id(
             "zamani.extension.future_computing.specialization"
@@ -1434,17 +1739,26 @@ mod tests {
     }
 
     #[test]
-    fn identifiers_are_not_hardware_specific() {
+    fn dynamically_sized_identifiers_are_supported() {
 
-        let id = standard_stage_id(ids::LOWERING)
-            .expect("valid identifier");
-
-        assert!(
-            !id.as_str().contains("cpu")
+        let identifier = format!(
+            "zamani.extension.{}",
+            "future".repeat(10_000)
         );
 
+        let id = standard_stage_id(&identifier)
+            .expect("valid dynamic identifier");
+
+        assert_eq!(id.as_str(), identifier);
+    }
+
+    #[test]
+    fn invalid_identifiers_are_rejected() {
+
+        assert!(standard_stage_id("").is_err());
+
         assert!(
-            !id.as_str().contains("gpu")
+            standard_stage_id("invalid\nstage").is_err()
         );
     }
 
@@ -1453,23 +1767,23 @@ mod tests {
     // ------------------------------------------------------------------------
 
     #[test]
-    fn domain_stage_descriptor_supports_quantum_integration() {
+    fn quantum_domain_descriptor_is_supported() {
 
         let dependency = standard_stage_id(ids::IR_VERIFICATION)
-            .expect("valid dependency");
+            .expect("dependency");
 
         let descriptor = domain_stage_descriptor(
             domain_stages::QUANTUM_IR,
             "Quantum IR integration",
             "1",
-            "Integrates canonical quantum IR.",
+            "Integrates the canonical quantum IR authority.",
             CompilationPhase::IrGeneration,
             [dependency],
             StageDeterminism::Deterministic,
             StageConcurrency::InstanceExclusive,
             None,
         )
-        .expect("valid quantum descriptor");
+        .expect("quantum descriptor");
 
         assert_eq!(
             descriptor.id().as_str(),
@@ -1478,23 +1792,23 @@ mod tests {
     }
 
     #[test]
-    fn domain_stage_descriptor_supports_future_domains() {
+    fn future_domain_descriptor_is_supported() {
 
         let dependency = standard_stage_id(ids::IR_VERIFICATION)
-            .expect("valid dependency");
+            .expect("dependency");
 
         let descriptor = domain_stage_descriptor(
             "zamani.compiler.domain.photonic.lowering",
             "Photonic lowering",
             "1",
-            "Integrates future photonic computation.",
+            "Future photonic integration.",
             CompilationPhase::Lowering,
             [dependency],
             StageDeterminism::InputDependent,
             StageConcurrency::InstanceExclusive,
             None,
         )
-        .expect("future domain descriptor");
+        .expect("photonic descriptor");
 
         assert_eq!(
             descriptor.id().as_str(),
@@ -1503,130 +1817,14 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Activation
+    // Domain ownership
     // ------------------------------------------------------------------------
 
     #[test]
-    fn heterogeneous_planning_is_conditional() {
+    fn quantum_is_not_a_mandatory_global_domain_stage() {
 
         let definitions = standard_stage_definitions()
-            .expect("valid definitions");
-
-        let definition = definitions
-            .iter()
-            .find(|definition| {
-                definition.descriptor().id().as_str()
-                    == ids::HETEROGENEOUS_PLANNING
-            })
-            .expect("heterogeneous planning stage");
-
-        assert_eq!(
-            definition.activation(),
-            StageActivation::Conditional
-        );
-    }
-
-    #[test]
-    fn backend_codegen_is_conditional() {
-
-        let definitions = standard_stage_definitions()
-            .expect("valid definitions");
-
-        let definition = definitions
-            .iter()
-            .find(|definition| {
-                definition.descriptor().id().as_str()
-                    == ids::CODE_GENERATION
-            })
-            .expect("code generation stage");
-
-        assert_eq!(
-            definition.activation(),
-            StageActivation::Conditional
-        );
-    }
-
-    // ------------------------------------------------------------------------
-    // No artificial string limits
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn long_extension_identifiers_are_supported() {
-
-        let identifier = format!(
-            "zamani.extension.{}",
-            "future".repeat(1024)
-        );
-
-        let id = standard_stage_id(&identifier)
-            .expect("valid dynamically sized identifier");
-
-        assert_eq!(id.as_str(), identifier);
-    }
-
-    // ------------------------------------------------------------------------
-    // Validation failures
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn duplicate_standard_definitions_are_rejected() {
-
-        let definitions = standard_stage_definitions()
-            .expect("valid definitions");
-
-        let mut duplicated = definitions.clone();
-
-        duplicated.push(
-            definitions[0].clone()
-        );
-
-        assert!(matches!(
-            validate_standard_definitions(&duplicated),
-            Err(StandardStageError::DuplicateIdentifier { .. })
-        ));
-    }
-
-    #[test]
-    fn invalid_stage_identifiers_are_rejected() {
-
-        assert!(
-            standard_stage_id("")
-                .is_err()
-        );
-
-        assert!(
-            standard_stage_id("invalid\nstage")
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn invalid_domain_descriptors_are_rejected() {
-
-        let result = domain_stage_descriptor(
-            "",
-            "Invalid stage",
-            "1",
-            "Invalid identifier",
-            CompilationPhase::Lowering,
-            [],
-            StageDeterminism::Deterministic,
-            StageConcurrency::InstanceExclusive,
-            None,
-        );
-
-        assert!(result.is_err());
-    }
-
-    // ------------------------------------------------------------------------
-    // Semantic ownership
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn quantum_is_not_a_required_global_stage() {
-
-        let definitions = standard_stage_definitions()
-            .expect("valid definitions");
+            .expect("definitions");
 
         assert!(
             !definitions.iter().any(|definition| {
@@ -1637,10 +1835,10 @@ mod tests {
     }
 
     #[test]
-    fn ai_is_not_a_required_global_stage() {
+    fn ai_is_not_a_mandatory_global_domain_stage() {
 
         let definitions = standard_stage_definitions()
-            .expect("valid definitions");
+            .expect("definitions");
 
         assert!(
             !definitions.iter().any(|definition| {
@@ -1650,67 +1848,123 @@ mod tests {
         );
     }
 
+    // ------------------------------------------------------------------------
+    // Validation failures
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn standard_definitions_do_not_own_domain_ir() {
+    fn duplicate_definitions_are_rejected() {
 
         let definitions = standard_stage_definitions()
-            .expect("valid definitions");
+            .expect("definitions");
 
-        for definition in &definitions {
+        let mut duplicated = definitions.clone();
 
-            assert!(
-                !definition.descriptor().id().as_str()
-                    .contains("quantum.ir")
-            );
+        duplicated.push(definitions[0].clone());
 
-            assert!(
-                !definition.descriptor().id().as_str()
-                    .contains("ai.ir")
-            );
-
-            assert!(
-                !definition.descriptor().id().as_str()
-                    .contains("hdl.ir")
-            );
-        }
+        assert!(matches!(
+            validate_standard_definitions(&duplicated),
+            Err(StandardStageError::DuplicateIdentifier { .. })
+        ));
     }
 
-    // ------------------------------------------------------------------------
-    // Phase integration
-    // ------------------------------------------------------------------------
+    #[test]
+    fn empty_definitions_are_rejected() {
+
+        assert!(matches!(
+            validate_standard_definitions(&[]),
+            Err(StandardStageError::EmptyDefinitions)
+        ));
+    }
 
     #[test]
-    fn stages_have_compilation_phases() {
+    fn domain_descriptors_reject_invalid_identifiers() {
+
+        assert!(
+            domain_stage_descriptor(
+                "",
+                "Invalid stage",
+                "1",
+                "Invalid identifier",
+                CompilationPhase::Lowering,
+                [],
+                StageDeterminism::Deterministic,
+                StageConcurrency::InstanceExclusive,
+                None,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn every_standard_stage_has_a_phase() {
 
         let definitions = standard_stage_definitions()
-            .expect("valid definitions");
+            .expect("definitions");
 
         for definition in &definitions {
 
             assert!(
                 definition.descriptor().phase().is_some(),
-                "stage {} must declare its phase",
+                "missing phase for {}",
                 definition.descriptor().id()
             );
         }
     }
 
+    // ------------------------------------------------------------------------
+    // Deterministic dependency metadata
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn initialization_has_no_dependencies() {
+    fn dependencies_are_deterministically_ordered() {
 
         let definitions = standard_stage_definitions()
-            .expect("valid definitions");
+            .expect("definitions");
 
-        let initialization = definitions
-            .iter()
-            .find(|definition| {
-                definition.descriptor().id().as_str()
-                    == ids::INITIALIZATION
-            })
-            .expect("initialization stage");
+        for definition in &definitions {
 
-        assert!(
-            initialization.descriptor().dependencies().is_empty()
-        );
+            let dependencies =
+                definition.descriptor().dependencies();
+
+            let mut sorted = dependencies.to_vec();
+
+            sorted.sort();
+
+            assert_eq!(
+                dependencies,
+                sorted.as_slice()
+            );
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // POCO-REAF
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn standard_identifiers_are_not_hardware_specific() {
+
+        let definitions = standard_stage_definitions()
+            .expect("definitions");
+
+        for definition in &definitions {
+
+            let identifier = definition.descriptor()
+                .id()
+                .as_str();
+
+            assert!(
+                !identifier.contains("MAX_CPUS")
+            );
+
+            assert!(
+                !identifier.contains("MAX_GPUS")
+            );
+
+            assert!(
+                !identifier.contains("MAX_QUBITS")
+            );
+        }
     }
 }
