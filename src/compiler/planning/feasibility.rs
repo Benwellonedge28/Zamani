@@ -7,151 +7,61 @@
 //! # Zamani Compiler — Feasibility Planning
 //!
 //! Path: src/compiler/planning/feasibility.rs
-//! Edition: Rust 2021
+//! Edition: 2021
 //! Minimum Rust version: 1.97
 //!
-//! ## PURPOSE
+//! Determines whether a proposed computation realization is supported by
+//! authoritative semantic, capability, resource, and realization evidence.
 //!
-//! Determine whether a proposed computation realization is supported by
-//! explicit semantic, capability, resource, and realization evidence.
+//! This module composes evidence. It does not redefine the semantic model,
+//! capability model, resource model, target model, or canonical IRs.
 //!
-//! This is a compiler-side planning authority. It does not perform physical
-//! resource allocation, placement, scheduling, routing, compilation,
-//! lowering, or execution.
+//! It does not allocate or reserve physical resources, place operations,
+//! schedule physical devices, route computation, lower IR, invoke backends,
+//! or execute programs.
 //!
-//! ## AUTHORITATIVE OWNERS
+//! # Canonical authorities
 //!
-//! Semantic validity:
-//!     crate::frontend::semantic
+//! - Semantic validity: crate::frontend::semantic
+//! - Target identity: crate::compiler::configuration::target
+//! - Capability matching: crate::compiler::planning::capability_matching
+//! - Resource planning: crate::compiler::planning::resource_planning
+//! - Canonical computation representations: crate::zuir and domain IRs
+//! - Physical resource acquisition and execution: crate::runtime
 //!
-//! Capability analysis:
-//!     crate::compiler::analysis::capabilities
+//! # Important invariants
 //!
-//! Capability matching:
-//!     crate::compiler::planning::capability_matching
+//! 1. Unknown evidence never proves feasibility.
+//! 2. Invalid evidence never proves feasibility.
+//! 3. Missing resource evidence never means unlimited capacity.
+//! 4. Empty capability requirements never prove compatibility.
+//! 5. Preferences and hints are not promoted to mandatory requirements.
+//! 6. Global evidence applies to every applicable target.
+//! 7. Target-scoped evidence is never transferred to another target.
+//! 8. Proven incompatibility is not downgraded by unrelated missing evidence.
+//! 9. A non-execution target is not classified as an incompatible execution
+//!    target.
+//! 10. A planning result is not a reservation or execution guarantee.
+//! 11. Runtime must revalidate availability before physical execution.
 //!
-//! Resource planning:
-//!     crate::compiler::planning::resource_planning
+//! # Scalability
 //!
-//! Dependency analysis:
-//!     crate::compiler::analysis::dependency
+//! No universal maximum is imposed on targets, capabilities, requirements,
+//! resource dimensions, domains, evidence records, processors, accelerators,
+//! qubits, devices, or distributed participants.
 //!
-//! Canonical computation representations:
-//!     crate::zuir
-//!     crate::classical
-//!     crate::quantum::ir
-//!     crate::hdl::hdlir
-//!     crate::ai
-//!     crate::hybrid
-//!     crate::distributed
-//!
-//! Downstream planning:
-//!     partitioning
-//!     placement
-//!     scheduling
-//!     routing
-//!     data_movement
-//!
-//! Physical resource management and execution:
-//!     crate::runtime
-//!     hardware/provider authorities
-//!
-//! ## OWNS
-//!
-//! - Composition of independently established feasibility evidence.
-//! - Structured overall feasibility outcomes.
-//! - Per-target feasibility outcomes.
-//! - Explicit uncertainty and infeasibility findings.
-//! - Caller-configurable feasibility-analysis budgets.
-//! - Deterministic feasibility reports.
-//!
-//! ## DOES NOT OWN
-//!
-//! - Source-language semantics.
-//! - Capability definitions.
-//! - Resource definitions.
-//! - Hardware inventories.
-//! - Evidence authentication.
-//! - Backend implementation.
-//! - Target discovery.
-//! - Capability matching algorithms.
-//! - Resource assessment algorithms.
-//! - Dependency graph construction.
-//! - Data-transfer algorithms.
-//! - Physical placement.
-//! - Scheduling.
-//! - Routing.
-//! - Device allocation.
-//! - Runtime execution.
-//! - Quantum routing or QEC.
-//! - Any canonical IR.
-//!
-//! ## IMPORTANT SEMANTIC RULES
-//!
-//! 1. Unknown evidence is never proof of feasibility.
-//! 2. Missing resource evidence is not unlimited capacity.
-//! 3. Missing capability evidence is not capability support.
-//! 4. An empty capability requirement set is not proof of compatibility.
-//! 5. An unmet preference is not automatically a semantic failure.
-//! 6. A semantic error is distinct from target infeasibility.
-//! 7. An unrepresentable operation must not be silently approximated.
-//! 8. Incomplete target discovery must remain visible.
-//! 9. A planning result is not a resource reservation.
-//! 10. Runtime must revalidate resource availability before execution.
-//!
-//! ## SCALABILITY
-//!
-//! No universal maximum is imposed on:
-//!
-//! - targets;
-//! - capabilities;
-//! - requirements;
-//! - resource dimensions;
-//! - computing domains;
-//! - operations;
-//! - dependencies;
-//! - devices;
-//! - processors;
-//! - accelerators;
-//! - qubits;
-//! - distributed participants;
-//! - evidence records.
-//!
-//! Optional budgets are caller-supplied operational policies.
+//! Optional operational budgets are caller-supplied. They are not semantic
+//! or hardware limits.
 //!
 //! Literal infinite computation is not promised. Actual processing is
-//! constrained by available memory, address space, processing capacity,
-//! allocator behavior, and explicit operational budgets.
+//! bounded by available memory, address space, processing capacity, and
+//! explicitly configured operational budgets.
 //!
-//! ## DETERMINISM
+//! # Determinism
 //!
-//! Target results follow canonical capability-report ordering.
-//! Evidence records are sorted deterministically.
-//! No random identifiers, global mutable state, or implicit hardware
+//! Reports preserve canonical target ordering and sort findings by stable
+//! fields. No random identifiers, global mutable state, or implicit hardware
 //! discovery are used.
-//!
-//! ## INTEGRATION
-//!
-//! Input:
-//!     CapabilityMatchReport
-//!     ResourcePlanningReport
-//!     SemanticValidity
-//!     FeasibilityEvidenceSet
-//!
-//! Output:
-//!     FeasibilityReport
-//!
-//! Downstream consumers:
-//!     partitioning.rs
-//!     placement.rs
-//!     scheduling.rs
-//!     routing.rs
-//!     data_movement.rs
-//!     hybrid planning
-//!     backend realization planning
-//!
-//! A downstream consumer must not reinterpret an Indeterminate result
-//! as a successful feasibility decision.
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -173,39 +83,48 @@ use crate::compiler::planning::resource_planning::{
 // MODULE IDENTITY
 // ============================================================================
 
-/// Stable architectural identity of this module.
+/// Stable architectural identity.
 pub const FEASIBILITY_MODULE_NAME: &str =
     "zamani.compiler.planning.feasibility";
 
 /// Public API version.
-pub const FEASIBILITY_API_VERSION: u16 = 1;
+///
+/// Version 2 adds explicit invalid-evidence and not-applicable outcomes.
+pub const FEASIBILITY_API_VERSION: u16 = 2;
 
 // ============================================================================
-// STANDARD EVIDENCE DOMAINS
+// EVIDENCE DOMAINS
 // ============================================================================
 
-/// Evidence domain identifying semantic validity.
-pub const DOMAIN_SEMANTIC_VALIDITY: &str = "semantic.validity";
+/// Semantic validity evidence domain.
+pub const DOMAIN_SEMANTIC_VALIDITY: &str =
+    "semantic.validity";
 
-/// Evidence domain identifying representability.
-pub const DOMAIN_REPRESENTABILITY: &str = "realization.representability";
+/// Representability evidence domain.
+pub const DOMAIN_REPRESENTABILITY: &str =
+    "realization.representability";
 
-/// Evidence domain identifying dependency feasibility.
-pub const DOMAIN_DEPENDENCY: &str = "planning.dependency";
+/// Dependency feasibility evidence domain.
+pub const DOMAIN_DEPENDENCY: &str =
+    "planning.dependency";
 
-/// Evidence domain identifying data-movement feasibility.
-pub const DOMAIN_DATA_MOVEMENT: &str = "planning.data_movement";
+/// Data-movement feasibility evidence domain.
+pub const DOMAIN_DATA_MOVEMENT: &str =
+    "planning.data_movement";
 
-/// Evidence domain identifying synchronization feasibility.
-pub const DOMAIN_SYNCHRONIZATION: &str = "planning.synchronization";
+/// Synchronization feasibility evidence domain.
+pub const DOMAIN_SYNCHRONIZATION: &str =
+    "planning.synchronization";
 
-/// Evidence domain identifying security-policy feasibility.
-pub const DOMAIN_SECURITY: &str = "planning.security";
+/// Security feasibility evidence domain.
+pub const DOMAIN_SECURITY: &str =
+    "planning.security";
 
-/// Evidence domain identifying authorization feasibility.
-pub const DOMAIN_AUTHORIZATION: &str = "planning.authorization";
+/// Authorization feasibility evidence domain.
+pub const DOMAIN_AUTHORIZATION: &str =
+    "planning.authorization";
 
-/// Evidence domain identifying backend compatibility.
+/// Backend compatibility evidence domain.
 pub const DOMAIN_BACKEND_COMPATIBILITY: &str =
     "planning.backend_compatibility";
 
@@ -215,19 +134,16 @@ pub const DOMAIN_BACKEND_COMPATIBILITY: &str =
 
 /// Open-world identity of an evidence-producing subsystem.
 ///
-/// This is deliberately a string-based identity rather than a closed enum.
-/// Future computing domains can introduce new evidence domains without
-/// requiring this module to be redesigned.
+/// Future domains can introduce new evidence identities without modifying
+/// this module.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EvidenceDomain(String);
 
 impl EvidenceDomain {
-    /// Creates a validated evidence-domain identifier.
+    /// Creates a validated evidence-domain identity.
     ///
-    /// No arbitrary length limit is imposed.
-    pub fn new(
-        value: impl Into<String>,
-    ) -> Result<Self, FeasibilityError> {
+    /// No arbitrary identifier-length limit is imposed.
+    pub fn new(value: impl Into<String>) -> Result<Self, FeasibilityError> {
         let value = value.into();
 
         if value.trim().is_empty() {
@@ -285,38 +201,36 @@ impl fmt::Display for EvidenceDomain {
 // SEMANTIC VALIDITY
 // ============================================================================
 
-/// Semantic validity established by the authoritative semantic subsystem.
+/// Semantic validity supplied by the authoritative frontend semantic layer.
 ///
-/// The compiler must obtain this status from semantic validation. It must
-/// not infer semantic validity merely because parsing or capability
-/// matching succeeded.
+/// This type carries the result. It does not implement semantic analysis.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum SemanticValidity {
-    /// The semantic authority has established validity.
+    /// Semantic validation has established validity.
     Valid,
 
-    /// The semantic authority has established a semantic error.
+    /// Semantic validation has rejected the program.
     Invalid {
         /// Explanation supplied by the semantic authority.
         explanation: String,
     },
 
-    /// Semantic validity has not been established.
+    /// Semantic validation has not established validity.
     Unknown {
-        /// Explanation for the missing or incomplete validation.
+        /// Explanation for incomplete validation.
         explanation: String,
     },
 }
 
 impl SemanticValidity {
-    /// Constructs a confirmed valid result.
+    /// Creates a confirmed valid result.
     #[must_use]
     pub const fn valid() -> Self {
         Self::Valid
     }
 
-    /// Constructs a confirmed semantic-invalid result.
+    /// Creates a semantic-invalid result.
     #[must_use]
     pub fn invalid(
         explanation: impl Into<String>,
@@ -326,7 +240,7 @@ impl SemanticValidity {
         }
     }
 
-    /// Constructs an unresolved semantic result.
+    /// Creates an unresolved semantic result.
     #[must_use]
     pub fn unknown(
         explanation: impl Into<String>,
@@ -336,10 +250,22 @@ impl SemanticValidity {
         }
     }
 
-    /// Returns whether semantic validity has been established.
+    /// Returns whether validity has been established.
     #[must_use]
     pub const fn is_valid(&self) -> bool {
         matches!(self, Self::Valid)
+    }
+
+    /// Returns whether semantic validation rejected the program.
+    #[must_use]
+    pub const fn is_invalid(&self) -> bool {
+        matches!(self, Self::Invalid { .. })
+    }
+
+    /// Returns whether semantic validity remains unknown.
+    #[must_use]
+    pub const fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown { .. })
     }
 }
 
@@ -347,20 +273,29 @@ impl SemanticValidity {
 // EVIDENCE STATUS
 // ============================================================================
 
-/// Outcome supplied by an authoritative evidence-producing subsystem.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// Outcome supplied by an authoritative evidence producer.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 #[non_exhaustive]
 pub enum EvidenceStatus {
-    /// The evidence establishes that the assessed condition is satisfied.
+    /// Evidence establishes satisfaction.
     Satisfied,
 
-    /// The evidence establishes that the assessed condition is not satisfied.
+    /// Evidence establishes non-satisfaction.
     Unsatisfied,
 
-    /// The available evidence is insufficient to decide.
+    /// Evidence is missing, incomplete, or unresolved.
     Unknown,
 
-    /// The condition does not apply to this realization.
+    /// The assessed condition does not apply.
     NotApplicable,
 }
 
@@ -375,12 +310,12 @@ pub enum EvidenceScope {
     /// Applies to the computation independently of target.
     Global,
 
-    /// Applies only to the specified target.
+    /// Applies only to one target.
     Target(TargetId),
 }
 
 impl EvidenceScope {
-    /// Returns the target identity if this is target-scoped evidence.
+    /// Returns the target identity for target-scoped evidence.
     #[must_use]
     pub fn target(&self) -> Option<&TargetId> {
         match self {
@@ -389,7 +324,7 @@ impl EvidenceScope {
         }
     }
 
-    /// Returns whether the evidence applies to a particular target.
+    /// Returns whether the evidence applies to the specified target.
     #[must_use]
     pub fn applies_to(&self, target: &TargetId) -> bool {
         match self {
@@ -405,12 +340,8 @@ impl EvidenceScope {
 
 /// One independently established feasibility observation.
 ///
-/// The evidence-producing subsystem remains authoritative for the meaning
-/// of its domain. This structure only carries the outcome and provenance
-/// needed to compose planning decisions.
-///
-/// `evidence_id` may refer to an immutable report, snapshot, or source
-/// record maintained by the originating subsystem.
+/// The originating subsystem remains authoritative for the meaning and
+/// authenticity of its evidence.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeasibilityEvidence {
     scope: EvidenceScope,
@@ -421,7 +352,8 @@ pub struct FeasibilityEvidence {
 }
 
 impl FeasibilityEvidence {
-    /// Creates one evidence record.
+    /// Creates an evidence record.
+    #[must_use]
     pub fn new(
         scope: EvidenceScope,
         domain: EvidenceDomain,
@@ -439,6 +371,7 @@ impl FeasibilityEvidence {
     }
 
     /// Creates global evidence.
+    #[must_use]
     pub fn global(
         domain: EvidenceDomain,
         status: EvidenceStatus,
@@ -454,6 +387,7 @@ impl FeasibilityEvidence {
     }
 
     /// Creates target-scoped evidence.
+    #[must_use]
     pub fn for_target(
         target: TargetId,
         domain: EvidenceDomain,
@@ -469,7 +403,7 @@ impl FeasibilityEvidence {
         )
     }
 
-    /// Attaches an originating evidence identifier.
+    /// Attaches the originating evidence identifier.
     #[must_use]
     pub fn with_evidence_id(
         mut self,
@@ -497,7 +431,7 @@ impl FeasibilityEvidence {
         self.status
     }
 
-    /// Returns the explanation.
+    /// Returns the evidence explanation.
     #[must_use]
     pub fn explanation(&self) -> &str {
         &self.explanation
@@ -516,11 +450,12 @@ impl FeasibilityEvidence {
 
 /// Collection of independently established feasibility evidence.
 ///
-/// `complete` means that all applicable additional evidence producers
-/// required by the current planning request have reported their results.
+/// `complete` must be supplied by orchestration. It means that all
+/// applicable evidence producers required by the current request have
+/// completed their assessments.
 ///
-/// It does not mean that every conceivable future domain has been evaluated.
-/// It must be set by the orchestration layer, not guessed by this module.
+/// It does not mean that every possible future computing domain has been
+/// evaluated.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FeasibilityEvidenceSet {
     records: Vec<FeasibilityEvidence>,
@@ -528,16 +463,13 @@ pub struct FeasibilityEvidenceSet {
 }
 
 impl FeasibilityEvidenceSet {
-    /// Creates an evidence set.
-    ///
-    /// Records are sorted deterministically. Duplicate records are retained
-    /// because repeated evidence may represent distinct observations.
+    /// Creates an evidence set with deterministic record ordering.
     #[must_use]
     pub fn new(
         mut records: Vec<FeasibilityEvidence>,
         complete: bool,
     ) -> Self {
-        records.sort_by(|left, right| {
+        records.sort_unstable_by(|left, right| {
             (
                 &left.scope,
                 &left.domain,
@@ -557,40 +489,40 @@ impl FeasibilityEvidenceSet {
         Self { records, complete }
     }
 
-    /// Creates an empty evidence set that is explicitly complete.
+    /// Creates an explicitly complete empty evidence set.
     ///
-    /// Use this only when the orchestration layer has established that
-    /// no additional evidence checks apply.
+    /// Use only when orchestration has established that no additional
+    /// evidence checks apply.
     #[must_use]
     pub fn complete_without_additional_checks() -> Self {
         Self::new(Vec::new(), true)
     }
 
-    /// Returns all evidence records.
+    /// Returns all records.
     #[must_use]
     pub fn records(&self) -> &[FeasibilityEvidence] {
         &self.records
     }
 
-    /// Returns whether all applicable additional evidence was supplied.
+    /// Returns whether all required evidence producers have completed.
     #[must_use]
     pub const fn is_complete(&self) -> bool {
         self.complete
     }
 
-    /// Returns the number of evidence records.
+    /// Returns the record count.
     #[must_use]
     pub fn len(&self) -> usize {
         self.records.len()
     }
 
-    /// Returns whether the evidence set contains no records.
+    /// Returns whether the set is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
 
-    /// Returns records that apply to a target.
+    /// Iterates over records applicable to a target.
     pub fn for_target<'a>(
         &'a self,
         target: &'a TargetId,
@@ -600,7 +532,7 @@ impl FeasibilityEvidenceSet {
             .filter(move |record| record.scope.applies_to(target))
     }
 
-    /// Returns global records.
+    /// Iterates over global records.
     pub fn global_records(
         &self,
     ) -> impl Iterator<Item = &FeasibilityEvidence> {
@@ -614,11 +546,10 @@ impl FeasibilityEvidenceSet {
 // OPERATIONAL BUDGET
 // ============================================================================
 
-/// Caller-configurable operational budgets for feasibility analysis.
+/// Caller-configurable operational budgets for this analysis.
 ///
-/// These are implementation workload budgets, not semantic or hardware
-/// limits. An absent limit means that this module imposes no additional
-/// limit for that dimension.
+/// These limits control the amount of compiler work requested by the caller.
+/// They do not represent universal hardware limits or semantic restrictions.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct FeasibilityBudget {
     max_targets: Option<usize>,
@@ -626,7 +557,7 @@ pub struct FeasibilityBudget {
 }
 
 impl FeasibilityBudget {
-    /// Creates a budget with no additional limits.
+    /// Creates a budget without additional limits.
     #[must_use]
     pub const fn unlimited() -> Self {
         Self {
@@ -668,12 +599,6 @@ impl FeasibilityBudget {
     }
 }
 
-impl Default for FeasibilityBudget {
-    fn default() -> Self {
-        Self::unlimited()
-    }
-}
-
 // ============================================================================
 // REQUEST
 // ============================================================================
@@ -688,10 +613,10 @@ pub struct FeasibilityRequest<'a> {
 }
 
 impl<'a> FeasibilityRequest<'a> {
-    /// Creates a feasibility request from already evaluated evidence.
+    /// Creates a request from completed upstream reports.
     ///
-    /// Capability matching and resource planning must be performed by
-    /// their respective authoritative modules before this call.
+    /// Capability matching and resource planning must be performed by their
+    /// respective authoritative modules before this request is evaluated.
     #[must_use]
     pub fn new(
         capabilities: &'a CapabilityMatchReport,
@@ -708,7 +633,7 @@ impl<'a> FeasibilityRequest<'a> {
         }
     }
 
-    /// Sets caller-controlled operational budgets.
+    /// Applies caller-controlled operational budgets.
     #[must_use]
     pub const fn with_budget(
         mut self,
@@ -724,38 +649,54 @@ impl<'a> FeasibilityRequest<'a> {
 // ============================================================================
 
 /// Overall or per-target feasibility classification.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 #[non_exhaustive]
 pub enum FeasibilityDisposition {
-    /// At least one evaluated realization has proven feasibility.
+    /// A realization is proven feasible.
     Feasible,
 
-    /// At least one realization is feasible but has unmet non-mandatory
-    /// preferences or other explicitly reported trade-offs.
+    /// A realization is feasible with unmet non-mandatory preferences.
     FeasibleWithTradeoffs,
 
-    /// Required capabilities cannot be satisfied by the evaluated inventory.
+    /// Required capabilities are proven unsatisfied.
     CapabilityUnsatisfiable,
 
-    /// Required resource demands cannot be satisfied.
+    /// Required resource demands are proven unsatisfied.
     ResourceUnsatisfiable,
 
-    /// An applicable non-semantic realization constraint is unsatisfied.
+    /// An applicable realization constraint is proven unsatisfied.
     ConstraintUnsatisfiable,
 
-    /// The authoritative semantic subsystem has rejected the program.
+    /// The authoritative semantic subsystem rejected the program.
     SemanticInvalid,
 
-    /// The requested computation cannot be represented by the assessed
-    /// realization without changing its required meaning.
+    /// The computation cannot be represented without changing its meaning.
     Unrepresentable,
 
-    /// Available evidence is incomplete, missing, contradictory, or unknown.
+    /// The target is not a computation-realization target.
+    NotApplicable,
+
+    /// No applicable realization target was discovered.
+    NoRealizationTarget,
+
+    /// The evidence is invalid and cannot establish a conclusion.
+    InvalidEvidence,
+
+    /// The available evidence is insufficient to decide.
     Indeterminate,
 }
 
 impl FeasibilityDisposition {
-    /// Returns whether the result establishes feasibility.
+    /// Returns whether feasibility is established.
     #[must_use]
     pub const fn is_feasible(self) -> bool {
         matches!(
@@ -764,7 +705,7 @@ impl FeasibilityDisposition {
         )
     }
 
-    /// Returns whether the result is definitely infeasible.
+    /// Returns whether the outcome is definitively infeasible.
     #[must_use]
     pub const fn is_definitively_infeasible(self) -> bool {
         matches!(
@@ -774,13 +715,20 @@ impl FeasibilityDisposition {
                 | Self::ConstraintUnsatisfiable
                 | Self::SemanticInvalid
                 | Self::Unrepresentable
+                | Self::NoRealizationTarget
         )
     }
 
-    /// Returns whether further evidence is required.
+    /// Returns whether the assessment is unresolved.
     #[must_use]
     pub const fn is_indeterminate(self) -> bool {
         matches!(self, Self::Indeterminate)
+    }
+
+    /// Returns whether the evidence itself is invalid.
+    #[must_use]
+    pub const fn is_invalid(self) -> bool {
+        matches!(self, Self::InvalidEvidence)
     }
 }
 
@@ -797,17 +745,29 @@ impl fmt::Display for FeasibilityDisposition {
             Self::ConstraintUnsatisfiable => "constraint-unsatisfiable",
             Self::SemanticInvalid => "semantically invalid",
             Self::Unrepresentable => "unrepresentable",
+            Self::NotApplicable => "not applicable",
+            Self::NoRealizationTarget => "no realization target",
+            Self::InvalidEvidence => "invalid evidence",
             Self::Indeterminate => "indeterminate",
         })
     }
 }
 
 // ============================================================================
-// FINDING
+// FINDINGS
 // ============================================================================
 
 /// Stable machine-readable feasibility finding code.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 #[non_exhaustive]
 pub enum FeasibilityFindingCode {
     /// Semantic validation rejected the program.
@@ -828,17 +788,26 @@ pub enum FeasibilityFindingCode {
     /// Resource evidence is missing or unresolved.
     ResourceUnknown,
 
+    /// Resource evidence is invalid.
+    ResourceInvalid,
+
     /// Another realization constraint is unsatisfied.
     ConstraintUnsatisfied,
 
-    /// An additional evidence producer has not completed its assessment.
+    /// An evidence producer has not completed its assessment.
     EvidenceIncomplete,
 
-    /// A feasibility preference is unmet.
+    /// A non-mandatory preference is unmet.
     Tradeoff,
 
     /// Target discovery is incomplete.
     InventoryIncomplete,
+
+    /// A discovered target is not an execution target.
+    TargetNotApplicable,
+
+    /// No applicable realization target was discovered.
+    NoRealizationTarget,
 }
 
 /// One structured explanation of a feasibility result.
@@ -874,7 +843,7 @@ impl FeasibilityFinding {
         self.code
     }
 
-    /// Returns the evidence domain, if applicable.
+    /// Returns the evidence domain, if available.
     #[must_use]
     pub fn domain(&self) -> Option<&EvidenceDomain> {
         self.domain.as_ref()
@@ -940,7 +909,7 @@ impl TargetFeasibility {
         self.resource_disposition
     }
 
-    /// Returns all findings for this target.
+    /// Returns all target-specific and applicable global findings.
     #[must_use]
     pub fn findings(&self) -> &[FeasibilityFinding] {
         &self.findings
@@ -976,19 +945,19 @@ impl FeasibilityReport {
         self.disposition
     }
 
-    /// Returns every evaluated target result.
+    /// Returns all evaluated target results.
     #[must_use]
     pub fn targets(&self) -> &[TargetFeasibility] {
         &self.targets
     }
 
-    /// Returns all report-level findings.
+    /// Returns all report findings.
     #[must_use]
     pub fn findings(&self) -> &[FeasibilityFinding] {
         &self.findings
     }
 
-    /// Returns the result for a target.
+    /// Finds the result for a target.
     #[must_use]
     pub fn target(
         &self,
@@ -1008,25 +977,25 @@ impl FeasibilityReport {
             .filter(|target| target.is_feasible())
     }
 
-    /// Returns whether at least one assessed target is feasible.
+    /// Returns whether at least one target is proven feasible.
     #[must_use]
     pub fn has_feasible_target(&self) -> bool {
         self.feasible_targets().next().is_some()
     }
 
-    /// Returns whether target discovery was complete.
+    /// Returns whether target and resource discovery completed.
     #[must_use]
     pub const fn discovery_is_complete(&self) -> bool {
         self.discovery_complete
     }
 
-    /// Returns whether all applicable additional evidence was supplied.
+    /// Returns whether all applicable additional evidence producers completed.
     #[must_use]
     pub const fn evidence_is_complete(&self) -> bool {
         self.evidence_complete
     }
 
-    /// Returns the semantic validation result.
+    /// Returns the authoritative semantic validation result.
     #[must_use]
     pub fn semantic_validity(&self) -> &SemanticValidity {
         &self.semantic_validity
@@ -1038,30 +1007,29 @@ impl FeasibilityReport {
         self.capability_requirement_count
     }
 
-    /// Returns whether the report is complete.
+    /// Returns whether the complete assessment is exhaustive and decisive.
     ///
-    /// A feasible target may exist even when discovery is incomplete.
-    /// In that situation the report is useful but not exhaustive.
+    /// A proven feasible target can exist while discovery is incomplete.
+    /// In that case feasibility is established existentially, but the
+    /// inventory report is not exhaustive.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.discovery_complete
             && self.evidence_complete
-            && !matches!(
-                self.semantic_validity,
-                SemanticValidity::Unknown { .. }
-            )
+            && !self.semantic_validity.is_unknown()
             && self.targets.iter().all(|target| {
                 !target.disposition().is_indeterminate()
+                    && !target.disposition().is_invalid()
             })
     }
 
-    /// Returns the stable number of assessed targets.
+    /// Returns the number of evaluated targets.
     #[must_use]
     pub fn len(&self) -> usize {
         self.targets.len()
     }
 
-    /// Returns whether no targets were assessed.
+    /// Returns whether no targets were evaluated.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.targets.is_empty()
@@ -1084,12 +1052,15 @@ pub enum FeasibilityError {
         /// Budget dimension.
         dimension: &'static str,
 
-        /// Actual number of items.
+        /// Actual number of supplied items.
         actual: usize,
 
         /// Configured maximum.
         maximum: usize,
     },
+
+    /// The host could not reserve memory for the requested report.
+    AllocationFailure,
 }
 
 impl fmt::Display for FeasibilityError {
@@ -1099,7 +1070,10 @@ impl fmt::Display for FeasibilityError {
     ) -> fmt::Result {
         match self {
             Self::InvalidEvidenceDomain(message) => {
-                write!(formatter, "invalid feasibility evidence domain: {message}")
+                write!(
+                    formatter,
+                    "invalid feasibility evidence domain: {message}"
+                )
             }
 
             Self::BudgetExceeded {
@@ -1111,6 +1085,12 @@ impl fmt::Display for FeasibilityError {
                     formatter,
                     "feasibility {dimension} budget exceeded: \
                      {actual} items supplied, maximum {maximum}"
+                )
+            }
+
+            Self::AllocationFailure => {
+                formatter.write_str(
+                    "unable to reserve memory for feasibility analysis",
                 )
             }
         }
@@ -1128,20 +1108,21 @@ impl Error for FeasibilityError {}
 pub struct FeasibilityAnalyzer;
 
 impl FeasibilityAnalyzer {
-    /// Creates a feasibility analyzer.
+    /// Creates an analyzer.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
-    /// Evaluates the supplied evidence.
+    /// Evaluates the supplied canonical reports and additional evidence.
     ///
     /// This method does not invoke capability matching or resource planning.
     /// It consumes their completed reports.
     ///
     /// # Errors
     ///
-    /// Returns an error when a caller-supplied operational budget is exceeded.
+    /// Returns an error if an operational budget is exceeded or the host
+    /// cannot reserve memory for the report.
     pub fn evaluate(
         &self,
         request: FeasibilityRequest<'_>,
@@ -1165,52 +1146,85 @@ impl FeasibilityAnalyzer {
         let evidence_complete = request.evidence.is_complete();
 
         let mut targets = Vec::new();
+        targets
+            .try_reserve(request.capabilities.len())
+            .map_err(|_| FeasibilityError::AllocationFailure)?;
+
         let mut findings = Vec::new();
 
-        // Global semantic invalidity cannot be repaired by choosing
-        // a different target.
-        if let SemanticValidity::Invalid { explanation } =
-            &request.semantic_validity
-        {
-            findings.push(FeasibilityFinding::new(
-                FeasibilityFindingCode::SemanticInvalid,
-                Some(EvidenceDomain::new(DOMAIN_SEMANTIC_VALIDITY)?),
-                None,
-                explanation.clone(),
-                None,
-            ));
-        }
+        let estimated_findings = request
+            .evidence
+            .len()
+            .saturating_add(request.capabilities.len())
+            .saturating_add(2);
 
-        if let SemanticValidity::Unknown { explanation } =
-            &request.semantic_validity
-        {
-            findings.push(FeasibilityFinding::new(
-                FeasibilityFindingCode::EvidenceIncomplete,
-                Some(EvidenceDomain::new(DOMAIN_SEMANTIC_VALIDITY)?),
-                None,
-                explanation.clone(),
-                None,
-            ));
-        }
+        findings
+            .try_reserve(estimated_findings)
+            .map_err(|_| FeasibilityError::AllocationFailure)?;
 
-        // Global evidence applies to every candidate.
-        for evidence in request.evidence.global_records() {
-            if let Some(finding) = finding_from_evidence(
-                evidence,
-                None,
-            ) {
-                findings.push(finding);
+        // Semantic validity is global: changing targets cannot repair
+        // a semantically invalid source program.
+        match &request.semantic_validity {
+            SemanticValidity::Valid => {}
+
+            SemanticValidity::Invalid { explanation } => {
+                findings.push(FeasibilityFinding::new(
+                    FeasibilityFindingCode::SemanticInvalid,
+                    Some(EvidenceDomain::new(
+                        DOMAIN_SEMANTIC_VALIDITY,
+                    )?),
+                    None,
+                    explanation.clone(),
+                    None,
+                ));
+            }
+
+            SemanticValidity::Unknown { explanation } => {
+                findings.push(FeasibilityFinding::new(
+                    FeasibilityFindingCode::EvidenceIncomplete,
+                    Some(EvidenceDomain::new(
+                        DOMAIN_SEMANTIC_VALIDITY,
+                    )?),
+                    None,
+                    explanation.clone(),
+                    None,
+                ));
             }
         }
 
-        // Evaluate each discovered target independently.
+        // Preserve global findings even when no candidate target exists.
+        if request.capabilities.candidates().is_empty() {
+            for evidence in request.evidence.global_records() {
+                if let Some(finding) =
+                    finding_from_evidence(evidence, None)
+                {
+                    findings.push(finding);
+                }
+            }
+        }
+
+        // Evaluate every discovered candidate independently.
         for candidate in request.capabilities.candidates() {
             let target_id = candidate.target_id().clone();
 
             let resource = request.resources.target(&target_id);
 
+            let resource_disposition =
+                resource.map(|plan| plan.disposition());
+
             let mut target_findings = Vec::new();
 
+            let applicable_evidence_count =
+                request.evidence.for_target(&target_id).count();
+
+            target_findings
+                .try_reserve(
+                    applicable_evidence_count.saturating_add(3),
+                )
+                .map_err(|_| FeasibilityError::AllocationFailure)?;
+
+            // Global evidence applies to every candidate.
+            // Target-scoped evidence applies only to its own target.
             for evidence in request.evidence.for_target(&target_id) {
                 if let Some(finding) = finding_from_evidence(
                     evidence,
@@ -1225,7 +1239,7 @@ impl FeasibilityAnalyzer {
                     FeasibilityFindingCode::EvidenceIncomplete,
                     None,
                     Some(target_id.clone()),
-                    "one or more applicable feasibility evidence producers \
+                    "one or more applicable evidence producers \
                      have not completed their assessment",
                     None,
                 ));
@@ -1236,13 +1250,10 @@ impl FeasibilityAnalyzer {
                     FeasibilityFindingCode::InventoryIncomplete,
                     None,
                     Some(target_id.clone()),
-                    "the target inventory is incomplete",
+                    "target or resource discovery is incomplete",
                     None,
                 ));
             }
-
-            let resource_disposition =
-                resource.map(|plan| plan.disposition());
 
             if resource.is_none()
                 && candidate.is_eligible_for_planning()
@@ -1252,6 +1263,19 @@ impl FeasibilityAnalyzer {
                     None,
                     Some(target_id.clone()),
                     "no resource-planning result exists for this target",
+                    None,
+                ));
+            }
+
+            if candidate.disposition()
+                == TargetMatchDisposition::NotExecutionTarget
+            {
+                target_findings.push(FeasibilityFinding::new(
+                    FeasibilityFindingCode::TargetNotApplicable,
+                    None,
+                    Some(target_id.clone()),
+                    "the discovered target does not represent a \
+                     computation-realization target",
                     None,
                 ));
             }
@@ -1275,6 +1299,19 @@ impl FeasibilityAnalyzer {
             });
         }
 
+        if !discovery_complete {
+            findings.push(FeasibilityFinding::new(
+                FeasibilityFindingCode::InventoryIncomplete,
+                None,
+                None,
+                "target discovery or resource discovery is incomplete",
+                None,
+            ));
+        }
+
+        // Stable total ordering makes report comparisons reproducible.
+        findings.sort_unstable_by(compare_findings);
+
         let disposition = classify_overall(
             &request.semantic_validity,
             request.capabilities,
@@ -1282,16 +1319,6 @@ impl FeasibilityAnalyzer {
             &targets,
             request.evidence,
         );
-
-        if !discovery_complete {
-            findings.push(FeasibilityFinding::new(
-                FeasibilityFindingCode::InventoryIncomplete,
-                None,
-                None,
-                "target discovery or resource-planning inventory is incomplete",
-                None,
-            ));
-        }
 
         Ok(FeasibilityReport {
             disposition,
@@ -1319,7 +1346,7 @@ impl FeasibilityAnalyzer {
 }
 
 // ============================================================================
-// INTERNAL BUDGET VALIDATION
+// INTERNAL HELPERS
 // ============================================================================
 
 fn check_budget(
@@ -1340,6 +1367,18 @@ fn check_budget(
     Ok(())
 }
 
+fn compare_findings(
+    left: &FeasibilityFinding,
+    right: &FeasibilityFinding,
+) -> std::cmp::Ordering {
+    left.code
+        .cmp(&right.code)
+        .then_with(|| left.domain.cmp(&right.domain))
+        .then_with(|| left.target.cmp(&right.target))
+        .then_with(|| left.message.cmp(&right.message))
+        .then_with(|| left.evidence_id.cmp(&right.evidence_id))
+}
+
 // ============================================================================
 // EVIDENCE CLASSIFICATION
 // ============================================================================
@@ -1349,7 +1388,8 @@ fn finding_from_evidence(
     target: Option<TargetId>,
 ) -> Option<FeasibilityFinding> {
     let code = match evidence.status {
-        EvidenceStatus::Satisfied | EvidenceStatus::NotApplicable => {
+        EvidenceStatus::Satisfied
+        | EvidenceStatus::NotApplicable => {
             return None;
         }
 
@@ -1394,7 +1434,8 @@ fn classify_target(
     findings: &[FeasibilityFinding],
     evidence_complete: bool,
 ) -> FeasibilityDisposition {
-    if matches!(semantic, SemanticValidity::Invalid { .. })
+    // Global semantic invalidity cannot be repaired by target selection.
+    if semantic.is_invalid()
         || findings.iter().any(|finding| {
             finding.code == FeasibilityFindingCode::SemanticInvalid
         })
@@ -1402,51 +1443,86 @@ fn classify_target(
         return FeasibilityDisposition::SemanticInvalid;
     }
 
+    // Proven representability failure is definitive.
     if findings.iter().any(|finding| {
         finding.code == FeasibilityFindingCode::Unrepresentable
     }) {
         return FeasibilityDisposition::Unrepresentable;
     }
 
+    // Proven mandatory constraint failure is definitive.
     if findings.iter().any(|finding| {
         finding.code == FeasibilityFindingCode::ConstraintUnsatisfied
     }) {
         return FeasibilityDisposition::ConstraintUnsatisfiable;
     }
 
-    if !matches!(semantic, SemanticValidity::Valid) {
+    // Proven capability incompatibility is not made uncertain by unrelated
+    // missing evidence.
+    match capability {
+        TargetMatchDisposition::Incompatible => {
+            return FeasibilityDisposition::CapabilityUnsatisfiable;
+        }
+
+        TargetMatchDisposition::NotExecutionTarget => {
+            return FeasibilityDisposition::NotApplicable;
+        }
+
+        TargetMatchDisposition::Satisfied
+        | TargetMatchDisposition::Unresolved
+        | TargetMatchDisposition::NoRequirements => {}
+    }
+
+    // Proven resource shortfall is also definitive for this target.
+    if resource == Some(TargetResourceDisposition::Infeasible) {
+        return FeasibilityDisposition::ResourceUnsatisfiable;
+    }
+
+    if resource == Some(TargetResourceDisposition::InvalidEvidence) {
+        return FeasibilityDisposition::InvalidEvidence;
+    }
+
+    // Unknown semantic validity cannot establish a realization.
+    if semantic.is_unknown() {
         return FeasibilityDisposition::Indeterminate;
     }
 
+    // A missing or unresolved evidence record blocks a success conclusion.
     if !evidence_complete
         || findings.iter().any(|finding| {
             finding.code == FeasibilityFindingCode::EvidenceIncomplete
+                || finding.code == FeasibilityFindingCode::ResourceUnknown
         })
     {
         return FeasibilityDisposition::Indeterminate;
     }
 
     match capability {
-        TargetMatchDisposition::Incompatible
-        | TargetMatchDisposition::NotExecutionTarget => {
-            return FeasibilityDisposition::CapabilityUnsatisfiable;
-        }
-
         TargetMatchDisposition::Unresolved
         | TargetMatchDisposition::NoRequirements => {
             return FeasibilityDisposition::Indeterminate;
         }
 
         TargetMatchDisposition::Satisfied => {}
+
+        TargetMatchDisposition::Incompatible
+        | TargetMatchDisposition::NotExecutionTarget => {
+            return FeasibilityDisposition::NotApplicable;
+        }
     }
 
     match resource {
-        Some(TargetResourceDisposition::Feasible) 
-        | Some(TargetResourceDisposition::NoResourceRequirements) => {
+        Some(TargetResourceDisposition::Feasible) => {
             FeasibilityDisposition::Feasible
         }
 
-        Some(TargetResourceDisposition::FeasibleWithUnmetPreferences) => {
+        Some(TargetResourceDisposition::NoResourceRequirements) => {
+            FeasibilityDisposition::Feasible
+        }
+
+        Some(
+            TargetResourceDisposition::FeasibleWithUnmetPreferences,
+        ) => {
             FeasibilityDisposition::FeasibleWithTradeoffs
         }
 
@@ -1454,11 +1530,14 @@ fn classify_target(
             FeasibilityDisposition::ResourceUnsatisfiable
         }
 
+        Some(TargetResourceDisposition::InvalidEvidence) => {
+            FeasibilityDisposition::InvalidEvidence
+        }
+
         Some(
             TargetResourceDisposition::Unresolved
             | TargetResourceDisposition::EvidenceUnavailable
             | TargetResourceDisposition::EvidenceFailure
-            | TargetResourceDisposition::InvalidEvidence
             | TargetResourceDisposition::SkippedCapabilityIneligible,
         )
         | None => FeasibilityDisposition::Indeterminate,
@@ -1476,7 +1555,7 @@ fn classify_overall(
     targets: &[TargetFeasibility],
     evidence: &FeasibilityEvidenceSet,
 ) -> FeasibilityDisposition {
-    if matches!(semantic, SemanticValidity::Invalid { .. })
+    if semantic.is_invalid()
         || evidence.global_records().any(|record| {
             record.domain.is_semantic_validity()
                 && record.status == EvidenceStatus::Unsatisfied
@@ -1485,13 +1564,6 @@ fn classify_overall(
         return FeasibilityDisposition::SemanticInvalid;
     }
 
-    if !matches!(semantic, SemanticValidity::Valid)
-        || !evidence.is_complete()
-    {
-        return FeasibilityDisposition::Indeterminate;
-    }
-
-    // A global representability or constraint failure applies to all targets.
     if evidence.global_records().any(|record| {
         record.domain.is_representability()
             && record.status == EvidenceStatus::Unsatisfied
@@ -1507,8 +1579,19 @@ fn classify_overall(
         return FeasibilityDisposition::ConstraintUnsatisfiable;
     }
 
-    // An explicit successful target is sufficient to establish that at
-    // least one assessed realization is feasible.
+    if targets.iter().any(|target| {
+        target.disposition == FeasibilityDisposition::InvalidEvidence
+    }) {
+        // A separate proven feasible target may still establish an
+        // existentially feasible realization.
+        if !targets.iter().any(|target| target.is_feasible()) {
+            return FeasibilityDisposition::InvalidEvidence;
+        }
+    }
+
+    // A proven feasible candidate establishes existential feasibility.
+    // Incomplete discovery can still mean that the inventory is not
+    // exhaustive; that is reported separately by is_complete().
     if targets.iter().any(|target| {
         target.disposition == FeasibilityDisposition::Feasible
     }) {
@@ -1522,36 +1605,75 @@ fn classify_overall(
         return FeasibilityDisposition::FeasibleWithTradeoffs;
     }
 
-    let capability_candidates = capabilities
+    if semantic.is_unknown() || !evidence.is_complete() {
+        return FeasibilityDisposition::Indeterminate;
+    }
+
+    // Explicit unknown global evidence blocks an overall conclusion.
+    if evidence.global_records().any(|record| {
+        record.status == EvidenceStatus::Unknown
+    }) {
+        return FeasibilityDisposition::Indeterminate;
+    }
+
+    // No capability requirements is not proof of compatibility.
+    if capabilities.requirement_count() == 0 {
+        return FeasibilityDisposition::Indeterminate;
+    }
+
+    let realization_targets = capabilities
+        .candidates()
+        .iter()
+        .filter(|candidate| {
+            candidate.disposition()
+                != TargetMatchDisposition::NotExecutionTarget
+        })
+        .count();
+
+    if realization_targets == 0 {
+        if capabilities.discovery_is_complete() {
+            return FeasibilityDisposition::NoRealizationTarget;
+        }
+
+        return FeasibilityDisposition::Indeterminate;
+    }
+
+    let eligible_count = capabilities
         .candidates()
         .iter()
         .filter(|candidate| candidate.is_eligible_for_planning())
         .count();
 
-    // No requirements is not proof of compatibility.
-    if capabilities.requirement_count() == 0 {
-        return FeasibilityDisposition::Indeterminate;
-    }
+    let incompatible_count = capabilities
+        .candidates()
+        .iter()
+        .filter(|candidate| {
+            candidate.disposition()
+                == TargetMatchDisposition::Incompatible
+        })
+        .count();
 
-    if capability_candidates == 0
+    // All applicable computation targets explicitly reject the required
+    // capabilities.
+    if incompatible_count == realization_targets
         && capabilities.discovery_is_complete()
     {
         return FeasibilityDisposition::CapabilityUnsatisfiable;
     }
 
-    // Resource unsatisfiability requires all capability-eligible targets
-    // to have proven resource shortfalls and a complete resource inventory.
+    // All capability-eligible candidates have proven resource shortfalls.
     let resource_failures = targets
         .iter()
         .filter(|target| {
-            target.capability_disposition.is_eligible_for_planning()
+            target.capability_disposition
+                == TargetMatchDisposition::Satisfied
                 && target.disposition
                     == FeasibilityDisposition::ResourceUnsatisfiable
         })
         .count();
 
-    if capability_candidates > 0
-        && resource_failures == capability_candidates
+    if eligible_count > 0
+        && resource_failures == eligible_count
         && resources.discovery_is_complete()
     {
         return FeasibilityDisposition::ResourceUnsatisfiable;
@@ -1560,34 +1682,35 @@ fn classify_overall(
     let unrepresentable = targets
         .iter()
         .filter(|target| {
-            target.capability_disposition.is_eligible_for_planning()
-                && target.disposition == FeasibilityDisposition::Unrepresentable
+            target.capability_disposition
+                == TargetMatchDisposition::Satisfied
+                && target.disposition
+                    == FeasibilityDisposition::Unrepresentable
         })
         .count();
 
-    if capability_candidates > 0
-        && unrepresentable == capability_candidates
-    {
+    if eligible_count > 0 && unrepresentable == eligible_count {
         return FeasibilityDisposition::Unrepresentable;
     }
 
     let constraint_failures = targets
         .iter()
         .filter(|target| {
-            target.capability_disposition.is_eligible_for_planning()
+            target.capability_disposition
+                == TargetMatchDisposition::Satisfied
                 && target.disposition
                     == FeasibilityDisposition::ConstraintUnsatisfiable
         })
         .count();
 
-    if capability_candidates > 0
-        && constraint_failures == capability_candidates
+    if eligible_count > 0
+        && constraint_failures == eligible_count
     {
         return FeasibilityDisposition::ConstraintUnsatisfiable;
     }
 
-    // Incomplete inventories or mixed unresolved outcomes must not be
-    // upgraded into a global infeasibility or success claim.
+    // Mixed, incomplete, or unresolved candidate outcomes must not be
+    // upgraded into a success or a universal infeasibility claim.
     FeasibilityDisposition::Indeterminate
 }
 
@@ -1613,7 +1736,12 @@ mod tests {
     }
 
     #[test]
-    fn evidence_domains_are_open_ended() {
+    fn api_version_is_current() {
+        assert_eq!(FEASIBILITY_API_VERSION, 2);
+    }
+
+    #[test]
+    fn evidence_domains_are_open_world() {
         let domain = EvidenceDomain::new(
             "future.photonic.execution",
         )
@@ -1627,13 +1755,8 @@ mod tests {
 
     #[test]
     fn empty_evidence_domain_is_rejected() {
-        assert!(
-            EvidenceDomain::new("").is_err()
-        );
-
-        assert!(
-            EvidenceDomain::new("   ").is_err()
-        );
+        assert!(EvidenceDomain::new("").is_err());
+        assert!(EvidenceDomain::new("   ").is_err());
     }
 
     #[test]
@@ -1645,22 +1768,15 @@ mod tests {
 
     #[test]
     fn unknown_evidence_is_not_success() {
-        let domain = EvidenceDomain::new(
-            DOMAIN_DEPENDENCY,
-        )
-        .expect("valid domain");
-
         let evidence = FeasibilityEvidence::global(
-            domain,
+            EvidenceDomain::new(DOMAIN_DEPENDENCY)
+                .expect("valid domain"),
             EvidenceStatus::Unknown,
             "dependency validation has not completed",
         );
 
-        let finding = finding_from_evidence(
-            &evidence,
-            None,
-        )
-        .expect("unknown evidence must create a finding");
+        let finding = finding_from_evidence(&evidence, None)
+            .expect("unknown evidence must produce a finding");
 
         assert_eq!(
             finding.code(),
@@ -1669,13 +1785,29 @@ mod tests {
     }
 
     #[test]
-    fn semantic_invalidity_is_distinct_from_resource_failure() {
-        let semantic = SemanticValidity::invalid(
-            "invalid semantic operation",
+    fn global_constraint_failure_is_reported() {
+        let evidence = FeasibilityEvidence::global(
+            EvidenceDomain::new(DOMAIN_SECURITY)
+                .expect("valid domain"),
+            EvidenceStatus::Unsatisfied,
+            "security constraint is not satisfied",
         );
 
+        let finding = finding_from_evidence(&evidence, None)
+            .expect("failed global evidence must be reported");
+
+        assert_eq!(
+            finding.code(),
+            FeasibilityFindingCode::ConstraintUnsatisfied,
+        );
+    }
+
+    #[test]
+    fn semantic_invalidity_is_distinct_from_resource_failure() {
         let disposition = classify_target(
-            &semantic,
+            &SemanticValidity::invalid(
+                "invalid semantic operation",
+            ),
             TargetMatchDisposition::Satisfied,
             Some(TargetResourceDisposition::Feasible),
             &[],
@@ -1690,12 +1822,10 @@ mod tests {
 
     #[test]
     fn unknown_semantics_are_indeterminate() {
-        let semantic = SemanticValidity::unknown(
-            "semantic validation is incomplete",
-        );
-
         let disposition = classify_target(
-            &semantic,
+            &SemanticValidity::unknown(
+                "semantic validation is incomplete",
+            ),
             TargetMatchDisposition::Satisfied,
             Some(TargetResourceDisposition::Feasible),
             &[],
@@ -1711,7 +1841,7 @@ mod tests {
     #[test]
     fn unmet_preferences_allow_tradeoffs() {
         let disposition = classify_target(
-            &SemanticValidity::Valid,
+            &SemanticValidity::valid(),
             TargetMatchDisposition::Satisfied,
             Some(
                 TargetResourceDisposition::FeasibleWithUnmetPreferences,
@@ -1727,13 +1857,21 @@ mod tests {
     }
 
     #[test]
-    fn insufficient_resources_are_not_indeterminate() {
+    fn insufficient_resources_are_definitive() {
         let disposition = classify_target(
-            &SemanticValidity::Valid,
+            &SemanticValidity::valid(),
             TargetMatchDisposition::Satisfied,
             Some(TargetResourceDisposition::Infeasible),
-            &[],
-            true,
+            &[
+                FeasibilityFinding::new(
+                    FeasibilityFindingCode::EvidenceIncomplete,
+                    None,
+                    None,
+                    "another evidence producer is incomplete",
+                    None,
+                ),
+            ],
+            false,
         );
 
         assert_eq!(
@@ -1745,7 +1883,7 @@ mod tests {
     #[test]
     fn absent_resource_evidence_is_indeterminate() {
         let disposition = classify_target(
-            &SemanticValidity::Valid,
+            &SemanticValidity::valid(),
             TargetMatchDisposition::Satisfied,
             None,
             &[],
@@ -1760,48 +1898,72 @@ mod tests {
 
     #[test]
     fn empty_capability_requirements_are_not_compatible() {
-        assert_eq!(
-            classify_target(
-                &SemanticValidity::Valid,
-                TargetMatchDisposition::NoRequirements,
-                Some(TargetResourceDisposition::NoResourceRequirements),
-                &[],
-                true,
+        let disposition = classify_target(
+            &SemanticValidity::valid(),
+            TargetMatchDisposition::NoRequirements,
+            Some(
+                TargetResourceDisposition::NoResourceRequirements,
             ),
+            &[],
+            true,
+        );
+
+        assert_eq!(
+            disposition,
             FeasibilityDisposition::Indeterminate,
         );
     }
 
     #[test]
     fn explicit_capability_incompatibility_is_preserved() {
+        let disposition = classify_target(
+            &SemanticValidity::valid(),
+            TargetMatchDisposition::Incompatible,
+            None,
+            &[],
+            false,
+        );
+
         assert_eq!(
-            classify_target(
-                &SemanticValidity::Valid,
-                TargetMatchDisposition::Incompatible,
-                None,
-                &[],
-                true,
-            ),
+            disposition,
             FeasibilityDisposition::CapabilityUnsatisfiable,
         );
     }
 
     #[test]
-    fn unknown_resource_evidence_is_indeterminate() {
+    fn non_execution_targets_are_not_capability_failures() {
+        let disposition = classify_target(
+            &SemanticValidity::valid(),
+            TargetMatchDisposition::NotExecutionTarget,
+            None,
+            &[],
+            true,
+        );
+
         assert_eq!(
-            classify_target(
-                &SemanticValidity::Valid,
-                TargetMatchDisposition::Satisfied,
-                Some(TargetResourceDisposition::EvidenceUnavailable),
-                &[],
-                true,
-            ),
-            FeasibilityDisposition::Indeterminate,
+            disposition,
+            FeasibilityDisposition::NotApplicable,
         );
     }
 
     #[test]
-    fn unrepresentable_evidence_is_not_a_successful_fallback() {
+    fn invalid_resource_evidence_remains_distinct() {
+        let disposition = classify_target(
+            &SemanticValidity::valid(),
+            TargetMatchDisposition::Satisfied,
+            Some(TargetResourceDisposition::InvalidEvidence),
+            &[],
+            true,
+        );
+
+        assert_eq!(
+            disposition,
+            FeasibilityDisposition::InvalidEvidence,
+        );
+    }
+
+    #[test]
+    fn unrepresentable_evidence_is_not_a_fallback() {
         let evidence = FeasibilityEvidence::global(
             EvidenceDomain::new(DOMAIN_REPRESENTABILITY)
                 .expect("valid domain"),
@@ -1809,11 +1971,8 @@ mod tests {
             "required operation cannot be represented",
         );
 
-        let finding = finding_from_evidence(
-            &evidence,
-            None,
-        )
-        .expect("unrepresentability must be reported");
+        let finding = finding_from_evidence(&evidence, None)
+            .expect("unrepresentability must be reported");
 
         assert_eq!(
             finding.code(),
@@ -1824,13 +1983,15 @@ mod tests {
     #[test]
     fn evidence_order_is_deterministic() {
         let first = FeasibilityEvidence::global(
-            EvidenceDomain::new("z.domain").unwrap(),
+            EvidenceDomain::new("z.domain")
+                .expect("valid domain"),
             EvidenceStatus::Satisfied,
             "z",
         );
 
         let second = FeasibilityEvidence::global(
-            EvidenceDomain::new("a.domain").unwrap(),
+            EvidenceDomain::new("a.domain")
+                .expect("valid domain"),
             EvidenceStatus::Unknown,
             "a",
         );
@@ -1878,7 +2039,7 @@ mod tests {
     fn not_applicable_evidence_does_not_create_a_failure() {
         let evidence = FeasibilityEvidence::global(
             EvidenceDomain::new(DOMAIN_SYNCHRONIZATION)
-                .unwrap(),
+                .expect("valid domain"),
             EvidenceStatus::NotApplicable,
             "no synchronization boundary exists",
         );
