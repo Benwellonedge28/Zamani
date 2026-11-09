@@ -6,289 +6,374 @@
 
 //! # Zamani Universal Meta-Compiler — Planning
 //!
-//! Path:
-//!     src/compiler/planning/mod.rs
+//! Path: `src/compiler/planning/mod.rs`
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
 //!
-//! Rust:
-//!     Rust 1.97+
-//!     Edition 2021
-//!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
-//!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! # Purpose
 //!
 //! This module is the public composition boundary for compiler-side
-//! target discovery, capability matching, resource feasibility,
-//! heterogeneous workload partitioning, and abstract scheduling.
+//! target discovery, capability matching, feasibility assessment,
+//! resource planning, workload partitioning, data movement planning,
+//! routing planning, and abstract scheduling.
 //!
-//! Its responsibility is to expose and integrate the existing planning
-//! subsystems without introducing duplicate implementations.
+//! It exposes the existing planning implementations. It does not
+//! recreate their algorithms or establish competing authorities.
 //!
-//! The planning architecture supports Zamani's:
-//
-//!     Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever
+//! The architecture supports:
+//!
+//! `Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever`
 //!
 //! (POCO-REAF).
 //!
-//! The same semantic program may be considered for different compatible
-//! execution targets and different resource configurations without
-//! requiring source-level rewriting.
+//! A source program retains its semantic meaning while the compiler
+//! evaluates compatible realization possibilities using explicit
+//! requirements, capabilities, evidence, constraints, preferences,
+//! hints, and resource information.
 //!
-//! Target realization is conditional on:
+//! A successful planning result is a proposal. It is not proof that
+//! a physical resource has been reserved or that execution has begun.
 //!
-//! - Program semantics.
-//! - Required capabilities.
-//! - Available capability evidence.
-//! - Resource requirements.
-//! - Resource evidence.
-//! - Target compatibility.
-//! - Explicit constraints.
-//! - Operational budgets.
-//! - Physical and implementation feasibility.
+//! Literal infinite computation is not promised. Actual processing
+//! is bounded by available implementation resources, representable
+//! values, physical infrastructure, and explicitly configured
+//! operational budgets.
 //!
-//! No claim of physically infinite computation is made.
-//!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
+//! # Architectural ownership
 //!
 //! This module owns:
-//
-//! - Planning subsystem composition.
-//! - Stable planning module paths.
-//! - Public planning API exports.
-//! - Planning subsystem API version identification.
-//! - Documented integration boundaries.
 //!
-//! This module does NOT own:
-//
-//! - Source-language grammar.
-//! - AST construction.
-//! - Semantic analysis.
-//! - Type inference.
-//! - Ownership analysis.
-//! - Canonical capability semantics.
-//! - Canonical resource semantics.
+//! - Planning subsystem composition.
+//! - Public planning module paths.
+//! - Stable composition identity.
+//! - Composition API version.
+//! - Public re-exports of established subsystem contracts.
+//! - Cross-subsystem architectural documentation.
+//!
+//! It does not own:
+//!
+//! - Source grammar or AST construction.
+//! - Semantic analysis or semantic name resolution.
+//! - Canonical capability definitions.
+//! - Canonical resource requirement definitions.
+//! - Canonical target descriptor definitions.
 //! - Canonical IR definitions.
-//! - Optimization implementations.
-//! - Backend implementations.
+//! - Domain-specific IR definitions.
+//! - Optimization algorithms.
+//! - Backend implementations or code generation.
 //! - Physical hardware discovery.
-//! - Physical device allocation.
-//! - Runtime execution.
+//! - Physical resource allocation or reservation.
+//! - Physical placement.
+//! - Network transport.
 //! - Physical execution scheduling.
 //! - Quantum physical routing.
 //! - Quantum error correction.
-//! - Network transport.
-//! - Hardware synthesis.
+//! - Runtime execution.
 //!
-//! Those responsibilities remain with their authoritative repository
-//! subsystems.
+//! These responsibilities remain with their authoritative subsystems.
 //!
-//! ============================================================================
-//! SUBSYSTEM ARCHITECTURE
-//! ============================================================================
+//! # Canonical authorities
 //!
-//! target_discovery
-//!     Discovers and aggregates registered target descriptors.
+//! Source syntax:
+//!     grammar/
 //!
-//! capability_matching
-//!     Evaluates canonical semantic capability requirements against
-//!     explicitly supplied target capability evidence.
+//! Semantic meaning and requirements:
+//!     crate::frontend::semantic
 //!
-//! resource_planning
-//!     Evaluates resource requirements against supplied resource evidence.
-//!
-//! partitioning
-//!     Partitions abstract workloads while preserving operation identity,
-//!     dependencies, candidate targets, and unresolved boundaries.
-//!
-//! scheduling
-//!     Constructs dependency-aware abstract execution schedules from
-//!     partitioning results.
-//!
-//! These modules retain independent implementation ownership.
-//!
-//! This parent module must not recreate their algorithms.
-//!
-//! ============================================================================
-//! AUTHORITATIVE REPOSITORY DEPENDENCIES
-//! ============================================================================
-//!
-//! Compiler configuration:
-//!     crate::compiler::configuration
-//!
-//! Compiler analysis:
-//!     crate::compiler::analysis
-//!
-//! Canonical semantic capabilities:
-//!     crate::frontend::semantic::capabilities
-//!
-//! Canonical target descriptors:
+//! Canonical target descriptors and target identity:
 //!     crate::compiler::configuration::target
 //!
-//! Distributed workload partitioning:
-//!     crate::distributed::planning
+//! Canonical capability semantics:
+//!     crate::frontend::semantic::capabilities
 //!
-//! Canonical hybrid computation:
-//!     crate::hybrid
-//!
-//! Canonical quantum IR:
-//!     crate::quantum::ir
-//!
-//! Canonical classical computation:
-//!     crate::classical
+//! Canonical resource semantics:
+//!     crate::frontend::semantic::resources
 //!
 //! Canonical universal IR:
 //!     crate::zuir
 //!
-//! Compiler optimization:
-//!     crate::compiler::optimization
+//! Classical representation:
+//!     crate::classical
 //!
-//! Backend:
+//! Quantum representation:
+//!     crate::quantum::ir
+//!
+//! HDL representation:
+//!     crate::hdl::hdlir
+//!
+//! AI and tensor computation:
+//!     crate::ai
+//!
+//! Hybrid computation:
+//!     crate::hybrid
+//!
+//! Distributed computation and partitioning:
+//!     crate::distributed
+//!
+//! Backend implementations:
 //!     crate::backend
 //!
-//! Runtime:
+//! Physical resource acquisition and execution:
 //!     crate::runtime
 //!
-//! ============================================================================
-//! INTEGRATION CONTRACT
-//! ============================================================================
+//! # Planning subsystem responsibilities
 //!
-//! Target discovery produces DiscoveryReport.
+//! The public planning architecture is composed of independent modules.
 //!
-//! Capability matching consumes discovered target information and
-//! canonical semantic capability requirements.
+//! ## target_discovery
 //!
-//! Resource planning consumes capability-matching results and explicitly
-//! supplied resource evidence.
+//! Discovers and aggregates registered target descriptors.
 //!
-//! Partitioning consumes abstract workloads and target compatibility
-//! evidence.
+//! Discovery does not establish capability compatibility, resource
+//! feasibility, authorization, physical availability, or execution.
 //!
-//! Scheduling consumes partitioning results and their dependencies.
+//! ## capability_matching
 //!
-//! Downstream compiler stages consume planning reports rather than
-//! reconstructing their internal decisions.
+//! Evaluates canonical semantic capability requirements against
+//! explicitly supplied target capability evidence.
 //!
-//! Every incomplete, incompatible, infeasible, or unresolved result must
-//! remain distinguishable from a successful realization.
+//! Capability declarations and capability evidence are not interchangeable.
 //!
-//! A partial inventory must never be silently presented as a complete
-//! inventory.
+//! ## feasibility
 //!
-//! A missing capability must never be silently treated as available.
+//! Aggregates authoritative semantic, capability, resource, and
+//! realization evidence to assess whether a proposed realization
+//! is established, rejected, or unresolved.
 //!
-//! An unknown resource quantity must never be treated as unlimited.
+//! Unknown or incomplete evidence must never establish feasibility.
 //!
-//! A successful abstract plan must never be represented as proof that
-//! physical execution or allocation has succeeded.
+//! ## resource_planning
 //!
-//! ============================================================================
-//! SCALABILITY
-//! ============================================================================
+//! Evaluates canonical resource requirements against explicitly
+//! supplied target-scoped resource evidence.
 //!
-//! This module introduces no fixed maximum for:
+//! It does not allocate or reserve resources.
 //!
-//! - Registered targets.
-//! - Discovery providers.
+//! ## partitioning
+//!
+//! Partitions abstract workloads into target-compatible logical
+//! segments while preserving canonical operation identities,
+//! dependencies, candidate targets, and unresolved boundaries.
+//!
+//! It does not perform physical placement.
+//!
+//! ## data_movement
+//!
+//! Plans logical data transfers across partition boundaries using
+//! explicit transfer requirements, placement evidence, and supplied
+//! routing information.
+//!
+//! It does not serialize, allocate, transfer, or transport data.
+//!
+//! ## routing
+//!
+//! Coordinates abstract routes across partition boundaries using
+//! supplied placement and topology evidence.
+//!
+//! It does not discover physical topology, reserve network resources,
+//! or perform quantum physical routing.
+//!
+//! ## scheduling
+//!
+//! Produces dependency-aware abstract schedules from validated
+//! partitioning results and explicit scheduling policies.
+//!
+//! It does not schedule physical devices or execute operations.
+//!
+//! # Planning order
+//!
+//! The usual dependency flow is:
+//!
+//!     Target discovery
+//!           |
+//!           v
+//!     Capability matching
+//!           |
+//!           v
+//!     Feasibility assessment
+//!           |
+//!           v
+//!     Resource planning
+//!           |
+//!           v
+//!     Workload partitioning
+//!           |
+//!           +--------------------+
+//!           |                    |
+//!           v                    v
+//!     Data movement          Scheduling
+//!           |
+//!           v
+//!        Routing
+//!
+//! This is a logical dependency guide, not a requirement that every
+//! compilation request execute every planning stage in this exact order.
+//!
+//! Some stages may be inapplicable to a particular program.
+//! Required stages must not be silently skipped.
+//!
+//! Data movement, routing, and scheduling may have additional ordering
+//! dependencies established by their input contracts. Their owning
+//! implementations remain authoritative for those dependencies.
+//!
+//! # Conceptual distinctions
+//!
+//! Planning integrations must preserve these separate concepts:
+//!
+//! Requirement:
+//!     What the program needs.
+//!
+//! Capability:
+//!     What a target or implementation can provide.
+//!
+//! Constraint:
+//!     What an acceptable realization must obey.
+//!
+//! Preference:
+//!     What is desirable but not mandatory.
+//!
+//! Hint:
+//!     Optional implementation guidance.
+//!
+//! Feasibility:
+//!     Whether supplied evidence establishes that a proposed
+//!     realization satisfies applicable mandatory conditions.
+//!
+//! A preference must not become a mandatory requirement.
+//! A hint must not become a correctness condition.
+//! A capability declaration must not be treated as evidence.
+//! Missing evidence must not be interpreted as unlimited capacity.
+//! Unknown feasibility must not be reported as feasible.
+//!
+//! # Integration contract
+//!
+//! Inputs originate from authoritative subsystems:
+//!
+//! - Validated semantic requirements and constraints.
+//! - Canonical capability requirements and evidence.
+//! - Canonical resource requirements and resource evidence.
+//! - Canonical target descriptors.
+//! - Canonical operation identities and dependency graphs.
+//! - Domain-specific IR and validated data relationships.
+//! - Explicit placement and topology snapshots where applicable.
+//!
+//! Planning reports are consumed by downstream compiler stages.
+//!
+//! Downstream consumers must preserve the report's completeness,
+//! evidence scope, unresolved conditions, provenance, and errors.
+//!
+//! A consumer must not reconstruct a planning decision from partial
+//! report fields while discarding its failure or uncertainty status.
+//!
+//! # Scalability and POCO-REAF
+//!
+//! This composition module introduces no fixed maximum for:
+//!
+//! - Registered target providers.
+//! - Discovered targets.
+//! - Capability identities.
+//! - Capability requirements.
+//! - Resource dimensions.
+//! - Resource quantities.
 //! - Computing domains.
-//! - CPUs.
-//! - CPU cores.
-//! - Threads.
-//! - GPUs.
-//! - FPGAs.
-//! - ASICs.
-//! - QPUs.
-//! - Accelerators.
-//! - Processing elements.
-//! - Distributed nodes.
 //! - Work items.
 //! - Operations.
 //! - Dependencies.
 //! - Partitions.
+//! - Transfers.
+//! - Routes.
+//! - Network nodes or links.
 //! - Schedule steps.
-//! - Resources.
-//! - Memory.
-//! - Tensor dimensions.
+//! - Processors or accelerators.
 //! - Quantum resources.
-//! - Hardware resources.
+//! - Memory capacity.
+//! - Tensor dimensions.
+//! - Future computing technologies.
 //!
-//! Collection capacity is determined by available implementation
-//! resources and explicitly configured operational budgets.
+//! Collection sizes are governed by available implementation resources
+//! and explicitly configured operational budgets.
 //!
-//! An absent operational budget does not imply infinite physical capacity.
+//! Operational budgets are request or policy limits. They must not
+//! silently become language-level or universal hardware ceilings.
 //!
-//! The compiler must report allocation failures, budget exhaustion,
-//! arithmetic overflow, and infeasibility explicitly.
+//! The absence of a configured budget does not imply unlimited
+//! physical capacity.
 //!
-//! ============================================================================
-//! DETERMINISM
-//! ============================================================================
+//! Arithmetic overflow, allocation failure, incomplete evidence,
+//! resource exhaustion, and infeasibility must remain explicit.
 //!
-//! The composed public API preserves the determinism guarantees of the
-//! underlying planning implementations.
+//! # Determinism
 //!
-//! Stable identifiers and deterministic ordering must be preserved.
+//! This module introduces no global mutable registry, random identity,
+//! timestamp-dependent decision, or registration-order-dependent
+//! selection policy.
 //!
-//! Provider registration order must not silently determine target identity.
+//! Each subsystem retains its own deterministic ordering contract.
 //!
-//! Equivalent inputs and equivalent evidence must produce equivalent
-//! planning results wherever the underlying contracts guarantee
-//! deterministic behavior.
+//! Composition must preserve those guarantees and must not silently
+//! reorder or discard reports.
 //!
-//! ============================================================================
-//! CONCURRENCY
-//! ============================================================================
+//! # Concurrency
 //!
-//! This module does not create a global scheduler or global mutable
-//! target registry.
+//! This module does not create a global execution scheduler.
 //!
-//! Concurrency policies belong to explicit planning requests and their
-//! owning subsystems.
+//! Independent planning requests may use independent subsystem instances
+//! and immutable evidence snapshots.
+//!
+//! Shared mutable state and compilation-session synchronization belong
+//! to the compiler context and session.
 //!
 //! Physical execution concurrency belongs to the runtime.
 //!
-//! ============================================================================
-//! ERROR HANDLING
-//! ============================================================================
+//! # Error handling
 //!
-//! The underlying modules retain their specific error types.
+//! Each subsystem retains its own error type.
 //!
-//! This module does not collapse all failures into a single ambiguous
-//! planning error.
+//! This module does not flatten all errors into one generic planning error.
 //!
-//! Callers should preserve:
+//! Callers must preserve distinctions between:
 //!
-//! - Discovery failures.
-//! - Invalid target descriptors.
-//! - Target identity conflicts.
+//! - Discovery failure.
+//! - Invalid target descriptor.
+//! - Target identity conflict.
 //! - Capability incompatibility.
-//! - Unresolved capability evidence.
+//! - Unknown capability evidence.
+//! - Invalid feasibility evidence.
+//! - Incomplete feasibility assessment.
 //! - Resource infeasibility.
-//! - Unresolved resource evidence.
+//! - Unknown resource capacity.
 //! - Incomplete partitioning.
+//! - Unassigned work.
 //! - Unresolved dependencies.
-//! - Scheduling cycles.
+//! - Invalid transfer requirements.
+//! - Missing placement information.
+//! - Routing failure.
+//! - Scheduling cycle.
 //! - Operational budget exhaustion.
-//! - Implementation resource failures.
+//! - Arithmetic overflow.
+//! - Implementation resource exhaustion.
 //!
-//! ============================================================================
-//! PUBLIC API STABILITY
-//! ============================================================================
+//! # Security
 //!
-//! Existing module-qualified APIs remain available.
+//! Planning reports and provider evidence are not automatically trusted.
 //!
-//! The root-level re-exports provide a convenient public interface.
+//! Authentication, authorization, provider trust, evidence provenance,
+//! extension isolation, and artifact verification remain the responsibility
+//! of the authoritative security and provider subsystems.
 //!
-//! Implementation details that are not part of the documented public
-//! contract should continue to be accessed through their owning modules.
+//! No planning result grants permission to access a physical resource.
 //!
-//! Changes to individual subsystem contracts must be coordinated with
-//! their consumers and must not silently change program semantics.
+//! # Compatibility
+//!
+//! Existing public module-qualified paths are retained.
+//!
+//! The additional public modules are additive composition exports.
+//! Existing subsystem API versions remain independently governed by
+//! their owning modules.
+//!
+//! Changes to a subsystem's public contract must be coordinated with
+//! its consumers. A composition-module change must not silently alter
+//! source semantics or domain IR contracts.
 
 // ============================================================================
 // MODULE DECLARATIONS
@@ -296,41 +381,51 @@
 
 /// Target discovery and aggregation.
 ///
-/// Owns the provider registry, discovery request, discovery policy,
-/// target aggregation, and discovery diagnostics.
-///
-/// Does not allocate physical devices.
+/// Owns discovery provider registration, discovery requests, descriptor
+/// validation coordination, deterministic aggregation, and discovery
+/// diagnostics. Does not allocate physical devices.
 pub mod target_discovery;
 
 /// Canonical capability requirement matching.
 ///
 /// Connects discovered targets to canonical semantic capability
 /// requirements and explicitly supplied capability evidence.
-///
-/// Does not introduce a competing capability model or compatibility engine.
+/// Does not create a competing capability model.
 pub mod capability_matching;
+
+/// Evidence-based realization feasibility assessment.
+///
+/// Combines authoritative semantic, capability, resource, and
+/// realization evidence. Unknown evidence never establishes feasibility.
+pub mod feasibility;
 
 /// Abstract resource feasibility planning.
 ///
-/// Evaluates resource demands against explicitly supplied resource
-/// evidence and canonical resource contracts.
-///
-/// Does not allocate physical resources.
+/// Evaluates resource demands against explicitly supplied evidence.
+/// Does not allocate or reserve physical resources.
 pub mod resource_planning;
 
-/// Heterogeneous workload partitioning.
+/// Heterogeneous logical workload partitioning.
 ///
 /// Divides abstract workloads into target-compatible segments while
-/// preserving dependencies and reporting incomplete assignments.
-///
-/// Does not perform physical device placement.
+/// preserving operation identity, dependencies, and unresolved boundaries.
 pub mod partitioning;
+
+/// Abstract data movement planning.
+///
+/// Plans logical data movement across partition boundaries without
+/// performing serialization, allocation, or physical transfers.
+pub mod data_movement;
+
+/// Abstract routing across partition boundaries.
+///
+/// Consumes supplied placement and topology evidence. Does not perform
+/// physical placement, network transport, or quantum physical routing.
+pub mod routing;
 
 /// Dependency-aware abstract scheduling.
 ///
-/// Constructs schedules from partitioning information and explicit
-/// scheduling policies.
-///
+/// Constructs schedules from partitioning results and explicit policies.
 /// Does not execute operations or schedule physical devices.
 pub mod scheduling;
 
@@ -344,8 +439,11 @@ pub const PLANNING_MODULE_NAME: &str =
 
 /// Public composition API version.
 ///
-/// This version identifies the composition interface. It is independent
-/// of the individual subsystem API versions.
+/// This identifies the composition boundary, not the language version,
+/// semantic-model version, IR schema version, backend ABI, or runtime ABI.
+///
+/// Additive module exposure does not require changing this version.
+/// Increment it when the composition contract changes incompatibly.
 pub const PLANNING_API_VERSION: u16 = 1;
 
 /// Returns the public planning composition API version.
@@ -398,6 +496,20 @@ pub use self::capability_matching::{
 };
 
 // ============================================================================
+// FEASIBILITY PUBLIC API
+// ============================================================================
+
+/// Stable identity of the feasibility subsystem.
+pub use self::feasibility::FEASIBILITY_MODULE_NAME;
+
+/// Feasibility subsystem API version.
+pub use self::feasibility::FEASIBILITY_API_VERSION;
+
+// The detailed evidence, assessment, and report types remain available
+// through `planning::feasibility`. This avoids creating a second
+// feasibility type namespace at the planning root.
+
+// ============================================================================
 // RESOURCE PLANNING PUBLIC API
 // ============================================================================
 
@@ -441,6 +553,32 @@ pub use self::partitioning::{
 };
 
 // ============================================================================
+// DATA MOVEMENT PUBLIC API
+// ============================================================================
+
+/// Stable identity of the data-movement subsystem.
+pub use self::data_movement::DATA_MOVEMENT_MODULE_NAME;
+
+/// Data-movement subsystem API version.
+pub use self::data_movement::DATA_MOVEMENT_API_VERSION;
+
+// Detailed transfer requirements, placement evidence, movement plans,
+// reports, and errors remain available through `planning::data_movement`.
+
+// ============================================================================
+// ROUTING PUBLIC API
+// ============================================================================
+
+/// Stable identity of the compiler routing subsystem.
+pub use self::routing::COMPILER_ROUTING_MODULE_NAME;
+
+/// Compiler routing subsystem API version.
+pub use self::routing::COMPILER_ROUTING_API_VERSION;
+
+// Detailed route policies, budgets, route reports, and errors remain
+// available through `planning::routing`.
+
+// ============================================================================
 // SCHEDULING PUBLIC API
 // ============================================================================
 
@@ -457,7 +595,7 @@ pub use self::scheduling::{
 };
 
 // ============================================================================
-// INTEGRATION TESTS
+// COMPOSITION TESTS
 // ============================================================================
 
 #[cfg(test)]
@@ -479,10 +617,7 @@ mod tests {
             PLANNING_API_VERSION
         );
 
-        assert_eq!(
-            api_version(),
-            1
-        );
+        assert!(api_version() > 0);
     }
 
     #[test]
@@ -498,6 +633,11 @@ mod tests {
         );
 
         assert_eq!(
+            FEASIBILITY_MODULE_NAME,
+            "zamani.compiler.planning.feasibility"
+        );
+
+        assert_eq!(
             RESOURCE_PLANNING_MODULE_NAME,
             "zamani.compiler.planning.resource_planning"
         );
@@ -505,6 +645,16 @@ mod tests {
         assert_eq!(
             PARTITIONING_MODULE_NAME,
             "zamani.compiler.planning.partitioning"
+        );
+
+        assert_eq!(
+            DATA_MOVEMENT_MODULE_NAME,
+            "zamani.compiler.planning.data_movement"
+        );
+
+        assert_eq!(
+            COMPILER_ROUTING_MODULE_NAME,
+            "zamani.compiler.planning.routing"
         );
 
         assert_eq!(
@@ -517,13 +667,16 @@ mod tests {
     fn subsystem_api_versions_are_available() {
         assert!(TARGET_DISCOVERY_API_VERSION > 0);
         assert!(CAPABILITY_MATCHING_API_VERSION > 0);
+        assert!(FEASIBILITY_API_VERSION > 0);
         assert!(RESOURCE_PLANNING_API_VERSION > 0);
         assert!(PARTITIONING_API_VERSION > 0);
+        assert!(DATA_MOVEMENT_API_VERSION > 0);
+        assert!(COMPILER_ROUTING_API_VERSION > 0);
         assert!(SCHEDULING_API_VERSION > 0);
     }
 
     #[test]
-    fn planning_subsystems_have_stable_module_identity() {
+    fn subsystem_module_names_are_stable() {
         assert_eq!(
             target_discovery::TARGET_DISCOVERY_MODULE_NAME,
             TARGET_DISCOVERY_MODULE_NAME
@@ -535,6 +688,11 @@ mod tests {
         );
 
         assert_eq!(
+            feasibility::FEASIBILITY_MODULE_NAME,
+            FEASIBILITY_MODULE_NAME
+        );
+
+        assert_eq!(
             resource_planning::RESOURCE_PLANNING_MODULE_NAME,
             RESOURCE_PLANNING_MODULE_NAME
         );
@@ -542,6 +700,16 @@ mod tests {
         assert_eq!(
             partitioning::PARTITIONING_MODULE_NAME,
             PARTITIONING_MODULE_NAME
+        );
+
+        assert_eq!(
+            data_movement::DATA_MOVEMENT_MODULE_NAME,
+            DATA_MOVEMENT_MODULE_NAME
+        );
+
+        assert_eq!(
+            routing::COMPILER_ROUTING_MODULE_NAME,
+            COMPILER_ROUTING_MODULE_NAME
         );
 
         assert_eq!(
