@@ -10,132 +10,96 @@
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //!
-//! ## PURPOSE
+//! # Purpose
 //!
-//! Discover and aggregate registered compilation target descriptors.
+//! Discover and aggregate registered target descriptors.
 //!
-//! A target describes a possible compilation or realization environment.
-//! Discovery establishes that a provider has reported a target. It does
-//! not establish that:
+//! Discovery establishes that registered providers have reported
+//! target descriptions. It does not establish physical availability,
+//! capability compatibility, resource feasibility, authorization,
+//! backend realizability, or execution availability.
 //!
-//! - The target is physically available.
-//! - The target is currently operational.
-//! - A backend can generate executable output for it.
-//! - The target satisfies a program's capabilities.
-//! - The target has sufficient resources.
-//! - The caller is authorized to use the target.
+//! # Architectural authorities
 //!
-//! Those questions belong to their respective authoritative subsystems.
-//!
-//! ## OWNERSHIP
-//!
-//! This module owns:
-//!
-//! - Discovery provider identity.
-//! - Discovery request and policy.
-//! - Instance-owned discovery provider registration.
-//! - Provider invocation.
-//! - Target descriptor aggregation.
-//! - Duplicate identity detection.
-//! - Discovery diagnostics.
-//! - Discovery result ordering.
-//! - Partial discovery failure reporting.
-//!
-//! This module does not own:
-//!
-//! - Target descriptor definitions.
-//! - Capability definitions.
-//! - Semantic requirements.
-//! - Backend implementations.
-//! - Backend registration.
-//! - Physical hardware inspection.
-//! - Device allocation.
-//! - Runtime scheduling.
-//! - Physical routing.
-//! - Resource management.
-//! - IR representations.
-//! - Source-language grammar.
-//!
-//! ## AUTHORITATIVE DEPENDENCIES
-//!
-//! Target descriptors:
+//! Target identity and descriptors:
 //!     crate::compiler::configuration::target
 //!
-//! Capability analysis:
-//!     crate::compiler::analysis::capabilities
+//! Capability requirements and evidence:
+//!     crate::frontend::semantic
 //!
-//! Existing compiler orchestration:
-//!     crate::compiler
+//! Capability matching:
+//!     crate::compiler::planning::capability_matching
 //!
-//! Backend implementation:
-//!     crate::backend
+//! Resource feasibility:
+//!     crate::compiler::planning::resource_planning
 //!
-//! Runtime:
+//! Backend registration:
+//!     crate::backend::registry
+//!
+//! Backend compatibility:
+//!     crate::backend::compatibility
+//!
+//! Physical allocation and execution:
 //!     crate::runtime
 //!
-//! ## SCALABILITY
+//! # Ownership
 //!
-//! No fixed maximum is imposed on:
+//! This module owns:
+//! - Discovery provider identities.
+//! - Discovery requests and policies.
+//! - Instance-owned discovery provider registration.
+//! - Provider invocation.
+//! - Descriptor validation coordination.
+//! - Deterministic descriptor aggregation.
+//! - Duplicate identity detection.
+//! - Identity conflict reporting.
+//! - Provider provenance.
+//! - Partial discovery reporting.
 //!
-//! - Registered providers.
-//! - Discovered targets.
-//! - Architectures.
-//! - Vendors.
-//! - Processing elements.
-//! - CPUs.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Distributed nodes.
-//! - Future computing domains.
+//! This module does not own:
+//! - Canonical target descriptor definitions.
+//! - Semantic capability definitions.
+//! - Semantic resource requirements.
+//! - Backend registration.
+//! - Backend implementations.
+//! - Physical resource inventory.
+//! - Device allocation.
+//! - Physical scheduling.
+//! - Physical routing.
+//! - Runtime execution.
+//! - Source-language grammar.
+//! - Canonical IR.
 //!
-//! Collections grow according to available resources.
+//! # POCO-REAF
 //!
-//! An explicit caller-controlled discovery budget can be introduced by
-//! the orchestration layer without changing target identity semantics.
+//! No universal hardware capacity limits are imposed.
 //!
-//! Literal infinity is not a realizable finite-computer guarantee.
+//! The number of providers and discovered targets is determined
+//! by actual registrations, provider results and available resources.
 //!
-//! ## DETERMINISM
+//! No finite Rust process can promise literal infinity.
 //!
-//! Provider registration and target aggregation use ordered maps.
-//! Results are sorted by stable target identity.
-//! Provider registration order does not determine target ordering.
+//! Operational limits must be explicit, configurable and owned
+//! by the relevant orchestration or configuration subsystem.
 //!
-//! ## CONCURRENCY
+//! # Determinism
 //!
-//! The registry is instance-owned.
-//! No global mutable registry is used.
+//! Provider identities and target identities use ordered collections.
+//! Provider failures and conflicts are reported deterministically.
+//! Conflicting identities are never silently selected.
 //!
-//! Providers must be safe to invoke through shared references.
-//! Concurrent discovery execution is deliberately left to the caller's
-//! orchestration policy.
+//! # Integration
 //!
-//! ## INTEGRATION
+//! Downstream consumers:
+//! - capability_matching.rs
+//! - resource_planning.rs
+//! - feasibility.rs
+//! - partitioning.rs
+//! - routing.rs
+//! - scheduling.rs
 //!
-//! Parent module:
-//!     src/compiler/planning/mod.rs
-//!
-//! Required declaration:
-//!     pub mod target_discovery;
-//!
-//! Existing compiler root:
-//!     src/compiler/mod.rs
-//!
-//! Required declaration:
-//!     pub mod planning;
-//!
-//! Existing crate root already exposes the compiler subsystem.
-//!
-//! The next planning stages consume DiscoveryReport:
-//!
-//!     capability_matching.rs
-//!     resource_planning.rs
-//!     partitioning.rs
-//!     feasibility.rs
-//!
-//! None of those modules needs to redefine target discovery.
+//! Backend discovery adapts the canonical backend registry to this
+//! subsystem. It must not introduce another target registry.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -144,7 +108,6 @@ use std::sync::Arc;
 
 use crate::compiler::configuration::target::{
     TargetDescriptor,
-    TargetError,
     TargetId,
 };
 
@@ -157,7 +120,7 @@ pub const TARGET_DISCOVERY_MODULE_NAME: &str =
     "zamani.compiler.planning.target_discovery";
 
 /// Target discovery API version.
-pub const TARGET_DISCOVERY_API_VERSION: u16 = 1;
+pub const TARGET_DISCOVERY_API_VERSION: u16 = 2;
 
 // ============================================================================
 // PROVIDER IDENTITY
@@ -165,18 +128,9 @@ pub const TARGET_DISCOVERY_API_VERSION: u16 = 1;
 
 /// Stable identity of a target discovery provider.
 ///
-/// Provider identifiers are open-ended and are not hardware classifications.
+/// This is an open-world identifier.
 ///
-/// Examples:
-///
-/// - `backend.llvm`
-— `backend.wasm`
-/// - `toolchain.custom`
-/// - `hardware.inventory`
-/// - `quantum.provider`
-/// - `distributed.inventory`
-///
-/// These examples do not constitute a closed provider registry.
+/// It is not a hardware classification or backend identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct DiscoveryProviderId(String);
 
@@ -191,13 +145,6 @@ impl DiscoveryProviderId {
             return Err(DiscoveryError::EmptyProviderId);
         }
 
-        if value.chars().any(char::is_control) {
-            return Err(DiscoveryError::InvalidProviderId {
-                value,
-                reason: "control characters are forbidden".to_owned(),
-            });
-        }
-
         if value.trim() != value {
             return Err(DiscoveryError::InvalidProviderId {
                 value,
@@ -205,10 +152,17 @@ impl DiscoveryProviderId {
             });
         }
 
+        if value.chars().any(char::is_control) {
+            return Err(DiscoveryError::InvalidProviderId {
+                value,
+                reason: "control characters are forbidden".to_owned(),
+            });
+        }
+
         Ok(Self(value))
     }
 
-    /// Returns the stable provider identifier.
+    /// Returns the identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -228,16 +182,14 @@ impl fmt::Display for DiscoveryProviderId {
 // DISCOVERY REQUEST
 // ============================================================================
 
-/// Controls the scope of a target discovery operation.
+/// Controls the scope of target discovery.
 ///
-/// An empty requested-target set means that the caller has not restricted
-/// discovery by target identity.
+/// An empty target set means unrestricted identity discovery.
 ///
-/// This does not mean that every conceivable target exists.
+/// It does not imply that every possible target exists.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiscoveryRequest {
     requested_targets: BTreeSet<TargetId>,
-
     include_metadata_only: bool,
 }
 
@@ -247,7 +199,7 @@ impl DiscoveryRequest {
         Self::default()
     }
 
-    /// Creates a discovery request restricted to specified target IDs.
+    /// Creates a request restricted to specified target identities.
     pub fn for_targets(
         targets: impl IntoIterator<Item = TargetId>,
     ) -> Self {
@@ -257,7 +209,7 @@ impl DiscoveryRequest {
         }
     }
 
-    /// Restricts the request to explicitly supplied target identifiers.
+    /// Restricts the request to specified target identities.
     pub fn with_targets(
         mut self,
         targets: impl IntoIterator<Item = TargetId>,
@@ -266,11 +218,14 @@ impl DiscoveryRequest {
         self
     }
 
-    /// Sets whether descriptive and non-executable targets are included.
+    /// Controls whether non-execution target roles are included.
     ///
-    /// The default is false for general discovery.
+    /// The canonical target descriptor currently exposes open-world
+    /// roles rather than a dedicated metadata-only classification.
     ///
-    /// Target roles are still determined by their canonical descriptor.
+    /// For compatibility, false retains the existing execution-role
+    /// filtering behavior. New integrations should avoid using role
+    /// strings as a substitute for explicit target classification.
     pub fn include_metadata_only(
         mut self,
         include: bool,
@@ -279,27 +234,30 @@ impl DiscoveryRequest {
         self
     }
 
-    /// Returns the requested target identifiers.
+    /// Returns requested target identities.
     #[must_use]
     pub fn requested_targets(&self) -> &BTreeSet<TargetId> {
         &self.requested_targets
     }
 
-    /// Returns whether metadata-only targets are requested.
+    /// Returns whether non-execution roles are included.
     #[must_use]
     pub fn includes_metadata_only(&self) -> bool {
         self.include_metadata_only
     }
 
-    /// Returns whether the request restricts target identity.
+    /// Returns whether discovery is identity-restricted.
     #[must_use]
     pub fn is_restricted(&self) -> bool {
         !self.requested_targets.is_empty()
     }
 
-    /// Determines whether a target identity is requested.
+    /// Determines whether a target identity was requested.
     #[must_use]
-    pub fn accepts_identity(&self, target: &TargetId) -> bool {
+    pub fn accepts_identity(
+        &self,
+        target: &TargetId,
+    ) -> bool {
         self.requested_targets.is_empty()
             || self.requested_targets.contains(target)
     }
@@ -310,20 +268,17 @@ impl DiscoveryRequest {
 // ============================================================================
 
 /// Controls discovery failure handling.
-///
-/// A failed provider must never silently disappear from the result.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DiscoveryPolicy {
     require_all_providers: bool,
-
     reject_duplicate_target_identities: bool,
 }
 
 impl DiscoveryPolicy {
-    /// Creates a policy suitable for ordinary discovery.
+    /// Creates a best-effort discovery policy.
     ///
-    /// Provider failures are reported while successful providers can
-    /// still contribute valid results.
+    /// Successful providers may contribute results even when
+    /// another provider fails.
     pub const fn best_effort() -> Self {
         Self {
             require_all_providers: false,
@@ -331,7 +286,10 @@ impl DiscoveryPolicy {
         }
     }
 
-    /// Creates a policy requiring every registered provider to succeed.
+    /// Creates a strict discovery policy.
+    ///
+    /// Every provider must succeed and target identities must
+    /// be unambiguous.
     pub const fn strict() -> Self {
         Self {
             require_all_providers: true,
@@ -339,7 +297,7 @@ impl DiscoveryPolicy {
         }
     }
 
-    /// Controls whether any provider failure invalidates the discovery.
+    /// Controls whether every provider must succeed.
     pub const fn require_all_providers(
         mut self,
         required: bool,
@@ -348,12 +306,12 @@ impl DiscoveryPolicy {
         self
     }
 
-    /// Controls whether conflicting target identities invalidate discovery.
+    /// Controls whether identity conflicts invalidate discovery.
     ///
-    /// Conflicts are always preserved in the report.
+    /// Conflicts are always recorded, even when rejection is disabled.
     ///
-    /// Disabling strict rejection does not permit the system to silently
-    /// select one conflicting descriptor.
+    /// Disabling rejection never allows an ambiguous identity
+    /// to become an accepted target.
     pub const fn reject_duplicate_target_identities(
         mut self,
         reject: bool,
@@ -368,7 +326,7 @@ impl DiscoveryPolicy {
         self.require_all_providers
     }
 
-    /// Returns whether identity conflicts invalidate discovery.
+    /// Returns whether conflicts invalidate discovery.
     #[must_use]
     pub const fn rejects_duplicate_target_identities(self) -> bool {
         self.reject_duplicate_target_identities
@@ -382,13 +340,13 @@ impl Default for DiscoveryPolicy {
 }
 
 // ============================================================================
-// PROVIDER ERROR
+// PROVIDER FAILURE
 // ============================================================================
 
-/// Error reported by an individual discovery provider.
+/// Failure reported by a discovery provider.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderFailure {
-    /// Stable provider identity.
+    /// Registered provider identity.
     pub provider: DiscoveryProviderId,
 
     /// Human-readable failure description.
@@ -430,40 +388,23 @@ impl Error for ProviderFailure {}
 
 /// Interface implemented by registered target discovery providers.
 ///
-/// A provider supplies target descriptors from its own authoritative source.
+/// Providers return canonical target descriptors from their
+/// own authoritative information sources.
 ///
-/// Examples include:
+/// Providers must not allocate hardware or execute programs.
 ///
-/// - A backend integration.
-/// - A toolchain integration.
-/// - A deployment inventory.
-/// - A hardware inventory service.
-/// - A remote computing provider.
+/// They must not claim capability compatibility or resource
+/// feasibility merely because a target descriptor exists.
 ///
-/// A provider must not allocate devices as part of discovery.
-///
-/// Implementations must be deterministic when their underlying inventory
-/// and request are unchanged.
-///
-/// Providers must report actual knowledge rather than fabricate targets.
-///
-/// Providers must return an error if they cannot establish trustworthy
-/// descriptors for their discovery operation.
+/// Implementations must be thread-safe.
 pub trait TargetDiscoveryProvider: Send + Sync {
-    /// Returns the stable identity of this provider.
+    /// Returns the stable provider identity.
     fn id(&self) -> &DiscoveryProviderId;
 
     /// Discovers target descriptors.
     ///
-    /// The method must not:
-    ///
-    /// - Allocate hardware.
-    /// - Execute user programs.
-    /// - Modify the canonical semantic model.
-    /// - Modify the compiler IR.
-    /// - Claim capability compatibility.
-    ///
-    /// Returned descriptors are validated by the discovery subsystem.
+    /// Returned descriptors are validated and filtered by the
+    /// discovery registry.
     fn discover(
         &self,
         request: &DiscoveryRequest,
@@ -476,12 +417,10 @@ pub trait TargetDiscoveryProvider: Send + Sync {
 
 /// Instance-owned target discovery provider registry.
 ///
-/// Registration is explicit. There are no global mutable registries
-/// or import-time registration side effects.
+/// This registry is deliberately separate from the canonical
+/// backend registry.
 ///
-/// Provider identifiers must be unique within one registry.
-///
-/// Different compiler sessions can use different registries.
+/// Registration order does not determine discovery result order.
 #[derive(Default)]
 pub struct TargetDiscoveryRegistry {
     providers: BTreeMap<
@@ -491,15 +430,14 @@ pub struct TargetDiscoveryRegistry {
 }
 
 impl TargetDiscoveryRegistry {
-    /// Creates an empty provider registry.
+    /// Creates an empty registry.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Registers a discovery provider.
+    /// Registers a provider.
     ///
-    /// Duplicate provider IDs are rejected. Existing providers are never
-    /// silently overwritten.
+    /// Existing registrations are never silently overwritten.
     pub fn register<P>(
         &mut self,
         provider: P,
@@ -510,7 +448,7 @@ impl TargetDiscoveryRegistry {
         self.register_shared(Arc::new(provider))
     }
 
-    /// Registers a shared discovery provider.
+    /// Registers a shared provider.
     pub fn register_shared(
         &mut self,
         provider: Arc<dyn TargetDiscoveryProvider>,
@@ -528,7 +466,7 @@ impl TargetDiscoveryRegistry {
         Ok(())
     }
 
-    /// Unregisters a provider by stable identity.
+    /// Removes a registered provider.
     ///
     /// Returns true if a provider was removed.
     pub fn unregister(
@@ -559,19 +497,19 @@ impl TargetDiscoveryRegistry {
         self.providers.is_empty()
     }
 
-    /// Returns registered provider identities in deterministic order.
+    /// Returns provider identities in deterministic order.
     pub fn provider_ids(
         &self,
     ) -> impl Iterator<Item = &DiscoveryProviderId> {
         self.providers.keys()
     }
 
-    /// Discovers targets through all registered providers.
+    /// Performs discovery through registered providers.
     ///
-    /// The result preserves provider failures and identity conflicts.
+    /// Every provider is invoked exactly once during this operation.
     ///
-    /// Strict policies return an error if a provider fails or an identity
-    /// conflict is detected.
+    /// Provider execution is sequential. Parallel execution, cancellation
+    /// and time budgets belong to the orchestration layer.
     pub fn discover(
         &self,
         request: &DiscoveryRequest,
@@ -579,19 +517,28 @@ impl TargetDiscoveryRegistry {
     ) -> Result<DiscoveryReport, DiscoveryError> {
         let mut report = DiscoveryReport::new();
 
-        for (provider_id, provider) in &self.providers {
-            let result = provider.discover(request);
+        // Collect all valid observations before accepting any target.
+        //
+        // This prevents a conflicting identity from being accidentally
+        // reintroduced by a later provider.
+        let mut observations: BTreeMap<
+            TargetId,
+            Vec<DescriptorObservation>,
+        > = BTreeMap::new();
 
-            match result {
+        for (registered_id, provider) in &self.providers {
+            match provider.discover(request) {
                 Ok(descriptors) => {
                     report.successful_providers += 1;
 
                     for descriptor in descriptors {
-                        if !request.accepts_identity(descriptor.id()) {
+                        let target_id = descriptor.id().clone();
+
+                        if !request.accepts_identity(&target_id) {
                             report.rejected_descriptors.push(
                                 RejectedDescriptor {
-                                    provider: provider_id.clone(),
-                                    target: descriptor.id().clone(),
+                                    provider: registered_id.clone(),
+                                    target: target_id,
                                     reason: RejectionReason::NotRequested,
                                 },
                             );
@@ -602,8 +549,8 @@ impl TargetDiscoveryRegistry {
                         if let Err(error) = descriptor.validate() {
                             report.rejected_descriptors.push(
                                 RejectedDescriptor {
-                                    provider: provider_id.clone(),
-                                    target: descriptor.id().clone(),
+                                    provider: registered_id.clone(),
+                                    target: target_id,
                                     reason: RejectionReason::InvalidDescriptor(
                                         error.to_string(),
                                     ),
@@ -613,14 +560,17 @@ impl TargetDiscoveryRegistry {
                             continue;
                         }
 
+                        // Preserve the existing public filtering behavior.
+                        //
+                        // The role is supplied by the canonical target
+                        // descriptor; no hardware taxonomy is introduced.
                         if !request.includes_metadata_only()
-                            && descriptor.role().as_str()
-                                != "execution"
+                            && descriptor.role().as_str() != "execution"
                         {
                             report.rejected_descriptors.push(
                                 RejectedDescriptor {
-                                    provider: provider_id.clone(),
-                                    target: descriptor.id().clone(),
+                                    provider: registered_id.clone(),
+                                    target: target_id,
                                     reason: RejectionReason::MetadataOnly,
                                 },
                             );
@@ -628,32 +578,105 @@ impl TargetDiscoveryRegistry {
                             continue;
                         }
 
-                        report.insert_descriptor(
-                            provider_id.clone(),
-                            descriptor,
-                        );
+                        let variants = observations
+                            .entry(target_id)
+                            .or_default();
+
+                        if let Some(existing) = variants
+                            .iter_mut()
+                            .find(|entry| entry.descriptor == descriptor)
+                        {
+                            existing.providers.insert(registered_id.clone());
+                        } else {
+                            let mut providers = BTreeSet::new();
+                            providers.insert(registered_id.clone());
+
+                            variants.push(DescriptorObservation {
+                                descriptor,
+                                providers,
+                            });
+                        }
                     }
                 }
 
                 Err(failure) => {
-                    report.failures.push(failure);
+                    // The registry, not an untrusted provider response,
+                    // is authoritative for provider provenance.
+                    report.failures.push(
+                        ProviderFailure::new(
+                            registered_id.clone(),
+                            failure.message,
+                        ),
+                    );
                 }
             }
         }
 
-        if policy.requires_all_providers()
-            && !report.failures.is_empty()
-        {
-            return Err(DiscoveryError::ProviderFailures {
-                failures: report.failures,
-            });
+        // Finalize identities only after every provider has been processed.
+        for (target_id, variants) in observations {
+            if variants.len() == 1 {
+                let observation = variants.into_iter().next()
+                    .expect("one observation was checked");
+
+                report.targets.insert(
+                    target_id,
+                    DiscoveredTarget {
+                        descriptor: observation.descriptor,
+                        providers: observation.providers,
+                    },
+                );
+            } else {
+                let mut providers = BTreeSet::new();
+
+                for observation in &variants {
+                    providers.extend(
+                        observation.providers.iter().cloned(),
+                    );
+                }
+
+                report.conflicts.push(TargetIdentityConflict {
+                    target: target_id,
+                    providers,
+                    descriptor_count: variants.len(),
+                });
+            }
         }
 
-        if policy.rejects_duplicate_target_identities()
-            && !report.conflicts.is_empty()
-        {
+        report.failures.sort_by(|left, right| {
+            left.provider.cmp(&right.provider)
+                .then_with(|| left.message.cmp(&right.message))
+        });
+
+        report.rejected_descriptors.sort_by(|left, right| {
+            left.target.cmp(&right.target)
+                .then_with(|| left.provider.cmp(&right.provider))
+        });
+
+        // Strict mode must preserve the complete report if both provider
+        // failures and target conflicts exist.
+        let has_provider_failure =
+            policy.requires_all_providers()
+                && report.has_provider_failures();
+
+        let has_conflict =
+            policy.rejects_duplicate_target_identities()
+                && report.has_conflicts();
+
+        if has_provider_failure || has_conflict {
+            if has_provider_failure && has_conflict {
+                return Err(DiscoveryError::IncompleteReport {
+                    report: Box::new(report),
+                });
+            }
+
+            if has_provider_failure {
+                return Err(DiscoveryError::ProviderFailures {
+                    failures: report.failures.clone(),
+                });
+            }
+
             return Err(DiscoveryError::TargetIdentityConflicts {
-                conflicts: report.conflicts,
+                conflicts: report.conflicts.clone(),
             });
         }
 
@@ -662,39 +685,29 @@ impl TargetDiscoveryRegistry {
 }
 
 // ============================================================================
+// INTERNAL DESCRIPTOR OBSERVATION
+// ============================================================================
+
+/// One distinct descriptor and all providers reporting it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DescriptorObservation {
+    descriptor: TargetDescriptor,
+    providers: BTreeSet<DiscoveryProviderId>,
+}
+
+// ============================================================================
 // DISCOVERED TARGET
 // ============================================================================
 
-/// A target descriptor together with its discovery provenance.
-///
-/// Multiple providers may report the same identical descriptor.
-///
-/// Identical reports are consolidated without losing provider provenance.
-///
-/// Conflicting descriptors are not consolidated.
+/// An unambiguous target descriptor and its discovery provenance.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredTarget {
     descriptor: TargetDescriptor,
-
     providers: BTreeSet<DiscoveryProviderId>,
 }
 
 impl DiscoveredTarget {
-    /// Creates a discovered target.
-    pub fn new(
-        descriptor: TargetDescriptor,
-        provider: DiscoveryProviderId,
-    ) -> Self {
-        let mut providers = BTreeSet::new();
-        providers.insert(provider);
-
-        Self {
-            descriptor,
-            providers,
-        }
-    }
-
-    /// Returns the target descriptor.
+    /// Returns the canonical target descriptor.
     #[must_use]
     pub fn descriptor(&self) -> &TargetDescriptor {
         &self.descriptor
@@ -706,13 +719,13 @@ impl DiscoveredTarget {
         self.descriptor.id()
     }
 
-    /// Returns all providers reporting the identical descriptor.
+    /// Returns providers reporting this identical descriptor.
     #[must_use]
     pub fn providers(&self) -> &BTreeSet<DiscoveryProviderId> {
         &self.providers
     }
 
-    /// Returns the number of providers reporting this target.
+    /// Returns the number of reporting providers.
     #[must_use]
     pub fn provider_count(&self) -> usize {
         self.providers.len()
@@ -725,13 +738,13 @@ impl DiscoveredTarget {
 
 /// Conflicting descriptors reported for one target identity.
 ///
-/// The discovery system must not silently choose one descriptor.
+/// Conflicting identities are never admitted as discovered targets.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetIdentityConflict {
     /// Conflicting target identity.
     pub target: TargetId,
 
-    /// Providers that supplied conflicting descriptors.
+    /// Every provider that reported one of the conflicting descriptors.
     pub providers: BTreeSet<DiscoveryProviderId>,
 
     /// Number of distinct descriptors reported.
@@ -742,26 +755,27 @@ pub struct TargetIdentityConflict {
 // REJECTED DESCRIPTORS
 // ============================================================================
 
-/// Reason a provider-reported descriptor was excluded.
+/// Reason a descriptor was rejected.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RejectionReason {
-    /// The descriptor was not requested.
+    /// Target identity was not requested.
     NotRequested,
 
-    /// The descriptor does not represent an execution target.
+    /// Target has a non-execution role and metadata-only targets
+    /// were not requested.
     MetadataOnly,
 
-    /// Structural validation failed.
+    /// Descriptor validation failed.
     InvalidDescriptor(String),
 }
 
-/// A descriptor rejected during discovery.
+/// A rejected provider-reported descriptor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RejectedDescriptor {
     /// Provider that supplied the descriptor.
     pub provider: DiscoveryProviderId,
 
-    /// Rejected target identity.
+    /// Target identity.
     pub target: TargetId,
 
     /// Rejection reason.
@@ -772,82 +786,34 @@ pub struct RejectedDescriptor {
 // DISCOVERY REPORT
 // ============================================================================
 
-/// Complete result of a target discovery operation.
+/// Complete result of target discovery.
 ///
-/// This report distinguishes:
+/// An empty report does not prove that no hardware exists.
 ///
-/// - Successfully discovered targets.
-/// - Providers that succeeded.
-/// - Providers that failed.
-/// - Invalid or unrequested descriptors.
-/// - Conflicting target identities.
-///
-/// An empty report is not proof that no hardware exists. It means that
-/// the registered providers supplied no accepted targets.
+/// It means registered providers supplied no accepted target descriptors.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DiscoveryReport {
     targets: BTreeMap<TargetId, DiscoveredTarget>,
-
     conflicts: Vec<TargetIdentityConflict>,
-
     failures: Vec<ProviderFailure>,
-
     rejected_descriptors: Vec<RejectedDescriptor>,
-
     successful_providers: usize,
 }
 
 impl DiscoveryReport {
-    /// Creates an empty discovery report.
+    /// Creates an empty report.
     pub fn new() -> Self {
         Self::default()
     }
 
-    fn insert_descriptor(
-        &mut self,
-        provider: DiscoveryProviderId,
-        descriptor: TargetDescriptor,
-    ) {
-        let id = descriptor.id().clone();
-
-        match self.targets.get_mut(&id) {
-            None => {
-                self.targets.insert(
-                    id,
-                    DiscoveredTarget::new(descriptor, provider),
-                );
-            }
-
-            Some(existing) => {
-                if existing.descriptor == descriptor {
-                    existing.providers.insert(provider);
-                } else {
-                    let mut providers = existing.providers.clone();
-                    providers.insert(provider.clone());
-
-                    self.conflicts.push(
-                        TargetIdentityConflict {
-                            target: id,
-                            providers,
-                            descriptor_count: 2,
-                        },
-                    );
-
-                    self.targets.remove(existing.id());
-                }
-            }
-        }
-    }
-
     /// Returns accepted targets in deterministic identity order.
-    #[must_use]
     pub fn targets(
         &self,
     ) -> impl Iterator<Item = &DiscoveredTarget> {
         self.targets.values()
     }
 
-    /// Returns a target by stable identity.
+    /// Returns an unambiguous target by identity.
     #[must_use]
     pub fn target(
         &self,
@@ -856,7 +822,7 @@ impl DiscoveryReport {
         self.targets.get(id)
     }
 
-    /// Returns identity conflicts.
+    /// Returns target identity conflicts.
     #[must_use]
     pub fn conflicts(&self) -> &[TargetIdentityConflict] {
         &self.conflicts
@@ -892,7 +858,7 @@ impl DiscoveryReport {
         self.successful_providers
     }
 
-    /// Returns whether any provider failed.
+    /// Returns whether a provider failed.
     #[must_use]
     pub fn has_provider_failures(&self) -> bool {
         !self.failures.is_empty()
@@ -904,11 +870,16 @@ impl DiscoveryReport {
         !self.conflicts.is_empty()
     }
 
-    /// Returns whether discovery was entirely successful.
+    /// Returns whether any descriptor was rejected.
+    #[must_use]
+    pub fn has_rejections(&self) -> bool {
+        !self.rejected_descriptors.is_empty()
+    }
+
+    /// Returns whether discovery completed without reported problems.
     ///
-    /// A successful empty discovery is possible.
-    ///
-    /// This does not establish hardware availability or feasibility.
+    /// This does not establish capability compatibility,
+    /// resource feasibility or physical availability.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.failures.is_empty()
@@ -918,16 +889,16 @@ impl DiscoveryReport {
 }
 
 // ============================================================================
-// DISCOVERY ERROR
+// DISCOVERY ERRORS
 // ============================================================================
 
 /// Errors produced by target discovery.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiscoveryError {
-    /// Provider identity is empty.
+    /// Provider identifier is empty.
     EmptyProviderId,
 
-    /// Provider identity is invalid.
+    /// Provider identifier is invalid.
     InvalidProviderId {
         /// Invalid value.
         value: String,
@@ -936,25 +907,33 @@ pub enum DiscoveryError {
         reason: String,
     },
 
-    /// Provider is already registered.
+    /// Provider identity is already registered.
     DuplicateProvider {
-        /// Duplicate provider.
+        /// Existing identity.
         provider: DiscoveryProviderId,
     },
 
-    /// One or more providers failed under a strict policy.
+    /// Providers failed under strict discovery.
     ProviderFailures {
-        /// All reported provider failures.
+        /// Reported provider failures.
         failures: Vec<ProviderFailure>,
     },
 
-    /// Conflicting target descriptors were discovered.
+    /// Conflicting target identities were discovered.
     TargetIdentityConflicts {
-        /// All discovered conflicts.
+        /// All conflicts.
         conflicts: Vec<TargetIdentityConflict>,
     },
 
-    /// Target descriptor construction failed.
+    /// Both provider failures and target conflicts occurred.
+    ///
+    /// This variant preserves the complete discovery report.
+    IncompleteReport {
+        /// Complete report.
+        report: Box<DiscoveryReport>,
+    },
+
+    /// An invalid target was encountered during construction.
     InvalidTarget {
         /// Target identity.
         target: TargetId,
@@ -971,27 +950,30 @@ impl fmt::Display for DiscoveryError {
     ) -> fmt::Result {
         match self {
             Self::EmptyProviderId => {
-                write!(formatter, "provider identifier cannot be empty")
+                write!(
+                    formatter,
+                    "provider identifier cannot be empty"
+                )
             }
 
             Self::InvalidProviderId { value, reason } => {
                 write!(
                     formatter,
-                    "invalid discovery provider identifier `{value}`: {reason}"
+                    "invalid provider identifier `{value}`: {reason}"
                 )
             }
 
             Self::DuplicateProvider { provider } => {
                 write!(
                     formatter,
-                    "discovery provider `{provider}` is already registered"
+                    "provider `{provider}` is already registered"
                 )
             }
 
             Self::ProviderFailures { failures } => {
                 write!(
                     formatter,
-                    "{} target discovery provider(s) failed",
+                    "{} discovery provider(s) failed",
                     failures.len()
                 )
             }
@@ -999,8 +981,18 @@ impl fmt::Display for DiscoveryError {
             Self::TargetIdentityConflicts { conflicts } => {
                 write!(
                     formatter,
-                    "{} target identity conflict(s) detected",
+                    "{} target identity conflict(s)",
                     conflicts.len()
+                )
+            }
+
+            Self::IncompleteReport { report } => {
+                write!(
+                    formatter,
+                    "discovery incomplete: {} provider failure(s), \
+                     {} target conflict(s)",
+                    report.failures.len(),
+                    report.conflicts.len()
                 )
             }
 
@@ -1021,19 +1013,16 @@ impl Error for DiscoveryError {}
 // ============================================================================
 
 /// Stateless target discovery service.
-///
-/// The registry is supplied explicitly so that discovery remains
-/// independently testable and session-specific.
 pub struct TargetDiscovery;
 
 impl TargetDiscovery {
-    /// Returns the stable module identity.
+    /// Returns the subsystem identity.
     #[must_use]
     pub const fn module_name() -> &'static str {
         TARGET_DISCOVERY_MODULE_NAME
     }
 
-    /// Returns the public API version.
+    /// Returns the subsystem API version.
     #[must_use]
     pub const fn api_version() -> u16 {
         TARGET_DISCOVERY_API_VERSION
@@ -1050,23 +1039,17 @@ impl TargetDiscovery {
 }
 
 // ============================================================================
-// TEST PROVIDERS
+// TESTS
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::compiler::configuration::target::{
-        TargetDescriptor,
-        TargetId,
-        TargetRole,
-    };
-
     struct StaticProvider {
         id: DiscoveryProviderId,
         descriptors: Vec<TargetDescriptor>,
-        should_fail: bool,
+        failure: Option<String>,
     }
 
     impl StaticProvider {
@@ -1077,7 +1060,7 @@ mod tests {
             Self {
                 id: DiscoveryProviderId::new(id).unwrap(),
                 descriptors,
-                should_fail: false,
+                failure: None,
             }
         }
 
@@ -1085,7 +1068,7 @@ mod tests {
             Self {
                 id: DiscoveryProviderId::new(id).unwrap(),
                 descriptors: Vec::new(),
-                should_fail: true,
+                failure: Some("test provider failure".to_owned()),
             }
         }
     }
@@ -1099,10 +1082,10 @@ mod tests {
             &self,
             _request: &DiscoveryRequest,
         ) -> Result<Vec<TargetDescriptor>, ProviderFailure> {
-            if self.should_fail {
+            if let Some(message) = &self.failure {
                 return Err(ProviderFailure::new(
                     self.id.clone(),
-                    "test provider failure",
+                    message.clone(),
                 ));
             }
 
@@ -1118,7 +1101,6 @@ mod tests {
             TargetId::new(id).unwrap(),
             name,
         )
-        .role(TargetRole::new("execution").unwrap())
         .build()
         .unwrap()
     }
@@ -1142,9 +1124,9 @@ mod tests {
             TARGET_DISCOVERY_MODULE_NAME
         );
 
-        assert_ne!(
+        assert_eq!(
             TargetDiscovery::api_version(),
-            0
+            TARGET_DISCOVERY_API_VERSION
         );
     }
 
@@ -1156,19 +1138,24 @@ mod tests {
     }
 
     #[test]
-    fn provider_registry_rejects_duplicate_ids() {
+    fn whitespace_provider_identifier_is_rejected() {
+        assert!(
+            DiscoveryProviderId::new(" provider ").is_err()
+        );
+    }
+
+    #[test]
+    fn duplicate_provider_registration_is_rejected() {
         let mut registry = TargetDiscoveryRegistry::new();
 
         registry.register(
-            StaticProvider::new("test.provider", Vec::new())
+            StaticProvider::new("provider.a", Vec::new())
         ).unwrap();
 
-        let result = registry.register(
-            StaticProvider::new("test.provider", Vec::new())
-        );
-
         assert!(matches!(
-            result,
+            registry.register(
+                StaticProvider::new("provider.a", Vec::new())
+            ),
             Err(DiscoveryError::DuplicateProvider { .. })
         ));
     }
@@ -1178,7 +1165,7 @@ mod tests {
         let mut registry = TargetDiscoveryRegistry::new();
 
         let provider = StaticProvider::new(
-            "test.provider",
+            "provider.a",
             Vec::new(),
         );
 
@@ -1194,27 +1181,25 @@ mod tests {
     fn discovers_registered_targets() {
         let registry = registry_with(vec![
             StaticProvider::new(
-                "test.cpu",
+                "provider.cpu",
                 vec![descriptor("cpu:test", "Test CPU")],
             ),
         ]);
 
-        let report = TargetDiscovery::discover(
-            &registry,
+        let report = registry.discover(
             &DiscoveryRequest::all_registered(),
             DiscoveryPolicy::best_effort(),
         ).unwrap();
 
         assert_eq!(report.len(), 1);
-        assert!(!report.has_provider_failures());
-        assert!(!report.has_conflicts());
+        assert!(report.is_complete());
     }
 
     #[test]
     fn target_order_is_deterministic() {
         let registry = registry_with(vec![
             StaticProvider::new(
-                "test.provider",
+                "provider.test",
                 vec![
                     descriptor("target:z", "Z"),
                     descriptor("target:a", "A"),
@@ -1239,7 +1224,7 @@ mod tests {
     }
 
     #[test]
-    fn identical_descriptors_from_multiple_providers_are_merged() {
+    fn identical_descriptors_merge_provider_provenance() {
         let target = descriptor(
             "shared:target",
             "Shared Target",
@@ -1261,51 +1246,104 @@ mod tests {
             DiscoveryPolicy::strict(),
         ).unwrap();
 
-        assert_eq!(report.len(), 1);
-
-        let discovered = report.targets().next().unwrap();
+        let discovered = report.target(
+            &TargetId::new("shared:target").unwrap()
+        ).unwrap();
 
         assert_eq!(discovered.provider_count(), 2);
     }
 
     #[test]
-    fn conflicting_descriptors_are_not_silently_selected() {
+    fn conflicting_descriptors_are_rejected() {
         let registry = registry_with(vec![
             StaticProvider::new(
                 "provider.a",
                 vec![descriptor(
                     "shared:target",
-                    "First Description",
+                    "First",
                 )],
             ),
             StaticProvider::new(
                 "provider.b",
                 vec![descriptor(
                     "shared:target",
-                    "Different Description",
+                    "Second",
                 )],
             ),
         ]);
 
-        let result = registry.discover(
-            &DiscoveryRequest::all_registered(),
-            DiscoveryPolicy::strict(),
-        );
-
         assert!(matches!(
-            result,
+            registry.discover(
+                &DiscoveryRequest::all_registered(),
+                DiscoveryPolicy::strict(),
+            ),
             Err(DiscoveryError::TargetIdentityConflicts { .. })
         ));
     }
 
     #[test]
-    fn best_effort_preserves_provider_failures() {
+    fn third_provider_cannot_reintroduce_conflicting_identity() {
         let registry = registry_with(vec![
             StaticProvider::new(
-                "provider.good",
-                vec![descriptor("target:good", "Good")],
+                "provider.a",
+                vec![descriptor("target:x", "First")],
             ),
-            StaticProvider::failing("provider.bad"),
+            StaticProvider::new(
+                "provider.b",
+                vec![descriptor("target:x", "Second")],
+            ),
+            StaticProvider::new(
+                "provider.c",
+                vec![descriptor("target:x", "Third")],
+            ),
+        ]);
+
+        let report = registry.discover(
+            &DiscoveryRequest::all_registered(),
+            DiscoveryPolicy::best_effort()
+                .reject_duplicate_target_identities(false),
+        ).unwrap();
+
+        assert_eq!(report.len(), 0);
+        assert_eq!(report.conflicts().len(), 1);
+        assert_eq!(
+            report.conflicts()[0].descriptor_count,
+            3
+        );
+        assert_eq!(
+            report.conflicts()[0].providers.len(),
+            3
+        );
+    }
+
+    #[test]
+    fn repeated_identical_descriptor_from_same_provider_is_not_a_conflict() {
+        let target = descriptor("target:x", "Target X");
+
+        let registry = registry_with(vec![
+            StaticProvider::new(
+                "provider.a",
+                vec![target.clone(), target],
+            ),
+        ]);
+
+        let report = registry.discover(
+            &DiscoveryRequest::all_registered(),
+            DiscoveryPolicy::strict(),
+        ).unwrap();
+
+        assert_eq!(report.len(), 1);
+        assert!(report.conflicts().is_empty());
+    }
+
+    #[test]
+    fn best_effort_preserves_provider_failures() {
+        let registry = registry_with(vec![
+            StaticProvider::failing("provider.failure"),
+            StaticProvider::new(
+                "provider.success",
+                vec![descriptor("target:x", "X")],
+            ),
         ]);
 
         let report = registry.discover(
@@ -1314,14 +1352,37 @@ mod tests {
         ).unwrap();
 
         assert_eq!(report.len(), 1);
-        assert!(report.has_provider_failures());
+        assert_eq!(report.failures().len(), 1);
         assert!(!report.is_complete());
     }
 
     #[test]
     fn strict_policy_rejects_provider_failures() {
         let registry = registry_with(vec![
-            StaticProvider::failing("provider.bad"),
+            StaticProvider::failing("provider.failure"),
+        ]);
+
+        assert!(matches!(
+            registry.discover(
+                &DiscoveryRequest::all_registered(),
+                DiscoveryPolicy::strict(),
+            ),
+            Err(DiscoveryError::ProviderFailures { .. })
+        ));
+    }
+
+    #[test]
+    fn strict_policy_preserves_combined_failures_and_conflicts() {
+        let registry = registry_with(vec![
+            StaticProvider::failing("provider.failure"),
+            StaticProvider::new(
+                "provider.a",
+                vec![descriptor("target:x", "First")],
+            ),
+            StaticProvider::new(
+                "provider.b",
+                vec![descriptor("target:x", "Second")],
+            ),
         ]);
 
         let result = registry.discover(
@@ -1329,10 +1390,13 @@ mod tests {
             DiscoveryPolicy::strict(),
         );
 
-        assert!(matches!(
-            result,
-            Err(DiscoveryError::ProviderFailures { .. })
-        ));
+        match result {
+            Err(DiscoveryError::IncompleteReport { report }) => {
+                assert_eq!(report.failures().len(), 1);
+                assert_eq!(report.conflicts().len(), 1);
+            }
+            _ => panic!("combined discovery failure was not preserved"),
+        }
     }
 
     #[test]
@@ -1348,7 +1412,7 @@ mod tests {
         ]);
 
         let request = DiscoveryRequest::for_targets([
-            TargetId::new("target:b").unwrap(),
+            TargetId::new("target:a").unwrap(),
         ]);
 
         let report = registry.discover(
@@ -1357,17 +1421,11 @@ mod tests {
         ).unwrap();
 
         assert_eq!(report.len(), 1);
-
-        assert_eq!(
-            report.targets().next().unwrap().id().as_str(),
-            "target:b"
-        );
-
         assert_eq!(report.rejected_descriptors().len(), 1);
     }
 
     #[test]
-    fn empty_registry_produces_empty_successful_report() {
+    fn empty_registry_is_a_valid_empty_discovery() {
         let registry = TargetDiscoveryRegistry::new();
 
         let report = registry.discover(
@@ -1377,80 +1435,5 @@ mod tests {
 
         assert!(report.is_empty());
         assert!(report.is_complete());
-    }
-
-    #[test]
-    fn metadata_only_targets_are_excluded_by_default() {
-        let metadata_target = TargetDescriptor::builder(
-            TargetId::new("format:portable-ir").unwrap(),
-            "Portable IR",
-        )
-        .role(TargetRole::new("intermediate-representation").unwrap())
-        .build()
-        .unwrap();
-
-        let registry = registry_with(vec![
-            StaticProvider::new(
-                "provider.ir",
-                vec![metadata_target],
-            ),
-        ]);
-
-        let report = registry.discover(
-            &DiscoveryRequest::all_registered(),
-            DiscoveryPolicy::best_effort(),
-        ).unwrap();
-
-        assert!(report.is_empty());
-        assert_eq!(report.rejected_descriptors().len(), 1);
-    }
-
-    #[test]
-    fn metadata_only_targets_can_be_requested_explicitly() {
-        let metadata_target = TargetDescriptor::builder(
-            TargetId::new("format:portable-ir").unwrap(),
-            "Portable IR",
-        )
-        .role(TargetRole::new("intermediate-representation").unwrap())
-        .build()
-        .unwrap();
-
-        let registry = registry_with(vec![
-            StaticProvider::new(
-                "provider.ir",
-                vec![metadata_target],
-            ),
-        ]);
-
-        let report = registry.discover(
-            &DiscoveryRequest::all_registered()
-                .include_metadata_only(true),
-            DiscoveryPolicy::best_effort(),
-        ).unwrap();
-
-        assert_eq!(report.len(), 1);
-    }
-
-    #[test]
-    fn discovery_does_not_claim_capability_compatibility() {
-        let registry = registry_with(vec![
-            StaticProvider::new(
-                "provider.test",
-                vec![descriptor("target:test", "Test")],
-            ),
-        ]);
-
-        let report = registry.discover(
-            &DiscoveryRequest::all_registered(),
-            DiscoveryPolicy::best_effort(),
-        ).unwrap();
-
-        let discovered = report.targets().next().unwrap();
-
-        // Discovery exposes a descriptor, not a compatibility verdict.
-        assert_eq!(
-            discovered.id().as_str(),
-            "target:test"
-        );
     }
 }
