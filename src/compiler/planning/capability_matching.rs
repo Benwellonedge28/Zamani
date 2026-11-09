@@ -6,163 +6,90 @@
 
 //! # Zamani Compiler — Capability Matching
 //!
-//! Path: src/compiler/planning/capability_matching.rs
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
+//! Matches canonical semantic capability requirements against explicitly
+//! scoped capability evidence belonging to discovered targets.
 //!
-//! ## PURPOSE
-//!
-//! Match canonical semantic capability requirements against explicitly
-//! scoped capability evidence for discovered compilation targets.
-//!
-//! This module connects:
-//!
-//! - compiler target discovery;
-//! - canonical frontend capability requirements;
-//! - canonical capability evidence;
+//! This module coordinates:
+//! - target discovery;
+//! - canonical semantic capability requirements;
+//! - target-scoped capability evidence;
 //! - canonical semantic compatibility evaluation;
 //! - downstream resource and realization planning.
 //!
-//! It does not define another capability model or compatibility engine.
+//! It does not define another capability model, evidence registry,
+//! compatibility evaluator, target descriptor, or hardware inventory.
 //!
-//! ## AUTHORITATIVE OWNERS
+//! ## Canonical authorities
 //!
-//! Target identity and descriptors:
-//!     crate::compiler::configuration::target
+//! - Target identity and descriptors:
+//!   `compiler::configuration::target`
+//! - Target discovery:
+//!   `compiler::planning::target_discovery`
+//! - Compiler capability analysis:
+//!   `compiler::analysis::capabilities`
+//! - Capability semantics:
+//!   `frontend::semantic::capabilities`
+//! - Resource feasibility:
+//!   `compiler::planning::resource_planning`
+//! - Overall feasibility:
+//!   `compiler::planning::feasibility`
 //!
-//! Target discovery:
-//!     crate::compiler::planning::target_discovery
+//! ## Important invariants
 //!
-//! Compiler-facing capability analysis:
-//!     crate::compiler::analysis::capabilities
+//! 1. Missing evidence never proves support.
+//! 2. Unknown evidence never proves support.
+//! 3. Conflicting evidence never proves support.
+//! 4. Evidence for another target is never combined with this target's
+//!    evidence.
+//! 5. Empty requirements never prove compatibility.
+//! 6. Conflicting target identities are never admitted.
+//! 7. Discovery failures remain visible in the report.
+//! 8. Capability satisfaction does not establish resource feasibility.
+//! 9. Capability satisfaction does not establish backend availability.
+//! 10. Capability satisfaction does not establish authorization.
+//! 11. Capability satisfaction does not establish physical availability.
+//! 12. Capability satisfaction does not establish execution success.
 //!
-//! Canonical capability requirements:
-//!     crate::frontend::semantic::capabilities::requirements
+//! ## Target roles
 //!
-//! Canonical capability evidence:
-//!     crate::frontend::semantic::capabilities::evidence
+//! The existing target-role contract identifies `execution`, `simulation`,
+//! and `emulation` as computation-realization roles. These are all eligible
+//! for capability evaluation.
 //!
-//! Canonical compatibility evaluation:
-//!     crate::frontend::semantic::capabilities::compatibility
+//! Other roles, including intermediate-representation and deployment-package
+//! roles, are not execution candidates.
 //!
-//! Backend compatibility:
-//!     crate::backend::compatibility
+//! Unknown roles fail closed. A future role that represents a computation
+//! realization must be explicitly integrated into this classification.
 //!
-//! ## OWNERSHIP
+//! ## Scalability
 //!
-//! This module owns:
-//!
-//! - Matching discovered targets against semantic capability evidence.
-//! - The target-evidence subject identity convention.
-//! - Per-target matching results.
-//! - Deterministic candidate ordering.
-//! - Preservation of discovery diagnostics.
-//! - Classification of satisfied, incompatible, unresolved, and
-//!   requirement-free target results.
-//!
-//! This module does not own:
-//!
-//! - Capability definitions.
-//! - Capability requirements.
-//! - Capability evidence storage.
-//! - Evidence authentication or trust.
-//! - Hardware discovery.
-//! - Target descriptors.
-//! - Backend registration.
-//! - Backend implementation.
-//! - Resource sufficiency.
-//! - Resource allocation.
-//! - Scheduling.
-//! - Partitioning.
-//! - Routing.
-//! - Physical placement.
-//! - Runtime execution.
-//! - Semantic analysis.
-//! - IR definitions.
-//!
-//! ## EVIDENCE SUBJECT CONVENTION
-//!
-//! A target's evidence subject is exactly its canonical TargetId string.
-//!
-//! For example:
-//!
-//!     TargetId("x86_64-linux")
-//!
-//! uses:
-//!
-//!     EvidenceSubject("x86_64-linux")
-//!
-//! Evidence providers must use this convention when creating
-//! CapabilityEvidence records.
-//!
-//! No vendor or architecture inference is performed.
-//!
-//! ## SEMANTIC INVARIANTS
-//!
-//! 1. Missing evidence is not proof of support.
-//! 2. Unknown evidence is not proof of support.
-//! 3. Conflicting evidence is not proof of support.
-//! 4. Explicitly unsupported capabilities remain incompatible.
-//! 5. Empty requirements are not proof of compatibility.
-//! 6. Evidence belonging to another target is never combined.
-//! 7. Discovery conflicts never produce an eligible target.
-//! 8. Discovery failures remain visible in the result.
-//! 9. Capability compatibility does not establish resource sufficiency.
-//! 10. Capability compatibility does not establish authorization.
-//! 11. Capability compatibility does not authenticate evidence.
-//! 12. Capability compatibility does not prove backend code generation.
-//! 13. A semantically valid program is not made semantically invalid
-//!     merely because a discovered target cannot realize it.
-//!
-//! ## SCALABILITY
-//!
-//! No fixed maximum is imposed on:
-//!
+//! No universal maximum is imposed on:
 //! - targets;
-//! - capabilities;
+//! - providers;
+//! - capability identities;
 //! - capability requirements;
 //! - evidence records;
-//! - computing domains;
-//! - providers;
-//! - processors;
-//! - accelerators;
-//! - devices;
-//! - distributed nodes;
-//! - resource quantities.
+//! - computational domains;
+//! - hardware families;
+//! - distributed participants.
 //!
-//! Collections grow according to available memory.
+//! Evidence is indexed by subject once per matching operation. The index
+//! contains references rather than duplicating the entire evidence inventory.
+//! A target-specific evidence set is constructed only when that target is
+//! evaluated.
 //!
-//! This module does not promise literal infinite computation.
-//! Resource exhaustion must remain an explicit implementation failure.
+//! Actual operation remains bounded by available memory, address space,
+//! processing time, and explicit operational budgets. Literal infinity is
+//! not promised.
 //!
-//! ## DETERMINISM
+//! ## Trust
 //!
-//! Target discovery supplies targets in stable TargetId order.
-//! Capability requirements preserve canonical semantic ordering.
-//! The canonical evaluator determines requirement outcomes.
-//! This module introduces no random ordering or global mutable state.
-//!
-//! ## TRUST
-//!
-//! CapabilityEvidence is a claim, not proof of authenticity.
-//!
-//! Evidence authentication, issuer trust, signatures, and authorization
-//! must be completed by their authoritative security and provenance
-//! subsystems before the result is used as a trusted deployment decision.
-//!
-//! ## DOWNSTREAM INTEGRATION
-//!
-//! The result may be consumed by:
-//!
-//! - resource_planning.rs;
-//! - partitioning.rs;
-//! - feasibility.rs;
-//! - backend selection;
-//! - deployment planning.
-//!
-//! This module never allocates or executes a target.
+//! Capability evidence is a claim, not proof of authenticity.
+//! Authentication, issuer trust, provenance verification, and authorization
+//! remain the responsibility of their authoritative security subsystems.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
@@ -171,120 +98,156 @@ use crate::compiler::analysis::capabilities::{
     CapabilityAnalysisDisposition,
     CapabilityAnalysisError,
     CapabilityAnalysisReport,
+    CapabilityEvidence,
+    CapabilityEvidenceError,
     CapabilityEvidenceSet,
     CapabilityRequirements,
     EvidenceSubject,
 };
 
+use crate::compiler::configuration::target::{
+    TargetDescriptor,
+    TargetId,
+    TargetRole,
+};
+
 use crate::compiler::planning::target_discovery::{
-    DiscoveryReport,
-    DiscoveryProviderId,
     DiscoveredTarget,
+    DiscoveryProviderId,
+    DiscoveryReport,
     ProviderFailure,
     RejectedDescriptor,
     TargetIdentityConflict,
 };
-
-use crate::compiler::configuration::target::{
-    TargetDescriptor,
-    TargetId,
-};
-
-// ============================================================================
-// MODULE IDENTITY
-// ============================================================================
 
 /// Stable architectural identity of this module.
 pub const CAPABILITY_MATCHING_MODULE_NAME: &str =
     "zamani.compiler.planning.capability_matching";
 
 /// Public API version of this module.
-pub const CAPABILITY_MATCHING_API_VERSION: u16 = 1;
+///
+/// Version 2 includes the corrected computation-realization role handling
+/// and the target-indexed evidence evaluation contract.
+pub const CAPABILITY_MATCHING_API_VERSION: u16 = 2;
 
 // ============================================================================
-// TARGET EVIDENCE SUBJECT
+// TARGET EVIDENCE IDENTITY
 // ============================================================================
 
-/// Construct the canonical evidence subject for a discovered target.
+/// Construct the canonical evidence subject for a target.
 ///
-/// The target identifier is used unchanged. This ensures that capability
-/// evidence cannot accidentally be associated with another target through
-/// architecture aliases, vendor names, or display names.
+/// The target identifier is used unchanged. No vendor, architecture,
+/// display-name, or operating-system inference is performed.
 ///
-/// Evidence providers must use the same convention.
+/// Evidence providers must use this same convention.
 ///
 /// # Errors
 ///
-/// Returns the canonical evidence-model validation error if construction
-/// of the subject fails. Validated TargetId values should satisfy the
-/// evidence subject's textual validation requirements.
+/// Returns an error if the target identity cannot be represented as a
+/// canonical semantic evidence subject.
 pub fn target_evidence_subject(
     target_id: &TargetId,
 ) -> Result<EvidenceSubject, CapabilityMatchError> {
-    EvidenceSubject::new(target_id.as_str())
-        .map_err(|error| {
-            CapabilityMatchError::InvalidEvidenceSubject {
-                target: target_id.clone(),
-                message: error.to_string(),
-            }
-        })
+    EvidenceSubject::new(target_id.as_str()).map_err(|error| {
+        CapabilityMatchError::InvalidEvidenceSubject {
+            target: target_id.clone(),
+            message: error.to_string(),
+        }
+    })
+}
+
+// ============================================================================
+// TARGET ROLE CLASSIFICATION
+// ============================================================================
+
+/// Whether a target role represents a computation-realization target.
+///
+/// Simulation and emulation are included because they can execute a
+/// computation according to their declared semantics. They must not be
+/// excluded merely because they are not physical execution devices.
+///
+/// Unknown roles are rejected by default. This avoids assuming that an
+/// arbitrary descriptor represents an executable target.
+///
+/// This classification is about target participation, not capability
+/// support. The canonical capability evaluator still decides whether
+/// the target satisfies the program's requirements.
+fn is_computation_realization_role(role: &TargetRole) -> bool {
+    matches!(
+        role.as_str(),
+        "execution" | "simulation" | "emulation"
+    )
+}
+
+/// Whether the discovered target may participate in capability matching.
+fn is_computation_realization_target(
+    target: &DiscoveredTarget,
+) -> bool {
+    is_computation_realization_role(
+        target.descriptor().role(),
+    )
 }
 
 // ============================================================================
 // MATCH DISPOSITION
 // ============================================================================
 
-/// Classification of one discovered target's capability result.
+/// Classification of one target's capability compatibility result.
 ///
-/// This classification is intentionally separate from target discovery,
-/// resource feasibility, backend compatibility, and execution availability.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+/// This is not a resource-feasibility, backend-compatibility, authorization,
+/// allocation, or execution result.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
 #[non_exhaustive]
 pub enum TargetMatchDisposition {
-    /// All evaluated capability requirements have supporting evidence.
-    ///
-    /// This does not prove resource sufficiency, evidence authenticity,
-    /// authorization, or executable backend availability.
+    /// Every evaluated capability requirement has supporting evidence.
     Satisfied,
 
-    /// At least one requirement has explicit incompatible evidence.
+    /// At least one requirement has explicitly incompatible evidence.
     Incompatible,
 
-    /// At least one requirement lacks sufficient evidence.
+    /// At least one requirement lacks sufficient evidence, with no
+    /// established incompatibility taking aggregate precedence.
     Unresolved,
 
     /// The program supplied no capability requirements.
     ///
-    /// This is not proof that the target is compatible.
+    /// This is not proof of compatibility.
     NoRequirements,
 
-    /// The discovered descriptor does not represent an execution target.
-    ///
-    /// Such a descriptor may describe an IR format, deployment package,
-    /// or other non-execution artifact.
+    /// The descriptor does not represent a recognized computation-
+    /// realization target.
     NotExecutionTarget,
 }
 
 impl TargetMatchDisposition {
-    /// Whether the canonical evidence establishes satisfaction.
+    /// Whether all capability requirements are established as satisfied.
     #[must_use]
     pub const fn is_satisfied(self) -> bool {
         matches!(self, Self::Satisfied)
     }
 
-    /// Whether an explicit incompatibility was established.
+    /// Whether an incompatibility has been established.
     #[must_use]
     pub const fn is_incompatible(self) -> bool {
         matches!(self, Self::Incompatible)
     }
 
-    /// Whether additional evidence is required.
+    /// Whether the aggregate result requires additional evidence.
     #[must_use]
     pub const fn is_unresolved(self) -> bool {
         matches!(self, Self::Unresolved)
     }
 
-    /// Whether the requirement set was empty.
+    /// Whether the requirement collection was empty.
     #[must_use]
     pub const fn has_no_requirements(self) -> bool {
         matches!(self, Self::NoRequirements)
@@ -293,7 +256,7 @@ impl TargetMatchDisposition {
     /// Whether this target is eligible for subsequent capability-based
     /// planning.
     ///
-    /// Only Satisfied returns true.
+    /// Only a non-empty, fully satisfied requirement set is eligible.
     #[must_use]
     pub const fn is_eligible_for_planning(self) -> bool {
         self.is_satisfied()
@@ -310,22 +273,20 @@ impl fmt::Display for TargetMatchDisposition {
             Self::Incompatible => "capability requirements incompatible",
             Self::Unresolved => "capability evidence unresolved",
             Self::NoRequirements => "no capability requirements",
-            Self::NotExecutionTarget => "not an execution target",
+            Self::NotExecutionTarget => "not a computation-realization target",
         })
     }
 }
 
 // ============================================================================
-// ONE TARGET MATCH
+// TARGET MATCH
 // ============================================================================
 
 /// Capability-matching result for one discovered target.
 ///
-/// The original discovery record is retained, including the providers
-/// that reported the identical target descriptor.
-///
-/// The canonical capability analysis report is retained without
-/// reconstructing or discarding source-associated requirement records.
+/// The original discovery record and canonical semantic analysis report
+/// are retained. No requirement provenance or compatibility outcome is
+/// reconstructed or discarded.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TargetCapabilityMatch {
     discovered_target: DiscoveredTarget,
@@ -364,7 +325,7 @@ impl TargetCapabilityMatch {
         self.discovered_target.id()
     }
 
-    /// Return providers that reported this target.
+    /// Return providers that reported this identical descriptor.
     #[must_use]
     pub fn providers(&self) -> &BTreeSet<DiscoveryProviderId> {
         self.discovered_target.providers()
@@ -376,14 +337,13 @@ impl TargetCapabilityMatch {
         self.discovered_target.provider_count()
     }
 
-    /// Return the matching disposition.
+    /// Return the aggregate matching disposition.
     #[must_use]
     pub const fn disposition(&self) -> TargetMatchDisposition {
         self.disposition
     }
 
-    /// Return whether the target is eligible for subsequent
-    /// capability-based planning.
+    /// Whether this target is eligible for subsequent capability planning.
     #[must_use]
     pub const fn is_eligible_for_planning(&self) -> bool {
         self.disposition.is_eligible_for_planning()
@@ -391,7 +351,7 @@ impl TargetCapabilityMatch {
 
     /// Return the complete canonical capability-analysis report.
     ///
-    /// Non-execution targets have no capability analysis report.
+    /// Non-computation targets have no analysis report.
     #[must_use]
     pub const fn analysis(
         &self,
@@ -399,9 +359,7 @@ impl TargetCapabilityMatch {
         self.analysis.as_ref()
     }
 
-    /// Return the number of evaluated semantic capability requirements.
-    ///
-    /// Non-execution targets return zero because no analysis was performed.
+    /// Return the number of evaluated requirements.
     #[must_use]
     pub fn requirement_count(&self) -> usize {
         self.analysis
@@ -409,25 +367,52 @@ impl TargetCapabilityMatch {
             .map(CapabilityAnalysisReport::len)
             .unwrap_or(0)
     }
+
+    /// Whether at least one requirement has explicitly incompatible
+    /// evidence.
+    ///
+    /// This remains accurate when other requirements are unresolved.
+    #[must_use]
+    pub fn has_incompatibilities(&self) -> bool {
+        self.analysis
+            .as_ref()
+            .is_some_and(CapabilityAnalysisReport::has_incompatibilities)
+    }
+
+    /// Whether at least one requirement remains unresolved.
+    ///
+    /// This remains accurate when the aggregate disposition is
+    /// `Incompatible`.
+    #[must_use]
+    pub fn has_unresolved_requirements(&self) -> bool {
+        self.analysis
+            .as_ref()
+            .is_some_and(CapabilityAnalysisReport::has_unresolved_requirements)
+    }
+
+    /// Whether all supplied requirements have definitive evidence.
+    ///
+    /// A definitive result can be satisfied or incompatible. An empty
+    /// requirement set is not considered evidence-complete.
+    #[must_use]
+    pub fn has_complete_evidence(&self) -> bool {
+        self.analysis
+            .as_ref()
+            .is_some_and(CapabilityAnalysisReport::has_complete_evidence)
+    }
 }
 
 // ============================================================================
-// MATCHING REPORT
+// MATCH REPORT
 // ============================================================================
 
 /// Complete capability-matching report.
 ///
-/// The report retains:
+/// Discovery failures, rejected descriptors, and target identity conflicts
+/// are preserved independently from capability compatibility.
 ///
-/// - every non-conflicting discovered target considered;
-/// - each target's canonical capability-analysis result;
-/// - discovery provider failures;
-/// - rejected discovery descriptors;
-/// - target identity conflicts;
-/// - whether the original discovery inventory was complete.
-///
-/// A report with one or more satisfied targets does not imply that the
-/// complete target inventory was discovered successfully.
+/// A satisfied candidate does not imply that the complete target inventory
+/// was discovered successfully.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CapabilityMatchReport {
     candidates: Vec<TargetCapabilityMatch>,
@@ -455,19 +440,19 @@ impl CapabilityMatchReport {
         }
     }
 
-    /// Return all evaluated target results in deterministic target-ID order.
+    /// Return all considered candidates in deterministic target-ID order.
     ///
-    /// Non-execution targets are included with the
+    /// Non-computation targets are retained with the
     /// `NotExecutionTarget` disposition.
     #[must_use]
     pub fn candidates(&self) -> &[TargetCapabilityMatch] {
         &self.candidates
     }
 
-    /// Iterate over targets whose capability requirements are satisfied.
+    /// Iterate over targets with satisfied capability requirements.
     ///
-    /// This iterator does not establish resource feasibility, backend
-    /// availability, evidence authenticity, or authorization.
+    /// This does not establish resource feasibility, backend availability,
+    /// evidence authenticity, authorization, or execution success.
     pub fn satisfied_targets(
         &self,
     ) -> impl Iterator<Item = &TargetCapabilityMatch> {
@@ -476,42 +461,52 @@ impl CapabilityMatchReport {
             .filter(|candidate| candidate.is_eligible_for_planning())
     }
 
-    /// Iterate over targets with explicitly incompatible evidence.
+    /// Iterate over targets with established incompatible requirements.
     pub fn incompatible_targets(
         &self,
     ) -> impl Iterator<Item = &TargetCapabilityMatch> {
-        self.candidates.iter().filter(|candidate| {
-            candidate.disposition().is_incompatible()
-        })
+        self.candidates
+            .iter()
+            .filter(|candidate| candidate.disposition().is_incompatible())
     }
 
-    /// Iterate over targets for which capability evidence is incomplete.
+    /// Iterate over targets with unresolved capability requirements.
+    ///
+    /// A target whose aggregate result is `Incompatible` but which also
+    /// has unresolved requirements can be inspected through
+    /// `TargetCapabilityMatch::has_unresolved_requirements`.
     pub fn unresolved_targets(
         &self,
     ) -> impl Iterator<Item = &TargetCapabilityMatch> {
-        self.candidates.iter().filter(|candidate| {
-            candidate.disposition().is_unresolved()
-        })
+        self.candidates
+            .iter()
+            .filter(|candidate| candidate.disposition().is_unresolved())
     }
 
-    /// Iterate over targets analyzed with an empty requirement set.
+    /// Iterate over targets with empty requirement sets.
     pub fn targets_without_requirements(
         &self,
     ) -> impl Iterator<Item = &TargetCapabilityMatch> {
-        self.candidates.iter().filter(|candidate| {
-            candidate.disposition().has_no_requirements()
-        })
+        self.candidates
+            .iter()
+            .filter(|candidate| candidate.disposition().has_no_requirements())
     }
 
-    /// Return a candidate by target identity.
+    /// Find a candidate by stable target identity.
+    ///
+    /// Candidates are stored in ascending target-ID order, allowing
+    /// logarithmic lookup.
     #[must_use]
     pub fn target(
         &self,
         target_id: &TargetId,
     ) -> Option<&TargetCapabilityMatch> {
         self.candidates
-            .iter()
-            .find(|candidate| candidate.target_id() == target_id)
+            .binary_search_by(|candidate| {
+                candidate.target_id().cmp(target_id)
+            })
+            .ok()
+            .map(|index| &self.candidates[index])
     }
 
     /// Return the number of considered target descriptors.
@@ -532,20 +527,20 @@ impl CapabilityMatchReport {
         self.requirement_count
     }
 
-    /// Whether discovery completed without provider failures, rejected
-    /// descriptors, or target identity conflicts.
+    /// Whether target discovery completed without reported failures,
+    /// rejected descriptors, or identity conflicts.
     #[must_use]
     pub const fn discovery_is_complete(&self) -> bool {
         self.discovery_complete
     }
 
-    /// Return discovery provider failures.
+    /// Return provider failures.
     #[must_use]
     pub fn discovery_failures(&self) -> &[ProviderFailure] {
         &self.discovery_failures
     }
 
-    /// Return rejected discovery descriptors.
+    /// Return rejected descriptors.
     #[must_use]
     pub fn discovery_rejections(&self) -> &[RejectedDescriptor] {
         &self.discovery_rejections
@@ -559,23 +554,153 @@ impl CapabilityMatchReport {
 
     /// Whether at least one candidate has satisfied capability evidence.
     ///
-    /// This is not a global inventory-completeness claim.
+    /// This does not mean that discovery found every possible target.
     #[must_use]
     pub fn has_satisfied_target(&self) -> bool {
         self.satisfied_targets().next().is_some()
     }
 
-    /// Whether any provider failed during target discovery.
+    /// Whether any discovery provider failed.
     #[must_use]
     pub fn has_discovery_failures(&self) -> bool {
         !self.discovery_failures.is_empty()
     }
 
-    /// Whether any discovered target identity was ambiguous.
+    /// Whether any target identity conflict occurred.
     #[must_use]
     pub fn has_discovery_conflicts(&self) -> bool {
         !self.discovery_conflicts.is_empty()
     }
+}
+
+// ============================================================================
+// EVIDENCE INDEX
+// ============================================================================
+
+/// Index evidence by its canonical subject.
+///
+/// The index stores references to existing evidence records. It does not
+/// clone or duplicate the entire evidence inventory.
+///
+/// Every record is validated before it enters the index, including records
+/// for subjects that are not ultimately evaluated.
+fn index_evidence<'a>(
+    evidence: &'a CapabilityEvidenceSet,
+) -> Result<
+    BTreeMap<EvidenceSubject, Vec<&'a CapabilityEvidence>>,
+    CapabilityMatchError,
+> {
+    let mut index: BTreeMap<
+        EvidenceSubject,
+        Vec<&'a CapabilityEvidence>,
+    > = BTreeMap::new();
+
+    for record in evidence.iter() {
+        record
+            .validate()
+            .map_err(CapabilityMatchError::from)?;
+
+        index
+            .entry(record.subject().clone())
+            .or_default()
+            .push(record);
+    }
+
+    Ok(index)
+}
+
+/// Construct the evidence set for exactly one subject.
+///
+/// Evidence from other targets is never included.
+fn evidence_for_subject(
+    subject: &EvidenceSubject,
+    index: &BTreeMap<
+        EvidenceSubject,
+        Vec<&CapabilityEvidence>,
+    >,
+) -> Result<CapabilityEvidenceSet, CapabilityMatchError> {
+    let mut scoped = CapabilityEvidenceSet::new();
+
+    if let Some(records) = index.get(subject) {
+        scoped
+            .extend(records.iter().map(|record| (**record).clone()))
+            .map_err(CapabilityMatchError::from)?;
+    }
+
+    Ok(scoped)
+}
+
+// ============================================================================
+// CANONICAL ANALYSIS ADAPTER
+// ============================================================================
+
+/// Convert the canonical analysis disposition without weakening its result.
+///
+/// Unknown future dispositions fail closed.
+fn map_analysis_disposition(
+    disposition: CapabilityAnalysisDisposition,
+) -> TargetMatchDisposition {
+    match disposition {
+        CapabilityAnalysisDisposition::Satisfied => {
+            TargetMatchDisposition::Satisfied
+        }
+
+        CapabilityAnalysisDisposition::Incompatible => {
+            TargetMatchDisposition::Incompatible
+        }
+
+        CapabilityAnalysisDisposition::Unresolved => {
+            TargetMatchDisposition::Unresolved
+        }
+
+        CapabilityAnalysisDisposition::NoRequirements => {
+            TargetMatchDisposition::NoRequirements
+        }
+
+        _ => TargetMatchDisposition::Unresolved,
+    }
+}
+
+/// Analyze one target using only its indexed evidence.
+fn analyze_target(
+    requirements: &CapabilityRequirements,
+    target: &DiscoveredTarget,
+    evidence_index: &BTreeMap<
+        EvidenceSubject,
+        Vec<&CapabilityEvidence>,
+    >,
+) -> Result<TargetCapabilityMatch, CapabilityMatchError> {
+    if !is_computation_realization_target(target) {
+        return Ok(TargetCapabilityMatch::new(
+            target.clone(),
+            TargetMatchDisposition::NotExecutionTarget,
+            None,
+        ));
+    }
+
+    let subject = target_evidence_subject(target.id())?;
+
+    let scoped_evidence = evidence_for_subject(
+        &subject,
+        evidence_index,
+    )?;
+
+    let analysis = analyze_capabilities(
+        requirements,
+        &subject,
+        &scoped_evidence,
+    )
+    .map_err(CapabilityMatchError::CapabilityAnalysis)?;
+
+    let disposition = map_analysis_disposition(
+        analysis.disposition(),
+    );
+
+    Ok(TargetCapabilityMatch::new(
+        target.clone(),
+        disposition,
+        Some(analysis),
+    ))
 }
 
 // ============================================================================
@@ -584,52 +709,39 @@ impl CapabilityMatchReport {
 
 /// Stateless compiler capability-matching service.
 ///
-/// The service delegates compatibility evaluation to the canonical
-/// frontend semantic capability implementation through the existing
-/// compiler-facing analysis facade.
+/// All semantic compatibility decisions remain delegated to the canonical
+/// frontend capability evaluator through the compiler analysis facade.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CapabilityMatcher;
 
 impl CapabilityMatcher {
-    /// Match semantic capability requirements against a discovered
-    /// target inventory and scoped evidence.
+    /// Match canonical capability requirements against discovered targets.
     ///
-    /// The supplied evidence set may contain evidence for multiple targets.
-    /// The canonical evaluator filters it by the exact target evidence
-    /// subject for each target.
+    /// Evidence may contain records for many targets. It is validated and
+    /// indexed once by exact evidence subject. Each target receives only
+    /// its own evidence records.
     ///
-    /// Discovery failures are preserved in the report. Successfully
-    /// discovered targets can still be evaluated, but the report explicitly
-    /// records that the inventory may be incomplete.
+    /// Discovery failures are preserved. Successfully discovered targets
+    /// may still be individually assessed when discovery is incomplete.
     ///
-    /// Target identity conflicts are excluded defensively, even if a
-    /// malformed or older discovery report happens to expose a target
-    /// whose identity is also listed as conflicted.
-    ///
-    /// Non-execution target descriptors are retained as
-    /// `NotExecutionTarget` results and are not evaluated as execution
-    /// candidates.
+    /// Conflicting target identities are excluded defensively.
     ///
     /// # Errors
     ///
-    /// Returns an error if canonical capability evidence validation or
-    /// compatibility evaluation fails.
-    ///
-    /// Invalid evidence is not silently converted into an unresolved
-    /// or successful match.
+    /// Returns an error for invalid evidence, invalid evidence-subject
+    /// construction, or failure of canonical compatibility evaluation.
     pub fn match_targets(
         requirements: &CapabilityRequirements,
         discovery: &DiscoveryReport,
         evidence: &CapabilityEvidenceSet,
     ) -> Result<CapabilityMatchReport, CapabilityMatchError> {
+        let evidence_index = index_evidence(evidence)?;
+
         let mut report = CapabilityMatchReport::new(
             discovery,
             requirements.len(),
         );
 
-        // Discovery reports are ordered by TargetId. The explicit conflict
-        // set also protects against the current discovery aggregation edge
-        // case where a later observation could reintroduce a conflicted ID.
         let conflicted_ids: BTreeSet<TargetId> = discovery
             .conflicts()
             .iter()
@@ -641,69 +753,32 @@ impl CapabilityMatcher {
                 continue;
             }
 
-            let descriptor = discovered.descriptor();
-
-            // Only execution targets are candidates for execution planning.
-            // Target roles are open strings; this comparison uses the
-            // established role identifier rather than introducing an enum.
-            if descriptor.role().as_str() != "execution" {
-                report.candidates.push(TargetCapabilityMatch::new(
-                    discovered.clone(),
-                    TargetMatchDisposition::NotExecutionTarget,
-                    None,
-                ));
-
-                continue;
-            }
-
-            let subject = target_evidence_subject(discovered.id())?;
-
-            let analysis = analyze_capabilities(
+            let candidate = analyze_target(
                 requirements,
-                &subject,
-                evidence,
-            )
-            .map_err(CapabilityMatchError::CapabilityAnalysis)?;
+                discovered,
+                &evidence_index,
+            )?;
 
-            let disposition = match analysis.disposition() {
-                CapabilityAnalysisDisposition::Satisfied => {
-                    TargetMatchDisposition::Satisfied
-                }
-
-                CapabilityAnalysisDisposition::Incompatible => {
-                    TargetMatchDisposition::Incompatible
-                }
-
-                CapabilityAnalysisDisposition::Unresolved => {
-                    TargetMatchDisposition::Unresolved
-                }
-
-                CapabilityAnalysisDisposition::NoRequirements => {
-                    TargetMatchDisposition::NoRequirements
-                }
-
-                // CapabilityAnalysisDisposition is non-exhaustive.
-                // A future disposition must not become a successful match.
-                _ => TargetMatchDisposition::Unresolved,
-            };
-
-            report.candidates.push(TargetCapabilityMatch::new(
-                discovered.clone(),
-                disposition,
-                Some(analysis),
-            ));
+            report.candidates.push(candidate);
         }
+
+        // DiscoveryReport currently supplies targets in BTreeMap order.
+        // Keep this explicit invariant in case its internal representation
+        // changes in the future.
+        report.candidates.sort_by(|left, right| {
+            left.target_id().cmp(right.target_id())
+        });
 
         Ok(report)
     }
 
-    /// Match requirements against a single discovered target.
+    /// Match requirements against one discovered target.
     ///
-    /// This method uses the same canonical target-evidence identity
-    /// convention as `match_targets`.
+    /// This uses the same target identity convention, evidence validation,
+    /// role classification, and canonical evaluator as `match_targets`.
     ///
-    /// It is useful for incremental planning when one target is added
-    /// to an existing inventory.
+    /// It is useful for incremental planning when one unambiguous target
+    /// has been discovered.
     ///
     /// # Errors
     ///
@@ -713,50 +788,13 @@ impl CapabilityMatcher {
         target: &DiscoveredTarget,
         evidence: &CapabilityEvidenceSet,
     ) -> Result<TargetCapabilityMatch, CapabilityMatchError> {
-        let descriptor = target.descriptor();
+        let evidence_index = index_evidence(evidence)?;
 
-        if descriptor.role().as_str() != "execution" {
-            return Ok(TargetCapabilityMatch::new(
-                target.clone(),
-                TargetMatchDisposition::NotExecutionTarget,
-                None,
-            ));
-        }
-
-        let subject = target_evidence_subject(target.id())?;
-
-        let analysis = analyze_capabilities(
+        analyze_target(
             requirements,
-            &subject,
-            evidence,
+            target,
+            &evidence_index,
         )
-        .map_err(CapabilityMatchError::CapabilityAnalysis)?;
-
-        let disposition = match analysis.disposition() {
-            CapabilityAnalysisDisposition::Satisfied => {
-                TargetMatchDisposition::Satisfied
-            }
-
-            CapabilityAnalysisDisposition::Incompatible => {
-                TargetMatchDisposition::Incompatible
-            }
-
-            CapabilityAnalysisDisposition::Unresolved => {
-                TargetMatchDisposition::Unresolved
-            }
-
-            CapabilityAnalysisDisposition::NoRequirements => {
-                TargetMatchDisposition::NoRequirements
-            }
-
-            _ => TargetMatchDisposition::Unresolved,
-        };
-
-        Ok(TargetCapabilityMatch::new(
-            target.clone(),
-            disposition,
-            Some(analysis),
-        ))
     }
 
     /// Return the stable architectural module name.
@@ -779,16 +817,16 @@ impl CapabilityMatcher {
 /// Errors produced by capability matching.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CapabilityMatchError {
-    /// Canonical capability evidence or compatibility evaluation failed.
+    /// Canonical evidence validation or compatibility evaluation failed.
     CapabilityAnalysis(CapabilityAnalysisError),
 
-    /// A target identity could not be converted into a canonical evidence
+    /// A target identity could not be represented as a canonical evidence
     /// subject.
     InvalidEvidenceSubject {
         /// Target whose identity failed conversion.
         target: TargetId,
 
-        /// Underlying validation message.
+        /// Underlying validation explanation.
         message: String,
     },
 }
@@ -833,6 +871,14 @@ impl From<CapabilityAnalysisError> for CapabilityMatchError {
     }
 }
 
+impl From<CapabilityEvidenceError> for CapabilityMatchError {
+    fn from(error: CapabilityEvidenceError) -> Self {
+        Self::CapabilityAnalysis(
+            CapabilityAnalysisError::from(error),
+        )
+    }
+}
+
 // ============================================================================
 // TESTS
 // ============================================================================
@@ -841,24 +887,42 @@ impl From<CapabilityAnalysisError> for CapabilityMatchError {
 mod tests {
     use super::*;
 
+    use std::collections::BTreeMap;
+
     use crate::compiler::configuration::target::{
         TargetDescriptor,
         TargetId,
+        TargetRole,
     };
 
     use crate::compiler::planning::target_discovery::{
+        DiscoveryPolicy,
         DiscoveryProviderId,
         DiscoveryRequest,
+        ProviderFailure,
         TargetDiscoveryProvider,
         TargetDiscoveryRegistry,
-        ProviderFailure,
     };
 
-    use crate::frontend::semantic::capabilities::{
-        CapabilityEvidenceSet,
+    use crate::frontend::ast::node::node_id::NodeId;
+    use crate::frontend::ast::node::source::span::{
+        SourceId,
+        Span,
+    };
+
+    use crate::frontend::semantic::capabilities::evidence::{
+        CapabilityEvidence,
+        CapabilityEvidenceStatus,
+        EvidenceOrigin,
+    };
+
+    use crate::frontend::semantic::capabilities::model::{
+        CapabilityId,
+        CapabilityRequirement,
     };
 
     use crate::frontend::semantic::capabilities::requirements::{
+        CapabilityRequirementRecord,
         CapabilityRequirements,
     };
 
@@ -880,10 +944,25 @@ mod tests {
         }
     }
 
-    fn execution_target(id: &str) -> TargetDescriptor {
+    fn target(id: &str) -> TargetDescriptor {
         TargetDescriptor::builder(
-            TargetId::new(id).expect("valid target identifier"),
+            TargetId::new(id).expect("valid target ID"),
             id,
+        )
+        .build()
+        .expect("valid target descriptor")
+    }
+
+    fn target_with_role(
+        id: &str,
+        role: &str,
+    ) -> TargetDescriptor {
+        TargetDescriptor::builder(
+            TargetId::new(id).expect("valid target ID"),
+            id,
+        )
+        .role(
+            TargetRole::new(role).expect("valid target role"),
         )
         .build()
         .expect("valid target descriptor")
@@ -892,11 +971,9 @@ mod tests {
     fn discovery_with(
         descriptors: Vec<TargetDescriptor>,
     ) -> DiscoveryReport {
-        let provider_id = DiscoveryProviderId::new("test.provider")
-            .expect("valid provider identity");
-
         let provider = TestProvider {
-            id: provider_id,
+            id: DiscoveryProviderId::new("test.provider")
+                .expect("valid provider ID"),
             descriptors,
         };
 
@@ -909,9 +986,77 @@ mod tests {
         registry
             .discover(
                 &DiscoveryRequest::all_registered(),
-                crate::compiler::planning::target_discovery::DiscoveryPolicy::best_effort(),
+                DiscoveryPolicy::best_effort(),
             )
             .expect("discovery should succeed")
+    }
+
+    fn capability(name: &str) -> CapabilityId {
+        CapabilityId::new("test.domain", name)
+            .expect("valid capability ID")
+    }
+
+    fn requirements(names: &[&str]) -> CapabilityRequirements {
+        let mut requirements = CapabilityRequirements::new();
+
+        for (index, name) in names.iter().enumerate() {
+            let node_id = NodeId::new(
+                u64::try_from(index + 1).expect("test index fits"),
+            )
+            .expect("valid node ID");
+
+            let span = Span::from_usize(
+                SourceId::from_raw(1),
+                index,
+                index + 1,
+            )
+            .expect("valid source span");
+
+            let record = CapabilityRequirementRecord::new(
+                node_id,
+                span,
+                CapabilityRequirement::new(capability(name)),
+            );
+
+            requirements
+                .insert_record(record)
+                .expect("valid requirement");
+        }
+
+        requirements
+    }
+
+    fn evidence(
+        subject: &str,
+        capability_name: &str,
+        status: CapabilityEvidenceStatus,
+    ) -> CapabilityEvidence {
+        CapabilityEvidence::new(
+            capability(capability_name),
+            EvidenceSubject::new(subject)
+                .expect("valid evidence subject"),
+            status,
+            None,
+            BTreeMap::new(),
+            EvidenceOrigin::new(
+                "test",
+                "test.provider",
+                None,
+            )
+            .expect("valid evidence origin"),
+        )
+        .expect("valid evidence")
+    }
+
+    fn evidence_set(
+        records: impl IntoIterator<Item = CapabilityEvidence>,
+    ) -> CapabilityEvidenceSet {
+        let mut set = CapabilityEvidenceSet::new();
+
+        set.extend(records)
+            .expect("valid evidence records");
+
+        set
     }
 
     #[test]
@@ -920,56 +1065,16 @@ mod tests {
             .expect("valid target ID");
 
         let subject = target_evidence_subject(&id)
-            .expect("target evidence subject should be valid");
+            .expect("valid evidence subject");
 
         assert_eq!(subject.as_str(), id.as_str());
     }
 
     #[test]
-    fn empty_requirements_do_not_create_a_compatible_target() {
+    fn empty_requirements_are_not_compatible() {
         let discovery = discovery_with(vec![
-            execution_target("test.execution"),
+            target("test.execution"),
         ]);
-
-        let requirements = CapabilityRequirements::new();
-        let evidence = CapabilityEvidenceSet::new();
-
-        let report = CapabilityMatcher::match_targets(
-            &requirements,
-            &discovery,
-            &evidence,
-        )
-        .expect("empty requirements are valid");
-
-        assert_eq!(report.len(), 1);
-        assert_eq!(
-            report.candidates()[0].disposition(),
-            TargetMatchDisposition::NoRequirements,
-        );
-
-        assert!(!report.has_satisfied_target());
-        assert!(
-            !report.candidates()[0].is_eligible_for_planning()
-        );
-    }
-
-    #[test]
-    fn non_execution_descriptors_are_not_execution_candidates() {
-        let descriptor = TargetDescriptor::builder(
-            TargetId::new("test.portable-ir")
-                .expect("valid target ID"),
-            "Portable IR",
-        )
-        .role(
-            crate::compiler::configuration::target::TargetRole::new(
-                "intermediate-representation",
-            )
-            .expect("valid target role"),
-        )
-        .build()
-        .expect("valid descriptor");
-
-        let discovery = discovery_with(vec![descriptor]);
 
         let report = CapabilityMatcher::match_targets(
             &CapabilityRequirements::new(),
@@ -979,6 +1084,236 @@ mod tests {
         .expect("matching should succeed");
 
         assert_eq!(report.len(), 1);
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::NoRequirements,
+        );
+
+        assert!(!candidate.is_eligible_for_planning());
+        assert!(!report.has_satisfied_target());
+    }
+
+    #[test]
+    fn supported_target_evidence_satisfies_requirements() {
+        let requirements = requirements(&["compute"]);
+
+        let evidence = evidence_set([evidence(
+            "test.execution",
+            "compute",
+            CapabilityEvidenceStatus::Supported,
+        )]);
+
+        let discovery = discovery_with(vec![
+            target("test.execution"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &requirements,
+            &discovery,
+            &evidence,
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::Satisfied,
+        );
+
+        assert!(candidate.is_eligible_for_planning());
+        assert!(candidate.has_complete_evidence());
+        assert_eq!(candidate.requirement_count(), 1);
+    }
+
+    #[test]
+    fn evidence_for_another_target_never_satisfies_a_requirement() {
+        let requirements = requirements(&["compute"]);
+
+        let evidence = evidence_set([evidence(
+            "another.target",
+            "compute",
+            CapabilityEvidenceStatus::Supported,
+        )]);
+
+        let discovery = discovery_with(vec![
+            target("test.execution"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &requirements,
+            &discovery,
+            &evidence,
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::Unresolved,
+        );
+
+        assert!(candidate.has_unresolved_requirements());
+        assert!(!candidate.is_eligible_for_planning());
+    }
+
+    #[test]
+    fn unsupported_evidence_is_incompatible() {
+        let requirements = requirements(&["compute"]);
+
+        let evidence = evidence_set([evidence(
+            "test.execution",
+            "compute",
+            CapabilityEvidenceStatus::Unsupported,
+        )]);
+
+        let discovery = discovery_with(vec![
+            target("test.execution"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &requirements,
+            &discovery,
+            &evidence,
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::Incompatible,
+        );
+
+        assert!(candidate.has_incompatibilities());
+        assert!(candidate.has_complete_evidence());
+    }
+
+    #[test]
+    fn mixed_incompatible_and_unresolved_results_remain_visible() {
+        let requirements = requirements(&[
+            "known_unsupported",
+            "unknown_support",
+        ]);
+
+        let evidence = evidence_set([evidence(
+            "test.execution",
+            "known_unsupported",
+            CapabilityEvidenceStatus::Unsupported,
+        )]);
+
+        let discovery = discovery_with(vec![
+            target("test.execution"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &requirements,
+            &discovery,
+            &evidence,
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::Incompatible,
+        );
+
+        assert!(candidate.has_incompatibilities());
+        assert!(candidate.has_unresolved_requirements());
+        assert!(!candidate.has_complete_evidence());
+        assert!(!candidate.is_eligible_for_planning());
+    }
+
+    #[test]
+    fn simulation_targets_are_capability_evaluated() {
+        let discovery = discovery_with(vec![
+            target_with_role("test.simulator", "simulation"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::NoRequirements,
+        );
+
+        assert!(candidate.analysis().is_some());
+    }
+
+    #[test]
+    fn emulation_targets_are_capability_evaluated() {
+        let discovery = discovery_with(vec![
+            target_with_role("test.emulator", "emulation"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
+        assert_eq!(
+            report.candidates()[0].disposition(),
+            TargetMatchDisposition::NoRequirements,
+        );
+    }
+
+    #[test]
+    fn intermediate_representation_is_not_an_execution_candidate() {
+        let discovery = discovery_with(vec![
+            target_with_role(
+                "test.portable-ir",
+                "intermediate-representation",
+            ),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
+        let candidate = &report.candidates()[0];
+
+        assert_eq!(
+            candidate.disposition(),
+            TargetMatchDisposition::NotExecutionTarget,
+        );
+
+        assert!(candidate.analysis().is_none());
+    }
+
+    #[test]
+    fn unknown_target_roles_fail_closed() {
+        let discovery = discovery_with(vec![
+            target_with_role(
+                "test.future-role",
+                "future-unknown-role",
+            ),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
         assert_eq!(
             report.candidates()[0].disposition(),
             TargetMatchDisposition::NotExecutionTarget,
@@ -986,29 +1321,11 @@ mod tests {
     }
 
     #[test]
-    fn discovery_completeness_is_preserved() {
-        let discovery = discovery_with(vec![
-            execution_target("test.execution"),
-        ]);
-
-        let report = CapabilityMatcher::match_targets(
-            &CapabilityRequirements::new(),
-            &discovery,
-            &CapabilityEvidenceSet::new(),
-        )
-        .expect("matching should succeed");
-
-        assert!(report.discovery_is_complete());
-        assert!(!report.has_discovery_failures());
-        assert!(!report.has_discovery_conflicts());
-    }
-
-    #[test]
     fn target_results_are_deterministically_ordered() {
         let discovery = discovery_with(vec![
-            execution_target("zeta.target"),
-            execution_target("alpha.target"),
-            execution_target("middle.target"),
+            target("zeta.target"),
+            target("alpha.target"),
+            target("middle.target"),
         ]);
 
         let report = CapabilityMatcher::match_targets(
@@ -1035,7 +1352,48 @@ mod tests {
     }
 
     #[test]
-    fn module_identity_is_stable() {
+    fn candidate_lookup_uses_stable_target_identity() {
+        let discovery = discovery_with(vec![
+            target("alpha.target"),
+            target("beta.target"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
+        let id = TargetId::new("beta.target")
+            .expect("valid target ID");
+
+        assert_eq!(
+            report.target(&id).map(TargetCapabilityMatch::target_id),
+            Some(&id),
+        );
+    }
+
+    #[test]
+    fn discovery_completeness_is_preserved() {
+        let discovery = discovery_with(vec![
+            target("test.execution"),
+        ]);
+
+        let report = CapabilityMatcher::match_targets(
+            &CapabilityRequirements::new(),
+            &discovery,
+            &CapabilityEvidenceSet::new(),
+        )
+        .expect("matching should succeed");
+
+        assert!(report.discovery_is_complete());
+        assert!(!report.has_discovery_failures());
+        assert!(!report.has_discovery_conflicts());
+    }
+
+    #[test]
+    fn module_identity_and_api_version_are_stable() {
         assert_eq!(
             CapabilityMatcher::module_name(),
             CAPABILITY_MATCHING_MODULE_NAME,
@@ -1045,5 +1403,7 @@ mod tests {
             CapabilityMatcher::api_version(),
             CAPABILITY_MATCHING_API_VERSION,
         );
+
+        assert_eq!(CAPABILITY_MATCHING_API_VERSION, 2);
     }
 }
