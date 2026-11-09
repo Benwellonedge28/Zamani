@@ -5,173 +5,124 @@
 
 //! Zamani Universal Meta-Compiler — Pipeline Stage Contract.
 //!
-//! Path:
-//!     src/compiler/pipeline/stage.rs
+//! Path: src/compiler/pipeline/stage.rs
 //!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! Rust: Edition 2021, Rust 1.97+
+//! Safety: Unsafe Rust is forbidden.
 //!
-//! Safety:
-//!     Safe Rust only.
-//!     Unsafe Rust is forbidden.
+//! # Purpose
 //!
-//! ============================================================================
-//! PURPOSE
-//! ============================================================================
+//! Defines the canonical, domain-independent contract implemented by
+//! individual compiler pipeline stages.
 //!
-//! Defines the foundational contract implemented by individual compiler
-//! pipeline stages.
-//!
-//! A stage is one independently executable unit of compiler work.
-//!
-//! Examples include:
-//!
-//! - Frontend integration.
-//! - Structural validation.
-//! - Semantic analysis integration.
-//! - Ownership analysis.
-//! - Dependency analysis.
-//! - Canonical IR construction.
-//! - IR verification.
-//! - Optimization.
-//! - Capability analysis.
-//! - Feasibility analysis.
-//! - Heterogeneous planning.
-//! - IR lowering.
-//! - Legalization.
-//! - Linking.
-//! - Backend invocation.
-//! - Artifact validation.
-//!
-//! This module defines contracts only.
-//!
-//! It does not implement the compiler pipeline itself.
-//!
-//! ============================================================================
-//! ARCHITECTURAL OWNERSHIP
-//! ============================================================================
+//! A stage represents one independently executable unit of compiler work.
 //!
 //! This module owns:
 //!
-//! - StageId.
-//! - StageDescriptor.
-//! - StageExecution.
-//! - StageExecutionContext.
-//! - StageInput.
-//! - StageOutput.
-//! - StageDecision.
-//! - StageOutcome.
-//! - StageError.
-//! - StageErrorKind.
-//! - StageDeterminism.
-//! - StageConcurrency.
-//! - The Stage trait.
+//! - Stage identity.
+//! - Stage metadata.
+//! - Dependency declarations.
+//! - Determinism declarations.
+//! - Concurrency declarations.
+//! - Type-erased input and output transport.
+//! - Conditional execution decisions.
+//! - Shared execution context.
+//! - Structured stage errors.
+//! - Stage invocation contracts.
 //!
-//! It does NOT own:
+//! This module does not own:
 //!
-//! - Pipeline ordering.
+//! - Pipeline registration.
 //! - Dependency graph construction.
+//! - Pipeline ordering.
 //! - Pipeline orchestration.
-//! - Stage registration.
-//! - Pipeline recovery.
-//! - Compilation lifecycle tracking.
-//! - Compiler diagnostics.
-//! - Semantic analysis.
-//! - Type inference.
-//! - Ownership analysis.
-//! - Capability semantics.
-//! - Resource requirement semantics.
+//! - Recovery execution.
+//! - Compilation lifecycle.
+//! - Source semantics.
+//! - AST.
 //! - Canonical IR.
 //! - Optimization algorithms.
 //! - Hardware discovery.
-//! - Hardware allocation.
+//! - Physical allocation.
 //! - Physical scheduling.
 //! - Physical routing.
 //! - Backend implementation.
 //! - Runtime execution.
 //!
-//! ============================================================================
-//! DEPENDENCY DIRECTION
-//! ============================================================================
+//! # Canonical authorities
 //!
-//! Existing foundational dependencies:
-//!
+//! CompilationContext:
 //!     compiler::context::compilation_context
-//!         CompilationContext
 //!
+//! CompilationPhase:
 //!     compiler::context::compilation_state
-//!         CompilationPhase
 //!
+//! BudgetDimension:
 //!     compiler::configuration::budget
-//!         BudgetDimension
 //!
-//! Future consumers:
+//! Stage implementations:
+//!     compiler::pipeline::stages
 //!
-//!     pipeline::stages
-//!     pipeline::ordering
-//!     pipeline::failure
-//!     pipeline::execution
-//!     pipeline::orchestration
+//! Dependency ordering:
+//!     compiler::pipeline::ordering
 //!
-//! This module does not depend on those future consumers.
+//! Stage execution:
+//!     compiler::pipeline::execution
 //!
-//! ============================================================================
-//! POCO-REAF
-//! ============================================================================
+//! Pipeline failures:
+//!     compiler::pipeline::failure
 //!
-//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//! Recovery:
+//!     compiler::pipeline::recovery
 //!
-//! This module imposes no universal limits on:
+//! Orchestration:
+//!     compiler::pipeline::orchestration
 //!
-//! - CPUs.
-//! - Cores.
-//! - Workers.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Qubits.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - IR operations.
-//! - Modules.
-//! - Functions.
-//! - Pipeline stages.
-//! - Stage dependencies.
-//! - Compilation units.
+//! # POCO-REAF
 //!
-//! Stage identifiers and metadata use dynamically sized strings.
+//! No universal ceilings are imposed on stages, dependencies,
+//! hardware, devices, memory, qubits, tensors, modules or operations.
 //!
-//! Operational resource constraints are supplied by CompilationContext.
+//! Operational constraints are managed by CompilationContext.
 //!
-//! Unlimited configured budgets do not promise infinite physical resources.
+//! Physical constraints are discovered and evaluated by the
+//! appropriate target and runtime authorities.
 //!
-//! ============================================================================
-//! GRAMMAR BOUNDARY
-//! ============================================================================
+//! An unlimited budget does not imply infinite physical resources.
 //!
-//! The authoritative grammar roots are:
+//! # Grammar boundary
+//!
+//! Source-language compilation intent belongs to:
 //!
 //!     grammar/Zamani.g4
 //!     grammar/antlr/ZamaniParser.g4
-//!     grammar/core/program.g4
 //!     grammar/compile/compile.g4
 //!
-//! The grammar describes source-level compilation intent.
+//! Source semantics belong to the frontend semantic authority.
 //!
-//! This module describes compiler implementation stages.
+//! A source-level compilation declaration is not a StageId.
 //!
-//! A source-level compilation declaration is not itself a Stage object.
+//! Stage activation must be based on validated compiler input.
 //!
-//! Semantic analysis must interpret source declarations before they can
-//! influence legal compiler-stage execution.
+//! # Determinism
 //!
-//! ============================================================================
+//! Stage metadata and dependency declarations are stable.
+//!
+//! Actual deterministic execution is coordinated by the pipeline executor.
+//!
+//! # Thread safety
+//!
+//! Stage implementations must be Send + Sync.
+//!
+//! Payloads transported between stages must be Send + Sync + 'static.
+//!
+//! # Error handling
+//!
+//! Stage errors remain explicit and typed.
+//!
+//! Retryability is advisory evidence for recovery policy.
+//!
+//! This module never retries a stage automatically.
 
 use std::any::Any;
 use std::error::Error;
@@ -179,14 +130,16 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::compiler::configuration::budget::BudgetDimension;
+
 use crate::compiler::context::compilation_context::CompilationContext;
+
 use crate::compiler::context::compilation_state::CompilationPhase;
 
 // ============================================================================
 // API VERSION
 // ============================================================================
 
-/// Public API version for the pipeline-stage contract.
+/// Public version of the canonical pipeline-stage contract.
 ///
 /// Independent of:
 ///
@@ -203,32 +156,49 @@ pub const STAGE_API_VERSION: u16 = 1;
 // STAGE IDENTITY
 // ============================================================================
 
-/// Identifies one compiler pipeline stage.
+/// Identifies one logical compiler pipeline stage.
 ///
-/// Stage identifiers are logical identifiers.
+/// Identifiers are dynamically sized and extensible.
 ///
 /// They are not hardware identifiers.
 ///
-/// A stage identifier must be non-empty and must not contain control
-/// characters.
+/// Examples:
 ///
-/// No arbitrary identifier-length limit is imposed.
+/// zamani.compiler.frontend.parse
+/// zamani.compiler.semantic.analysis
+/// zamani.compiler.ir.verification
+/// zamani.compiler.optimization
+/// zamani.compiler.lowering
+/// zamani.domain.quantum.specialization
+/// zamani.extension.example.custom_stage
+///
+/// No universal identifier-length limit is imposed.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StageId(Arc<str>);
 
 /// Errors associated with stage identity construction.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StageIdError {
+    /// Identifier is empty or whitespace-only.
     Empty,
+
+    /// Identifier contains control characters.
     InvalidControlCharacter,
 }
 
 impl fmt::Display for StageIdError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::Empty => {
-                formatter.write_str("stage identifier cannot be empty")
+                formatter.write_str(
+                    "stage identifier cannot be empty",
+                )
             }
+
             Self::InvalidControlCharacter => {
                 formatter.write_str(
                     "stage identifier cannot contain control characters",
@@ -241,8 +211,10 @@ impl fmt::Display for StageIdError {
 impl Error for StageIdError {}
 
 impl StageId {
-    /// Creates a validated stage identifier.
-    pub fn new(value: impl Into<Arc<str>>) -> Result<Self, StageIdError> {
+    /// Creates a validated logical stage identifier.
+    pub fn new(
+        value: impl Into<Arc<str>>,
+    ) -> Result<Self, StageIdError> {
         let value = value.into();
 
         if value.trim().is_empty() {
@@ -250,21 +222,32 @@ impl StageId {
         }
 
         if value.chars().any(char::is_control) {
-            return Err(StageIdError::InvalidControlCharacter);
+            return Err(
+                StageIdError::InvalidControlCharacter,
+            );
         }
 
         Ok(Self(value))
     }
 
-    /// Returns the identifier as a string slice.
+    /// Returns the identifier.
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.0.as_ref()
     }
+
+    /// Returns a shared identifier representation.
+    #[must_use]
+    pub fn as_arc(&self) -> Arc<str> {
+        Arc::clone(&self.0)
+    }
 }
 
 impl fmt::Display for StageId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(self.as_str())
     }
 }
@@ -273,35 +256,25 @@ impl fmt::Display for StageId {
 // STAGE DETERMINISM
 // ============================================================================
 
-/// Describes the determinism guarantees of a stage.
-///
-/// Determinism is important for:
-///
-/// - Reproducible compilation.
-/// - Incremental compilation.
-/// - Distributed compilation.
-/// - Build caching.
-/// - Differential testing.
-/// - Portable artifacts.
-///
-/// A stage must declare its actual behavior rather than claiming
-/// determinism merely because it is executed sequentially.
+/// Declares the reproducibility characteristics of a stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StageDeterminism {
-    /// Identical declared inputs and configuration produce identical
-    /// observable stage outputs.
+    /// Identical declared inputs, configuration and environment
+    /// produce identical observable outputs.
+    ///
+    /// External inputs must be included in the declared input identity.
     Deterministic,
 
-    /// Output may depend on explicitly declared external measurements,
-    /// randomized decisions or environmental inputs.
+    /// Results depend on explicitly declared external measurements,
+    /// environmental inputs or randomized decisions.
     ///
-    /// Such inputs must be represented in provenance and cache identity.
+    /// These dependencies must be represented in provenance.
     InputDependent,
 
-    /// The stage cannot guarantee reproducible output.
+    /// Reproducibility cannot be guaranteed.
     ///
-    /// Its outputs must not be cached as deterministic artifacts.
+    /// Such outputs must not be treated as deterministic cache results.
     Nondeterministic,
 }
 
@@ -309,24 +282,24 @@ pub enum StageDeterminism {
 // STAGE CONCURRENCY
 // ============================================================================
 
-/// Declares the concurrency guarantees of a stage.
+/// Declares the concurrency guarantees of a stage implementation.
 ///
-/// This declaration does not start threads.
+/// These declarations do not create threads.
 ///
-/// Parallel execution belongs to the pipeline executor and the existing
-/// parallel-build subsystem.
+/// The execution subsystem is responsible for concurrency admission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StageConcurrency {
-    /// The same stage instance must not execute concurrently.
+    /// No concurrent invocation of this logical stage is permitted,
+    /// including invocations through different instances.
     Exclusive,
 
-    /// Different instances may execute concurrently, but one instance
-    /// must not be invoked concurrently.
+    /// One stage instance cannot be invoked concurrently.
+    ///
+    /// Different instances may be invoked concurrently.
     InstanceExclusive,
 
-    /// The stage implementation supports concurrent invocations,
-    /// including concurrent invocation of the same instance.
+    /// Concurrent invocation of the same stage instance is supported.
     Concurrent,
 }
 
@@ -334,12 +307,12 @@ pub enum StageConcurrency {
 // STAGE DESCRIPTOR
 // ============================================================================
 
-/// Immutable descriptive metadata for a compiler stage.
+/// Immutable metadata describing one compiler stage.
 ///
-/// The descriptor allows pipeline infrastructure to inspect a stage
-/// without executing it.
+/// Dependencies are kept in deterministic identifier order.
 ///
-/// It contains no implementation-specific hardware assumptions.
+/// This descriptor does not contain implementation-specific hardware
+/// assumptions or source-language semantic information.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageDescriptor {
     id: StageId,
@@ -364,12 +337,12 @@ pub struct StageDescriptor {
 impl StageDescriptor {
     /// Creates a stage descriptor.
     ///
-    /// The stage name and version are required.
+    /// Name and version must be non-empty.
     ///
-    /// The description may be empty.
+    /// Description may be empty.
     ///
-    /// Dependency existence and cycle detection belong to pipeline
-    /// ordering and registration.
+    /// Dependency existence and cycle detection are performed
+    /// by pipeline::ordering.
     pub fn new(
         id: StageId,
         name: impl Into<Arc<str>>,
@@ -381,12 +354,15 @@ impl StageDescriptor {
         let description = description.into();
 
         validate_descriptor_text(&name, "name")?;
+
         validate_descriptor_text(&version, "version")?;
 
         if description.chars().any(char::is_control) {
-            return Err(StageDescriptorError::InvalidText {
-                field: "description",
-            });
+            return Err(
+                StageDescriptorError::InvalidText {
+                    field: "description",
+                },
+            );
         }
 
         Ok(Self {
@@ -402,39 +378,48 @@ impl StageDescriptor {
         })
     }
 
-    /// Associates a standard high-level compilation phase.
+    /// Associates a standard compilation phase.
     #[must_use]
-    pub fn with_phase(mut self, phase: CompilationPhase) -> Self {
+    pub fn with_phase(
+        mut self,
+        phase: CompilationPhase,
+    ) -> Self {
         self.phase = Some(phase);
         self
     }
 
-    /// Declares a prerequisite stage.
+    /// Declares one prerequisite stage.
     ///
-    /// The dependency must complete successfully before this stage
-    /// is eligible for execution.
+    /// A prerequisite must complete successfully before this stage
+    /// can consume its output.
     ///
-    /// This method does not verify that the dependency is registered.
-    ///
-    /// Global dependency validation belongs to pipeline::ordering.
+    /// The dependency must be registered in the active pipeline.
     pub fn with_dependency(
         mut self,
         dependency: StageId,
     ) -> Result<Self, StageDescriptorError> {
         if dependency == self.id {
-            return Err(StageDescriptorError::SelfDependency {
-                stage: self.id.clone(),
-            });
+            return Err(
+                StageDescriptorError::SelfDependency {
+                    stage: self.id.clone(),
+                },
+            );
         }
 
         if self.dependencies.contains(&dependency) {
-            return Err(StageDescriptorError::DuplicateDependency {
-                stage: self.id.clone(),
-                dependency,
-            });
+            return Err(
+                StageDescriptorError::DuplicateDependency {
+                    stage: self.id.clone(),
+                    dependency,
+                },
+            );
         }
 
         self.dependencies.push(dependency);
+
+        // Dependency metadata must not depend on the order in which
+        // callers happened to declare the prerequisites.
+        self.dependencies.sort_unstable();
 
         Ok(self)
     }
@@ -453,7 +438,7 @@ impl StageDescriptor {
         Ok(self)
     }
 
-    /// Declares stage determinism.
+    /// Declares the actual determinism guarantee.
     #[must_use]
     pub fn with_determinism(
         mut self,
@@ -463,7 +448,7 @@ impl StageDescriptor {
         self
     }
 
-    /// Declares stage concurrency guarantees.
+    /// Declares the concurrency guarantee.
     #[must_use]
     pub fn with_concurrency(
         mut self,
@@ -473,12 +458,12 @@ impl StageDescriptor {
         self
     }
 
-    /// Associates an operational budget dimension with the stage.
+    /// Associates the default operational budget dimension.
     ///
-    /// The stage must explicitly report consumption through its execution
-    /// context.
+    /// This is descriptive metadata.
     ///
-    /// Merely declaring a dimension does not automatically account for work.
+    /// Explicit budget accounting remains the responsibility of
+    /// the executing stage.
     #[must_use]
     pub fn with_budget_dimension(
         mut self,
@@ -518,7 +503,7 @@ impl StageDescriptor {
         self.phase
     }
 
-    /// Returns declared dependencies.
+    /// Returns dependencies in deterministic order.
     #[must_use]
     pub fn dependencies(&self) -> &[StageId] {
         &self.dependencies
@@ -536,29 +521,82 @@ impl StageDescriptor {
         self.concurrency
     }
 
-    /// Returns the optional operational budget dimension.
+    /// Returns the optional default budget dimension.
     #[must_use]
     pub fn budget_dimension(&self) -> Option<&BudgetDimension> {
         self.budget_dimension.as_ref()
     }
+
+    /// Revalidates descriptor invariants.
+    ///
+    /// Useful at extension-registration and pipeline-construction
+    /// boundaries.
+    pub fn validate(&self) -> Result<(), StageDescriptorError> {
+        validate_descriptor_text(&self.name, "name")?;
+
+        validate_descriptor_text(&self.version, "version")?;
+
+        if self.description.chars().any(char::is_control) {
+            return Err(
+                StageDescriptorError::InvalidText {
+                    field: "description",
+                },
+            );
+        }
+
+        for dependency in &self.dependencies {
+            if dependency == &self.id {
+                return Err(
+                    StageDescriptorError::SelfDependency {
+                        stage: self.id.clone(),
+                    },
+                );
+            }
+        }
+
+        for pair in self.dependencies.windows(2) {
+            if pair[0] == pair[1] {
+                return Err(
+                    StageDescriptorError::DuplicateDependency {
+                        stage: self.id.clone(),
+                        dependency: pair[0].clone(),
+                    },
+                );
+            }
+        }
+
+        Ok(())
+    }
 }
+
+// ============================================================================
+// DESCRIPTOR VALIDATION
+// ============================================================================
 
 fn validate_descriptor_text(
     value: &str,
     field: &'static str,
 ) -> Result<(), StageDescriptorError> {
     if value.trim().is_empty() {
-        return Err(StageDescriptorError::EmptyText { field });
+        return Err(
+            StageDescriptorError::EmptyText {
+                field,
+            },
+        );
     }
 
     if value.chars().any(char::is_control) {
-        return Err(StageDescriptorError::InvalidText { field });
+        return Err(
+            StageDescriptorError::InvalidText {
+                field,
+            },
+        );
     }
 
     Ok(())
 }
 
-/// Stage descriptor construction errors.
+/// Errors encountered when constructing or validating stage metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StageDescriptorError {
@@ -581,10 +619,16 @@ pub enum StageDescriptorError {
 }
 
 impl fmt::Display for StageDescriptorError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::EmptyText { field } => {
-                write!(formatter, "stage descriptor {field} cannot be empty")
+                write!(
+                    formatter,
+                    "stage descriptor {field} cannot be empty"
+                )
             }
 
             Self::InvalidText { field } => {
@@ -595,7 +639,10 @@ impl fmt::Display for StageDescriptorError {
             }
 
             Self::SelfDependency { stage } => {
-                write!(formatter, "stage {stage} cannot depend on itself")
+                write!(
+                    formatter,
+                    "stage {stage} cannot depend on itself"
+                )
             }
 
             Self::DuplicateDependency {
@@ -614,16 +661,15 @@ impl fmt::Display for StageDescriptorError {
 impl Error for StageDescriptorError {}
 
 // ============================================================================
-// TYPE-ERASED STAGE INPUT
+// TYPE-ERASED INPUT
 // ============================================================================
 
-/// Type-erased, reference-counted stage input.
+/// Shared, type-erased input transported between pipeline stages.
 ///
-/// The pipeline can transfer values between independently implemented
-/// stages without owning or duplicating their domain-specific types.
+/// Domain-specific input types remain owned by their canonical
+/// repository subsystems.
 ///
-/// Payload types must be Send + Sync + 'static so that pipeline
-/// infrastructure can safely share them across worker threads.
+/// Values must implement Send + Sync + 'static.
 #[derive(Clone, Default)]
 pub struct StageInput {
     payload: Option<Arc<dyn Any + Send + Sync>>,
@@ -633,7 +679,9 @@ impl StageInput {
     /// Creates an empty input.
     #[must_use]
     pub const fn empty() -> Self {
-        Self { payload: None }
+        Self {
+            payload: None,
+        }
     }
 
     /// Creates an input containing a typed value.
@@ -646,19 +694,19 @@ impl StageInput {
         }
     }
 
-    /// Returns whether the input contains a payload.
+    /// Returns whether the input is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.payload.is_none()
     }
 
-    /// Returns a typed reference when the payload has the requested type.
+    /// Returns a typed reference to the payload.
     #[must_use]
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         self.payload.as_ref()?.downcast_ref::<T>()
     }
 
-    /// Returns a cloned reference-counted payload.
+    /// Returns a shared reference-counted payload.
     #[must_use]
     pub fn shared_payload(
         &self,
@@ -668,7 +716,10 @@ impl StageInput {
 }
 
 impl fmt::Debug for StageInput {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter
             .debug_struct("StageInput")
             .field("has_payload", &self.payload.is_some())
@@ -677,21 +728,26 @@ impl fmt::Debug for StageInput {
 }
 
 // ============================================================================
-// STAGE OUTPUT
+// TYPE-ERASED OUTPUT
 // ============================================================================
 
-/// Type-erased stage output.
+/// Shared, type-erased output produced by one compiler stage.
 ///
-/// Outputs preserve domain ownership.
+/// Outputs preserve the ownership of the domain-specific representation.
 ///
-/// For example:
+/// Examples include:
 ///
-/// - A semantic-analysis stage may return a semantic result.
-/// - An IR stage may return a canonical IR module.
-/// - An optimization stage may return a verified IR result.
-/// - A backend stage may return an artifact reference.
+/// - Frontend results.
+/// - Validated semantic models.
+/// - Canonical ZUIR modules.
+/// - Classical IR.
+/// - Quantum IR.
+/// - HDLIR.
+/// - AI computation representations.
+/// - Lowered representations.
+/// - Artifact references.
 ///
-/// This module does not define those types.
+/// This type does not define those representations.
 #[derive(Clone, Default)]
 pub struct StageOutput {
     payload: Option<Arc<dyn Any + Send + Sync>>,
@@ -701,7 +757,9 @@ impl StageOutput {
     /// Creates an empty successful output.
     #[must_use]
     pub const fn empty() -> Self {
-        Self { payload: None }
+        Self {
+            payload: None,
+        }
     }
 
     /// Creates an output containing a typed value.
@@ -714,7 +772,7 @@ impl StageOutput {
         }
     }
 
-    /// Returns whether the output contains a payload.
+    /// Returns whether the output is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.payload.is_none()
@@ -726,7 +784,7 @@ impl StageOutput {
         self.payload.as_ref()?.downcast_ref::<T>()
     }
 
-    /// Returns a cloned reference-counted payload.
+    /// Returns a shared reference-counted payload.
     #[must_use]
     pub fn shared_payload(
         &self,
@@ -736,7 +794,10 @@ impl StageOutput {
 }
 
 impl fmt::Debug for StageOutput {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter
             .debug_struct("StageOutput")
             .field("has_payload", &self.payload.is_some())
@@ -745,48 +806,57 @@ impl fmt::Debug for StageOutput {
 }
 
 // ============================================================================
-// STAGE DECISION
+// CONDITIONAL EXECUTION DECISION
 // ============================================================================
 
 /// Decision made before executing a stage.
 ///
-/// Conditional execution is necessary because not every program requires
-/// every compiler domain.
+/// Domain-specific stages may be conditional.
 ///
-/// For example, a purely classical program should not be forced through
-/// quantum-specific lowering.
+/// For example, quantum lowering must not be forced upon a program
+/// that does not contain quantum computation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StageDecision {
     /// Execute the stage.
     Run,
 
-    /// Skip the stage with an explicit explanation.
+    /// Explicitly skip the stage.
     ///
-    /// Skipping is not the same as successful execution.
-    ///
-    /// The pipeline executor must record the skipped state and apply
-    /// the pipeline's dependency policy.
+    /// A skipped stage is not a completed stage.
     Skip {
         reason: Arc<str>,
     },
 }
 
 impl StageDecision {
-    /// Creates a skip decision.
+    /// Creates a validated skip decision.
     pub fn skip(
         reason: impl Into<Arc<str>>,
     ) -> Result<Self, StageError> {
         let reason = reason.into();
 
         if reason.trim().is_empty() {
-            return Err(StageError::new(
-                StageErrorKind::InvalidDecision,
-                "a skipped stage must provide a non-empty reason",
-            ));
+            return Err(
+                StageError::new(
+                    StageErrorKind::InvalidDecision,
+                    "a skipped stage must provide a non-empty reason",
+                ),
+            );
         }
 
-        Ok(Self::Skip { reason })
+        if reason.chars().any(char::is_control) {
+            return Err(
+                StageError::new(
+                    StageErrorKind::InvalidDecision,
+                    "a skip reason cannot contain control characters",
+                ),
+            );
+        }
+
+        Ok(Self::Skip {
+            reason,
+        })
     }
 
     /// Returns whether the stage should execute.
@@ -797,21 +867,20 @@ impl StageDecision {
 }
 
 // ============================================================================
-// STAGE EXECUTION CONTEXT
+// SHARED STAGE EXECUTION CONTEXT
 // ============================================================================
 
-/// Context supplied to one stage invocation.
+/// Shared context for one stage invocation.
 ///
-/// The compilation context is borrowed rather than reconstructed.
+/// All stages receive the same compilation context.
 ///
-/// Consequently, all stages share the same:
+/// Consequently, they share:
 ///
-/// - Configuration.
+/// - Compiler configuration.
 /// - Operational budget accounting.
 /// - Cancellation state.
 ///
-/// A stage cannot silently obtain a fresh unlimited budget by cloning
-/// or reconstructing an independent context.
+/// This module does not construct replacement compilation contexts.
 pub struct StageExecutionContext<'a> {
     compilation: &'a CompilationContext,
 
@@ -820,8 +889,6 @@ pub struct StageExecutionContext<'a> {
 
 impl<'a> StageExecutionContext<'a> {
     /// Creates an execution context.
-    ///
-    /// Pipeline execution infrastructure should use this constructor.
     #[must_use]
     pub fn new(
         compilation: &'a CompilationContext,
@@ -839,7 +906,7 @@ impl<'a> StageExecutionContext<'a> {
         self.compilation
     }
 
-    /// Returns the current stage identifier.
+    /// Returns the current stage identity.
     #[must_use]
     pub fn stage_id(&self) -> &StageId {
         self.descriptor.id()
@@ -851,7 +918,13 @@ impl<'a> StageExecutionContext<'a> {
         self.descriptor
     }
 
-    /// Checks whether compilation has been cancelled.
+    /// Returns the default budget dimension, if configured.
+    #[must_use]
+    pub fn budget_dimension(&self) -> Option<&BudgetDimension> {
+        self.descriptor.budget_dimension()
+    }
+
+    /// Checks cooperative cancellation.
     pub fn check_cancelled(&self) -> Result<(), StageError> {
         self.compilation
             .check_cancelled()
@@ -863,13 +936,13 @@ impl<'a> StageExecutionContext<'a> {
             })
     }
 
-    /// Accounts for stage work against the shared compilation budget.
+    /// Accounts for explicitly measured compiler work.
     ///
-    /// The supplied dimension is explicit because stages may account for
-    /// different kinds of measurable work.
+    /// Accounting uses the authoritative shared CompilationContext.
     ///
-    /// The returned value is the cumulative consumption reported by the
-    /// authoritative budget tracker.
+    /// The amount is expressed in the unit defined by BudgetDimension.
+    ///
+    /// A failed accounting operation is never treated as successful work.
     pub fn consume_budget(
         &self,
         dimension: BudgetDimension,
@@ -880,7 +953,7 @@ impl<'a> StageExecutionContext<'a> {
         self.compilation
             .consume_budget(dimension, amount)
             .map_err(|error| {
-                let kind = match error {
+                let kind = match &error {
                     crate::compiler::context::compilation_context::ContextError::Cancelled => {
                         StageErrorKind::Cancelled
                     }
@@ -889,19 +962,51 @@ impl<'a> StageExecutionContext<'a> {
                         StageErrorKind::BudgetExceeded
                     }
 
-                    _ => StageErrorKind::ExecutionContext,
+                    _ => {
+                        StageErrorKind::ExecutionContext
+                    }
                 };
 
-                StageError::new(kind, error.to_string())
+                StageError::new(
+                    kind,
+                    error.to_string(),
+                )
             })
+    }
+
+    /// Accounts for work using the descriptor's declared default
+    /// budget dimension.
+    ///
+    /// Returns an explicit error if no default dimension was declared.
+    ///
+    /// Use consume_budget when accounting across multiple dimensions.
+    pub fn consume_declared_budget(
+        &self,
+        amount: u128,
+    ) -> Result<u128, StageError> {
+        let dimension = self
+            .descriptor
+            .budget_dimension()
+            .cloned()
+            .ok_or_else(|| {
+                StageError::new(
+                    StageErrorKind::MissingBudgetDimension,
+                    "stage has no declared default budget dimension",
+                )
+            })?;
+
+        self.consume_budget(
+            dimension,
+            amount,
+        )
     }
 }
 
 // ============================================================================
-// STAGE ERROR
+// STAGE ERROR CLASSIFICATION
 // ============================================================================
 
-/// Classification of stage execution errors.
+/// Classification of errors returned by a compiler stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum StageErrorKind {
@@ -911,20 +1016,24 @@ pub enum StageErrorKind {
     /// Compilation was cancelled.
     Cancelled,
 
-    /// An operational compiler budget was exhausted.
+    /// Configured operational budget was exhausted.
     BudgetExceeded,
 
-    /// Stage input did not match the expected contract.
+    /// Input did not satisfy the stage contract.
     InvalidInput,
 
-    /// The stage encountered an unsupported operation.
+    /// Required operation is unsupported.
     UnsupportedOperation,
 
-    /// The stage cannot execute under the supplied configuration.
+    /// Stage cannot execute under the supplied configuration.
     IncompatibleConfiguration,
 
-    /// The stage reported an invalid execution decision.
+    /// Stage returned an invalid execution decision.
     InvalidDecision,
+
+    /// Stage attempted an operation that requires an undeclared
+    /// default budget dimension.
+    MissingBudgetDimension,
 
     /// An execution-context operation failed.
     ExecutionContext,
@@ -933,9 +1042,13 @@ pub enum StageErrorKind {
     InternalInvariant,
 }
 
-/// Structured error returned by a pipeline stage.
+// ============================================================================
+// STRUCTURED STAGE ERROR
+// ============================================================================
+
+/// Structured stage failure.
 ///
-/// Stage failures must not be silently converted into successful output.
+/// Recovery policy is external to this module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageError {
     kind: StageErrorKind,
@@ -958,11 +1071,12 @@ impl StageError {
         }
     }
 
-    /// Creates a retryable stage error.
+    /// Creates a stage error that declares potential retryability.
     ///
-    /// Retryability is a declaration, not an instruction to retry.
+    /// This is not permission to retry.
     ///
-    /// Recovery policy belongs to pipeline::recovery.
+    /// pipeline::recovery must independently determine whether replay
+    /// is safe and permitted.
     pub fn retryable(
         kind: StageErrorKind,
         message: impl Into<Arc<str>>,
@@ -986,7 +1100,7 @@ impl StageError {
         self.message.as_ref()
     }
 
-    /// Returns whether the stage declares the error retryable.
+    /// Returns the declared retryability.
     #[must_use]
     pub const fn is_retryable(&self) -> bool {
         self.retryable
@@ -994,12 +1108,15 @@ impl StageError {
 }
 
 impl fmt::Display for StageError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(
             formatter,
             "compiler stage failed ({:?}): {}",
             self.kind,
-            self.message
+            self.message,
         )
     }
 }
@@ -1012,20 +1129,14 @@ impl Error for StageError {}
 
 /// Result of a stage invocation.
 ///
-/// A skipped stage is represented separately from a completed stage.
-///
-/// This prevents the pipeline from confusing:
-///
-/// - successful execution;
-/// - conditional skipping;
-/// - execution failure.
+/// Skipping and successful completion are separate outcomes.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum StageOutcome {
     /// Stage completed successfully.
     Completed(StageOutput),
 
-    /// Stage was deliberately skipped.
+    /// Stage deliberately skipped execution.
     Skipped {
         reason: Arc<str>,
     },
@@ -1035,7 +1146,7 @@ pub enum StageOutcome {
 // STAGE EXECUTION REQUEST
 // ============================================================================
 
-/// Complete request for one stage invocation.
+/// Complete immutable input to one stage invocation.
 pub struct StageExecution<'a> {
     context: StageExecutionContext<'a>,
 
@@ -1059,7 +1170,7 @@ impl<'a> StageExecution<'a> {
         }
     }
 
-    /// Returns the execution context.
+    /// Returns the stage execution context.
     #[must_use]
     pub fn context(&self) -> &StageExecutionContext<'a> {
         &self.context
@@ -1073,47 +1184,49 @@ impl<'a> StageExecution<'a> {
 }
 
 // ============================================================================
-// STAGE TRAIT
+// CANONICAL STAGE TRAIT
 // ============================================================================
 
-/// Contract implemented by an independently executable compiler stage.
+/// Contract implemented by independently executable compiler stages.
 ///
 /// Implementations must:
 ///
-/// 1. Return stable, validated metadata.
-/// 2. Declare actual determinism guarantees.
-/// 3. Declare actual concurrency guarantees.
-/// 4. Check cancellation before expensive work.
-/// 5. Account for applicable compiler work.
-/// 6. Validate input before processing it.
-/// 7. Preserve the semantics of their input.
-/// 8. Return explicit errors for unsupported operations.
-/// 9. Never silently truncate compilation work.
-/// 10. Return output owned by the appropriate domain subsystem.
+/// 1. Return stable, validated descriptors.
+/// 2. Preserve descriptor identity throughout registration.
+/// 3. Declare truthful determinism guarantees.
+/// 4. Declare truthful concurrency guarantees.
+/// 5. Check cancellation before expensive operations.
+/// 6. Account for measurable work.
+/// 7. Validate incoming payloads.
+/// 8. Preserve source-language semantics.
+/// 9. Preserve canonical IR ownership.
+/// 10. Report unsupported operations explicitly.
+/// 11. Never silently truncate required work.
+/// 12. Never report failed work as successful.
+/// 13. Avoid introducing arbitrary hardware ceilings.
 ///
-/// A stage must not:
+/// Implementations must not:
 ///
-/// - Select physical devices without the appropriate planner/runtime.
-/// - Allocate hardware resources.
-/// - redefine canonical IR.
-/// - Modify source semantics.
-/// - silently skip required verification.
-/// - claim successful execution after failure.
+/// - Redefine semantic authority.
+/// - Create competing IR representations.
+/// - Perform physical allocation without the appropriate authority.
+/// - Implement runtime scheduling.
+/// - Silently bypass verification.
+/// - Automatically retry failed operations.
 ///
-/// The trait is object-safe and can therefore be used with registered
-/// heterogeneous stage implementations.
+/// This trait is object-safe.
 pub trait Stage: Send + Sync {
     /// Returns immutable stage metadata.
     fn descriptor(&self) -> &StageDescriptor;
 
-    /// Determines whether this stage should execute for the supplied input.
+    /// Determines whether the stage applies to this compilation input.
     ///
-    /// The default is to execute.
+    /// The default behavior is execution.
     ///
-    /// Implementations may override this for domain-specific conditional
-    /// execution.
+    /// Conditional domain-specific stages may override this method.
     ///
-    /// A skip decision must include a meaningful explanation.
+    /// Implementations must not interpret unvalidated source syntax
+    /// as authoritative semantic information.
     fn should_execute(
         &self,
         _context: &StageExecutionContext<'_>,
@@ -1122,34 +1235,30 @@ pub trait Stage: Send + Sync {
         Ok(StageDecision::Run)
     }
 
-    /// Executes the stage.
+    /// Executes the actual stage computation.
     ///
-    /// The pipeline executor is responsible for:
+    /// Dependency validation and output delivery belong to the executor.
     ///
-    /// - dependency validation;
-    /// - execution ordering;
-    /// - concurrency admission;
-    /// - lifecycle tracking;
-    /// - diagnostics;
-    /// - failure propagation;
-    /// - recovery policy.
-    ///
-    /// This method is responsible for the stage's actual computation.
+    /// This method performs only the work owned by this stage.
     fn execute(
         &self,
         execution: &StageExecution<'_>,
     ) -> Result<StageOutput, StageError>;
 
-    /// Performs one complete stage invocation.
+    /// Performs a complete cooperative stage invocation.
     ///
-    /// This method centralizes:
+    /// This default implementation guarantees:
     ///
-    /// - cancellation checking;
-    /// - conditional execution;
-    /// - execution;
-    /// - cancellation checking after execution.
+    /// - Cancellation is checked before applicability evaluation.
+    /// - Cancellation is checked after applicability evaluation.
+    /// - Skipped stages have explicit reasons.
+    /// - Cancellation is checked before expensive execution.
+    /// - Execution errors propagate unchanged.
+    /// - Cancellation is checked after execution.
+    /// - Successful outputs are returned only when cancellation
+    ///   has not been observed.
     ///
-    /// It does not swallow failures or automatically retry stages.
+    /// It never retries automatically.
     fn run(
         &self,
         compilation: &CompilationContext,
@@ -1157,6 +1266,15 @@ pub trait Stage: Send + Sync {
     ) -> Result<StageOutcome, StageError> {
         let descriptor = self.descriptor();
 
+        // Validate immutable metadata at the invocation boundary.
+        descriptor.validate().map_err(|error| {
+            StageError::new(
+                StageErrorKind::InternalInvariant,
+                error.to_string(),
+            )
+        })?;
+
+        // Check cancellation before evaluating applicability.
         compilation
             .check_cancelled()
             .map_err(|error| {
@@ -1172,34 +1290,41 @@ pub trait Stage: Send + Sync {
             input,
         );
 
-        match self.should_execute(
+        let decision = self.should_execute(
             execution.context(),
             execution.input(),
-        )? {
-            StageDecision::Skip { reason } => {
-                compilation
-                    .check_cancelled()
-                    .map_err(|error| {
-                        StageError::new(
-                            StageErrorKind::Cancelled,
-                            error.to_string(),
-                        )
-                    })?;
+        )?;
 
-                Ok(StageOutcome::Skipped { reason })
+        // Cancellation may occur during applicability evaluation.
+        execution.context().check_cancelled()?;
+
+        match decision {
+            StageDecision::Skip { reason } => {
+                if reason.trim().is_empty()
+                    || reason.chars().any(char::is_control)
+                {
+                    return Err(
+                        StageError::new(
+                            StageErrorKind::InvalidDecision,
+                            "stage returned an invalid skip reason",
+                        ),
+                    );
+                }
+
+                Ok(StageOutcome::Skipped {
+                    reason,
+                })
             }
 
             StageDecision::Run => {
+                // A stage must not begin expensive work after cancellation.
+                execution.context().check_cancelled()?;
+
                 let output = self.execute(&execution)?;
 
-                compilation
-                    .check_cancelled()
-                    .map_err(|error| {
-                        StageError::new(
-                            StageErrorKind::Cancelled,
-                            error.to_string(),
-                        )
-                    })?;
+                // Cancellation may race with stage execution.
+                // Never publish success after observing cancellation.
+                execution.context().check_cancelled()?;
 
                 Ok(StageOutcome::Completed(output))
             }
@@ -1216,6 +1341,7 @@ mod tests {
     use super::*;
 
     use crate::compiler::configuration::budget::BudgetDimension;
+
     use crate::compiler::context::compilation_context::CompilationContext;
 
     use crate::compiler_types::CompilerConfig;
@@ -1238,7 +1364,6 @@ mod tests {
                     "Stage used by contract tests",
                 )
                 .expect("valid descriptor"),
-
                 should_skip,
             }
         }
@@ -1255,7 +1380,9 @@ mod tests {
             _input: &StageInput,
         ) -> Result<StageDecision, StageError> {
             if self.should_skip {
-                StageDecision::skip("not required by this test program")
+                StageDecision::skip(
+                    "not required by this test program",
+                )
             } else {
                 Ok(StageDecision::Run)
             }
@@ -1267,17 +1394,29 @@ mod tests {
         ) -> Result<StageOutput, StageError> {
             execution.context().check_cancelled()?;
 
-            Ok(StageOutput::new(String::from("completed")))
+            Ok(StageOutput::new(
+                String::from("completed"),
+            ))
         }
     }
 
     fn context() -> CompilationContext {
-        CompilationContext::new(CompilerConfig::default())
-            .expect("valid test compiler configuration")
+        CompilationContext::new(
+            CompilerConfig::default(),
+        )
+        .expect("valid test configuration")
     }
 
+    fn id(value: &str) -> StageId {
+        StageId::new(value).expect("valid stage identifier")
+    }
+
+    // ------------------------------------------------------------------------
+    // IDENTITIES
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn stage_id_rejects_empty_identifiers() {
+    fn rejects_empty_identifiers() {
         assert!(matches!(
             StageId::new(""),
             Err(StageIdError::Empty)
@@ -1285,7 +1424,7 @@ mod tests {
     }
 
     #[test]
-    fn stage_id_rejects_control_characters() {
+    fn rejects_control_characters() {
         assert!(matches!(
             StageId::new("stage\ninvalid"),
             Err(StageIdError::InvalidControlCharacter)
@@ -1293,24 +1432,38 @@ mod tests {
     }
 
     #[test]
-    fn stage_id_accepts_dynamic_identifiers() {
-        let id = StageId::new(
+    fn supports_future_extension_identifiers() {
+        let identifier = id(
             "zamani.extension.future_computing.specialization",
-        )
-        .expect("valid identifier");
+        );
 
         assert_eq!(
-            id.as_str(),
-            "zamani.extension.future_computing.specialization"
+            identifier.as_str(),
+            "zamani.extension.future_computing.specialization",
         );
     }
 
     #[test]
-    fn descriptor_rejects_empty_name() {
-        let id = StageId::new("test.stage").unwrap();
+    fn stage_identifiers_have_deterministic_ordering() {
+        let first = id("a.stage");
+        let second = id("b.stage");
 
+        assert!(first < second);
+    }
+
+    // ------------------------------------------------------------------------
+    // DESCRIPTORS
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn rejects_empty_stage_names() {
         assert!(matches!(
-            StageDescriptor::new(id, "", "1", ""),
+            StageDescriptor::new(
+                id("test.stage"),
+                "",
+                "1",
+                "",
+            ),
             Err(StageDescriptorError::EmptyText {
                 field: "name"
             })
@@ -1318,11 +1471,14 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_rejects_empty_version() {
-        let id = StageId::new("test.stage").unwrap();
-
+    fn rejects_empty_versions() {
         assert!(matches!(
-            StageDescriptor::new(id, "Test", "", ""),
+            StageDescriptor::new(
+                id("test.stage"),
+                "Test",
+                "",
+                "",
+            ),
             Err(StageDescriptorError::EmptyText {
                 field: "version"
             })
@@ -1330,36 +1486,36 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_rejects_self_dependency() {
-        let id = StageId::new("test.stage").unwrap();
+    fn rejects_self_dependencies() {
+        let identifier = id("test.stage");
 
         let descriptor = StageDescriptor::new(
-            id.clone(),
+            identifier.clone(),
             "Test",
             "1",
             "",
         )
-        .unwrap();
+        .expect("valid descriptor");
 
         assert!(matches!(
-            descriptor.with_dependency(id),
+            descriptor.with_dependency(identifier),
             Err(StageDescriptorError::SelfDependency { .. })
         ));
     }
 
     #[test]
-    fn descriptor_rejects_duplicate_dependencies() {
-        let dependency = StageId::new("frontend.parse").unwrap();
+    fn rejects_duplicate_dependencies() {
+        let dependency = id("frontend.parse");
 
         let descriptor = StageDescriptor::new(
-            StageId::new("semantic.analysis").unwrap(),
+            id("semantic.analysis"),
             "Semantic analysis",
             "1",
             "",
         )
-        .unwrap()
+        .expect("valid descriptor")
         .with_dependency(dependency.clone())
-        .unwrap();
+        .expect("first dependency");
 
         assert!(matches!(
             descriptor.with_dependency(dependency),
@@ -1368,86 +1524,185 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_preserves_declared_metadata() {
+    fn dependency_metadata_is_deterministic() {
         let descriptor = StageDescriptor::new(
-            StageId::new("ir.verification").unwrap(),
+            id("semantic.analysis"),
+            "Semantic analysis",
+            "1",
+            "",
+        )
+        .expect("valid descriptor")
+        .with_dependencies([
+            id("z.stage"),
+            id("a.stage"),
+            id("m.stage"),
+        ])
+        .expect("valid dependencies");
+
+        assert_eq!(
+            descriptor.dependencies(),
+            &[id("a.stage"), id("m.stage"), id("z.stage")]
+        );
+    }
+
+    #[test]
+    fn preserves_stage_metadata() {
+        let descriptor = StageDescriptor::new(
+            id("ir.verification"),
             "IR verification",
             "1",
-            "Verifies canonical intermediate representations",
+            "Verifies canonical representations",
         )
-        .unwrap()
+        .expect("valid descriptor")
         .with_phase(CompilationPhase::IrVerification)
         .with_determinism(StageDeterminism::Deterministic)
         .with_concurrency(StageConcurrency::Concurrent);
 
         assert_eq!(
             descriptor.phase(),
-            Some(CompilationPhase::IrVerification)
+            Some(CompilationPhase::IrVerification),
         );
 
         assert_eq!(
             descriptor.determinism(),
-            StageDeterminism::Deterministic
+            StageDeterminism::Deterministic,
         );
 
         assert_eq!(
             descriptor.concurrency(),
-            StageConcurrency::Concurrent
+            StageConcurrency::Concurrent,
         );
+
+        assert!(descriptor.validate().is_ok());
     }
 
+    // ------------------------------------------------------------------------
+    // INPUT AND OUTPUT
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn stage_input_supports_typed_payloads() {
-        let input = StageInput::new(String::from("portable IR"));
+    fn input_supports_typed_payloads() {
+        let input = StageInput::new(
+            String::from("portable IR"),
+        );
 
         assert_eq!(
             input.downcast_ref::<String>().map(String::as_str),
-            Some("portable IR")
+            Some("portable IR"),
         );
 
         assert!(input.downcast_ref::<u64>().is_none());
     }
 
     #[test]
-    fn stage_output_supports_typed_payloads() {
+    fn output_supports_typed_payloads() {
         let output = StageOutput::new(42_u64);
 
         assert_eq!(
             output.downcast_ref::<u64>(),
-            Some(&42_u64)
+            Some(&42_u64),
         );
     }
 
     #[test]
-    fn empty_stage_input_is_supported() {
-        let input = StageInput::empty();
-
-        assert!(input.is_empty());
-        assert!(input.downcast_ref::<String>().is_none());
+    fn empty_input_and_output_are_supported() {
+        assert!(StageInput::empty().is_empty());
+        assert!(StageOutput::empty().is_empty());
     }
 
     #[test]
-    fn empty_stage_output_is_supported() {
-        let output = StageOutput::empty();
+    fn shared_payloads_preserve_identity() {
+        let input = StageInput::new(String::from("source"));
 
-        assert!(output.is_empty());
+        let shared = input.shared_payload().expect("payload");
+
+        assert_eq!(
+            shared.downcast_ref::<String>().map(String::as_str),
+            Some("source"),
+        );
     }
+
+    // ------------------------------------------------------------------------
+    // BUDGET ACCOUNTING
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn stage_can_consume_shared_budget() {
+        let compilation = context();
+
+        let dimension = BudgetDimension::new(
+            "compiler_stage_work",
+            "units",
+        )
+        .expect("valid dimension");
+
+        let descriptor = StageDescriptor::new(
+            id("test.budget"),
+            "Budget test",
+            "1",
+            "",
+        )
+        .expect("valid descriptor")
+        .with_budget_dimension(dimension.clone());
+
+        let execution = StageExecutionContext::new(
+            &compilation,
+            &descriptor,
+        );
+
+        assert_eq!(
+            execution.consume_declared_budget(1).expect("budget"),
+            1,
+        );
+    }
+
+    #[test]
+    fn missing_default_budget_dimension_is_explicit() {
+        let compilation = context();
+
+        let descriptor = StageDescriptor::new(
+            id("test.budget"),
+            "Budget test",
+            "1",
+            "",
+        )
+        .expect("valid descriptor");
+
+        let execution = StageExecutionContext::new(
+            &compilation,
+            &descriptor,
+        );
+
+        assert_eq!(
+            execution
+                .consume_declared_budget(1)
+                .expect_err("dimension required")
+                .kind(),
+            StageErrorKind::MissingBudgetDimension,
+        );
+    }
+
+    // ------------------------------------------------------------------------
+    // EXECUTION
+    // ------------------------------------------------------------------------
 
     #[test]
     fn stage_executes_successfully() {
         let compilation = context();
-        let stage = TestStage::new("test.execution", false);
 
-        let result = stage.run(
-            &compilation,
-            StageInput::empty(),
+        let stage = TestStage::new(
+            "test.execution",
+            false,
         );
 
-        match result.expect("stage execution should succeed") {
+        match stage
+            .run(&compilation, StageInput::empty())
+            .expect("stage execution")
+        {
             StageOutcome::Completed(output) => {
                 assert_eq!(
                     output.downcast_ref::<String>().map(String::as_str),
-                    Some("completed")
+                    Some("completed"),
                 );
             }
 
@@ -1460,106 +1715,80 @@ mod tests {
     #[test]
     fn stage_can_be_conditionally_skipped() {
         let compilation = context();
-        let stage = TestStage::new("test.optional", true);
 
-        let result = stage
-            .run(&compilation, StageInput::empty())
-            .expect("skip should be successful");
+        let stage = TestStage::new(
+            "test.optional",
+            true,
+        );
 
         assert!(matches!(
-            result,
-            StageOutcome::Skipped { .. }
+            stage.run(&compilation, StageInput::empty()),
+            Ok(StageOutcome::Skipped { .. }),
         ));
     }
 
     #[test]
-    fn cancellation_is_checked_before_execution() {
+    fn invalid_skip_decision_is_rejected() {
+        assert!(StageDecision::skip("").is_err());
+
+        assert!(StageDecision::skip(
+            "not applicable",
+        ).is_ok());
+    }
+
+    // ------------------------------------------------------------------------
+    // CANCELLATION
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn cancellation_prevents_execution() {
         let compilation = context();
 
         compilation.cancellation_token().cancel();
 
-        let stage = TestStage::new("test.cancelled", false);
-
-        let result = stage.run(
-            &compilation,
-            StageInput::empty(),
-        );
-
-        assert!(matches!(
-            result,
-            Err(StageError {
-                kind: StageErrorKind::Cancelled,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    fn stage_can_account_for_shared_budget() {
-        let compilation = context();
-
-        let dimension = BudgetDimension::new(
-            "compiler_stage_work",
-            "units",
-        )
-        .expect("valid budget dimension");
-
-        let stage = StageDescriptor::new(
-            StageId::new("test.budget").unwrap(),
-            "Budget test",
-            "1",
-            "",
-        )
-        .unwrap()
-        .with_budget_dimension(dimension.clone());
-
-        let execution = StageExecutionContext::new(
-            &compilation,
-            &stage,
+        let stage = TestStage::new(
+            "test.cancelled",
+            false,
         );
 
         assert_eq!(
-            execution
-                .consume_budget(dimension, 1)
-                .expect("unlimited budget should permit work"),
-            1
+            stage
+                .run(&compilation, StageInput::empty())
+                .expect_err("must be cancelled")
+                .kind(),
+            StageErrorKind::Cancelled,
         );
     }
 
+    // ------------------------------------------------------------------------
+    // ERROR CONTRACT
+    // ------------------------------------------------------------------------
+
     #[test]
-    fn stage_error_preserves_retryability() {
+    fn retryability_remains_advisory() {
         let error = StageError::retryable(
             StageErrorKind::Execution,
-            "temporary external service failure",
+            "temporary provider failure",
         );
 
         assert!(error.is_retryable());
 
         assert_eq!(
             error.kind(),
-            StageErrorKind::Execution
+            StageErrorKind::Execution,
         );
     }
 
     #[test]
-    fn stage_error_display_is_structured() {
+    fn error_display_preserves_classification() {
         let error = StageError::new(
             StageErrorKind::InvalidInput,
-            "unexpected IR representation",
+            "unexpected representation",
         );
 
         assert_eq!(
             error.to_string(),
-            "compiler stage failed (InvalidInput): unexpected IR representation"
+            "compiler stage failed (InvalidInput): unexpected representation",
         );
-    }
-
-    #[test]
-    fn skip_requires_an_explanation() {
-        assert!(StageDecision::skip("").is_err());
-
-        assert!(StageDecision::skip(
-            "quantum lowering is unnecessary"
-        ).is_ok());
     }
 }
