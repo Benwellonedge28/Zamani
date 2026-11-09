@@ -5,147 +5,102 @@
 
 //! Zamani Universal Meta-Compiler — Dependency-Aware Pipeline Ordering.
 //!
-//! Path:
-//!     src/compiler/pipeline/ordering.rs
-//!
-//! Rust:
-//!     Edition 2021
-//!     Minimum supported version: Rust 1.97
+//! Path: src/compiler/pipeline/ordering.rs
+//! Rust edition: 2021
+//! Minimum supported Rust version: 1.97
 //!
 //! # Purpose
 //!
-//! Provides deterministic dependency-aware ordering for compiler stages.
+//! Validate compiler-stage dependency graphs and produce deterministic
+//! topological ordering and dependency generations.
 //!
-//! This module consumes the canonical StageDescriptor and StageId
-//! contracts defined in:
-//!
-//!     crate::compiler::pipeline::stage
-//!
-//! It validates the registered stage dependency graph and produces:
-//!
-//! - A deterministic topological order.
-//! - Dependency-independent execution levels.
-//! - Direct dependency queries.
-//! - Direct dependent queries.
-//! - Relative ordering queries.
-//!
-//! # Architectural ownership
+//! # Ownership
 //!
 //! This module owns:
-//!
 //! - StageOrdering.
 //! - OrderingError.
 //! - Dependency graph validation.
 //! - Deterministic topological ordering.
-//! - Dependency-level construction.
+//! - Dependency-generation construction.
+//! - Dependency relationship queries.
 //!
-//! This module does NOT own:
-//!
-//! - Stage implementation.
-//! - Stage registration.
+//! This module does not own:
+//! - Stage identity or descriptor construction.
+//! - Stage registration or implementation.
+//! - Stage activation decisions.
 //! - Stage execution.
-//! - Stage activation.
-//! - Conditional stage selection.
-//! - Compilation lifecycle.
-//! - Cancellation.
-//! - Resource budgets.
+//! - Pipeline orchestration or lifecycle.
+//! - Retry or recovery execution.
 //! - Semantic analysis.
-//! - Type inference.
-//! - Ownership analysis.
 //! - Canonical IR.
-//! - IR verification.
 //! - Optimization algorithms.
-//! - Hardware discovery.
-//! - Hardware allocation.
-//! - Physical scheduling.
-//! - Physical routing.
+//! - Hardware discovery or allocation.
+//! - Physical scheduling or routing.
 //! - Backend implementation.
 //! - Runtime execution.
 //!
-//! # Dependency direction
+//! # Canonical integration
 //!
-//!     pipeline::stage
-//!          |
-//!          v
-//!     pipeline::ordering
-//!          |
-//!          v
-//!     pipeline::execution
-//!          |
-//!          v
-//!     pipeline::orchestration
+//! Stage contracts:
+//!     compiler::pipeline::stage
 //!
-//! The ordering module does not depend on execution or orchestration.
+//! Standard stage declarations:
+//!     compiler::pipeline::stages
 //!
-//! # POCO-REAF
+//! Execution:
+//!     compiler::pipeline::execution
 //!
-//! This module imposes no universal limits on:
-//!
-//! - Pipeline stages.
-//! - Stage dependencies.
-//! - Compilation units.
-//! - Functions.
-//! - Modules.
-//! - CPUs.
-//! - Cores.
-//! - Workers.
-//! - GPUs.
-//! - FPGAs.
-//! - QPUs.
-//! - Accelerators.
-//! - Nodes.
-//! - Devices.
-//! - Memory.
-//! - Storage.
-//! - Qubits.
-//! - Tensor dimensions.
-//! - Tensor rank.
-//! - IR operations.
-//!
-//! Graph size is bounded only by the resources available to the compiler.
-//!
-//! This does not imply physically infinite memory or processing capacity.
+//! Lifecycle and orchestration:
+//!     compiler::pipeline::orchestration
 //!
 //! # Determinism
 //!
-//! Registration order does not determine the resulting order.
+//! The graph is independent of descriptor registration order.
 //!
-//! Among currently eligible stages, StageId lexical ordering is used.
+//! Stages in each dependency generation are ordered lexically by StageId.
+//! Generations are processed in dependency order.
 //!
-//! Consequently, identical stage identifiers and dependency relationships
-//! produce identical ordering results regardless of registration order.
+//! This is a deterministic generation-based ordering policy. It is not
+//! a promise to globally select the lexically smallest currently-ready
+//! stage after every individual graph operation.
 //!
 //! # Conditional stages
 //!
-//! Ordering describes the registered dependency graph.
+//! This module orders the graph it receives. It does not decide whether
+//! a conditional stage applies to a particular compilation.
 //!
-//! It does not decide whether a stage applies to a particular program.
+//! Orchestration must construct and validate the active graph for the
+//! compilation. It must not remove a prerequisite while leaving an
+//! active dependent that requires that prerequisite.
 //!
-//! A conditional stage that is skipped remains a skipped stage.
-//! It must not automatically be interpreted as successfully completed.
-//!
-//! The executor must enforce dependency-outcome policy before executing
-//! dependent stages.
-//!
-//! If a stage is not part of a compilation's active graph, orchestration
-//! must construct and validate the appropriate active graph while ensuring
-//! that no active stage silently loses a required prerequisite.
+//! A skipped stage is not a completed stage. Execution remains responsible
+//! for enforcing dependency outcome requirements.
 //!
 //! # Grammar boundary
 //!
-//! The authoritative grammar describes source-level compilation intent.
+//! Source-level compilation intent is defined by the grammar and validated
+//! by the frontend and semantic authorities.
 //!
-//! Relevant grammar authorities include:
+//! A grammar declaration is not a StageDescriptor or StageId.
 //!
-//!     grammar/Zamani.g4
-//!     grammar/antlr/ZamaniParser.g4
-//!     grammar/core/program.g4
-//!     grammar/compile/compile.g4
+//! # Scalability
 //!
-//! Grammar declarations are not compiler StageDescriptors.
+//! This module imposes no configured maximum on:
+//! - stages;
+//! - dependencies;
+//! - computing domains;
+//! - compilation units;
+//! - hardware resources;
+//! - devices;
+//! - workers;
+//! - memory;
+//! - qubits;
+//! - tensor dimensions;
+//! - IR operations.
 //!
-//! Source-level intent must pass through the frontend and semantic
-//! authorities before it can influence stage activation or planning.
+//! The implementation uses dynamically sized collections. Actual capacity
+//! remains bounded by available memory, address space and processing
+//! resources. No software implementation can guarantee infinite resources.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -153,66 +108,45 @@ use std::fmt;
 
 use crate::compiler::pipeline::stage::{StageDescriptor, StageId};
 
-// ============================================================================
-// API VERSION
-// ============================================================================
-
 /// Public API version of the pipeline-ordering contract.
 ///
-/// This version is independent of:
-///
-/// - Zamani language version.
-/// - Grammar version.
-/// - Compiler release version.
-/// - Semantic-model version.
-/// - AST version.
-/// - IR version.
-/// - Backend ABI version.
+/// Independent of language, grammar, compiler, semantic-model, IR and
+/// backend ABI versions.
 pub const PIPELINE_ORDERING_API_VERSION: u16 = 1;
 
 // ============================================================================
-// ORDERING ERROR
+// ERRORS
 // ============================================================================
 
-/// Errors detected while validating or ordering a stage dependency graph.
+/// Structural errors detected while validating a stage dependency graph.
 ///
-/// Errors are structural.
-///
-/// They are not stage-execution failures.
+/// These are graph-construction errors, not stage-execution failures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum OrderingError {
-    /// A stage identifier occurs more than once in the registry.
+    /// A stage identifier occurs more than once.
     DuplicateStage {
         stage: StageId,
     },
 
-    /// A stage references a prerequisite that is not registered.
+    /// A stage refers to an unregistered prerequisite.
     MissingDependency {
         stage: StageId,
         dependency: StageId,
     },
 
-    /// A dependency cycle prevents a complete topological ordering.
+    /// A complete topological ordering could not be produced.
     ///
-    /// `unresolved_stages` contains all stages that could not be removed
-    /// by the topological ordering algorithm.
+    /// The unresolved stages include:
+    /// - stages participating in a cycle;
+    /// - stages transitively blocked by a cycle.
     ///
-    /// This set can include:
-    ///
-    /// - Stages directly participating in a cycle.
-    /// - Stages transitively blocked by a cycle.
-    ///
-    /// It is therefore deliberately not described as an exact list
-    /// of cycle members.
+    /// This is not necessarily an exact list of cycle members.
     CycleDetected {
         unresolved_stages: Vec<StageId>,
     },
 
     /// An internal graph invariant was violated.
-    ///
-    /// This indicates an implementation defect rather than invalid
-    /// user program semantics.
     InternalInvariant {
         message: &'static str,
     },
@@ -249,7 +183,7 @@ impl fmt::Display for OrderingError {
                 )?;
 
                 for (index, stage) in unresolved_stages.iter().enumerate() {
-                    if index > 0 {
+                    if index != 0 {
                         formatter.write_str(", ")?;
                     }
 
@@ -275,34 +209,37 @@ impl Error for OrderingError {}
 // ORDERING RESULT
 // ============================================================================
 
-/// Validated deterministic ordering of a compiler-stage dependency graph.
+/// Validated, deterministic ordering of a compiler-stage dependency graph.
 ///
-/// The result is independent of the lifetime of the original descriptors.
-///
-/// It owns stage identifiers and graph relationships, but does not own
-/// stage implementations.
+/// This value owns its stage identifiers and graph relationships. It does
+/// not retain references to the original descriptors or stage implementations.
 ///
 /// # Ordering guarantees
 ///
-/// `ordered_stages()` returns a complete topological ordering.
+/// For every stage and every declared prerequisite, the prerequisite appears
+/// earlier in `ordered_stages()`.
 ///
-/// For every stage S and every declared dependency D:
+/// `levels()` returns dependency generations. Every prerequisite of a stage
+/// in generation N belongs to a preceding generation.
 ///
-///     position(D) < position(S)
+/// Stages in the same generation have no dependency path between them.
+/// This does not automatically authorize concurrent execution.
 ///
-/// `levels()` groups stages that have no dependency relationship requiring
-/// one of them to precede another in the graph's current topological
-/// progression.
+/// # Execution boundary
 ///
-/// A level does not grant permission to execute stages concurrently.
-/// The executor must also check each stage's concurrency contract,
-/// resource requirements, cancellation state and operational budgets.
+/// `execution.rs` remains responsible for:
+/// - implementation registration validation;
+/// - required-stage enforcement;
+/// - cancellation;
+/// - dependency-output delivery;
+/// - skipped and blocked outcomes;
+/// - execution policy and operational budgets.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StageOrdering {
     /// Complete deterministic topological ordering.
     ordered_stages: Vec<StageId>,
 
-    /// Dependency-independent topological levels.
+    /// Dependency generations, with lexical ordering inside each generation.
     levels: Vec<Vec<StageId>>,
 
     /// Direct prerequisites for each registered stage.
@@ -311,7 +248,7 @@ pub struct StageOrdering {
     /// Direct dependents for each registered stage.
     dependents: BTreeMap<StageId, Vec<StageId>>,
 
-    /// Position of each stage in the complete topological ordering.
+    /// Zero-based position in the complete deterministic ordering.
     positions: BTreeMap<StageId, usize>,
 }
 
@@ -320,43 +257,42 @@ impl StageOrdering {
     // CONSTRUCTION
     // ========================================================================
 
-    /// Builds and validates an ordering from registered stage descriptors.
+    /// Builds and validates a dependency ordering from borrowed descriptors.
     ///
-    /// The input may be any iterator of borrowed StageDescriptors.
+    /// The operation:
     ///
-    /// The function:
+    /// 1. Indexes registered descriptors.
+    /// 2. Rejects duplicate stage identities.
+    /// 3. Validates that every prerequisite exists.
+    /// 4. Builds direct dependency and dependent relationships.
+    /// 5. Rejects invalid dependency metadata.
+    /// 6. Performs deterministic topological ordering.
+    /// 7. Detects cycles and reports unresolved stages.
+    /// 8. Builds stable position indexes.
     ///
-    /// 1. Validates unique stage identifiers.
-    /// 2. Validates that every dependency is registered.
-    /// 3. Builds direct dependency and dependent relationships.
-    /// 4. Performs deterministic topological ordering.
-    /// 5. Detects unresolved dependency cycles.
-    /// 6. Constructs dependency-independent levels.
+    /// The input iterator may be any iterator of borrowed StageDescriptors.
     ///
-    /// No arbitrary stage-count or dependency-count limit is imposed.
-    ///
-    /// # Determinism
-    ///
-    /// Eligible stages are selected in StageId lexical order.
-    ///
-    /// Registration order therefore cannot change the result.
+    /// No arbitrary stage-count or dependency-count ceiling is imposed.
     pub fn build<'a>(
         descriptors: impl IntoIterator<Item = &'a StageDescriptor>,
     ) -> Result<Self, OrderingError> {
-        let mut registered = BTreeMap::<StageId, &StageDescriptor>::new();
+        // --------------------------------------------------------------------
+        // 1. Index descriptors and reject duplicate identities.
+        // --------------------------------------------------------------------
 
-        // --------------------------------------------------------------------
-        // 1. Validate and index registered stages.
-        // --------------------------------------------------------------------
+        let mut registered =
+            BTreeMap::<StageId, &'a StageDescriptor>::new();
 
         for descriptor in descriptors {
             let id = descriptor.id().clone();
 
-            if registered.insert(id.clone(), descriptor).is_some() {
+            if registered.contains_key(&id) {
                 return Err(OrderingError::DuplicateStage {
                     stage: id,
                 });
             }
+
+            registered.insert(id, descriptor);
         }
 
         // --------------------------------------------------------------------
@@ -371,10 +307,10 @@ impl StageOrdering {
         let mut dependents =
             BTreeMap::<StageId, Vec<StageId>>::new();
 
-        for id in registered.keys() {
-            indegree.insert(id.clone(), 0);
-            dependencies.insert(id.clone(), Vec::new());
-            dependents.insert(id.clone(), Vec::new());
+        for stage_id in registered.keys() {
+            indegree.insert(stage_id.clone(), 0);
+            dependencies.insert(stage_id.clone(), Vec::new());
+            dependents.insert(stage_id.clone(), Vec::new());
         }
 
         // --------------------------------------------------------------------
@@ -382,25 +318,31 @@ impl StageOrdering {
         // --------------------------------------------------------------------
 
         for (stage_id, descriptor) in &registered {
-            let mut stage_dependencies = descriptor.dependencies().to_vec();
+            let mut stage_dependencies =
+                descriptor.dependencies().to_vec();
 
-            // Normalize dependency ordering independently of the order
-            // in which a stage declared its prerequisites.
-            stage_dependencies.sort();
+            // StageDescriptor normally keeps dependencies sorted and
+            // rejects duplicates. Normalize and validate defensively at
+            // this graph boundary.
+            stage_dependencies.sort_unstable();
 
-            // StageDescriptor already rejects duplicate dependencies.
-            // We still validate the graph boundary defensively because
-            // ordering must not rely on an unchecked external assumption.
             for pair in stage_dependencies.windows(2) {
                 if pair[0] == pair[1] {
                     return Err(OrderingError::InternalInvariant {
                         message:
-                            "StageDescriptor exposed duplicate dependencies",
+                            "stage descriptor contains duplicate dependencies",
                     });
                 }
             }
 
             for dependency in &stage_dependencies {
+                if dependency == stage_id {
+                    return Err(OrderingError::InternalInvariant {
+                        message:
+                            "stage descriptor contains a self-dependency",
+                    });
+                }
+
                 if !registered.contains_key(dependency) {
                     return Err(OrderingError::MissingDependency {
                         stage: stage_id.clone(),
@@ -426,24 +368,29 @@ impl StageOrdering {
                     .get_mut(dependency)
                     .ok_or(OrderingError::InternalInvariant {
                         message:
-                            "registered dependency has no dependent entry",
+                            "registered prerequisite has no dependent entry",
                     })?;
 
                 dependency_dependents.push(stage_id.clone());
             }
 
-            dependencies.insert(stage_id.clone(), stage_dependencies);
+            dependencies.insert(
+                stage_id.clone(),
+                stage_dependencies,
+            );
         }
 
         // Normalize dependent lists.
         for stage_dependents in dependents.values_mut() {
-            stage_dependents.sort();
+            stage_dependents.sort_unstable();
         }
 
         // --------------------------------------------------------------------
         // 4. Initialize deterministic topological processing.
         // --------------------------------------------------------------------
 
+        // BTreeSet provides deterministic lexical ordering for each
+        // dependency generation.
         let mut ready = BTreeSet::<StageId>::new();
 
         for (stage_id, dependency_count) in &indegree {
@@ -458,16 +405,19 @@ impl StageOrdering {
         let mut levels = Vec::<Vec<StageId>>::new();
 
         // --------------------------------------------------------------------
-        // 5. Deterministic Kahn topological ordering.
+        // 5. Kahn's algorithm, preserving dependency generations.
         // --------------------------------------------------------------------
 
         while !ready.is_empty() {
-            // Every stage in this level has all its prerequisites
-            // satisfied by preceding levels.
+            // All stages in this generation have their prerequisites
+            // satisfied by earlier generations.
             //
-            // BTreeSet guarantees stable lexical ordering.
+            // Taking the complete ready set before processing ensures
+            // that newly-ready dependents enter the next generation.
             let current_level: Vec<StageId> =
-                std::mem::take(&mut ready).into_iter().collect();
+                std::mem::take(&mut ready)
+                    .into_iter()
+                    .collect();
 
             let mut next_ready = BTreeSet::<StageId>::new();
 
@@ -493,7 +443,7 @@ impl StageOrdering {
                         .checked_sub(1)
                         .ok_or(OrderingError::InternalInvariant {
                             message:
-                                "dependency counter became negative",
+                                "dependency counter underflowed",
                         })?;
 
                     if *dependency_count == 0 {
@@ -507,7 +457,7 @@ impl StageOrdering {
         }
 
         // --------------------------------------------------------------------
-        // 6. Detect cycles or stages blocked by cycles.
+        // 6. Detect cycles and their unresolved downstream stages.
         // --------------------------------------------------------------------
 
         if ordered_stages.len() != registered.len() {
@@ -517,7 +467,7 @@ impl StageOrdering {
                     (*remaining_dependencies > 0)
                         .then(|| stage_id.clone())
                 })
-                .collect::<Vec<_>>();
+                .collect();
 
             return Err(OrderingError::CycleDetected {
                 unresolved_stages,
@@ -525,7 +475,7 @@ impl StageOrdering {
         }
 
         // --------------------------------------------------------------------
-        // 7. Build stable position index.
+        // 7. Build the position index.
         // --------------------------------------------------------------------
 
         let mut positions =
@@ -534,12 +484,57 @@ impl StageOrdering {
         for (position, stage_id) in
             ordered_stages.iter().enumerate()
         {
-            positions.insert(stage_id.clone(), position);
+            if positions
+                .insert(stage_id.clone(), position)
+                .is_some()
+            {
+                return Err(OrderingError::InternalInvariant {
+                    message:
+                        "topological ordering contains a duplicate stage",
+                });
+            }
         }
 
         // --------------------------------------------------------------------
-        // 8. Return validated graph.
+        // 8. Validate the final graph snapshot.
         // --------------------------------------------------------------------
+
+        if positions.len() != registered.len()
+            || dependencies.len() != registered.len()
+            || dependents.len() != registered.len()
+        {
+            return Err(OrderingError::InternalInvariant {
+                message:
+                    "validated graph indexes have inconsistent stage counts",
+            });
+        }
+
+        for (stage_id, stage_dependencies) in &dependencies {
+            let stage_position = positions
+                .get(stage_id)
+                .copied()
+                .ok_or(OrderingError::InternalInvariant {
+                    message:
+                        "dependency graph references an unordered stage",
+                })?;
+
+            for dependency in stage_dependencies {
+                let dependency_position = positions
+                    .get(dependency)
+                    .copied()
+                    .ok_or(OrderingError::InternalInvariant {
+                        message:
+                            "dependency graph references an unordered prerequisite",
+                    })?;
+
+                if dependency_position >= stage_position {
+                    return Err(OrderingError::InternalInvariant {
+                        message:
+                            "topological ordering violates a dependency edge",
+                    });
+                }
+            }
+        }
 
         Ok(Self {
             ordered_stages,
@@ -552,7 +547,7 @@ impl StageOrdering {
 
     /// Builds an ordering from a descriptor slice.
     ///
-    /// This is a convenience wrapper around `build`.
+    /// Convenience wrapper around `build`.
     pub fn from_slice(
         descriptors: &[StageDescriptor],
     ) -> Result<Self, OrderingError> {
@@ -565,7 +560,7 @@ impl StageOrdering {
 
     /// Returns the complete deterministic topological ordering.
     ///
-    /// Every stage appears exactly once.
+    /// Every registered stage appears exactly once.
     ///
     /// Every prerequisite appears before its dependent.
     #[must_use]
@@ -573,21 +568,21 @@ impl StageOrdering {
         &self.ordered_stages
     }
 
-    /// Returns dependency-independent topological levels.
+    /// Returns dependency generations.
     ///
-    /// Each level is deterministically ordered by StageId.
+    /// Stages are sorted lexically inside each generation.
     ///
-    /// Stages in one level are not automatically safe to execute
-    /// concurrently. The executor must enforce their StageConcurrency
-    /// declarations and available operational resources.
+    /// Generations are processed in dependency order.
+    ///
+    /// These levels do not authorize parallel execution.
     #[must_use]
     pub fn levels(&self) -> &[Vec<StageId>] {
         &self.levels
     }
 
-    /// Returns the number of registered stages in this ordering.
+    /// Returns the number of registered stages.
     ///
-    /// This is descriptive metadata, not a configured stage limit.
+    /// This is descriptive metadata, not a configured capacity limit.
     #[must_use]
     pub fn stage_count(&self) -> usize {
         self.ordered_stages.len()
@@ -629,7 +624,7 @@ impl StageOrdering {
             .map(Vec::as_slice)
     }
 
-    /// Returns the zero-based position of a stage in the total ordering.
+    /// Returns the zero-based position in the deterministic total order.
     ///
     /// Returns `None` if the stage is not registered.
     #[must_use]
@@ -640,12 +635,13 @@ impl StageOrdering {
         self.positions.get(stage).copied()
     }
 
-    /// Returns whether `first` must precede `second` in the total ordering.
+    /// Returns whether `first` appears before `second` in the generated
+    /// total order.
     ///
-    /// This reports the generated deterministic topological order.
+    /// This reports ordering position, including deterministic tie-breaking
+    /// between independent stages. It does not prove a dependency path.
     ///
-    /// It does not claim that two unrelated stages have a semantic
-    /// dependency relationship.
+    /// Returns `None` if either stage is not registered.
     #[must_use]
     pub fn appears_before(
         &self,
@@ -658,7 +654,56 @@ impl StageOrdering {
         Some(first_position < second_position)
     }
 
-    /// Returns whether the graph is empty.
+    /// Returns whether `stage` directly or transitively depends on
+    /// `prerequisite`.
+    ///
+    /// Unlike `appears_before`, this query checks actual graph reachability.
+    ///
+    /// The search is iterative and does not use recursive graph traversal.
+    ///
+    /// Returns:
+    /// - `Some(true)` when a dependency path exists;
+    /// - `Some(false)` when both stages exist but no path exists;
+    /// - `None` when either stage is not registered.
+    ///
+    /// A stage is not considered to depend on itself.
+    #[must_use]
+    pub fn depends_on(
+        &self,
+        stage: &StageId,
+        prerequisite: &StageId,
+    ) -> Option<bool> {
+        if !self.contains(stage) || !self.contains(prerequisite) {
+            return None;
+        }
+
+        if stage == prerequisite {
+            return Some(false);
+        }
+
+        let mut visited = BTreeSet::<StageId>::new();
+        let mut pending = vec![stage.clone()];
+
+        while let Some(current) = pending.pop() {
+            let current_dependencies = self
+                .dependencies
+                .get(&current)?;
+
+            for dependency in current_dependencies {
+                if dependency == prerequisite {
+                    return Some(true);
+                }
+
+                if visited.insert(dependency.clone()) {
+                    pending.push(dependency.clone());
+                }
+            }
+        }
+
+        Some(false)
+    }
+
+    /// Returns whether the graph contains no stages.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.ordered_stages.is_empty()
@@ -713,7 +758,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Empty graph
+    // Empty and single-stage graphs
     // ------------------------------------------------------------------------
 
     #[test]
@@ -727,13 +772,11 @@ mod tests {
         assert!(ordering.levels().is_empty());
     }
 
-    // ------------------------------------------------------------------------
-    // Single stage
-    // ------------------------------------------------------------------------
-
     #[test]
     fn single_stage_is_ordered() {
-        let descriptors = vec![stage("compile.initialize", &[])];
+        let descriptors = vec![
+            stage("compile.initialize", &[]),
+        ];
 
         let ordering = StageOrdering::from_slice(&descriptors)
             .expect("single-stage graph must be valid");
@@ -748,7 +791,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Linear dependency graph
+    // Dependency ordering
     // ------------------------------------------------------------------------
 
     #[test]
@@ -776,12 +819,8 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------------
-    // Multiple independent stages
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn independent_stages_share_a_level() {
+    fn independent_stages_share_a_generation() {
         let descriptors = vec![
             stage("frontend.parse", &[]),
             stage("frontend.preprocess", &[]),
@@ -811,9 +850,34 @@ mod tests {
         );
     }
 
-    // ------------------------------------------------------------------------
-    // Determinism
-    // ------------------------------------------------------------------------
+    #[test]
+    fn each_dependency_generation_is_lexically_ordered() {
+        let descriptors = vec![
+            stage("z.root", &[]),
+            stage("a.root", &[]),
+            stage("m.child", &["a.root"]),
+            stage("b.child", &["z.root"]),
+        ];
+
+        let ordering = StageOrdering::from_slice(&descriptors)
+            .expect("graph must be valid");
+
+        assert_eq!(
+            ordering.levels()[0]
+                .iter()
+                .map(StageId::as_str)
+                .collect::<Vec<_>>(),
+            vec!["a.root", "z.root"]
+        );
+
+        assert_eq!(
+            ordering.levels()[1]
+                .iter()
+                .map(StageId::as_str)
+                .collect::<Vec<_>>(),
+            vec!["b.child", "m.child"]
+        );
+    }
 
     #[test]
     fn registration_order_does_not_change_result() {
@@ -847,7 +911,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Duplicate stage identity
+    // Invalid graph structures
     // ------------------------------------------------------------------------
 
     #[test]
@@ -866,10 +930,6 @@ mod tests {
         ));
     }
 
-    // ------------------------------------------------------------------------
-    // Missing dependency
-    // ------------------------------------------------------------------------
-
     #[test]
     fn missing_dependency_is_rejected() {
         let descriptors = vec![
@@ -884,10 +944,6 @@ mod tests {
             OrderingError::MissingDependency { .. }
         ));
     }
-
-    // ------------------------------------------------------------------------
-    // Direct cycle
-    // ------------------------------------------------------------------------
 
     #[test]
     fn direct_cycle_is_rejected() {
@@ -916,10 +972,6 @@ mod tests {
         }
     }
 
-    // ------------------------------------------------------------------------
-    // Indirect cycle
-    // ------------------------------------------------------------------------
-
     #[test]
     fn indirect_cycle_is_rejected() {
         let descriptors = vec![
@@ -929,7 +981,7 @@ mod tests {
         ];
 
         let error = StageOrdering::from_slice(&descriptors)
-            .expect_err("indirect cycle must be rejected");
+            .expect_err("cycle must be rejected");
 
         assert!(matches!(
             error,
@@ -937,12 +989,8 @@ mod tests {
         ));
     }
 
-    // ------------------------------------------------------------------------
-    // Cycle with downstream blocked stage
-    // ------------------------------------------------------------------------
-
     #[test]
-    fn cycle_reports_all_unresolved_stages() {
+    fn cycle_reports_downstream_blocked_stages() {
         let descriptors = vec![
             stage("stage.a", &["stage.b"]),
             stage("stage.b", &["stage.a"]),
@@ -965,7 +1013,6 @@ mod tests {
                 assert!(unresolved.contains(&"stage.a"));
                 assert!(unresolved.contains(&"stage.b"));
                 assert!(unresolved.contains(&"stage.c"));
-
                 assert!(!unresolved.contains(&"stage.independent"));
             }
 
@@ -974,7 +1021,7 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Direct dependency queries
+    // Direct relationship queries
     // ------------------------------------------------------------------------
 
     #[test]
@@ -1003,10 +1050,6 @@ mod tests {
             vec!["stage.a", "stage.b"]
         );
     }
-
-    // ------------------------------------------------------------------------
-    // Direct dependent queries
-    // ------------------------------------------------------------------------
 
     #[test]
     fn direct_dependent_queries_are_correct() {
@@ -1037,11 +1080,11 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Position queries
+    // Ordering and dependency are different concepts
     // ------------------------------------------------------------------------
 
     #[test]
-    fn position_queries_reflect_dependency_order() {
+    fn position_queries_reflect_deterministic_order() {
         let descriptors = vec![
             stage("stage.c", &["stage.b"]),
             stage("stage.b", &["stage.a"]),
@@ -1061,13 +1104,39 @@ mod tests {
         assert_eq!(ordering.appears_before(&c, &a), Some(false));
     }
 
-    // ------------------------------------------------------------------------
-    // Unknown stage queries
-    // ------------------------------------------------------------------------
+    #[test]
+    fn transitive_dependency_queries_are_correct() {
+        let descriptors = vec![
+            stage("stage.a", &[]),
+            stage("stage.b", &["stage.a"]),
+            stage("stage.c", &["stage.b"]),
+            stage("stage.independent", &[]),
+        ];
+
+        let ordering = StageOrdering::from_slice(&descriptors)
+            .expect("graph must be valid");
+
+        let a = StageId::new("stage.a").expect("valid ID");
+        let b = StageId::new("stage.b").expect("valid ID");
+        let c = StageId::new("stage.c").expect("valid ID");
+        let independent = StageId::new("stage.independent")
+            .expect("valid ID");
+
+        assert_eq!(ordering.depends_on(&c, &a), Some(true));
+        assert_eq!(ordering.depends_on(&c, &b), Some(true));
+        assert_eq!(ordering.depends_on(&b, &c), Some(false));
+        assert_eq!(
+            ordering.depends_on(&independent, &a),
+            Some(false)
+        );
+        assert_eq!(ordering.depends_on(&a, &a), Some(false));
+    }
 
     #[test]
     fn unknown_stage_queries_return_none() {
-        let descriptors = vec![stage("stage.a", &[])];
+        let descriptors = vec![
+            stage("stage.a", &[]),
+        ];
 
         let ordering = StageOrdering::from_slice(&descriptors)
             .expect("graph must be valid");
@@ -1080,6 +1149,7 @@ mod tests {
         assert_eq!(ordering.dependencies_of(&unknown), None);
         assert_eq!(ordering.dependents_of(&unknown), None);
         assert_eq!(ordering.appears_before(&unknown, &unknown), None);
+        assert_eq!(ordering.depends_on(&unknown, &unknown), None);
     }
 
     // ------------------------------------------------------------------------
@@ -1110,14 +1180,16 @@ mod tests {
         let ordering = StageOrdering::from_slice(&descriptors)
             .expect("cross-domain graph must be valid");
 
-        let planning = StageId::new("planning.hybrid")
+        let hybrid = StageId::new("planning.hybrid")
             .expect("valid ID");
 
-        let dependencies = ordering
-            .dependencies_of(&planning)
-            .expect("planning stage must exist");
+        let backend = StageId::new("backend.realize")
+            .expect("valid ID");
 
-        assert_eq!(dependencies.len(), 5);
+        assert_eq!(
+            ordering.depends_on(&backend, &hybrid),
+            Some(true)
+        );
 
         for domain in [
             "classical.analyze",
@@ -1126,40 +1198,45 @@ mod tests {
             "hdl.analyze",
             "distributed.analyze",
         ] {
-            let domain_id =
-                StageId::new(domain).expect("valid domain ID");
+            let domain_id = StageId::new(domain)
+                .expect("valid ID");
 
             assert_eq!(
-                ordering.appears_before(&domain_id, &planning),
+                ordering.depends_on(&hybrid, &domain_id),
                 Some(true)
             );
         }
     }
 
     // ------------------------------------------------------------------------
-    // Empty dependencies and multiple roots
+    // Large dynamically sized graph
     // ------------------------------------------------------------------------
 
     #[test]
-    fn multiple_roots_are_deterministically_ordered() {
-        let descriptors = vec![
-            stage("root.z", &[]),
-            stage("root.a", &[]),
-            stage("root.m", &[]),
-        ];
+    fn dynamically_sized_graph_has_no_small_fixed_stage_ceiling() {
+        let descriptors = (0..1_024)
+            .map(|index| {
+                let id = format!("stage.{index:04}");
+
+                if index == 0 {
+                    stage(&id, &[])
+                } else {
+                    let dependency = format!(
+                        "stage.{:04}",
+                        index - 1
+                    );
+
+                    let dependency_refs = [dependency.as_str()];
+
+                    stage(&id, &dependency_refs)
+                }
+            })
+            .collect::<Vec<_>>();
 
         let ordering = StageOrdering::from_slice(&descriptors)
-            .expect("multiple roots must be valid");
+            .expect("dynamically sized graph must be valid");
 
-        assert_eq!(
-            ids(&ordering),
-            vec![
-                "root.a",
-                "root.m",
-                "root.z",
-            ]
-        );
-
-        assert_eq!(ordering.levels().len(), 1);
+        assert_eq!(ordering.stage_count(), descriptors.len());
+        assert_eq!(ordering.levels().len(), descriptors.len());
     }
 }
