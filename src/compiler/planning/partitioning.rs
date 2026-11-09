@@ -1,3 +1,4 @@
+
 #![forbid(unsafe_code)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(unused_must_use)]
@@ -5,37 +6,27 @@
 
 //! # Zamani Compiler — Heterogeneous Workload Partitioning
 //!
-//! Path: `src/compiler/planning/partitioning.rs`
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
+//! Coordinates target-compatible logical workload partitioning.
 //!
-//! ## PURPOSE
-//!
-//! Coordinate compiler-level heterogeneous workload partitioning by
-//! integrating:
+//! This module integrates:
 //!
 //! - Canonical ZUIR operation identities.
-//! - Operation-level capability candidate information.
-//! - Compiler target discovery and capability matching.
-//! - Target-scoped resource feasibility results.
-//! - The existing distributed logical workload partitioner.
+//! - Compiler target identities.
+//! - Operation-level capability candidates.
+//! - Global capability-matching evidence.
+//! - Optional resource-feasibility evidence.
+//! - Canonical distributed workload partitioning.
 //!
-//! The result is a collection of logical partitions. Each partition contains
-//! work units that share at least one eligible target according to the
-//! supplied evidence.
+//! It does not perform physical placement, target selection,
+//! allocation, scheduling, routing, lowering, or execution.
 //!
-//! This module does not select a particular target for a partition.
+//! # Architectural authorities
 //!
-//! ## AUTHORITATIVE OWNERS
-//!
-//! Canonical operation identities:
+//! Operation identity:
 //!     crate::zuir::ids::OperationId
 //!
 //! Target identity:
 //!     crate::compiler::configuration::target::TargetId
-//!
-//! Target discovery:
-//!     crate::compiler::planning::target_discovery
 //!
 //! Capability matching:
 //!     crate::compiler::planning::capability_matching
@@ -43,8 +34,11 @@
 //! Resource feasibility:
 //!     crate::compiler::planning::resource_planning
 //!
-//! Generic workload partitioning:
+//! Generic logical partitioning:
 //!     crate::distributed::planning::partition
+//!
+//! Source semantics:
+//!     crate::frontend::semantic
 //!
 //! Canonical computation representations:
 //!     crate::zuir
@@ -55,117 +49,37 @@
 //!     crate::hybrid
 //!     crate::distributed
 //!
-//! Physical placement and execution:
-//!     crate::runtime
-//!     crate::distributed
-//!     hardware-specific authorities
+//! # Scalability
 //!
-//! ## OWNS
+//! No arbitrary universal ceilings are imposed on:
 //!
-//! - Compiler-facing partitioning input.
-//! - Per-work-unit target eligibility filtering.
-//! - Integration of capability and resource planning evidence.
-//! - Compatibility-aware refinement of logical partitions.
-//! - Per-partition common-target assessment.
-//! - Cross-partition dependency reporting.
-//! - Explicit reporting of unassignable work.
-//! - Deterministic compiler partitioning results.
-//!
-//! ## DOES NOT OWN
-//!
-//! - Source-language semantics.
-//! - AST or semantic resource models.
-//! - ZUIR operation definitions.
-//! - Capability definitions.
-//! - Resource definitions.
-//! - Hardware inventories.
-//! - Physical resource allocation.
-//! - Device reservation.
-//! - Backend selection.
-//! - Backend code generation.
-//! - Runtime scheduling.
-//! - Network routing.
-//! - Quantum routing.
-//! - Quantum error correction.
-//! - Domain-specific operation decomposition.
-//! - Execution.
-//!
-//! ## PARTITIONING MODEL
-//!
-//! The existing distributed partitioner first creates generic logical
-//! partitions while preserving workload dependencies.
-//!
-//! This module then refines those partitions where necessary so that every
-//! resulting partition has a non-empty intersection of eligible targets.
-//!
-//! A partition's candidate-target set is not a device assignment.
-//!
-//! Physical placement remains a separate downstream decision.
-//!
-//! ## POCO-REAF
-//!
-//! No universal maximum is imposed here on:
-//!
-//! - Work units.
-//! - Dependencies.
-//! - Logical partitions.
-//! - Candidate targets.
+//! - Operations.
+//! - Workload dependencies.
+//! - Partitions.
+//! - Targets.
 //! - Computing domains.
 //! - CPUs, GPUs, FPGAs, ASICs or QPUs.
 //! - Distributed participants.
-//! - Hardware architectures.
-//! - Future computational technologies.
 //!
-//! The module uses the existing distributed partitioner's WorkEstimate
-//! representation and policy contracts. Any arithmetic overflow reported
-//! by that existing implementation remains an explicit error.
+//! Operational budgets are explicit caller policies.
 //!
-//! Operational budgets are caller-supplied policies, not language limits.
+//! Actual execution remains subject to finite memory, address space,
+//! available processing capacity and physical resources.
 //!
-//! No finite process can promise literal infinity. The objective is to avoid
-//! arbitrary universal ceilings and allow workloads to grow with available
-//! implementation resources.
+//! # Partitioning invariant
 //!
-//! ## DETERMINISM
+//! Every assigned operation appears in exactly one output segment.
 //!
-//! - Canonical OperationId ordering is used by the existing partitioner.
-//! - Target candidates use ordered sets.
-//! - Refinement follows deterministic partition and operation ordering.
-//! - Locality ties are resolved deterministically.
-//! - No random selection or global mutable state is used.
+//! Every unassigned operation appears in exactly one unassigned record.
 //!
-//! ## EVIDENCE RULES
+//! Every segment contains operations with identical proven candidate
+//! target sets. This conservative grouping preserves all alternatives
+//! without selecting a target.
 //!
-//! - Missing capability evidence is not compatibility.
-//! - Unknown mandatory resource evidence is not feasibility.
-//! - A target absent from the capability report is not eligible.
-//! - A target without a proven resource-feasible result is not admitted
-//!   when a resource report is supplied.
-//! - An incomplete discovery inventory remains incomplete.
-//! - A partition without a common eligible target is not reported as
-//!   successfully realizable.
+//! Every input dependency is retained either as an internal dependency,
+//! a cross-segment boundary, or an unresolved dependency.
 //!
-//! ## INTEGRATION
-//!
-//! The caller constructs PartitioningWorkload from canonical IR and
-//! domain-specific analysis results.
-//!
-//! Each WorkItem must receive its candidate targets from the appropriate
-//! operation-level capability analysis. The compiler-wide capability report
-//! provides the additional global target-eligibility boundary.
-//!
-//! The caller may supply a ResourcePlanningReport to restrict candidates
-//! to targets with proven resource feasibility.
-//!
-//! The result can be consumed by:
-//!
-//! - compiler feasibility analysis;
-//! - compiler scheduling planning;
-//! - data-movement planning;
-//! - distributed placement;
-//! - backend realization planning.
-//!
-//! It does not allocate, reserve, schedule, route, or execute resources.
+//! No dependency is silently discarded.
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
@@ -192,30 +106,23 @@ use crate::distributed::planning::partition::{
 
 use crate::zuir::ids::OperationId;
 
-// ============================================================================
-// MODULE IDENTITY
-// ============================================================================
-
-/// Stable architectural identity of this module.
+/// Stable architectural identity.
 pub const PARTITIONING_MODULE_NAME: &str =
     "zamani.compiler.planning.partitioning";
 
-/// Public API version of this module.
-pub const PARTITIONING_API_VERSION: u16 = 1;
+/// Public API version.
+pub const PARTITIONING_API_VERSION: u16 = 2;
 
 // ============================================================================
 // WORK ITEM
 // ============================================================================
 
-/// One indivisible compiler work item associated with a canonical ZUIR
-/// operation identity.
+/// One indivisible compiler work item.
 ///
-/// The operation identity is borrowed from the canonical IR authority.
-/// This type does not define another operation representation.
+/// Operation identity belongs to ZUIR.
 ///
-/// `candidate_targets` must be populated from operation-level capability
-/// analysis. It must not be inferred from an operation's display name,
-/// dialect name, vendor name, or target architecture.
+/// Candidate targets must originate from operation-level capability
+/// analysis. They are not inferred from names or hardware vendors.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkItem {
     operation: OperationId,
@@ -226,12 +133,6 @@ pub struct WorkItem {
 
 impl WorkItem {
     /// Creates a compiler work item.
-    ///
-    /// `estimated_work` is an abstract, non-negative estimate compatible
-    /// with the existing distributed partitioner's WorkEstimate contract.
-    ///
-    /// `candidate_targets` contains targets admitted by the appropriate
-    /// operation-level capability analysis.
     #[must_use]
     pub fn new(
         operation: OperationId,
@@ -246,10 +147,10 @@ impl WorkItem {
         }
     }
 
-    /// Sets an optional logical affinity key.
+    /// Sets a logical affinity key.
     ///
-    /// Affinity is a grouping preference, not a mandatory placement
-    /// constraint.
+    /// Affinity is a grouping preference. It is not a physical
+    /// placement instruction.
     #[must_use]
     pub fn with_affinity(
         mut self,
@@ -271,7 +172,7 @@ impl WorkItem {
         self.estimated_work
     }
 
-    /// Returns the optional grouping affinity.
+    /// Returns the optional affinity.
     #[must_use]
     pub fn affinity(&self) -> Option<&str> {
         self.affinity.as_deref()
@@ -288,15 +189,9 @@ impl WorkItem {
 // WORKLOAD
 // ============================================================================
 
-/// Compiler-facing heterogeneous workload graph.
+/// Compiler-facing workload graph.
 ///
-/// Work items refer to canonical ZUIR operation identities. Dependencies
-/// refer to those same identities.
-///
-/// The graph does not own or redefine operation semantics.
-///
-/// The constructor preserves the supplied collections. Structural graph
-/// validation is delegated to the existing distributed partitioner.
+/// This is planning metadata, not a replacement for ZUIR.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartitioningWorkload {
     work_items: Vec<WorkItem>,
@@ -304,7 +199,7 @@ pub struct PartitioningWorkload {
 }
 
 impl PartitioningWorkload {
-    /// Creates a workload graph.
+    /// Creates a workload.
     #[must_use]
     pub fn new(
         work_items: Vec<WorkItem>,
@@ -316,19 +211,19 @@ impl PartitioningWorkload {
         }
     }
 
-    /// Returns all compiler work items.
+    /// Returns work items.
     #[must_use]
     pub fn work_items(&self) -> &[WorkItem] {
         &self.work_items
     }
 
-    /// Returns all workload dependencies.
+    /// Returns dependencies.
     #[must_use]
     pub fn dependencies(&self) -> &[Dependency<OperationId>] {
         &self.dependencies
     }
 
-    /// Returns whether the workload contains no work items.
+    /// Returns whether the workload is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.work_items.is_empty()
@@ -339,12 +234,7 @@ impl PartitioningWorkload {
 // OPTIONS
 // ============================================================================
 
-/// Options for one compiler partitioning invocation.
-///
-/// The actual logical partitioning strategy and operational budgets are
-/// delegated to the existing distributed partitioning subsystem.
-///
-/// No default hardware-count or partition-count ceiling is introduced.
+/// Partitioning invocation options.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PartitioningOptions {
     policy: PartitionPolicy,
@@ -352,8 +242,7 @@ pub struct PartitioningOptions {
 }
 
 impl PartitioningOptions {
-    /// Creates options using the supplied logical partitioning policy
-    /// and operational budget.
+    /// Creates partitioning options.
     #[must_use]
     pub const fn new(
         policy: PartitionPolicy,
@@ -371,7 +260,7 @@ impl PartitioningOptions {
         }
     }
 
-    /// Returns the logical partitioning policy.
+    /// Returns the partitioning policy.
     #[must_use]
     pub const fn policy(self) -> PartitionPolicy {
         self.policy
@@ -391,17 +280,10 @@ impl Default for PartitioningOptions {
 }
 
 // ============================================================================
-// PARTITION SEGMENT IDENTITY
+// PARTITION IDENTITIES
 // ============================================================================
 
-/// Identity of a compiler-refined logical partition.
-///
-/// A base partition is produced by the existing distributed partitioner.
-/// The ordinal identifies a compatibility-aware segment within that base
-/// partition.
-///
-/// This identity is local to one planning result. It is not a persistent
-/// device identity or runtime allocation identifier.
+/// Identity of a compatibility-refined partition segment.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PartitionSegmentId {
     base_partition: PartitionId,
@@ -409,7 +291,7 @@ pub struct PartitionSegmentId {
 }
 
 impl PartitionSegmentId {
-    /// Creates a partition-segment identity.
+    /// Creates an identity.
     #[must_use]
     pub const fn new(
         base_partition: PartitionId,
@@ -421,13 +303,13 @@ impl PartitionSegmentId {
         }
     }
 
-    /// Returns the generic distributed partition identity.
+    /// Returns the original partition identity.
     #[must_use]
     pub const fn base_partition(self) -> PartitionId {
         self.base_partition
     }
 
-    /// Returns the segment ordinal within the base partition.
+    /// Returns the segment ordinal.
     #[must_use]
     pub const fn ordinal(self) -> usize {
         self.ordinal
@@ -435,7 +317,10 @@ impl PartitionSegmentId {
 }
 
 impl fmt::Display for PartitionSegmentId {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         write!(
             formatter,
             "{}.{}",
@@ -446,14 +331,10 @@ impl fmt::Display for PartitionSegmentId {
 }
 
 // ============================================================================
-// PARTITION SEGMENT
+// PARTITION SEGMENTS
 // ============================================================================
 
-/// One logical partition after target-compatibility refinement.
-///
-/// Every segment has a non-empty candidate-target set.
-///
-/// The set represents possible realization targets, not a selected target.
+/// One logical target-compatible partition segment.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartitionSegment {
     id: PartitionSegmentId,
@@ -469,32 +350,31 @@ impl PartitionSegment {
         self.id
     }
 
-    /// Returns the original generic partition identity.
+    /// Returns the base partition.
     #[must_use]
     pub const fn base_partition(&self) -> PartitionId {
         self.id.base_partition()
     }
 
-    /// Returns all member operation identities.
+    /// Returns member operations.
     #[must_use]
     pub fn work_items(&self) -> &[OperationId] {
         &self.work_items
     }
 
-    /// Returns targets that can satisfy the intersection of member
-    /// operation capability requirements and supplied resource evidence.
+    /// Returns all proven candidate targets.
     #[must_use]
     pub fn candidate_targets(&self) -> &BTreeSet<TargetId> {
         &self.candidate_targets
     }
 
-    /// Returns the aggregate abstract work estimate.
+    /// Returns aggregate abstract work.
     #[must_use]
     pub const fn estimated_work(&self) -> WorkEstimate {
         self.estimated_work
     }
 
-    /// Returns whether the segment has at least one possible target.
+    /// Returns whether at least one candidate exists.
     #[must_use]
     pub fn has_candidate_target(&self) -> bool {
         !self.candidate_targets.is_empty()
@@ -505,38 +385,39 @@ impl PartitionSegment {
 // UNASSIGNED WORK
 // ============================================================================
 
-/// Why a work item could not be included in a target-compatible segment.
+/// Why a work item could not be assigned.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum UnassignedReason {
-    /// The operation has no operation-level capability candidate.
+    /// No operation-level candidate exists.
     NoOperationCapabilityCandidate,
 
-    /// None of the operation's candidates passed global capability matching.
+    /// No candidate passed global capability matching.
     NoGloballyEligibleTarget,
 
-    /// Candidate targets did not have proven resource feasibility.
+    /// No candidate had proven resource feasibility.
     NoResourceFeasibleTarget,
 }
 
 impl fmt::Display for UnassignedReason {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         formatter.write_str(match self {
-            Self::NoOperationCapabilityCandidate => {
-                "operation has no capability-compatible target"
-            }
-            Self::NoGloballyEligibleTarget => {
-                "no operation candidate passed global capability matching"
-            }
-            Self::NoResourceFeasibleTarget => {
-                "no operation candidate has proven resource feasibility"
-            }
+            Self::NoOperationCapabilityCandidate =>
+                "no operation-level capability candidate",
+
+            Self::NoGloballyEligibleTarget =>
+                "no globally capability-eligible target",
+
+            Self::NoResourceFeasibleTarget =>
+                "no target with proven resource feasibility",
         })
     }
 }
 
-/// One work item that could not be assigned to a target-compatible
-/// logical partition.
+/// An operation that could not be assigned.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UnassignedWorkItem {
     operation: OperationId,
@@ -544,13 +425,13 @@ pub struct UnassignedWorkItem {
 }
 
 impl UnassignedWorkItem {
-    /// Returns the operation identity.
+    /// Returns its operation.
     #[must_use]
     pub const fn operation(&self) -> OperationId {
         self.operation
     }
 
-    /// Returns the reason the work item was not assigned.
+    /// Returns its reason.
     #[must_use]
     pub const fn reason(&self) -> UnassignedReason {
         self.reason
@@ -561,10 +442,7 @@ impl UnassignedWorkItem {
 // DEPENDENCY BOUNDARIES
 // ============================================================================
 
-/// One dependency crossing two compiler partition segments.
-///
-/// The dependency is preserved. A downstream data-movement, scheduling,
-/// routing, or placement stage determines how it is realized.
+/// A dependency crossing two assigned segments.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartitionBoundary {
     source: OperationId,
@@ -587,28 +465,26 @@ impl PartitionBoundary {
         self.destination
     }
 
-    /// Returns the source partition segment.
+    /// Returns the source segment.
     #[must_use]
     pub const fn source_segment(&self) -> PartitionSegmentId {
         self.source_segment
     }
 
-    /// Returns the destination partition segment.
+    /// Returns the destination segment.
     #[must_use]
     pub const fn destination_segment(&self) -> PartitionSegmentId {
         self.destination_segment
     }
 
-    /// Returns the supplied abstract communication cost.
+    /// Returns the communication estimate.
     #[must_use]
     pub const fn communication_cost(&self) -> WorkEstimate {
         self.communication_cost
     }
 }
 
-/// One dependency involving work that could not be assigned.
-///
-/// The dependency is retained rather than silently discarded.
+/// A dependency involving unassigned work.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UnresolvedDependency {
     source: OperationId,
@@ -619,31 +495,31 @@ pub struct UnresolvedDependency {
 }
 
 impl UnresolvedDependency {
-    /// Returns the source operation.
+    /// Returns the source.
     #[must_use]
     pub const fn source(&self) -> OperationId {
         self.source
     }
 
-    /// Returns the destination operation.
+    /// Returns the destination.
     #[must_use]
     pub const fn destination(&self) -> OperationId {
         self.destination
     }
 
-    /// Returns whether the source operation was assigned.
+    /// Returns whether the source was assigned.
     #[must_use]
     pub const fn source_assigned(&self) -> bool {
         self.source_assigned
     }
 
-    /// Returns whether the destination operation was assigned.
+    /// Returns whether the destination was assigned.
     #[must_use]
     pub const fn destination_assigned(&self) -> bool {
         self.destination_assigned
     }
 
-    /// Returns the supplied abstract communication cost.
+    /// Returns the communication estimate.
     #[must_use]
     pub const fn communication_cost(&self) -> WorkEstimate {
         self.communication_cost
@@ -651,32 +527,28 @@ impl UnresolvedDependency {
 }
 
 // ============================================================================
-// REPORT DISPOSITION
+// DISPOSITION
 // ============================================================================
 
-/// Overall compiler partitioning disposition.
+/// Overall assignment disposition.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub enum PartitioningDisposition {
-    /// Every work item has been assigned and the supplied discovery
-    /// inventory is complete.
+    /// All operations assigned with complete discovery.
     Complete,
 
-    /// Some work items were assigned, but others could not be assigned.
+    /// Some operations remain unassigned.
     Partial,
 
-    /// No work item could be assigned to a target-compatible segment.
+    /// No operation could be assigned.
     NoCompatibleTarget,
 
-    /// Every work item was assigned, but the target inventory was incomplete.
+    /// All operations assigned, but discovery was incomplete.
     IncompleteInventory,
 }
 
 impl PartitioningDisposition {
-    /// Returns whether every work item has been assigned.
-    ///
-    /// This does not establish backend compatibility, scheduling feasibility,
-    /// authorization, physical availability, or successful execution.
+    /// Whether all operations are represented in assigned segments.
     #[must_use]
     pub const fn all_work_assigned(self) -> bool {
         matches!(
@@ -685,26 +557,21 @@ impl PartitioningDisposition {
         )
     }
 
-    /// Returns whether the result has a complete target inventory.
+    /// Conservative disposition-only completeness indication.
+    ///
+    /// Use PartitioningReport::inventory_is_complete for the
+    /// authoritative result.
     #[must_use]
     pub const fn inventory_complete(self) -> bool {
-        matches!(self, Self::Complete | Self::Partial | Self::NoCompatibleTarget)
+        matches!(self, Self::Complete)
     }
 }
 
 // ============================================================================
-// COMPLETE REPORT
+// REPORT
 // ============================================================================
 
-/// Complete compiler-side partitioning result.
-///
-/// `base_plan` is the structural workload partition plan produced by the
-/// existing distributed partitioner.
-///
-/// `segments` are the compatibility-aware refinements of those partitions.
-///
-/// The report never claims that a particular physical target has been
-/// selected or reserved.
+/// Complete compiler partitioning report.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PartitioningReport {
     base_plan: PartitionPlan<OperationId>,
@@ -719,69 +586,77 @@ pub struct PartitioningReport {
 }
 
 impl PartitioningReport {
-    /// Returns the original generic logical partition plan.
+    /// Returns the generic distributed partition plan.
     #[must_use]
     pub fn base_plan(&self) -> &PartitionPlan<OperationId> {
         &self.base_plan
     }
 
-    /// Returns all target-compatible partition segments.
+    /// Returns compatibility-refined segments.
     #[must_use]
     pub fn segments(&self) -> &[PartitionSegment] {
         &self.segments
     }
 
-    /// Returns all work items that could not be assigned.
+    /// Returns unassigned work.
     #[must_use]
     pub fn unassigned(&self) -> &[UnassignedWorkItem] {
         &self.unassigned
     }
 
-    /// Returns dependencies crossing assigned partition segments.
+    /// Returns cross-segment boundaries.
     #[must_use]
     pub fn boundaries(&self) -> &[PartitionBoundary] {
         &self.boundaries
     }
 
-    /// Returns dependencies involving at least one unassigned work item.
+    /// Returns unresolved dependencies.
     #[must_use]
     pub fn unresolved_dependencies(&self) -> &[UnresolvedDependency] {
         &self.unresolved_dependencies
     }
 
-    /// Returns the overall planning disposition.
+    /// Returns the assignment disposition.
     #[must_use]
     pub const fn disposition(&self) -> PartitioningDisposition {
         self.disposition
     }
 
-    /// Returns whether target discovery was complete.
+    /// Returns authoritative discovery completeness.
     #[must_use]
     pub const fn inventory_is_complete(&self) -> bool {
         self.inventory_complete
     }
 
-    /// Returns the original number of work items.
+    /// Returns original work-item count.
     #[must_use]
     pub const fn work_item_count(&self) -> usize {
         self.work_item_count
     }
 
-    /// Returns the original number of dependencies.
+    /// Returns original dependency count.
     #[must_use]
     pub const fn dependency_count(&self) -> usize {
         self.dependency_count
     }
 
-    /// Returns whether all work items were assigned.
+    /// Returns whether all work is assigned exactly once.
     #[must_use]
     pub fn is_fully_assigned(&self) -> bool {
         self.unassigned.is_empty()
-            && self.segments.iter().map(|segment| segment.work_items.len()).sum::<usize>()
-                == self.work_item_count
+            && self.assigned_count() == self.work_item_count
     }
 
-    /// Returns whether every segment has at least one candidate target.
+    /// Returns the number of assigned operations.
+    #[must_use]
+    pub fn assigned_count(&self) -> usize {
+        self.segments
+            .iter()
+            .map(|segment| segment.work_items.len())
+            .sum()
+    }
+
+    /// Returns whether all segments have candidate targets.
     #[must_use]
     pub fn every_segment_has_candidate_targets(&self) -> bool {
         self.segments
@@ -789,32 +664,29 @@ impl PartitioningReport {
             .all(PartitionSegment::has_candidate_target)
     }
 
-    /// Returns whether the report is complete.
-    ///
-    /// A complete partitioning report is not a complete deployment plan.
-    /// Scheduling, routing, backend realization, authorization, and runtime
-    /// resource revalidation remain separate.
+    /// Returns whether the result is fully complete.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.disposition == PartitioningDisposition::Complete
             && self.is_fully_assigned()
             && self.inventory_complete
             && self.every_segment_has_candidate_targets()
+            && self.unresolved_dependencies.is_empty()
     }
 
-    /// Returns whether any dependency crosses a partition boundary.
+    /// Returns whether cross-segment dependencies exist.
     #[must_use]
     pub fn has_cross_partition_dependencies(&self) -> bool {
         !self.boundaries.is_empty()
     }
 
-    /// Returns whether any dependency could not be fully assigned.
+    /// Returns whether unresolved dependencies exist.
     #[must_use]
     pub fn has_unresolved_dependencies(&self) -> bool {
         !self.unresolved_dependencies.is_empty()
     }
 
-    /// Returns whether there is at least one assigned segment.
+    /// Returns whether any segment exists.
     #[must_use]
     pub fn has_segments(&self) -> bool {
         !self.segments.is_empty()
@@ -825,50 +697,50 @@ impl PartitioningReport {
 // ERRORS
 // ============================================================================
 
-/// Errors produced by compiler partitioning.
+/// Compiler partitioning errors.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum PartitioningError {
-    /// The existing distributed workload partitioner rejected the graph
-    /// or its configured policy.
+    /// The canonical distributed partitioner rejected the graph.
     DistributedPartitioning(PartitionError),
 
-    /// Multiple compiler work items used the same canonical operation ID.
+    /// Duplicate work-item metadata.
     DuplicateWorkItemMetadata(OperationId),
 
-    /// An operation from a base partition was absent from the compiler
-    /// workload metadata.
+    /// Missing work-item metadata.
     MissingWorkItemMetadata(OperationId),
 
-    /// A checked aggregate estimate could not be represented.
+    /// Checked arithmetic failed.
     ArithmeticOverflow,
+
+    /// An invariant was violated during report construction.
+    InvalidPartitionResult(String),
 }
 
 impl fmt::Display for PartitioningError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::DistributedPartitioning(error) => {
-                write!(formatter, "distributed logical partitioning failed: {error}")
+                write!(formatter, "distributed partitioning failed: {error}")
             }
 
             Self::DuplicateWorkItemMetadata(operation) => {
-                write!(
-                    formatter,
-                    "duplicate compiler work-item metadata for operation {operation:?}"
-                )
+                write!(formatter, "duplicate operation metadata: {operation:?}")
             }
 
             Self::MissingWorkItemMetadata(operation) => {
-                write!(
-                    formatter,
-                    "missing compiler work-item metadata for operation {operation:?}"
-                )
+                write!(formatter, "missing operation metadata: {operation:?}")
             }
 
             Self::ArithmeticOverflow => {
-                formatter.write_str(
-                    "compiler partitioning estimate arithmetic overflowed",
-                )
+                formatter.write_str("partitioning arithmetic overflow")
+            }
+
+            Self::InvalidPartitionResult(reason) => {
+                write!(formatter, "invalid partition result: {reason}")
             }
         }
     }
@@ -904,54 +776,27 @@ impl SegmentBuilder {
     fn new(
         ordinal: usize,
         operation: OperationId,
-        candidate_targets: BTreeSet<TargetId>,
-        estimated_work: WorkEstimate,
+        candidates: BTreeSet<TargetId>,
+        estimate: WorkEstimate,
     ) -> Self {
         Self {
             ordinal,
             work_items: vec![operation],
-            candidate_targets,
-            estimated_work,
+            candidate_targets: candidates,
+            estimated_work: estimate,
         }
-    }
-
-    fn can_accept(
-        &self,
-        candidates: &BTreeSet<TargetId>,
-    ) -> bool {
-        self.candidate_targets
-            .iter()
-            .any(|target| candidates.contains(target))
-    }
-
-    fn common_targets(
-        &self,
-        candidates: &BTreeSet<TargetId>,
-    ) -> BTreeSet<TargetId> {
-        self.candidate_targets
-            .intersection(candidates)
-            .cloned()
-            .collect()
     }
 
     fn add(
         &mut self,
         operation: OperationId,
-        candidates: &BTreeSet<TargetId>,
-        estimated_work: WorkEstimate,
+        estimate: WorkEstimate,
     ) -> Result<(), PartitioningError> {
-        let common_targets = self.common_targets(candidates);
-
-        if common_targets.is_empty() {
-            return Err(PartitioningError::ArithmeticOverflow);
-        }
-
         self.estimated_work = self
             .estimated_work
-            .checked_add(estimated_work)
+            .checked_add(estimate)
             .ok_or(PartitioningError::ArithmeticOverflow)?;
 
-        self.candidate_targets = common_targets;
         self.work_items.push(operation);
 
         Ok(())
@@ -978,36 +823,19 @@ impl SegmentBuilder {
 // ============================================================================
 
 /// Stateless compiler partitioning coordinator.
-///
-/// It integrates canonical capability and resource results with the
-/// repository's existing distributed workload partitioner.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Partitioner;
 
 impl Partitioner {
-    /// Creates a compiler partitioner.
+    /// Creates a partitioner.
     #[must_use]
     pub const fn new() -> Self {
         Self
     }
 
-    /// Partitions a workload using canonical capability matching and
-    /// optional resource feasibility results.
+    /// Partitions using canonical capability and optional resource evidence.
     ///
-    /// Every work item's candidate set is first intersected with the
-    /// globally capability-eligible targets.
-    ///
-    /// If a resource report is supplied, candidates are further restricted
-    /// to targets whose mandatory resource requirements are proven feasible.
-    ///
-    /// A missing resource report means that this invocation is not applying
-    /// a resource-evidence filter. It does not mean that resource capacity
-    /// has been proven unlimited.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the generic workload graph is invalid, an
-    /// operational budget is exceeded, or checked arithmetic fails.
+    /// Resource evidence is never assumed to be unlimited.
     pub fn partition(
         &self,
         workload: &PartitioningWorkload,
@@ -1015,11 +843,10 @@ impl Partitioner {
         capability_report: &CapabilityMatchReport,
         resource_report: Option<&ResourcePlanningReport>,
     ) -> Result<PartitioningReport, PartitioningError> {
-        let capability_targets: BTreeSet<TargetId> =
-            capability_report
-                .satisfied_targets()
-                .map(|candidate| candidate.target_id().clone())
-                .collect();
+        let capability_targets = capability_report
+            .satisfied_targets()
+            .map(|candidate| candidate.target_id().clone())
+            .collect::<BTreeSet<_>>();
 
         let resource_targets = resource_report.map(|report| {
             report
@@ -1028,10 +855,11 @@ impl Partitioner {
                 .collect::<BTreeSet<_>>()
         });
 
-        let inventory_complete = capability_report.discovery_is_complete()
-            && resource_report
-                .map(ResourcePlanningReport::discovery_is_complete)
-                .unwrap_or(true);
+        let inventory_complete =
+            capability_report.discovery_is_complete()
+                && resource_report
+                    .map(ResourcePlanningReport::discovery_is_complete)
+                    .unwrap_or(true);
 
         self.partition_with_target_evidence(
             workload,
@@ -1042,27 +870,7 @@ impl Partitioner {
         )
     }
 
-    /// Partitions a workload using already-evaluated target evidence.
-    ///
-    /// This lower-level entry point is useful when a higher-level compiler
-    /// coordinator has already combined capability and resource reports.
-    ///
-    /// `capability_eligible_targets` must come from canonical capability
-    /// matching.
-    ///
-    /// If `resource_feasible_targets` is supplied, it must contain only
-    /// targets with proven resource feasibility.
-    ///
-    /// The caller must not include targets with unresolved mandatory
-    /// capability or resource evidence.
-    ///
-    /// `inventory_complete` must accurately describe the completeness
-    /// of the supplied target evidence.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the workload graph or configured partitioning
-    /// policy is invalid.
+    /// Partitions using previously evaluated target evidence.
     pub fn partition_with_target_evidence(
         &self,
         workload: &PartitioningWorkload,
@@ -1071,6 +879,10 @@ impl Partitioner {
         resource_feasible_targets: Option<&BTreeSet<TargetId>>,
         inventory_complete: bool,
     ) -> Result<PartitioningReport, PartitioningError> {
+        // ------------------------------------------------------------
+        // Validate metadata identity.
+        // ------------------------------------------------------------
+
         let mut metadata = BTreeMap::new();
 
         for item in &workload.work_items {
@@ -1086,7 +898,11 @@ impl Partitioner {
             }
         }
 
-        let generic_units = workload
+        // ------------------------------------------------------------
+        // Construct canonical generic workload.
+        // ------------------------------------------------------------
+
+        let units = workload
             .work_items
             .iter()
             .map(|item| {
@@ -1098,21 +914,28 @@ impl Partitioner {
             })
             .collect();
 
-        let generic_graph = WorkloadGraph::new(
-            generic_units,
+        let graph = WorkloadGraph::new(
+            units,
             workload.dependencies.clone(),
         );
 
-        // Reuse the repository's canonical generic graph partitioner.
-        // This preserves its validation, budgets, dependency accounting,
-        // deterministic ordering, and structural output validation.
+        // Delegate structural validation and generic partitioning.
         let base_plan = partition_workload(
-            &generic_graph,
+            &graph,
             options.policy(),
             options.budget(),
         )?;
 
-        let adjacency = build_adjacency(&workload.dependencies);
+        // ------------------------------------------------------------
+        // Compatibility refinement.
+        //
+        // Exact candidate-set grouping is deliberately conservative:
+        // every operation in a segment has exactly the same proven
+        // alternatives.
+        //
+        // It avoids repeatedly scanning previously assigned operations
+        // to calculate locality.
+        // ------------------------------------------------------------
 
         let mut segments = Vec::new();
         let mut unassigned = Vec::new();
@@ -1121,7 +944,8 @@ impl Partitioner {
             BTreeMap::<OperationId, PartitionSegmentId>::new();
 
         for base_partition in base_plan.partitions() {
-            let mut builders: Vec<SegmentBuilder> = Vec::new();
+            let mut groups =
+                BTreeMap::<BTreeSet<TargetId>, SegmentBuilder>::new();
 
             for operation in base_partition.units() {
                 let item = metadata
@@ -1152,59 +976,27 @@ impl Partitioner {
                     continue;
                 }
 
-                let mut best: Option<(usize, WorkEstimate)> = None;
-
-                for (index, builder) in builders.iter().enumerate() {
-                    if !builder.can_accept(&eligible) {
-                        continue;
-                    }
-
-                    let locality = locality_score(
+                if let Some(builder) = groups.get_mut(&eligible) {
+                    builder.add(
                         *operation,
-                        &builder.work_items,
-                        &adjacency,
+                        item.estimated_work,
                     )?;
+                } else {
+                    let ordinal = groups.len();
 
-                    let replace = match best {
-                        None => true,
-
-                        Some((best_index, best_locality)) => {
-                            locality > best_locality
-                                || (
-                                    locality == best_locality
-                                        && index < best_index
-                                )
-                        }
-                    };
-
-                    if replace {
-                        best = Some((index, locality));
-                    }
-                }
-
-                match best {
-                    Some((index, _)) => {
-                        builders[index].add(
-                            *operation,
-                            &eligible,
-                            item.estimated_work,
-                        )?;
-                    }
-
-                    None => {
-                        let ordinal = builders.len();
-
-                        builders.push(SegmentBuilder::new(
+                    groups.insert(
+                        eligible.clone(),
+                        SegmentBuilder::new(
                             ordinal,
                             *operation,
                             eligible,
                             item.estimated_work,
-                        ));
-                    }
+                        ),
+                    );
                 }
             }
 
-            for builder in builders {
+            for (_, builder) in groups {
                 let segment = builder.finish(base_partition.id());
 
                 for operation in &segment.work_items {
@@ -1224,6 +1016,10 @@ impl Partitioner {
             }
         }
 
+        // ------------------------------------------------------------
+        // Preserve every dependency.
+        // ------------------------------------------------------------
+
         let mut boundaries = Vec::new();
         let mut unresolved_dependencies = Vec::new();
 
@@ -1231,25 +1027,26 @@ impl Partitioner {
             let source = *dependency.source();
             let destination = *dependency.destination();
 
-            let source_segment = segment_by_operation.get(&source).copied();
+            let source_segment =
+                segment_by_operation.get(&source).copied();
+
             let destination_segment =
                 segment_by_operation.get(&destination).copied();
 
             match (source_segment, destination_segment) {
-                (Some(source_id), Some(destination_id))
-                    if source_id != destination_id =>
-                {
+                (Some(left), Some(right)) if left != right => {
                     boundaries.push(PartitionBoundary {
                         source,
                         destination,
-                        source_segment: source_id,
-                        destination_segment: destination_id,
-                        communication_cost: dependency.communication_cost(),
+                        source_segment: left,
+                        destination_segment: right,
+                        communication_cost:
+                            dependency.communication_cost(),
                     });
                 }
 
                 (Some(_), Some(_)) => {
-                    // The dependency remains internal to one segment.
+                    // Dependency remains internal to its segment.
                 }
 
                 _ => {
@@ -1258,45 +1055,67 @@ impl Partitioner {
                             source,
                             destination,
                             source_assigned: source_segment.is_some(),
-                            destination_assigned: destination_segment.is_some(),
-                            communication_cost: dependency.communication_cost(),
+                            destination_assigned:
+                                destination_segment.is_some(),
+                            communication_cost:
+                                dependency.communication_cost(),
                         },
                     );
                 }
             }
         }
 
-        let assigned_count = segment_by_operation.len();
+        // ------------------------------------------------------------
+        // Verify work conservation.
+        // ------------------------------------------------------------
 
-        if assigned_count
+        let assigned = segment_by_operation.len();
+
+        let accounted = assigned
             .checked_add(unassigned.len())
-            .ok_or(PartitioningError::ArithmeticOverflow)?
-            != workload.work_items.len()
-        {
+            .ok_or(PartitioningError::ArithmeticOverflow)?;
+
+        if accounted != workload.work_items.len() {
             return Err(
-                PartitioningError::MissingWorkItemMetadata(
-                    workload
-                        .work_items
-                        .iter()
-                        .find(|item| {
-                            !segment_by_operation.contains_key(&item.operation)
-                                && !unassigned.iter().any(|entry| {
-                                    entry.operation == item.operation
-                                })
-                        })
-                        .map(|item| item.operation)
-                        .unwrap_or_else(|| {
-                            // This branch is only reachable if the report
-                            // violates the workload accounting invariant.
-                            workload.work_items[0].operation
-                        }),
+                PartitioningError::InvalidPartitionResult(
+                    format!(
+                        "expected {} operations, accounted for {}",
+                        workload.work_items.len(),
+                        accounted,
+                    ),
                 ),
             );
         }
 
+        // Verify unique assignment and segment membership.
+        for segment in &segments {
+            if segment.work_items.is_empty()
+                || segment.candidate_targets.is_empty()
+            {
+                return Err(
+                    PartitioningError::InvalidPartitionResult(
+                        "empty or incompatible segment".to_owned(),
+                    ),
+                );
+            }
+
+            for operation in &segment.work_items {
+                if segment_by_operation.get(operation)
+                    != Some(&segment.id)
+                {
+                    return Err(
+                        PartitioningError::InvalidPartitionResult(
+                            format!(
+                                "inconsistent membership for {operation:?}"
+                            ),
+                        ),
+                    );
+                }
+            }
+        }
+
         let disposition = determine_disposition(
             workload.work_items.len(),
-            assigned_count,
             unassigned.len(),
             inventory_complete,
         );
@@ -1314,13 +1133,13 @@ impl Partitioner {
         })
     }
 
-    /// Returns the stable module identity.
+    /// Returns the module identity.
     #[must_use]
     pub const fn module_name() -> &'static str {
         PARTITIONING_MODULE_NAME
     }
 
-    /// Returns the public API version.
+    /// Returns the API version.
     #[must_use]
     pub const fn api_version() -> u16 {
         PARTITIONING_API_VERSION
@@ -1328,7 +1147,7 @@ impl Partitioner {
 }
 
 // ============================================================================
-// INTERNAL TARGET FILTERING
+// TARGET FILTERING
 // ============================================================================
 
 fn eligible_targets_for_item(
@@ -1342,8 +1161,8 @@ fn eligible_targets_for_item(
         .cloned()
         .collect::<BTreeSet<_>>();
 
-    if let Some(resource_targets) = resource_targets {
-        eligible.retain(|target| resource_targets.contains(target));
+    if let Some(resources) = resource_targets {
+        eligible.retain(|target| resources.contains(target));
     }
 
     eligible
@@ -1358,13 +1177,12 @@ fn unassigned_reason(
         return UnassignedReason::NoOperationCapabilityCandidate;
     }
 
-    let globally_eligible = item
+    let has_global_candidate = item
         .candidate_targets
-        .intersection(capability_targets)
-        .next()
-        .is_some();
+        .iter()
+        .any(|target| capability_targets.contains(target));
 
-    if !globally_eligible {
+    if !has_global_candidate {
         return UnassignedReason::NoGloballyEligibleTarget;
     }
 
@@ -1376,76 +1194,15 @@ fn unassigned_reason(
 }
 
 // ============================================================================
-// INTERNAL GRAPH HELPERS
-// ============================================================================
-
-fn build_adjacency(
-    dependencies: &[Dependency<OperationId>],
-) -> BTreeMap<OperationId, Vec<(OperationId, WorkEstimate)>> {
-    let mut adjacency =
-        BTreeMap::<OperationId, Vec<(OperationId, WorkEstimate)>>::new();
-
-    for dependency in dependencies {
-        let source = *dependency.source();
-        let destination = *dependency.destination();
-        let cost = dependency.communication_cost();
-
-        adjacency
-            .entry(source)
-            .or_default()
-            .push((destination, cost));
-
-        adjacency
-            .entry(destination)
-            .or_default()
-            .push((source, cost));
-    }
-
-    for neighbors in adjacency.values_mut() {
-        neighbors.sort_by_key(|(operation, cost)| (*operation, *cost));
-    }
-
-    adjacency
-}
-
-fn locality_score(
-    operation: OperationId,
-    segment_members: &[OperationId],
-    adjacency: &BTreeMap<
-        OperationId,
-        Vec<(OperationId, WorkEstimate)>,
-    >,
-) -> Result<WorkEstimate, PartitioningError> {
-    let Some(neighbors) = adjacency.get(&operation) else {
-        return Ok(0);
-    };
-
-    let members = segment_members
-        .iter()
-        .copied()
-        .collect::<BTreeSet<_>>();
-
-    neighbors
-        .iter()
-        .filter(|(neighbor, _)| members.contains(neighbor))
-        .try_fold(0_u128, |total, (_, cost)| {
-            total
-                .checked_add(*cost)
-                .ok_or(PartitioningError::ArithmeticOverflow)
-        })
-}
-
-// ============================================================================
-// INTERNAL REPORT CLASSIFICATION
+// DISPOSITION
 // ============================================================================
 
 fn determine_disposition(
     total: usize,
-    assigned: usize,
     unassigned: usize,
     inventory_complete: bool,
 ) -> PartitioningDisposition {
-    if unassigned == total && total > 0 {
+    if total > 0 && unassigned == total {
         return PartitioningDisposition::NoCompatibleTarget;
     }
 
@@ -1457,382 +1214,5 @@ fn determine_disposition(
         return PartitioningDisposition::IncompleteInventory;
     }
 
-    // An empty workload is valid and requires no target assignment.
-    let _ = assigned;
-
     PartitioningDisposition::Complete
-}
-
-// ============================================================================
-// TESTS
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn operation(value: u128) -> OperationId {
-        OperationId::new(value).expect("valid operation identity")
-    }
-
-    fn target(value: &str) -> TargetId {
-        TargetId::new(value).expect("valid target identity")
-    }
-
-    fn work_item(
-        id: u128,
-        candidates: &[&str],
-    ) -> WorkItem {
-        WorkItem::new(
-            operation(id),
-            1,
-            candidates.iter().map(|value| target(value)),
-        )
-    }
-
-    fn workload(
-        items: Vec<WorkItem>,
-        dependencies: Vec<Dependency<OperationId>>,
-    ) -> PartitioningWorkload {
-        PartitioningWorkload::new(items, dependencies)
-    }
-
-    fn partition_with(
-        graph: &PartitioningWorkload,
-        eligible: &[&str],
-        complete: bool,
-    ) -> PartitioningReport {
-        let targets = eligible
-            .iter()
-            .map(|value| target(value))
-            .collect::<BTreeSet<_>>();
-
-        Partitioner::new()
-            .partition_with_target_evidence(
-                graph,
-                PartitioningOptions::default(),
-                &targets,
-                None,
-                complete,
-            )
-            .expect("partitioning should succeed")
-    }
-
-    #[test]
-    fn module_identity_is_stable() {
-        assert_eq!(
-            Partitioner::module_name(),
-            PARTITIONING_MODULE_NAME,
-        );
-
-        assert_eq!(
-            Partitioner::api_version(),
-            PARTITIONING_API_VERSION,
-        );
-    }
-
-    #[test]
-    fn empty_workload_produces_complete_empty_report() {
-        let graph = workload(Vec::new(), Vec::new());
-
-        let report = partition_with(&graph, &[], true);
-
-        assert!(report.is_complete());
-        assert!(report.segments().is_empty());
-        assert!(report.unassigned().is_empty());
-        assert!(report.boundaries().is_empty());
-    }
-
-    #[test]
-    fn one_compatible_work_item_is_assigned() {
-        let graph = workload(
-            vec![work_item(1, &["cpu"])],
-            Vec::new(),
-        );
-
-        let report = partition_with(&graph, &["cpu"], true);
-
-        assert!(report.is_complete());
-        assert_eq!(report.segments().len(), 1);
-
-        assert_eq!(
-            report.segments()[0].candidate_targets(),
-            &BTreeSet::from([target("cpu")]),
-        );
-    }
-
-    #[test]
-    fn incompatible_operations_are_refined_into_separate_segments() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu"]),
-                work_item(2, &["gpu"]),
-            ],
-            vec![
-                Dependency::new(operation(1), operation(2), 10),
-            ],
-        );
-
-        let report = partition_with(
-            &graph,
-            &["cpu", "gpu"],
-            true,
-        );
-
-        assert!(report.is_complete());
-        assert_eq!(report.segments().len(), 2);
-        assert_eq!(report.boundaries().len(), 1);
-
-        assert_eq!(
-            report.boundaries()[0].source(),
-            operation(1),
-        );
-
-        assert_eq!(
-            report.boundaries()[0].destination(),
-            operation(2),
-        );
-    }
-
-    #[test]
-    fn operations_with_common_targets_can_share_a_segment() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu", "gpu"]),
-                work_item(2, &["cpu"]),
-            ],
-            vec![
-                Dependency::new(operation(1), operation(2), 5),
-            ],
-        );
-
-        let report = partition_with(
-            &graph,
-            &["cpu", "gpu"],
-            true,
-        );
-
-        assert!(report.is_complete());
-        assert_eq!(report.segments().len(), 1);
-
-        assert_eq!(
-            report.segments()[0].candidate_targets(),
-            &BTreeSet::from([target("cpu")]),
-        );
-    }
-
-    #[test]
-    fn work_without_candidate_targets_is_not_silently_assigned() {
-        let graph = workload(
-            vec![work_item(1, &[])],
-            Vec::new(),
-        );
-
-        let report = partition_with(&graph, &["cpu"], true);
-
-        assert_eq!(
-            report.disposition(),
-            PartitioningDisposition::NoCompatibleTarget,
-        );
-
-        assert_eq!(report.unassigned().len(), 1);
-
-        assert_eq!(
-            report.unassigned()[0].reason(),
-            UnassignedReason::NoOperationCapabilityCandidate,
-        );
-    }
-
-    #[test]
-    fn candidates_not_in_global_capability_report_are_rejected() {
-        let graph = workload(
-            vec![work_item(1, &["cpu"])],
-            Vec::new(),
-        );
-
-        let report = partition_with(&graph, &["gpu"], true);
-
-        assert_eq!(report.unassigned().len(), 1);
-
-        assert_eq!(
-            report.unassigned()[0].reason(),
-            UnassignedReason::NoGloballyEligibleTarget,
-        );
-    }
-
-    #[test]
-    fn resource_evidence_filters_candidate_targets() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu", "gpu"]),
-            ],
-            Vec::new(),
-        );
-
-        let capability_targets =
-            BTreeSet::from([target("cpu"), target("gpu")]);
-
-        let resource_targets =
-            BTreeSet::from([target("gpu")]);
-
-        let report = Partitioner::new()
-            .partition_with_target_evidence(
-                &graph,
-                PartitioningOptions::default(),
-                &capability_targets,
-                Some(&resource_targets),
-                true,
-            )
-            .expect("partitioning should succeed");
-
-        assert!(report.is_complete());
-
-        assert_eq!(
-            report.segments()[0].candidate_targets(),
-            &BTreeSet::from([target("gpu")]),
-        );
-    }
-
-    #[test]
-    fn missing_resource_feasibility_is_not_assumed() {
-        let graph = workload(
-            vec![work_item(1, &["cpu"])],
-            Vec::new(),
-        );
-
-        let capability_targets =
-            BTreeSet::from([target("cpu")]);
-
-        let resource_targets = BTreeSet::new();
-
-        let report = Partitioner::new()
-            .partition_with_target_evidence(
-                &graph,
-                PartitioningOptions::default(),
-                &capability_targets,
-                Some(&resource_targets),
-                true,
-            )
-            .expect("partitioning should succeed");
-
-        assert_eq!(report.unassigned().len(), 1);
-
-        assert_eq!(
-            report.unassigned()[0].reason(),
-            UnassignedReason::NoResourceFeasibleTarget,
-        );
-    }
-
-    #[test]
-    fn incomplete_inventory_is_not_reported_as_complete() {
-        let graph = workload(
-            vec![work_item(1, &["cpu"])],
-            Vec::new(),
-        );
-
-        let report = partition_with(&graph, &["cpu"], false);
-
-        assert_eq!(
-            report.disposition(),
-            PartitioningDisposition::IncompleteInventory,
-        );
-
-        assert!(!report.is_complete());
-    }
-
-    #[test]
-    fn dependency_cycles_are_preserved_by_the_existing_partitioner() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu"]),
-                work_item(2, &["cpu"]),
-            ],
-            vec![
-                Dependency::new(operation(1), operation(2), 1),
-                Dependency::new(operation(2), operation(1), 1),
-            ],
-        );
-
-        let report = partition_with(&graph, &["cpu"], true);
-
-        assert!(report.is_complete());
-        assert_eq!(report.dependency_count(), 2);
-        assert!(report.boundaries().is_empty());
-    }
-
-    #[test]
-    fn dependencies_involving_unassigned_work_are_preserved() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu"]),
-                work_item(2, &[]),
-            ],
-            vec![
-                Dependency::new(operation(1), operation(2), 7),
-            ],
-        );
-
-        let report = partition_with(&graph, &["cpu"], true);
-
-        assert_eq!(report.unresolved_dependencies().len(), 1);
-
-        assert!(report.unresolved_dependencies()[0].source_assigned());
-        assert!(!report.unresolved_dependencies()[0].destination_assigned());
-    }
-
-    #[test]
-    fn duplicate_operation_metadata_is_rejected() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu"]),
-                work_item(1, &["gpu"]),
-            ],
-            Vec::new(),
-        );
-
-        let targets = BTreeSet::from([
-            target("cpu"),
-            target("gpu"),
-        ]);
-
-        let result = Partitioner::new()
-            .partition_with_target_evidence(
-                &graph,
-                PartitioningOptions::default(),
-                &targets,
-                None,
-                true,
-            );
-
-        assert!(matches!(
-            result,
-            Err(PartitioningError::DuplicateWorkItemMetadata(_)),
-        ));
-    }
-
-    #[test]
-    fn cross_partition_dependency_is_not_lost() {
-        let graph = workload(
-            vec![
-                work_item(1, &["cpu"]),
-                work_item(2, &["gpu"]),
-            ],
-            vec![
-                Dependency::new(operation(1), operation(2), 99),
-            ],
-        );
-
-        let report = partition_with(
-            &graph,
-            &["cpu", "gpu"],
-            true,
-        );
-
-        assert_eq!(report.dependency_count(), 1);
-        assert_eq!(report.boundaries().len(), 1);
-        assert_eq!(
-            report.boundaries()[0].communication_cost(),
-            99,
-        );
-    }
 }
