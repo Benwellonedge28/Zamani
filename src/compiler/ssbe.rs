@@ -1,63 +1,174 @@
-//! Zamani Compiler — Self-Synthesizing Backend Engine (SSBE)
-//!
-//! SSBE converts validated substrate specifications into deterministic backend
-//! source modules.
-//!
-//! Important security boundary:
-//! SSBE generates source text, but it does not compile or execute that source.
-//! Generated backends must subsequently pass the normal Zamani compiler,
-//! formatter, static analysis, security checks, and CI pipeline.
-//!
-//! Design goals:
-//! - deterministic backend generation
-//! - strict substrate validation
-//! - safe output-path handling
-//! - protection against path traversal
-//! - Rust-source escaping for generated metadata
-//! - atomic file replacement
-//! - bounded input sizes
-//! - structured errors
-//! - testable generation without filesystem access
-//! - compatibility with the previous public API
 
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_docs)]
+
+//! Zamani Self-Synthesizing Backend Engine (SSBE).
+//!
+//! Path: src/compiler/ssbe.rs
+//! Edition: 2021
+//! Minimum Rust version: 1.97.
+//!
+//! # Purpose
+//!
+//! SSBE generates deterministic Rust source containing validated
+//! backend-provider metadata.
+//!
+//! SSBE does not implement target-specific machine-code generation.
+//! It does not create executable artifacts or register unverified
+//! backend implementations.
+//!
+//! Generated provider metadata must subsequently pass the normal
+//! Rust compilation, security, backend integration, registration,
+//! artifact validation and compiler qualification processes.
+//!
+//! # Architectural ownership
+//!
+//! Canonical source semantics:
+//!     crate::frontend::semantic
+//!
+//! Canonical universal IR:
+//!     crate::zuir
+//!
+//! Canonical backend interface:
+//!     crate::backend
+//!
+//! Canonical backend registry:
+//!     crate::backend::registry
+//!
+//! Compiler-facing backend integration:
+//!     crate::compiler::backends
+//!
+//! Artifact validation:
+//!     crate::compiler::artifacts
+//!
+//! Security verification:
+//!     crate::compiler::security
+//!
+//! Compilation orchestration:
+//!     crate::compiler::pipeline
+//!
+//! SSBE integrates with these authorities.
+//! It does not replace them.
+//!
+//! # Scalability
+//!
+//! This module imposes no arbitrary universal limits on:
+//!
+//! - Instruction count.
+//! - Instruction length.
+//! - Substrate name length.
+//! - Paradigm name length.
+//! - Translation-rule length.
+//! - Backend provider count.
+//! - Computational domains.
+//! - Hardware architectures.
+//! - Accelerator count.
+//! - Quantum processor count.
+//! - Distributed participants.
+//! - Future computational technologies.
+//!
+//! An explicitly configured output budget is an operational
+//! restriction, not a language or hardware capability limit.
+//!
+//! Actual capacity depends on available memory, storage,
+//! operating-system limits and configured operational policies.
+//!
+//! # Security
+//!
+//! - No unsafe Rust.
+//! - No execution of generated source.
+//! - No execution of translation rules.
+//! - No arbitrary shell commands.
+//! - No path derived directly from untrusted substrate names.
+//! - No silent replacement when overwrite is disabled.
+//! - Exclusive temporary-file creation.
+//! - Deterministic metadata generation.
+//! - Structured error propagation.
+//!
+//! # POCO-REAF
+//!
+//! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
+//!
+//! A generated provider descriptor is independent of physical
+//! resource allocation and runtime execution.
+//!
+//! A registered provider must separately demonstrate compatibility,
+//! capability support, feasibility and correct backend realization.
+
+use std::error::Error;
 use std::fmt;
-use std::fs;
-use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Maximum number of instructions accepted for one synthesized backend.
-pub const MAX_INSTRUCTION_COUNT: usize = 65_536;
+use sha2::{Digest, Sha256};
 
-/// Maximum length of a single instruction.
-pub const MAX_INSTRUCTION_LENGTH: usize = 512;
+// ============================================================================
+// MODULE IDENTITY
+// ============================================================================
 
-/// Maximum substrate name length.
-pub const MAX_SUBSTRATE_NAME_LENGTH: usize = 128;
+/// Stable SSBE module identity.
+pub const SSBE_MODULE_NAME: &str =
+    "zamani.compiler.ssbe";
 
-/// Maximum paradigm length.
-pub const MAX_PARADIGM_LENGTH: usize = 128;
+/// SSBE API version.
+///
+/// Independent of the Zamani language, compiler, backend and IR versions.
+pub const SSBE_API_VERSION: u16 = 2;
 
-/// Maximum translation-rule length.
-pub const MAX_TRANSLATION_RULE_LENGTH: usize = 16_384;
+/// Generated metadata schema version.
+pub const SSBE_METADATA_SCHEMA_VERSION: u32 = 1;
 
-/// Definition of a target execution substrate.
+/// Generated metadata source format.
+pub const SSBE_SOURCE_FORMAT: &str =
+    "zamani.backend-provider-metadata.rust";
+
+const TEMPORARY_FILE_PREFIX: &str = ".zamani-ssbe";
+
+static TEMPORARY_FILE_SEQUENCE: AtomicU64 =
+    AtomicU64::new(0);
+
+// ============================================================================
+// SUBSTRATE DEFINITION
+// ============================================================================
+
+/// Definition of an execution substrate.
+///
+/// This is provider-generation input.
+///
+/// It is not a physical hardware allocation, backend implementation,
+/// target compatibility decision or executable instruction stream.
+///
+/// The instruction set represents descriptive provider metadata.
+/// It is not interpreted or executed by SSBE.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubstrateDefinition {
     /// Human-readable and machine-identifying substrate name.
     pub name: String,
 
-    /// Programming/architectural paradigm represented by the substrate.
+    /// Programming or architectural paradigm.
     pub paradigm: String,
 
-    /// Canonical instruction set accepted by the substrate backend.
+    /// Descriptive instruction set.
     pub instruction_set: Vec<String>,
 
-    /// Translation rule used as backend metadata.
+    /// Human-readable translation-rule description.
+    ///
+    /// This field is metadata only. SSBE does not interpret it
+    /// as executable code.
     pub translation_rule: String,
 }
 
 impl SubstrateDefinition {
-    /// Construct a substrate definition and validate it immediately.
+    /// Construct and validate a substrate definition.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when required metadata is empty or contains
+    /// prohibited control characters.
     pub fn new(
         name: impl Into<String>,
         paradigm: impl Into<String>,
@@ -72,113 +183,222 @@ impl SubstrateDefinition {
         };
 
         definition.validate()?;
+
         Ok(definition)
     }
 
     /// Validate the complete substrate definition.
+    ///
+    /// No arbitrary metadata-length or instruction-count ceiling
+    /// is imposed.
     pub fn validate(&self) -> Result<(), SsbeError> {
-        validate_text_field(
+        validate_text(
             &self.name,
             "substrate name",
-            MAX_SUBSTRATE_NAME_LENGTH,
         )?;
 
-        validate_text_field(
+        validate_text(
             &self.paradigm,
             "paradigm",
-            MAX_PARADIGM_LENGTH,
+        )?;
+
+        validate_text(
+            &self.translation_rule,
+            "translation rule",
         )?;
 
         if self.instruction_set.is_empty() {
             return Err(SsbeError::InvalidDefinition(
-                "instruction set cannot be empty".to_string(),
+                "instruction set cannot be empty".into(),
             ));
         }
 
-        if self.instruction_set.len() > MAX_INSTRUCTION_COUNT {
-            return Err(SsbeError::InvalidDefinition(format!(
-                "instruction set contains {} entries; maximum is {}",
-                self.instruction_set.len(),
-                MAX_INSTRUCTION_COUNT
-            )));
-        }
+        for (index, instruction) in
+            self.instruction_set.iter().enumerate()
+        {
+            if instruction.trim().is_empty() {
+                return Err(SsbeError::InvalidDefinition(
+                    format!(
+                        "instruction at index {index} cannot be empty"
+                    ),
+                ));
+            }
 
-        for (index, instruction) in self.instruction_set.iter().enumerate() {
-            validate_instruction(instruction, index)?;
+            if instruction.chars().any(char::is_control) {
+                return Err(SsbeError::InvalidDefinition(
+                    format!(
+                        "instruction at index {index} contains control characters"
+                    ),
+                ));
+            }
         }
-
-        validate_text_field(
-            &self.translation_rule,
-            "translation rule",
-            MAX_TRANSLATION_RULE_LENGTH,
-        )?;
 
         Ok(())
     }
 
-    /// Return a deterministic filesystem-safe backend filename.
-    pub fn backend_filename(&self) -> String {
-        format!("{}.rs", sanitize_identifier(&self.name))
+    /// Return the deterministic content identity of this definition.
+    ///
+    /// The identity includes all metadata and preserves instruction order.
+    ///
+    /// It is suitable for identifying generated metadata, not for
+    /// establishing provider authenticity or semantic correctness.
+    pub fn fingerprint(&self) -> String {
+        let mut hasher = Sha256::new();
+
+        hasher.update(b"zamani-ssbe-substrate-v1");
+
+        hash_field(&mut hasher, self.name.as_bytes());
+        hash_field(&mut hasher, self.paradigm.as_bytes());
+        hash_field(
+            &mut hasher,
+            self.translation_rule.as_bytes(),
+        );
+
+        hasher.update(
+            (self.instruction_set.len() as u128).to_be_bytes(),
+        );
+
+        for instruction in &self.instruction_set {
+            hash_field(&mut hasher, instruction.as_bytes());
+        }
+
+        hex::encode(hasher.finalize())
     }
 
-    /// Return the deterministic Rust type name for this backend.
-    pub fn backend_type_name(&self) -> String {
-        format!("{}Backend", rust_type_identifier(&self.name))
+    /// Return a deterministic generated source filename.
+    ///
+    /// The filename is derived from the complete definition fingerprint,
+    /// not directly from untrusted user-controlled names.
+    pub fn backend_filename(&self) -> String {
+        format!(
+            "ssbe-{}.rs",
+            self.fingerprint()
+        )
+    }
+
+    /// Return the stable generated metadata type name.
+    ///
+    /// The type name is deliberately independent of the substrate name.
+    pub fn backend_type_name(&self) -> &'static str {
+        "SubstrateMetadata"
     }
 }
 
-/// SSBE configuration.
+/// Hash a length-delimited field.
+///
+/// Length delimiting prevents ambiguous concatenation of metadata fields.
+fn hash_field(
+    hasher: &mut Sha256,
+    value: &[u8],
+) {
+    hasher.update(
+        (value.len() as u128).to_be_bytes(),
+    );
+
+    hasher.update(value);
+}
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+/// SSBE operational configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SsbeConfig {
     /// Maximum generated source size in bytes.
+    ///
+    /// Defaults to `usize::MAX`, meaning no additional SSBE-specific
+    /// source-size ceiling.
+    ///
+    /// The process remains subject to actual memory and operating-system
+    /// resource availability.
     pub max_generated_source_bytes: usize,
 
-    /// Whether existing generated files may be replaced.
+    /// Whether an existing generated file may be replaced.
+    ///
+    /// Defaults to false.
     pub allow_overwrite: bool,
 }
 
 impl Default for SsbeConfig {
     fn default() -> Self {
         Self {
-            max_generated_source_bytes: 4 * 1024 * 1024,
-            allow_overwrite: true,
+            max_generated_source_bytes: usize::MAX,
+            allow_overwrite: false,
         }
     }
 }
 
+// ============================================================================
+// ERRORS
+// ============================================================================
+
 /// Structured SSBE errors.
 #[derive(Debug)]
 pub enum SsbeError {
+    /// Invalid substrate metadata.
     InvalidDefinition(String),
-    InvalidIdentifier(String),
+
+    /// Invalid output directory.
     InvalidOutputDirectory(PathBuf),
+
+    /// Existing output cannot be replaced.
     OutputExists(PathBuf),
-    Io {
+
+    /// Generated source exceeds the explicitly configured budget.
+    GeneratedSourceTooLarge {
+        /// Actual generated size.
+        size: usize,
+
+        /// Configured maximum.
+        maximum: usize,
+    },
+
+    /// Allocation failed while constructing generated source.
+    Allocation {
+        /// Operation being performed.
         operation: &'static str,
+    },
+
+    /// Filesystem operation failed.
+    Io {
+        /// Operation being performed.
+        operation: &'static str,
+
+        /// Affected path.
         path: PathBuf,
+
+        /// Original operating-system error.
         source: io::Error,
     },
-    GeneratedSourceTooLarge {
-        size: usize,
-        maximum: usize,
+
+    /// Generated output could not be installed safely.
+    Installation {
+        /// Destination path.
+        path: PathBuf,
+
+        /// Original operating-system error.
+        source: io::Error,
     },
 }
 
 impl fmt::Display for SsbeError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Self::InvalidDefinition(message) => {
-                write!(formatter, "SSBE invalid substrate definition: {message}")
-            }
-
-            Self::InvalidIdentifier(message) => {
-                write!(formatter, "SSBE invalid identifier: {message}")
+                write!(
+                    formatter,
+                    "SSBE invalid substrate definition: {message}"
+                )
             }
 
             Self::InvalidOutputDirectory(path) => {
                 write!(
                     formatter,
-                    "SSBE invalid output directory '{}'",
+                    "SSBE invalid output directory: '{}'",
                     path.display()
                 )
             }
@@ -186,8 +406,25 @@ impl fmt::Display for SsbeError {
             Self::OutputExists(path) => {
                 write!(
                     formatter,
-                    "SSBE output already exists and overwriting is disabled: '{}'",
+                    "SSBE output already exists: '{}'",
                     path.display()
+                )
+            }
+
+            Self::GeneratedSourceTooLarge {
+                size,
+                maximum,
+            } => {
+                write!(
+                    formatter,
+                    "Generated source size {size} exceeds configured budget {maximum}"
+                )
+            }
+
+            Self::Allocation { operation } => {
+                write!(
+                    formatter,
+                    "SSBE allocation failed while {operation}"
                 )
             }
 
@@ -203,58 +440,186 @@ impl fmt::Display for SsbeError {
                 )
             }
 
-            Self::GeneratedSourceTooLarge { size, maximum } => {
+            Self::Installation {
+                path,
+                source,
+            } => {
                 write!(
                     formatter,
-                    "SSBE generated source is {size} bytes; maximum is {maximum}"
+                    "SSBE could not safely install '{}': {source}",
+                    path.display()
                 )
             }
         }
     }
 }
 
-impl std::error::Error for SsbeError {}
-
-/// Result of backend synthesis.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SynthesisResult {
-    /// Path of the generated backend source.
-    pub path: PathBuf,
-
-    /// Generated source size.
-    pub bytes_written: usize,
-
-    /// Number of instructions represented.
-    pub instruction_count: usize,
+impl Error for SsbeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Io { source, .. } => Some(source),
+            Self::Installation { source, .. } => Some(source),
+            _ => None,
+        }
+    }
 }
 
+// ============================================================================
+// RESULT
+// ============================================================================
+
+/// Result of successful metadata synthesis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SynthesisResult {
+    /// Absolute path of the generated Rust source.
+    pub path: PathBuf,
+
+    /// Generated source size in bytes.
+    pub bytes_written: usize,
+
+    /// Number of metadata instructions represented.
+    pub instruction_count: usize,
+
+    /// Deterministic substrate identity.
+    pub substrate_fingerprint: String,
+
+    /// SHA-256 digest of the generated source.
+    pub source_digest: String,
+}
+
+// ============================================================================
+// FALLIBLE SOURCE BUILDER
+// ============================================================================
+
+/// Fallible source builder with configurable resource accounting.
+struct SourceBuilder {
+    source: String,
+    maximum: usize,
+}
+
+impl SourceBuilder {
+    fn new(maximum: usize) -> Self {
+        Self {
+            source: String::new(),
+            maximum,
+        }
+    }
+
+    fn push(
+        &mut self,
+        value: &str,
+    ) -> Result<(), SsbeError> {
+        let new_size = self.source.len()
+            .checked_add(value.len())
+            .ok_or(SsbeError::GeneratedSourceTooLarge {
+                size: usize::MAX,
+                maximum: self.maximum,
+            })?;
+
+        if new_size > self.maximum {
+            return Err(SsbeError::GeneratedSourceTooLarge {
+                size: new_size,
+                maximum: self.maximum,
+            });
+        }
+
+        self.source
+            .try_reserve(value.len())
+            .map_err(|_| SsbeError::Allocation {
+                operation: "reserving generated source memory",
+            })?;
+
+        self.source.push_str(value);
+
+        Ok(())
+    }
+
+    fn push_rust_string(
+        &mut self,
+        value: &str,
+    ) -> Result<(), SsbeError> {
+        self.push("\"")?;
+
+        for character in value.chars() {
+            match character {
+                '\\' => self.push("\\\\")?,
+                '"' => self.push("\\\"")?,
+                '\n' => self.push("\\n")?,
+                '\r' => self.push("\\r")?,
+                '\t' => self.push("\\t")?,
+                '\0' => self.push("\\0")?,
+
+                character if character.is_control() => {
+                    self.push("\\u{")?;
+
+                    let escaped = format!(
+                        "{:x}",
+                        character as u32
+                    );
+
+                    self.push(&escaped)?;
+                    self.push("}")?;
+                }
+
+                character => {
+                    let mut encoded = [0_u8; 4];
+
+                    self.push(
+                        character.encode_utf8(&mut encoded),
+                    )?;
+                }
+            }
+        }
+
+        self.push("\"")
+    }
+
+    fn finish(self) -> String {
+        self.source
+    }
+}
+
+// ============================================================================
+// ENGINE
+// ============================================================================
+
 /// Self-Synthesizing Backend Engine.
+///
+/// The engine is stateless apart from its immutable configuration.
+///
+/// Cloned engines share no mutable synthesis state.
 #[derive(Debug, Clone)]
 pub struct SelfSynthesizingBackendEngine {
-    /// Directory in which generated backend modules are written.
+    /// Configured output directory.
+    ///
+    /// Retained as a public string for compatibility with the
+    /// previous SSBE interface.
     pub output_dir: String,
 
     config: SsbeConfig,
 }
 
 impl SelfSynthesizingBackendEngine {
-    /// Construct an SSBE using default configuration.
+    /// Construct SSBE with default configuration.
     pub fn new(output_dir: &str) -> Self {
         Self {
-            output_dir: output_dir.to_string(),
+            output_dir: output_dir.to_owned(),
             config: SsbeConfig::default(),
         }
     }
 
     /// Construct SSBE with explicit configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the configured source-size budget is zero.
     pub fn with_config(
         output_dir: impl Into<String>,
         config: SsbeConfig,
     ) -> Result<Self, SsbeError> {
         if config.max_generated_source_bytes == 0 {
             return Err(SsbeError::InvalidDefinition(
-                "maximum generated source size must be greater than zero"
-                    .to_string(),
+                "generated source budget must be greater than zero".into(),
             ));
         }
 
@@ -264,422 +629,505 @@ impl SelfSynthesizingBackendEngine {
         })
     }
 
-    /// Return the active configuration.
+    /// Return the active immutable configuration.
     pub fn config(&self) -> &SsbeConfig {
         &self.config
     }
 
-    /// Validate the configured output directory.
-    pub fn validate_output_directory(&self) -> Result<PathBuf, SsbeError> {
-        let path = PathBuf::from(&self.output_dir);
+    /// Validate and resolve the output directory.
+    ///
+    /// The directory is created if it does not exist.
+    ///
+    /// The returned path is canonicalized, preventing generated
+    /// filenames from being resolved through an uncanonicalized
+    /// relative directory path.
+    pub fn validate_output_directory(
+        &self,
+    ) -> Result<PathBuf, SsbeError> {
+        let configured = PathBuf::from(&self.output_dir);
 
-        if path.as_os_str().is_empty() {
-            return Err(SsbeError::InvalidOutputDirectory(path));
+        if configured.as_os_str().is_empty() {
+            return Err(
+                SsbeError::InvalidOutputDirectory(configured)
+            );
         }
 
-        if path.exists() && !path.is_dir() {
-            return Err(SsbeError::InvalidOutputDirectory(path));
+        if configured.exists() && !configured.is_dir() {
+            return Err(
+                SsbeError::InvalidOutputDirectory(configured)
+            );
         }
 
-        Ok(path)
+        if !configured.exists() {
+            fs::create_dir_all(&configured).map_err(|source| {
+                SsbeError::Io {
+                    operation: "creating output directory",
+                    path: configured.clone(),
+                    source,
+                }
+            })?;
+        }
+
+        fs::canonicalize(&configured).map_err(|source| {
+            SsbeError::Io {
+                operation: "canonicalizing output directory",
+                path: configured,
+                source,
+            }
+        })
     }
 
-    /// Generate backend Rust source without writing it to disk.
+    /// Generate deterministic backend-provider metadata source.
     ///
-    /// This method is the safest/testable core of SSBE.
+    /// This method performs no filesystem operations.
+    ///
+    /// The resulting Rust source contains metadata only.
+    /// It does not implement the canonical Backend trait.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid metadata or exhausted configured
+    /// generation budgets.
     pub fn generate_backend_source(
         &self,
         substrate: &SubstrateDefinition,
     ) -> Result<String, SsbeError> {
         substrate.validate()?;
 
-        let backend_type = substrate.backend_type_name();
-
-        let mut source = String::with_capacity(
-            1024 + substrate.instruction_set.len() * 64,
+        let mut builder = SourceBuilder::new(
+            self.config.max_generated_source_bytes,
         );
 
-        source.push_str("//! Zamani Autogenerated Backend.\n");
-        source.push_str("//!\n");
-        source.push_str("//! This file was generated by SSBE.\n");
-        source.push_str("//! Do not edit manually.\n");
-        source.push_str("//!\n");
-        source.push_str("//! Generation is deterministic for an identical\n");
-        source.push_str("//! SubstrateDefinition.\n\n");
+        builder.push(
+            "// Generated by Zamani SSBE.\n\
+             // This file contains provider metadata only.\n\
+             // It is not an executable backend implementation.\n\
+             // Generated source requires normal compilation and verification.\n\n",
+        )?;
 
-        source.push_str("#![allow(dead_code)]\n\n");
+        builder.push("#![forbid(unsafe_code)]\n\n")?;
 
-        source.push_str("/// Target substrate metadata.\n");
-        source.push_str("#[derive(Debug, Clone, Copy, PartialEq, Eq)]\n");
-        source.push_str("pub struct BackendMetadata;\n\n");
+        builder.push(
+            "/// Generated substrate-provider metadata.\n\
+             #[derive(Debug, Clone, Copy, PartialEq, Eq)]\n\
+             pub struct SubstrateMetadata;\n\n",
+        )?;
 
-        source.push_str("impl BackendMetadata {\n");
+        builder.push("impl SubstrateMetadata {\n")?;
 
-        source.push_str("    pub const SUBSTRATE: &str = ");
-        append_rust_string_literal(&mut source, &substrate.name);
-        source.push_str(";\n");
+        builder.push(
+            "    /// Metadata schema version.\n\
+             pub const SCHEMA_VERSION: u32 = ",
+        )?;
 
-        source.push_str("    pub const PARADIGM: &str = ");
-        append_rust_string_literal(&mut source, &substrate.paradigm);
-        source.push_str(";\n");
+        builder.push(
+            &SSBE_METADATA_SCHEMA_VERSION.to_string(),
+        )?;
 
-        source.push_str("    pub const TRANSLATION_RULE: &str = ");
-        append_rust_string_literal(&mut source, &substrate.translation_rule);
-        source.push_str(";\n");
+        builder.push(";\n\n")?;
 
-        source.push_str("    pub const INSTRUCTION_SET: &[&str] = &[\n");
+        builder.push(
+            "    /// Stable substrate fingerprint.\n\
+             pub const FINGERPRINT: &str = ",
+        )?;
+
+        builder.push_rust_string(
+            &substrate.fingerprint(),
+        )?;
+
+        builder.push(";\n\n")?;
+
+        builder.push(
+            "    /// Original substrate name.\n\
+             pub const SUBSTRATE: &str = ",
+        )?;
+
+        builder.push_rust_string(
+            &substrate.name,
+        )?;
+
+        builder.push(";\n\n")?;
+
+        builder.push(
+            "    /// Substrate programming paradigm.\n\
+             pub const PARADIGM: &str = ",
+        )?;
+
+        builder.push_rust_string(
+            &substrate.paradigm,
+        )?;
+
+        builder.push(";\n\n")?;
+
+        builder.push(
+            "    /// Translation-rule description.\n\
+             /// This value is descriptive metadata only.\n\
+             pub const TRANSLATION_RULE: &str = ",
+        )?;
+
+        builder.push_rust_string(
+            &substrate.translation_rule,
+        )?;
+
+        builder.push(";\n\n")?;
+
+        builder.push(
+            "    /// Descriptive instruction metadata.\n\
+             pub const INSTRUCTION_SET: &[&str] = &[\n",
+        )?;
 
         for instruction in &substrate.instruction_set {
-            source.push_str("        ");
-            append_rust_string_literal(&mut source, instruction);
-            source.push_str(",\n");
+            builder.push("        ")?;
+
+            builder.push_rust_string(instruction)?;
+
+            builder.push(",\n")?;
         }
 
-        source.push_str("    ];\n");
-        source.push_str("}\n\n");
+        builder.push("    ];\n")?;
 
-        source.push_str("/// Synthesized backend marker.\n");
-        source.push_str("#[derive(Debug, Clone, Copy, Default)]\n");
-        source.push_str("pub struct ");
-        source.push_str(&backend_type);
-        source.push_str(";\n\n");
+        builder.push("}\n")?;
 
-        source.push_str("impl ");
-        source.push_str(&backend_type);
-        source.push_str(" {\n");
-
-        source.push_str(
-            "    /// Returns the canonical target substrate name.\n",
-        );
-        source.push_str("    pub const fn substrate_name() -> &'static str {\n");
-        source.push_str("        BackendMetadata::SUBSTRATE\n");
-        source.push_str("    }\n\n");
-
-        source.push_str(
-            "    /// Returns the target paradigm.\n",
-        );
-        source.push_str("    pub const fn paradigm() -> &'static str {\n");
-        source.push_str("        BackendMetadata::PARADIGM\n");
-        source.push_str("    }\n\n");
-
-        source.push_str(
-            "    /// Returns the canonical instruction set.\n",
-        );
-        source.push_str(
-            "    pub const fn instruction_set() -> &'static [&'static str] {\n",
-        );
-        source.push_str("        BackendMetadata::INSTRUCTION_SET\n");
-        source.push_str("    }\n\n");
-
-        source.push_str(
-            "    /// Produces backend metadata for downstream compilation.\n",
-        );
-        source.push_str(
-            "    pub fn emit_code(module_name: &str) -> String {\n",
-        );
-        source.push_str(
-            "        format!(\"{}:{}\", Self::substrate_name(), module_name)\n",
-        );
-        source.push_str("    }\n");
-
-        source.push_str("}\n");
-
-        if source.len() > self.config.max_generated_source_bytes {
-            return Err(SsbeError::GeneratedSourceTooLarge {
-                size: source.len(),
-                maximum: self.config.max_generated_source_bytes,
-            });
-        }
-
-        Ok(source)
+        Ok(builder.finish())
     }
 
-    /// Synthesize a backend and atomically write it to the configured output
-    /// directory.
+    /// Synthesize metadata source and install it in the output directory.
     ///
-    /// The generated file is first written to a temporary file and then
-    /// renamed into place. This prevents consumers from observing a partially
-    /// generated Rust source file.
+    /// The legacy string-path return type is retained for compatibility.
+    ///
+    /// Prefer `synthesize_backend_checked` for structured error handling.
     pub fn synthesize_backend(
         &self,
         substrate: &SubstrateDefinition,
     ) -> Result<String, String> {
         self.synthesize_backend_checked(substrate)
-            .map(|result| result.path.to_string_lossy().into_owned())
+            .map(|result| {
+                result.path.to_string_lossy().into_owned()
+            })
             .map_err(|error| error.to_string())
     }
 
-    /// Structured version of `synthesize_backend`.
+    /// Synthesize and safely install metadata source.
+    ///
+    /// The generated file is written to a unique temporary file.
+    ///
+    /// The temporary file is fully written and synchronized before
+    /// installation.
+    ///
+    /// With overwrite disabled, installation uses an exclusive
+    /// filesystem hard-link operation, preventing a concurrent
+    /// process from silently replacing an existing destination.
+    ///
+    /// With overwrite enabled, the temporary file is atomically
+    /// renamed where the operating system supports that operation.
+    ///
+    /// # Errors
+    ///
+    /// Returns structured validation, allocation, budget or I/O errors.
     pub fn synthesize_backend_checked(
         &self,
         substrate: &SubstrateDefinition,
     ) -> Result<SynthesisResult, SsbeError> {
-        let output_dir = self.validate_output_directory()?;
-
         substrate.validate()?;
 
         let source = self.generate_backend_source(substrate)?;
 
-        if !output_dir.exists() {
-            fs::create_dir_all(&output_dir).map_err(|source| SsbeError::Io {
-                operation: "creating output directory",
-                path: output_dir.clone(),
-                source,
-            })?;
-        }
+        let output_dir = self.validate_output_directory()?;
 
-        let file_name = substrate.backend_filename();
-        let output_path = output_dir.join(&file_name);
-
-        ensure_path_is_direct_child(&output_dir, &output_path)?;
+        let output_path = output_dir.join(
+            substrate.backend_filename(),
+        );
 
         if output_path.exists() && !self.config.allow_overwrite {
             return Err(SsbeError::OutputExists(output_path));
         }
 
-        let temporary_path = temporary_path_for(&output_path);
+        let source_digest = hex::encode(
+            Sha256::digest(source.as_bytes()),
+        );
 
-        fs::write(&temporary_path, source.as_bytes()).map_err(|source| {
-            SsbeError::Io {
-                operation: "writing temporary backend",
-                path: temporary_path.clone(),
-                source,
-            }
-        })?;
+        let temporary_path = create_temporary_file(
+            &output_dir,
+            &substrate.fingerprint(),
+        )?;
 
-        if let Err(error) = fs::rename(&temporary_path, &output_path) {
+        let write_result = write_and_sync(
+            &temporary_path,
+            source.as_bytes(),
+        );
+
+        if let Err(error) = write_result {
             let _ = fs::remove_file(&temporary_path);
 
-            return Err(SsbeError::Io {
-                operation: "atomically installing backend",
+            return Err(error);
+        }
+
+        let installation = if self.config.allow_overwrite {
+            fs::rename(
+                &temporary_path,
+                &output_path,
+            )
+        } else {
+            fs::hard_link(
+                &temporary_path,
+                &output_path,
+            )
+        };
+
+        if let Err(source_error) = installation {
+            let _ = fs::remove_file(&temporary_path);
+
+            if source_error.kind() == io::ErrorKind::AlreadyExists {
+                return Err(
+                    SsbeError::OutputExists(output_path)
+                );
+            }
+
+            return Err(SsbeError::Installation {
                 path: output_path,
-                source: error,
+                source: source_error,
             });
+        }
+
+        if !self.config.allow_overwrite {
+            fs::remove_file(&temporary_path).map_err(|source| {
+                SsbeError::Io {
+                    operation: "removing installed temporary link",
+                    path: temporary_path,
+                    source,
+                }
+            })?;
         }
 
         Ok(SynthesisResult {
             path: output_path,
             bytes_written: source.len(),
             instruction_count: substrate.instruction_set.len(),
+            substrate_fingerprint: substrate.fingerprint(),
+            source_digest,
         })
     }
 }
 
-/// Ensure a generated file cannot escape the configured output directory.
-fn ensure_path_is_direct_child(
+// ============================================================================
+// FILESYSTEM OPERATIONS
+// ============================================================================
+
+/// Create a unique temporary file in the destination directory.
+///
+/// `create_new(true)` ensures that an existing file is never opened
+/// or overwritten.
+///
+/// Temporary files reside on the same filesystem as the destination,
+/// allowing atomic installation operations.
+fn create_temporary_file(
     directory: &Path,
-    candidate: &Path,
-) -> Result<(), SsbeError> {
-    let candidate_name = candidate.file_name().ok_or_else(|| {
-        SsbeError::InvalidOutputDirectory(candidate.to_path_buf())
-    })?;
+    fingerprint: &str,
+) -> Result<PathBuf, SsbeError> {
+    loop {
+        let sequence = TEMPORARY_FILE_SEQUENCE.fetch_add(
+            1,
+            Ordering::Relaxed,
+        );
 
-    if candidate_name.is_empty() {
-        return Err(SsbeError::InvalidOutputDirectory(
-            candidate.to_path_buf(),
-        ));
-    }
+        let mut filename = String::new();
 
-    for component in Path::new(candidate_name).components() {
-        if !matches!(component, Component::Normal(_)) {
-            return Err(SsbeError::InvalidIdentifier(
-                "generated filename contains an unsafe path component"
-                    .to_string(),
-            ));
+        filename
+            .try_reserve(
+                TEMPORARY_FILE_PREFIX.len()
+                    + fingerprint.len()
+                    + 64,
+            )
+            .map_err(|_| SsbeError::Allocation {
+                operation: "constructing temporary filename",
+            })?;
+
+        filename.push_str(TEMPORARY_FILE_PREFIX);
+        filename.push('-');
+        filename.push_str(fingerprint);
+        filename.push('-');
+
+        filename.push_str(
+            &std::process::id().to_string(),
+        );
+
+        filename.push('-');
+
+        filename.push_str(
+            &sequence.to_string(),
+        );
+
+        filename.push_str(".tmp");
+
+        let path = directory.join(filename);
+
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(_) => return Ok(path),
+
+            Err(error)
+                if error.kind() == io::ErrorKind::AlreadyExists =>
+            {
+                continue;
+            }
+
+            Err(source) => {
+                return Err(SsbeError::Io {
+                    operation: "creating exclusive temporary file",
+                    path,
+                    source,
+                });
+            }
         }
     }
+}
 
-    let expected_parent = directory;
+/// Write and synchronize generated source.
+fn write_and_sync(
+    path: &Path,
+    contents: &[u8],
+) -> Result<(), SsbeError> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .map_err(|source| SsbeError::Io {
+            operation: "opening temporary file",
+            path: path.to_path_buf(),
+            source,
+        })?;
 
-    if candidate.parent() != Some(expected_parent) {
-        return Err(SsbeError::InvalidIdentifier(
-            "generated backend path escapes the configured output directory"
-                .to_string(),
-        ));
-    }
+    file.write_all(contents).map_err(|source| {
+        SsbeError::Io {
+            operation: "writing generated source",
+            path: path.to_path_buf(),
+            source,
+        }
+    })?;
+
+    file.sync_all().map_err(|source| {
+        SsbeError::Io {
+            operation: "synchronizing generated source",
+            path: path.to_path_buf(),
+            source,
+        }
+    })?;
 
     Ok(())
 }
 
-/// Produce a unique temporary path adjacent to the final output.
-fn temporary_path_for(output: &Path) -> PathBuf {
-    let mut temporary = output.to_path_buf();
+// ============================================================================
+// VALIDATION
+// ============================================================================
 
-    let extension = match output.extension().and_then(|ext| ext.to_str()) {
-        Some(extension) => format!("{extension}.tmp"),
-        None => "tmp".to_string(),
-    };
-
-    temporary.set_extension(extension);
-
-    temporary
-}
-
-/// Convert an arbitrary substrate name into a deterministic safe identifier.
+/// Validate required textual metadata.
 ///
-/// This identifier is only used for a filename/type name. The original name
-/// is preserved separately as escaped metadata.
-fn sanitize_identifier(value: &str) -> String {
-    let mut result = String::with_capacity(value.len());
-
-    for character in value.chars() {
-        if character.is_ascii_alphanumeric() || character == '_' {
-            result.push(character.to_ascii_lowercase());
-        } else {
-            result.push('_');
-        }
-    }
-
-    while result.contains("__") {
-        result = result.replace("__", "_");
-    }
-
-    let result = result.trim_matches('_').to_string();
-
-    if result.is_empty() {
-        "generated_backend".to_string()
-    } else if result
-        .chars()
-        .next()
-        .is_some_and(|character| character.is_ascii_digit())
-    {
-        format!("backend_{result}")
-    } else {
-        result
-    }
-}
-
-/// Convert a substrate name into a valid Rust type identifier.
-fn rust_type_identifier(value: &str) -> String {
-    let sanitized = sanitize_identifier(value);
-
-    let mut result = String::with_capacity(sanitized.len());
-
-    let mut uppercase_next = true;
-
-    for character in sanitized.chars() {
-        if character == '_' {
-            uppercase_next = true;
-            continue;
-        }
-
-        if uppercase_next {
-            result.push(character.to_ascii_uppercase());
-            uppercase_next = false;
-        } else {
-            result.push(character);
-        }
-    }
-
-    if result.is_empty() {
-        "GeneratedBackend".to_string()
-    } else if result
-        .chars()
-        .next()
-        .is_some_and(|character| character.is_ascii_digit())
-    {
-        format!("Backend{result}")
-    } else {
-        result
-    }
-}
-
-/// Escape arbitrary text into a valid Rust string literal.
-fn append_rust_string_literal(output: &mut String, value: &str) {
-    output.push('"');
-
-    for character in value.chars() {
-        match character {
-            '\\' => output.push_str("\\\\"),
-            '"' => output.push_str("\\\""),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            '\0' => output.push_str("\\0"),
-            character if character.is_control() => {
-                output.push_str(&format!("\\u{{{:x}}}", character as u32));
-            }
-            character => output.push(character),
-        }
-    }
-
-    output.push('"');
-}
-
-/// Validate general textual metadata.
-fn validate_text_field(
+/// No arbitrary maximum byte or character count is imposed.
+fn validate_text(
     value: &str,
     field: &'static str,
-    maximum_length: usize,
 ) -> Result<(), SsbeError> {
     if value.trim().is_empty() {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "{field} cannot be empty"
-        )));
-    }
-
-    if value.len() > maximum_length {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "{field} exceeds maximum length of {maximum_length} bytes"
-        )));
+        return Err(SsbeError::InvalidDefinition(
+            format!("{field} cannot be empty"),
+        ));
     }
 
     if value.chars().any(char::is_control) {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "{field} contains control characters"
-        )));
+        return Err(SsbeError::InvalidDefinition(
+            format!(
+                "{field} contains prohibited control characters"
+            ),
+        ));
     }
 
     Ok(())
 }
 
-/// Validate one instruction.
-fn validate_instruction(
-    instruction: &str,
-    index: usize,
-) -> Result<(), SsbeError> {
-    if instruction.trim().is_empty() {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "instruction at index {index} is empty"
-        )));
-    }
+// ============================================================================
+// PUBLIC HELPERS
+// ============================================================================
 
-    if instruction.len() > MAX_INSTRUCTION_LENGTH {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "instruction at index {index} exceeds maximum length of {} bytes",
-            MAX_INSTRUCTION_LENGTH
-        )));
-    }
-
-    if instruction.chars().any(char::is_control) {
-        return Err(SsbeError::InvalidDefinition(format!(
-            "instruction at index {index} contains control characters"
-        )));
-    }
-
-    Ok(())
+/// Return the SSBE module identity.
+pub const fn module_name() -> &'static str {
+    SSBE_MODULE_NAME
 }
+
+/// Return the SSBE API version.
+pub const fn api_version() -> u16 {
+    SSBE_API_VERSION
+}
+
+/// Return the generated metadata schema version.
+pub const fn metadata_schema_version() -> u32 {
+    SSBE_METADATA_SCHEMA_VERSION
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_DIRECTORY_SEQUENCE: AtomicU64 =
+        AtomicU64::new(0);
+
+    struct TestDirectory {
+        path: PathBuf,
+    }
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let sequence = TEST_DIRECTORY_SEQUENCE.fetch_add(
+                1,
+                Ordering::Relaxed,
+            );
+
+            let path = std::env::temp_dir().join(
+                format!(
+                    "zamani-ssbe-test-{}-{sequence}",
+                    std::process::id()
+                ),
+            );
+
+            fs::create_dir_all(&path)
+                .expect("test directory must be created");
+
+            Self { path }
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
 
     fn sample_definition() -> SubstrateDefinition {
         SubstrateDefinition::new(
             "RISC-V CPU",
             "Classical",
             vec![
-                "LOAD".to_string(),
-                "STORE".to_string(),
-                "ADD".to_string(),
+                "LOAD".into(),
+                "STORE".into(),
+                "ADD".into(),
             ],
-            "lower Zamani IR to RISC-V instructions",
+            "Translate validated classical IR",
         )
-        .unwrap()
+        .expect("sample definition must be valid")
     }
 
     #[test]
-    fn substrate_definition_validates() {
+    fn definition_validates() {
         let definition = sample_definition();
 
         assert!(definition.validate().is_ok());
@@ -691,8 +1139,32 @@ mod tests {
         let result = SubstrateDefinition::new(
             "",
             "Classical",
-            vec!["ADD".to_string()],
+            vec!["ADD".into()],
             "rule",
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_paradigm_is_rejected() {
+        let result = SubstrateDefinition::new(
+            "CPU",
+            "",
+            vec!["ADD".into()],
+            "rule",
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_translation_rule_is_rejected() {
+        let result = SubstrateDefinition::new(
+            "CPU",
+            "Classical",
+            vec!["ADD".into()],
+            "",
         );
 
         assert!(result.is_err());
@@ -715,7 +1187,7 @@ mod tests {
         let result = SubstrateDefinition::new(
             "CPU",
             "Classical",
-            vec!["".to_string()],
+            vec!["".into()],
             "rule",
         );
 
@@ -723,82 +1195,11 @@ mod tests {
     }
 
     #[test]
-    fn filename_is_deterministic() {
-        let definition = sample_definition();
-
-        assert_eq!(
-            definition.backend_filename(),
-            "risc-v_cpu.rs"
-        );
-    }
-
-    #[test]
-    fn type_name_is_generated() {
-        let definition = sample_definition();
-
-        assert_eq!(
-            definition.backend_type_name(),
-            "RiscVCPUBackend"
-        );
-    }
-
-    #[test]
-    fn source_contains_escaped_metadata() {
-        let definition = SubstrateDefinition::new(
-            "Quantum \"Core\"",
-            "Quantum",
-            vec!["H".to_string()],
-            "apply \"translation\"",
-        )
-        .unwrap();
-
-        let engine = SelfSynthesizingBackendEngine::new("generated");
-
-        let source = engine
-            .generate_backend_source(&definition)
-            .unwrap();
-
-        assert!(source.contains("Quantum \\\"Core\\\""));
-        assert!(source.contains("apply \\\"translation\\\""));
-    }
-
-    #[test]
-    fn generated_source_contains_instruction_set() {
-        let definition = sample_definition();
-
-        let engine = SelfSynthesizingBackendEngine::new("generated");
-
-        let source = engine
-            .generate_backend_source(&definition)
-            .unwrap();
-
-        assert!(source.contains("\"LOAD\""));
-        assert!(source.contains("\"STORE\""));
-        assert!(source.contains("\"ADD\""));
-    }
-
-    #[test]
-    fn path_traversal_is_not_used_as_filename() {
-        let definition = SubstrateDefinition::new(
-            "../../escape",
-            "Classical",
-            vec!["ADD".to_string()],
-            "rule",
-        )
-        .unwrap();
-
-        assert_eq!(
-            definition.backend_filename(),
-            "escape.rs"
-        );
-    }
-
-    #[test]
-    fn invalid_cache_like_control_data_is_rejected() {
+    fn control_characters_are_rejected() {
         let result = SubstrateDefinition::new(
             "CPU\n",
             "Classical",
-            vec!["ADD".to_string()],
+            vec!["ADD".into()],
             "rule",
         );
 
@@ -806,23 +1207,159 @@ mod tests {
     }
 
     #[test]
-    fn configuration_rejects_zero_source_limit() {
-        let result = SelfSynthesizingBackendEngine::with_config(
-            "generated",
-            SsbeConfig {
-                max_generated_source_bytes: 0,
-                allow_overwrite: true,
-            },
+    fn long_metadata_is_supported() {
+        let long_value = "x".repeat(16_384);
+
+        let definition = SubstrateDefinition::new(
+            long_value.clone(),
+            "Classical",
+            vec![long_value.clone()],
+            long_value,
         );
 
-        assert!(result.is_err());
+        assert!(definition.is_ok());
+    }
+
+    #[test]
+    fn instruction_count_is_not_artificially_limited() {
+        let instructions = (0..70_000)
+            .map(|index| format!("OP_{index}"))
+            .collect();
+
+        let definition = SubstrateDefinition::new(
+            "Large substrate",
+            "Classical",
+            instructions,
+            "rule",
+        )
+        .expect("large instruction set must be accepted");
+
+        assert_eq!(
+            definition.instruction_set.len(),
+            70_000
+        );
+    }
+
+    #[test]
+    fn fingerprint_is_deterministic() {
+        let first = sample_definition();
+        let second = sample_definition();
+
+        assert_eq!(
+            first.fingerprint(),
+            second.fingerprint()
+        );
+    }
+
+    #[test]
+    fn fingerprint_changes_when_metadata_changes() {
+        let first = sample_definition();
+
+        let second = SubstrateDefinition::new(
+            "Different CPU",
+            "Classical",
+            vec!["LOAD".into()],
+            "rule",
+        )
+        .unwrap();
+
+        assert_ne!(
+            first.fingerprint(),
+            second.fingerprint()
+        );
+    }
+
+    #[test]
+    fn filename_is_deterministic_and_safe() {
+        let definition = sample_definition();
+
+        let filename = definition.backend_filename();
+
+        assert!(filename.starts_with("ssbe-"));
+        assert!(filename.ends_with(".rs"));
+        assert!(!filename.contains('/'));
+        assert!(!filename.contains('\\'));
+
+        assert_eq!(
+            filename,
+            definition.backend_filename()
+        );
+    }
+
+    #[test]
+    fn generated_source_contains_metadata() {
+        let definition = sample_definition();
+
+        let engine = SelfSynthesizingBackendEngine::new(
+            "generated",
+        );
+
+        let source = engine
+            .generate_backend_source(&definition)
+            .unwrap();
+
+        assert!(source.contains("SUBSTRATE"));
+        assert!(source.contains("PARADIGM"));
+        assert!(source.contains("TRANSLATION_RULE"));
+        assert!(source.contains("INSTRUCTION_SET"));
+        assert!(source.contains("FINGERPRINT"));
+    }
+
+    #[test]
+    fn generated_source_does_not_claim_to_implement_backend() {
+        let definition = sample_definition();
+
+        let engine = SelfSynthesizingBackendEngine::new(
+            "generated",
+        );
+
+        let source = engine
+            .generate_backend_source(&definition)
+            .unwrap();
+
+        assert!(
+            !source.contains("impl Backend for")
+        );
+
+        assert!(
+            !source.contains("pub fn emit_code")
+        );
+    }
+
+    #[test]
+    fn generated_source_escapes_metadata() {
+        let definition = SubstrateDefinition::new(
+            "Quantum \"Core\"",
+            "Quantum",
+            vec!["H".into()],
+            "Apply \"translation\"",
+        )
+        .unwrap();
+
+        let engine = SelfSynthesizingBackendEngine::new(
+            "generated",
+        );
+
+        let source = engine
+            .generate_backend_source(&definition)
+            .unwrap();
+
+        assert!(
+            source.contains("Quantum \\\"Core\\\"")
+        );
+
+        assert!(
+            source.contains("Apply \\\"translation\\\"")
+        );
     }
 
     #[test]
     fn generated_source_is_deterministic() {
         let definition = sample_definition();
 
-        let engine = SelfSynthesizingBackendEngine::new("generated");
+        let engine = SelfSynthesizingBackendEngine::new(
+            "generated",
+        );
 
         let first = engine
             .generate_backend_source(&definition)
@@ -836,53 +1373,149 @@ mod tests {
     }
 
     #[test]
-    fn synthesis_does_not_execute_generated_code() {
-        let definition = sample_definition();
+    fn zero_source_budget_is_rejected() {
+        let result = SelfSynthesizingBackendEngine::with_config(
+            "generated",
+            SsbeConfig {
+                max_generated_source_bytes: 0,
+                allow_overwrite: false,
+            },
+        );
 
-        let engine = SelfSynthesizingBackendEngine::new("generated");
-
-        let source = engine
-            .generate_backend_source(&definition)
-            .unwrap();
-
-        assert!(!source.contains("std::process::Command"));
-        assert!(!source.contains("Command::new"));
+        assert!(result.is_err());
     }
 
     #[test]
-    fn source_size_limit_is_enforced() {
+    fn configured_source_budget_is_enforced() {
         let definition = sample_definition();
 
         let engine = SelfSynthesizingBackendEngine::with_config(
             "generated",
             SsbeConfig {
                 max_generated_source_bytes: 10,
-                allow_overwrite: true,
+                allow_overwrite: false,
             },
         )
         .unwrap();
 
-        let result = engine.generate_backend_source(&definition);
-
         assert!(matches!(
-            result,
+            engine.generate_backend_source(&definition),
             Err(SsbeError::GeneratedSourceTooLarge { .. })
         ));
     }
 
     #[test]
-    fn metadata_is_exposed_by_generated_backend() {
+    fn default_configuration_has_no_arbitrary_source_ceiling() {
+        let config = SsbeConfig::default();
+
+        assert_eq!(
+            config.max_generated_source_bytes,
+            usize::MAX
+        );
+
+        assert!(!config.allow_overwrite);
+    }
+
+    #[test]
+    fn synthesis_creates_metadata_file() {
+        let directory = TestDirectory::new();
+
         let definition = sample_definition();
 
-        let engine = SelfSynthesizingBackendEngine::new("generated");
+        let engine = SelfSynthesizingBackendEngine::new(
+            directory.path.to_str().unwrap(),
+        );
 
-        let source = engine
-            .generate_backend_source(&definition)
+        let result = engine
+            .synthesize_backend_checked(&definition)
             .unwrap();
 
-        assert!(source.contains("pub const SUBSTRATE"));
-        assert!(source.contains("pub const PARADIGM"));
-        assert!(source.contains("pub const TRANSLATION_RULE"));
-        assert!(source.contains("pub const INSTRUCTION_SET"));
+        assert!(result.path.is_file());
+
+        assert_eq!(
+            result.instruction_count,
+            definition.instruction_set.len()
+        );
+
+        assert!(result.bytes_written > 0);
+
+        assert!(!result.source_digest.is_empty());
+        assert!(!result.substrate_fingerprint.is_empty());
+    }
+
+    #[test]
+    fn synthesis_refuses_overwrite_by_default() {
+        let directory = TestDirectory::new();
+
+        let definition = sample_definition();
+
+        let engine = SelfSynthesizingBackendEngine::new(
+            directory.path.to_str().unwrap(),
+        );
+
+        engine
+            .synthesize_backend_checked(&definition)
+            .unwrap();
+
+        let result = engine
+            .synthesize_backend_checked(&definition);
+
+        assert!(matches!(
+            result,
+            Err(SsbeError::OutputExists(_))
+        ));
+    }
+
+    #[test]
+    fn explicitly_configured_overwrite_is_supported() {
+        let directory = TestDirectory::new();
+
+        let definition = sample_definition();
+
+        let engine = SelfSynthesizingBackendEngine::with_config(
+            directory.path.to_string_lossy().into_owned(),
+            SsbeConfig {
+                max_generated_source_bytes: usize::MAX,
+                allow_overwrite: true,
+            },
+        )
+        .unwrap();
+
+        let first = engine
+            .synthesize_backend_checked(&definition)
+            .unwrap();
+
+        let second = engine
+            .synthesize_backend_checked(&definition)
+            .unwrap();
+
+        assert_eq!(first.path, second.path);
+        assert_eq!(first.source_digest, second.source_digest);
+    }
+
+    #[test]
+    fn output_directory_is_canonicalized() {
+        let directory = TestDirectory::new();
+
+        let engine = SelfSynthesizingBackendEngine::new(
+            directory.path.to_str().unwrap(),
+        );
+
+        let canonical = engine
+            .validate_output_directory()
+            .unwrap();
+
+        assert!(canonical.is_absolute());
+    }
+
+    #[test]
+    fn module_identity_is_stable() {
+        assert_eq!(
+            module_name(),
+            "zamani.compiler.ssbe"
+        );
+
+        assert_eq!(api_version(), 2);
+        assert_eq!(metadata_schema_version(), 1);
     }
 }
