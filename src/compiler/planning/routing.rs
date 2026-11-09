@@ -4,69 +4,49 @@
 #![deny(unused_must_use)]
 #![deny(missing_docs)]
 
-//! # Zamani Universal Meta-Compiler — Heterogeneous Routing
+//! # Zamani Compiler — Heterogeneous Routing
 //!
 //! Path: src/compiler/planning/routing.rs
 //! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //!
-//! ## PURPOSE
+//! # Purpose
 //!
-//! Coordinate routing between compiler-planned heterogeneous workload
-//! partitions using authoritative placement evidence and the existing
-//! provider-neutral distributed routing implementation.
+//! Coordinates routing across compiler partition boundaries by consuming:
 //!
-//! This module consumes:
+//! - A complete compiler partitioning report.
+//! - Authoritative placement assignments.
+//! - A validated distributed routing graph snapshot.
+//! - An explicit routing policy.
+//! - An optional provider-owned edge evaluator.
 //!
-//! - Compiler PartitioningReport.
-//! - PartitionBoundary.
-//! - Placement assignments.
-//! - Canonical TargetId.
-//! - A validated distributed RoutingGraph.
-//! - An injectable RouteEdgeEvaluator.
+//! It produces deterministic, validated, abstract route plans.
 //!
-//! It produces:
-//!
-//! - Deterministic inter-target routes.
-//! - Partition-boundary route associations.
-//! - Routing cost information.
-//! - Explicit routing failures.
-//! - Structural validation.
-//!
-//! ## OWNERSHIP
+//! # Ownership
 //!
 //! This module owns:
 //!
-//! - Compiler partition-boundary routing.
+//! - Compiler partition-boundary validation.
 //! - Placement-to-routing integration.
-//! - Placement compatibility validation.
-//! - Routing report construction.
-//! - Routing budget enforcement at the compiler boundary.
-//! - Routing diagnostics.
+//! - Compiler-level route result association.
+//! - Route aggregation and accounting.
+//! - Compiler routing diagnostics.
 //!
-//! ## DOES NOT OWN
+//! It does not own:
 //!
-//! - Source syntax.
-//! - AST.
-//! - Semantic analysis.
-//! - ZUIR.
-//! - Classical IR.
-//! - Quantum IR.
-//! - HDLIR.
-//! - AI IR.
+//! - Source grammar or semantic analysis.
+//! - AST or canonical IR.
 //! - Workload partitioning.
 //! - Physical placement.
-//! - Hardware discovery.
-//! - Network topology authority.
+//! - Hardware or topology discovery.
 //! - Network transport.
 //! - Physical resource allocation.
 //! - Execution scheduling.
-//! - Quantum routing.
-//! - Quantum error correction.
-//! - Noise or calibration models.
+//! - Quantum physical routing or QEC.
+//! - Backend code generation.
 //! - Runtime execution.
 //!
-//! ## AUTHORITATIVE INTEGRATIONS
+//! # Authoritative integrations
 //!
 //! Partitioning:
 //!     crate::compiler::planning::partitioning
@@ -74,73 +54,50 @@
 //! Target identity:
 //!     crate::compiler::configuration::target
 //!
-//! Distributed routing:
+//! Distributed route calculation:
 //!     crate::distributed::planning::routing
 //!
-//! Placement:
-//!     crate::compiler::planning::placement
-//!     (consumed through a placement-assignment map)
+//! Data movement:
+//!     crate::compiler::planning::data_movement
 //!
 //! Scheduling:
 //!     crate::compiler::planning::scheduling
 //!
-//! Runtime:
-//!     crate::runtime
+//! Semantic intent:
+//!     crate::frontend::semantic
 //!
-//! Networking:
-//!     crate::networking
+//! Networking syntax and semantics:
+//!     grammar/networking/routing.g4
+//!     grammar/spec/networking.md
 //!
-//! ## ROUTING SEMANTICS
+//! # Cost semantics
 //!
-//! A partition boundary identifies a dependency crossing two logical
-//! partition segments.
+//! Route costs and abstract communication-work estimates are separate
+//! quantities. They must never be added together unless a higher-level
+//! policy explicitly defines compatible units.
 //!
-//! Placement evidence maps each partition segment to its selected
-//! target.
+//! # Scalability
 //!
-//! A directed routing graph describes available logical communication
-//! paths between target identities.
+//! No arbitrary universal limits are imposed on targets, routes,
+//! partitions, dependencies, graph nodes, links, or hops.
 //!
-//! The distributed routing subsystem computes the actual proposed path.
+//! Optional budgets are caller-configured operational policies.
+//! Actual memory, address-space, numeric and physical resource limits
+//! remain finite.
 //!
-//! Graph edge costs must use one consistent caller-defined unit.
+//! # Determinism
 //!
-//! Communication work estimates are retained separately because they
-//! must not be added to route costs unless their units are compatible.
+//! Boundary processing is ordered by stable logical identities.
+//! Route-search determinism additionally depends on a stable graph
+//! snapshot and a deterministic edge evaluator.
 //!
-//! ## SCALABILITY
+//! # Runtime boundary
 //!
-//! No arbitrary universal limits are imposed on:
+//! A route is a proposal over a supplied topology snapshot.
+//! It does not reserve bandwidth, establish a connection, authenticate
+//! peers, or guarantee that the route remains available.
 //!
-//! - Targets.
-//! - Nodes.
-//! - Links.
-//! - Routes.
-//! - Partition segments.
-//! - Dependencies.
-//! - Network size.
-//! - Routing hops.
-//! - Computing domains.
-//! - Distributed participants.
-//!
-//! Optional limits are operational policies.
-//!
-//! Physical capacity and implementation resources remain finite.
-//!
-//! Literal infinite execution capacity is not promised.
-//!
-//! ## DETERMINISM
-//!
-//! Determinism is inherited from the canonical distributed routing engine.
-//!
-//! TargetId ordering provides deterministic target identity ordering.
-//!
-//! The supplied edge evaluator must be deterministic for reproducible
-//! routing results.
-//!
-//! ## SAFETY
-//!
-//! Safe Rust only.
+//! Runtime and networking providers must revalidate before execution.
 
 use core::fmt;
 use std::collections::BTreeMap;
@@ -150,6 +107,7 @@ use crate::compiler::configuration::target::TargetId;
 
 use crate::compiler::planning::partitioning::{
     PartitionBoundary,
+    PartitionSegment,
     PartitionSegmentId,
     PartitioningReport,
 };
@@ -164,29 +122,28 @@ use crate::distributed::planning::routing::{
     RoutingPolicy,
 };
 
+use crate::zuir::ids::OperationId;
+
 /// Stable architectural identity of this module.
 pub const COMPILER_ROUTING_MODULE_NAME: &str =
     "zamani.compiler.planning.routing";
 
 /// Public API version of this module.
-pub const COMPILER_ROUTING_API_VERSION: u16 = 1;
+pub const COMPILER_ROUTING_API_VERSION: u16 = 2;
 
-/// Routing cost supplied by the distributed routing authority.
+/// Cost type supplied by the distributed routing authority.
 ///
-/// Units are caller-defined and must remain consistent within a
-/// routing graph and evaluation policy.
+/// The unit is caller-defined and must be consistent within a report.
 pub type CompilerRoutingCost = u128;
 
 // ============================================================================
-// ROUTING OPTIONS
+// BUDGETS AND OPTIONS
 // ============================================================================
 
-/// Operational limits for compiler-level routing.
+/// Optional operational limits for compiler-level routing.
 ///
-/// These are compilation policies, not language-level hardware limits.
-///
-/// A missing limit means that this module does not impose an
-/// additional restriction for that dimension.
+/// These are compilation policies, not language-level or hardware limits.
+/// A missing limit means this module imposes no additional restriction.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CompilerRoutingBudget {
     max_boundary_routes: Option<usize>,
@@ -238,10 +195,7 @@ impl CompilerRoutingOptions {
         }
     }
 
-    /// Creates unrestricted compiler routing options.
-    ///
-    /// The underlying distributed routing policy also has no
-    /// caller-imposed search limits.
+    /// Creates options without caller-imposed compiler routing limits.
     #[must_use]
     pub const fn unlimited() -> Self {
         Self {
@@ -295,12 +249,8 @@ impl Default for CompilerRoutingOptions {
 
 /// Mapping from logical partition segments to selected target identities.
 ///
-/// This is supplied by the authoritative placement subsystem.
-///
-/// The routing module never chooses a target merely because it appears
-/// in a segment's candidate-target set.
-///
-/// The selected target must be present in that segment's candidate set.
+/// The mapping must originate from the authoritative placement subsystem.
+/// This module does not choose targets.
 pub type PlacementAssignments =
     BTreeMap<PartitionSegmentId, TargetId>;
 
@@ -310,13 +260,11 @@ pub type PlacementAssignments =
 
 /// A successfully routed compiler partition boundary.
 ///
-/// The route is a proposed path over a supplied routing snapshot.
-///
-/// It does not reserve network bandwidth or establish a connection.
+/// This is an abstract route proposal, not a physical reservation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BoundaryRoute {
-    source_operation: crate::zuir::ids::OperationId,
-    destination_operation: crate::zuir::ids::OperationId,
+    source_operation: OperationId,
+    destination_operation: OperationId,
 
     source_segment: PartitionSegmentId,
     destination_segment: PartitionSegmentId,
@@ -332,33 +280,25 @@ pub struct BoundaryRoute {
 impl BoundaryRoute {
     /// Returns the source operation.
     #[must_use]
-    pub const fn source_operation(
-        &self,
-    ) -> crate::zuir::ids::OperationId {
+    pub const fn source_operation(&self) -> OperationId {
         self.source_operation
     }
 
     /// Returns the destination operation.
     #[must_use]
-    pub const fn destination_operation(
-        &self,
-    ) -> crate::zuir::ids::OperationId {
+    pub const fn destination_operation(&self) -> OperationId {
         self.destination_operation
     }
 
     /// Returns the source partition segment.
     #[must_use]
-    pub const fn source_segment(
-        &self,
-    ) -> PartitionSegmentId {
+    pub const fn source_segment(&self) -> PartitionSegmentId {
         self.source_segment
     }
 
     /// Returns the destination partition segment.
     #[must_use]
-    pub const fn destination_segment(
-        &self,
-    ) -> PartitionSegmentId {
+    pub const fn destination_segment(&self) -> PartitionSegmentId {
         self.destination_segment
     }
 
@@ -374,15 +314,15 @@ impl BoundaryRoute {
         &self.destination_target
     }
 
-    /// Returns the underlying distributed routing plan.
+    /// Returns the underlying distributed route plan.
     #[must_use]
     pub fn route(&self) -> &RoutePlan<TargetId> {
         &self.route
     }
 
-    /// Returns the original abstract communication work estimate.
+    /// Returns the original abstract communication-work estimate.
     ///
-    /// This estimate is not automatically added to physical route cost.
+    /// This estimate is not automatically added to route cost.
     #[must_use]
     pub const fn communication_work_estimate(&self) -> u128 {
         self.communication_work_estimate
@@ -408,22 +348,33 @@ impl BoundaryRoute {
 }
 
 // ============================================================================
-// ROUTING REPORT
+// REPORT
 // ============================================================================
 
 /// Complete compiler-level routing report.
+///
+/// A report is returned only when every supplied boundary has a
+/// validated route.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CompilerRoutingReport {
     routes: Vec<BoundaryRoute>,
+
+    /// Expected count from the original partitioning report.
     partition_boundary_count: usize,
+
     total_route_cost: u128,
     total_hops: usize,
+    total_communication_work_estimate: u128,
 }
 
 impl CompilerRoutingReport {
-    fn new(routes: Vec<BoundaryRoute>) -> Result<Self, CompilerRoutingError> {
+    fn new(
+        routes: Vec<BoundaryRoute>,
+        partition_boundary_count: usize,
+    ) -> Result<Self, CompilerRoutingError> {
         let mut total_route_cost = 0_u128;
         let mut total_hops = 0_usize;
+        let mut total_communication_work_estimate = 0_u128;
 
         for route in &routes {
             total_route_cost = total_route_cost
@@ -433,13 +384,19 @@ impl CompilerRoutingReport {
             total_hops = total_hops
                 .checked_add(route.hop_count())
                 .ok_or(CompilerRoutingError::ArithmeticOverflow)?;
+
+            total_communication_work_estimate =
+                total_communication_work_estimate
+                    .checked_add(route.communication_work_estimate())
+                    .ok_or(CompilerRoutingError::ArithmeticOverflow)?;
         }
 
         Ok(Self {
-            partition_boundary_count: routes.len(),
             routes,
+            partition_boundary_count,
             total_route_cost,
             total_hops,
+            total_communication_work_estimate,
         })
     }
 
@@ -449,10 +406,16 @@ impl CompilerRoutingReport {
         &self.routes
     }
 
-    /// Returns the number of routed partition boundaries.
+    /// Returns the original partition-boundary count.
     #[must_use]
     pub const fn boundary_count(&self) -> usize {
         self.partition_boundary_count
+    }
+
+    /// Returns the number of successfully routed boundaries.
+    #[must_use]
+    pub fn routed_boundary_count(&self) -> usize {
+        self.routes.len()
     }
 
     /// Returns the sum of route costs.
@@ -469,13 +432,21 @@ impl CompilerRoutingReport {
         self.total_hops
     }
 
+    /// Returns the sum of abstract communication-work estimates.
+    ///
+    /// This value is not a payload size or route cost.
+    #[must_use]
+    pub const fn total_communication_work_estimate(&self) -> u128 {
+        self.total_communication_work_estimate
+    }
+
     /// Returns whether the report contains no boundary routes.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.routes.is_empty()
     }
 
-    /// Returns whether every supplied partition boundary was routed.
+    /// Returns whether every original boundary was routed.
     #[must_use]
     pub fn is_complete(&self) -> bool {
         self.routes.len() == self.partition_boundary_count
@@ -493,6 +464,32 @@ pub enum CompilerRoutingError {
     /// Partitioning did not produce a complete result.
     IncompletePartitioning,
 
+    /// Duplicate partition segment identity was encountered.
+    DuplicatePartitionSegment {
+        /// Duplicate segment identity.
+        segment: PartitionSegmentId,
+    },
+
+    /// An operation appears in more than one partition segment.
+    DuplicateOperationAssignment {
+        /// Operation with duplicate membership.
+        operation: OperationId,
+    },
+
+    /// A boundary references a segment that does not exist.
+    MissingPartitionSegment {
+        /// Missing segment identity.
+        segment: PartitionSegmentId,
+    },
+
+    /// A boundary operation is not a member of its referenced segment.
+    BoundaryOperationNotInSegment {
+        /// Operation identity.
+        operation: OperationId,
+        /// Referenced segment.
+        segment: PartitionSegmentId,
+    },
+
     /// A boundary refers to a partition without a placement assignment.
     MissingPlacement {
         /// Missing partition segment.
@@ -507,7 +504,7 @@ pub enum CompilerRoutingError {
         target: TargetId,
     },
 
-    /// The requested boundary-route budget was exceeded.
+    /// The configured boundary-route budget was exceeded.
     BoundaryBudgetExceeded {
         /// Number of required boundary routes.
         required: usize,
@@ -515,7 +512,7 @@ pub enum CompilerRoutingError {
         maximum: usize,
     },
 
-    /// Distributed routing could not find a valid route.
+    /// A distributed route search failed.
     PathRoutingFailed {
         /// Source target.
         source: TargetId,
@@ -525,7 +522,13 @@ pub enum CompilerRoutingError {
         cause: RoutingError,
     },
 
-    /// Checked arithmetic overflowed.
+    /// A required collection could not reserve memory.
+    AllocationFailed {
+        /// Collection that could not be reserved.
+        collection: &'static str,
+    },
+
+    /// Checked report arithmetic overflowed.
     ArithmeticOverflow,
 }
 
@@ -538,6 +541,37 @@ impl fmt::Display for CompilerRoutingError {
             Self::IncompletePartitioning => {
                 formatter.write_str(
                     "compiler routing requires complete partitioning evidence",
+                )
+            }
+
+            Self::DuplicatePartitionSegment { segment } => {
+                write!(
+                    formatter,
+                    "duplicate partition segment identity: {segment}"
+                )
+            }
+
+            Self::DuplicateOperationAssignment { operation } => {
+                write!(
+                    formatter,
+                    "operation {operation} belongs to more than one partition segment"
+                )
+            }
+
+            Self::MissingPartitionSegment { segment } => {
+                write!(
+                    formatter,
+                    "partition segment {segment} does not exist"
+                )
+            }
+
+            Self::BoundaryOperationNotInSegment {
+                operation,
+                segment,
+            } => {
+                write!(
+                    formatter,
+                    "operation {operation} does not belong to partition segment {segment}"
                 )
             }
 
@@ -581,6 +615,13 @@ impl fmt::Display for CompilerRoutingError {
                 )
             }
 
+            Self::AllocationFailed { collection } => {
+                write!(
+                    formatter,
+                    "unable to reserve memory for {collection}"
+                )
+            }
+
             Self::ArithmeticOverflow => {
                 formatter.write_str(
                     "compiler routing report arithmetic overflowed",
@@ -597,6 +638,171 @@ impl Error for CompilerRoutingError {
             _ => None,
         }
     }
+}
+
+// ============================================================================
+// INTERNAL VALIDATED INPUT
+// ============================================================================
+
+struct ValidatedBoundary {
+    boundary: PartitionBoundary,
+    source_target: TargetId,
+    destination_target: TargetId,
+}
+
+fn resolve_placement(
+    segment_id: PartitionSegmentId,
+    placements: &PlacementAssignments,
+    segments: &BTreeMap<PartitionSegmentId, &PartitionSegment>,
+) -> Result<TargetId, CompilerRoutingError> {
+    let target = placements
+        .get(&segment_id)
+        .ok_or(CompilerRoutingError::MissingPlacement {
+            segment: segment_id,
+        })?;
+
+    let segment = segments
+        .get(&segment_id)
+        .copied()
+        .ok_or(CompilerRoutingError::MissingPartitionSegment {
+            segment: segment_id,
+        })?;
+
+    if !segment.candidate_targets().contains(target) {
+        return Err(CompilerRoutingError::IncompatiblePlacement {
+            segment: segment_id,
+            target: target.clone(),
+        });
+    }
+
+    Ok(target.clone())
+}
+
+fn validate_partitioning(
+    partitioning: &PartitioningReport,
+) -> Result<
+    (
+        BTreeMap<PartitionSegmentId, &PartitionSegment>,
+        BTreeMap<OperationId, PartitionSegmentId>,
+    ),
+    CompilerRoutingError,
+> {
+    if !partitioning.is_complete() {
+        return Err(CompilerRoutingError::IncompletePartitioning);
+    }
+
+    let mut segments = BTreeMap::new();
+    let mut operation_segments = BTreeMap::new();
+
+    for segment in partitioning.segments() {
+        if segments.insert(segment.id(), segment).is_some() {
+            return Err(
+                CompilerRoutingError::DuplicatePartitionSegment {
+                    segment: segment.id(),
+                },
+            );
+        }
+
+        for operation in segment.work_items() {
+            if operation_segments
+                .insert(*operation, segment.id())
+                .is_some()
+            {
+                return Err(
+                    CompilerRoutingError::DuplicateOperationAssignment {
+                        operation: *operation,
+                    },
+                );
+            }
+        }
+    }
+
+    Ok((segments, operation_segments))
+}
+
+fn validate_boundaries(
+    partitioning: &PartitioningReport,
+    placements: &PlacementAssignments,
+    segments: &BTreeMap<PartitionSegmentId, &PartitionSegment>,
+    operation_segments: &BTreeMap<OperationId, PartitionSegmentId>,
+) -> Result<Vec<ValidatedBoundary>, CompilerRoutingError> {
+    let boundaries = partitioning.boundaries();
+
+    let mut validated = Vec::new();
+
+    validated
+        .try_reserve(boundaries.len())
+        .map_err(|_| CompilerRoutingError::AllocationFailed {
+            collection: "validated partition boundaries",
+        })?;
+
+    for boundary in boundaries {
+        let source_segment = boundary.source_segment();
+        let destination_segment = boundary.destination_segment();
+
+        if !segments.contains_key(&source_segment) {
+            return Err(
+                CompilerRoutingError::MissingPartitionSegment {
+                    segment: source_segment,
+                },
+            );
+        }
+
+        if !segments.contains_key(&destination_segment) {
+            return Err(
+                CompilerRoutingError::MissingPartitionSegment {
+                    segment: destination_segment,
+                },
+            );
+        }
+
+        if operation_segments.get(&boundary.source())
+            != Some(&source_segment)
+        {
+            return Err(
+                CompilerRoutingError::BoundaryOperationNotInSegment {
+                    operation: boundary.source(),
+                    segment: source_segment,
+                },
+            );
+        }
+
+        if operation_segments.get(&boundary.destination())
+            != Some(&destination_segment)
+        {
+            return Err(
+                CompilerRoutingError::BoundaryOperationNotInSegment {
+                    operation: boundary.destination(),
+                    segment: destination_segment,
+                },
+            );
+        }
+
+        let source_target =
+            resolve_placement(source_segment, placements, segments)?;
+
+        let destination_target =
+            resolve_placement(destination_segment, placements, segments)?;
+
+        validated.push(ValidatedBoundary {
+            boundary: boundary.clone(),
+            source_target,
+            destination_target,
+        });
+    }
+
+    // A stable order independent of dependency insertion order.
+    validated.sort_by_key(|item| {
+        (
+            item.boundary.source(),
+            item.boundary.destination(),
+            item.boundary.source_segment(),
+            item.boundary.destination_segment(),
+            item.boundary.communication_cost(),
+        )
+    });
+
+    Ok(validated)
 }
 
 // ============================================================================
@@ -627,29 +833,24 @@ impl CompilerRouter {
     }
 
     /// Routes every cross-partition dependency using supplied placement
-    /// assignments and an authoritative routing graph.
+    /// assignments and an authoritative routing graph snapshot.
     ///
     /// The placement map must contain the selected target for every
     /// partition segment referenced by a boundary.
     ///
-    /// Every selected target must belong to the corresponding segment's
-    /// candidate-target set.
+    /// Every selected target must belong to its segment's candidate set.
     ///
-    /// The routing graph must contain the selected targets and the
-    /// communication links available in the supplied topology snapshot.
+    /// The evaluator determines edge eligibility and effective cost.
     ///
-    /// The injected evaluator determines whether individual directed
-    /// edges are available and their effective costs.
-    ///
-    /// No physical resource is reserved.
-    ///
-    /// No network communication is performed.
+    /// Repeated source/destination target pairs are routed once per
+    /// invocation and their immutable route result is reused.
     ///
     /// # Errors
     ///
-    /// Returns an error for incomplete partitioning, missing placement,
-    /// incompatible placement, an unavailable route, a failed evaluator,
-    /// exhausted routing budgets, or arithmetic overflow.
+    /// Returns errors for incomplete or inconsistent partitioning,
+    /// missing or incompatible placement, unavailable routes,
+    /// evaluator failures, exhausted budgets, allocation failures,
+    /// or arithmetic overflow.
     pub fn route_partition_boundaries<Evaluator>(
         &self,
         partitioning: &PartitioningReport,
@@ -661,9 +862,8 @@ impl CompilerRouter {
     where
         Evaluator: RouteEdgeEvaluator<TargetId>,
     {
-        if !partitioning.is_complete() {
-            return Err(CompilerRoutingError::IncompletePartitioning);
-        }
+        let (segments, operation_segments) =
+            validate_partitioning(partitioning)?;
 
         let boundaries = partitioning.boundaries();
 
@@ -680,78 +880,93 @@ impl CompilerRouter {
             }
         }
 
-        // Build an index once instead of repeatedly scanning partition
-        // segments for every boundary.
-        let segments: BTreeMap<_, _> = partitioning
-            .segments()
-            .iter()
-            .map(|segment| (segment.id(), segment))
-            .collect();
+        // Validate every boundary and placement before performing any
+        // potentially expensive route search.
+        let validated = validate_boundaries(
+            partitioning,
+            placements,
+            &segments,
+            &operation_segments,
+        )?;
 
-        let mut routes = Vec::with_capacity(boundaries.len());
+        let mut routes = Vec::new();
 
-        for boundary in boundaries {
-            let source_target = self.resolve_placement(
-                boundary.source_segment(),
-                placements,
-                &segments,
-            )?;
-
-            let destination_target = self.resolve_placement(
-                boundary.destination_segment(),
-                placements,
-                &segments,
-            )?;
-
-            let route = find_route(
-                graph,
-                &source_target,
-                &destination_target,
-                options.path_policy(),
-                evaluator,
-            )
-            .map_err(|cause| {
-                CompilerRoutingError::PathRoutingFailed {
-                    source: source_target.clone(),
-                    destination: destination_target.clone(),
-                    cause,
-                }
+        routes
+            .try_reserve(validated.len())
+            .map_err(|_| CompilerRoutingError::AllocationFailed {
+                collection: "compiler boundary routes",
             })?;
 
-            route
-                .validate_structure()
+        // Cache by ordered directed endpoints. Reverse paths are not
+        // interchangeable because routing graphs are directed.
+        let mut route_cache =
+            BTreeMap::<(TargetId, TargetId), RoutePlan<TargetId>>::new();
+
+        for item in validated {
+            let key = (
+                item.source_target.clone(),
+                item.destination_target.clone(),
+            );
+
+            let route = if let Some(cached) = route_cache.get(&key) {
+                cached.clone()
+            } else {
+                let computed = find_route(
+                    graph,
+                    &item.source_target,
+                    &item.destination_target,
+                    options.path_policy(),
+                    evaluator,
+                )
                 .map_err(|cause| {
                     CompilerRoutingError::PathRoutingFailed {
-                        source: source_target.clone(),
-                        destination: destination_target.clone(),
+                        source: item.source_target.clone(),
+                        destination: item.destination_target.clone(),
                         cause,
                     }
                 })?;
 
+                computed
+                    .validate_structure()
+                    .map_err(|cause| {
+                        CompilerRoutingError::PathRoutingFailed {
+                            source: item.source_target.clone(),
+                            destination: item.destination_target.clone(),
+                            cause,
+                        }
+                    })?;
+
+                route_cache.insert(key, computed.clone());
+                computed
+            };
+
             routes.push(BoundaryRoute {
-                source_operation: boundary.source(),
-                destination_operation: boundary.destination(),
+                source_operation: item.boundary.source(),
+                destination_operation: item.boundary.destination(),
 
-                source_segment: boundary.source_segment(),
-                destination_segment: boundary.destination_segment(),
+                source_segment: item.boundary.source_segment(),
+                destination_segment: item.boundary.destination_segment(),
 
-                source_target,
-                destination_target,
+                source_target: item.source_target,
+                destination_target: item.destination_target,
 
                 route,
 
                 communication_work_estimate:
-                    boundary.communication_cost(),
+                    item.boundary.communication_cost(),
             });
         }
 
-        CompilerRoutingReport::new(routes)
+        CompilerRoutingReport::new(
+            routes,
+            boundaries.len(),
+        )
     }
 
     /// Routes one selected source target to one selected destination target.
     ///
-    /// This lower-level entry point is useful when routing is requested
-    /// independently of compiler partition-boundary orchestration.
+    /// This entry point is useful when routing is requested independently
+    /// of compiler partition-boundary orchestration.
     ///
     /// # Errors
     ///
@@ -767,55 +982,22 @@ impl CompilerRouter {
     where
         Evaluator: RouteEdgeEvaluator<TargetId>,
     {
-        find_route(
+        let route = find_route(
             graph,
             source,
             destination,
             policy,
             evaluator,
-        )
-    }
+        )?;
 
-    fn resolve_placement<'a>(
-        &self,
-        segment_id: PartitionSegmentId,
-        placements: &'a PlacementAssignments,
-        segments: &BTreeMap<
-            PartitionSegmentId,
-            &crate::compiler::planning::partitioning::PartitionSegment,
-        >,
-    ) -> Result<TargetId, CompilerRoutingError> {
-        let target = placements
-            .get(&segment_id)
-            .ok_or(
-                CompilerRoutingError::MissingPlacement {
-                    segment: segment_id,
-                },
-            )?;
+        route.validate_structure()?;
 
-        let segment = segments
-            .get(&segment_id)
-            .ok_or(
-                CompilerRoutingError::MissingPlacement {
-                    segment: segment_id,
-                },
-            )?;
-
-        if !segment.candidate_targets().contains(target) {
-            return Err(
-                CompilerRoutingError::IncompatiblePlacement {
-                    segment: segment_id,
-                    target: target.clone(),
-                },
-            );
-        }
-
-        Ok(target.clone())
+        Ok(route)
     }
 }
 
 // ============================================================================
-// CONVENIENCE FUNCTIONS
+// CONVENIENCE API
 // ============================================================================
 
 /// Routes partition boundaries using the distributed router's base costs.
@@ -849,11 +1031,8 @@ pub fn route_partition_boundaries(
 mod tests {
     use super::*;
 
-    use crate::compiler::configuration::target::TargetId;
-
     use crate::distributed::planning::routing::{
         BaseCostEvaluator,
-        RouteEdge,
         RoutingGraph,
         RoutingPolicy,
     };
@@ -866,61 +1045,47 @@ mod tests {
     fn module_identity_is_stable() {
         assert_eq!(
             CompilerRouter::module_name(),
-            "zamani.compiler.planning.routing"
+            COMPILER_ROUTING_MODULE_NAME,
         );
 
-        assert_eq!(CompilerRouter::api_version(), 1);
+        assert_eq!(
+            CompilerRouter::api_version(),
+            COMPILER_ROUTING_API_VERSION,
+        );
     }
 
     #[test]
     fn unlimited_options_have_no_boundary_limit() {
-        let options = CompilerRoutingOptions::unlimited();
-
         assert_eq!(
-            options.budget().max_boundary_routes(),
-            None
+            CompilerRoutingOptions::unlimited()
+                .budget()
+                .max_boundary_routes(),
+            None,
         );
     }
 
     #[test]
-    fn routing_budget_accepts_optional_limits() {
-        let budget =
-            CompilerRoutingBudget::unlimited()
-                .with_max_boundary_routes(Some(12));
+    fn boundary_budget_accepts_optional_limits() {
+        let budget = CompilerRoutingBudget::unlimited()
+            .with_max_boundary_routes(Some(12));
 
-        assert_eq!(
-            budget.max_boundary_routes(),
-            Some(12)
-        );
+        assert_eq!(budget.max_boundary_routes(), Some(12));
     }
 
     #[test]
     fn distributed_graph_routes_between_targets() {
         let source = target("cpu:worker-a");
-        let intermediate = target("network:relay-a");
-        let destination = target("gpu:worker-b");
+        let relay = target("network:relay-a");
+        let destination = target("accelerator:worker-b");
 
         let mut graph = RoutingGraph::new();
 
         graph.add_node(source.clone());
-        graph.add_node(intermediate.clone());
+        graph.add_node(relay.clone());
         graph.add_node(destination.clone());
 
-        graph
-            .add_edge(
-                &source,
-                intermediate.clone(),
-                4,
-            )
-            .expect("first edge");
-
-        graph
-            .add_edge(
-                &intermediate,
-                destination.clone(),
-                6,
-            )
-            .expect("second edge");
+        graph.add_edge(&source, relay.clone(), 4).unwrap();
+        graph.add_edge(&relay, destination.clone(), 6).unwrap();
 
         let result = CompilerRouter::new()
             .route_targets(
@@ -937,20 +1102,16 @@ mod tests {
 
         assert_eq!(
             result.nodes(),
-            &[
-                source,
-                intermediate,
-                destination,
-            ]
+            &[source, relay, destination],
         );
     }
 
     #[test]
-    fn routing_selects_lowest_cost_path() {
+    fn lowest_cost_path_is_selected() {
         let source = target("cpu:source");
         let slow = target("network:slow");
         let fast = target("network:fast");
-        let destination = target("gpu:destination");
+        let destination = target("accelerator:destination");
 
         let mut graph = RoutingGraph::new();
 
@@ -963,21 +1124,10 @@ mod tests {
             graph.add_node(node);
         }
 
-        graph
-            .add_edge(&source, slow.clone(), 50)
-            .expect("slow edge");
-
-        graph
-            .add_edge(&slow, destination.clone(), 50)
-            .expect("slow destination edge");
-
-        graph
-            .add_edge(&source, fast.clone(), 2)
-            .expect("fast edge");
-
-        graph
-            .add_edge(&fast, destination.clone(), 3)
-            .expect("fast destination edge");
+        graph.add_edge(&source, slow.clone(), 50).unwrap();
+        graph.add_edge(&slow, destination.clone(), 50).unwrap();
+        graph.add_edge(&source, fast.clone(), 2).unwrap();
+        graph.add_edge(&fast, destination.clone(), 3).unwrap();
 
         let result = CompilerRouter::new()
             .route_targets(
@@ -990,14 +1140,9 @@ mod tests {
             .expect("route should exist");
 
         assert_eq!(result.total_cost(), 5);
-
         assert_eq!(
             result.nodes(),
-            &[
-                source,
-                fast,
-                destination,
-            ]
+            &[source, fast, destination],
         );
     }
 
@@ -1023,9 +1168,9 @@ mod tests {
     }
 
     #[test]
-    fn unknown_target_returns_error() {
+    fn unknown_target_returns_typed_error() {
         let source = target("cpu:source");
-        let destination = target("gpu:destination");
+        let destination = target("accelerator:destination");
 
         let mut graph = RoutingGraph::new();
         graph.add_node(source.clone());
@@ -1039,25 +1184,23 @@ mod tests {
                 &BaseCostEvaluator,
             );
 
-        assert!(matches!(
-            result,
-            Err(RoutingError::UnknownDestination)
-        ));
+        assert_eq!(
+            result.unwrap_err(),
+            RoutingError::UnknownDestination,
+        );
     }
 
     #[test]
     fn zero_cost_edges_are_supported() {
         let source = target("cpu:source");
-        let destination = target("gpu:destination");
+        let destination = target("accelerator:destination");
 
         let mut graph = RoutingGraph::new();
 
         graph.add_node(source.clone());
         graph.add_node(destination.clone());
 
-        graph
-            .add_edge(&source, destination.clone(), 0)
-            .expect("zero-cost edge");
+        graph.add_edge(&source, destination.clone(), 0).unwrap();
 
         let result = CompilerRouter::new()
             .route_targets(
@@ -1073,39 +1216,16 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_graph_edges_are_rejected() {
-        let source = target("cpu:source");
-        let destination = target("gpu:destination");
-
-        let mut graph = RoutingGraph::new();
-
-        graph.add_node(source.clone());
-        graph.add_node(destination.clone());
-
-        graph
-            .add_edge(&source, destination.clone(), 1)
-            .expect("first edge");
-
-        assert!(
-            graph
-                .add_edge(&source, destination, 2)
-                .is_err()
-        );
-    }
-
-    #[test]
     fn route_plan_preserves_endpoints() {
         let source = target("cpu:source");
-        let destination = target("gpu:destination");
+        let destination = target("accelerator:destination");
 
         let mut graph = RoutingGraph::new();
 
         graph.add_node(source.clone());
         graph.add_node(destination.clone());
 
-        graph
-            .add_edge(&source, destination.clone(), 1)
-            .expect("edge");
+        graph.add_edge(&source, destination.clone(), 1).unwrap();
 
         let route = CompilerRouter::new()
             .route_targets(
@@ -1119,15 +1239,13 @@ mod tests {
 
         assert_eq!(route.nodes().first(), Some(&source));
         assert_eq!(route.nodes().last(), Some(&destination));
-
         assert!(route.validate_structure().is_ok());
     }
 
     #[test]
-    fn boundary_budget_is_not_a_hardware_limit() {
-        let budget =
-            CompilerRoutingBudget::unlimited()
-                .with_max_boundary_routes(None);
+    fn boundary_budget_is_an_operational_policy() {
+        let budget = CompilerRoutingBudget::unlimited()
+            .with_max_boundary_routes(None);
 
         assert_eq!(budget.max_boundary_routes(), None);
     }
