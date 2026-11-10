@@ -1,76 +1,142 @@
-//! Zamani Compiler — Automated Safety Guard
-//!
-//! Coordinated cross-substrate security analysis for compiler instruction
-//! streams.
-//!
-//! The safety guard is intentionally:
-//!   - deterministic;
-//!   - fail-closed for malformed security-sensitive input;
-//!   - independent of a particular backend implementation;
-//!   - bounded in memory;
-//!   - suitable for use from parallel compilation pipelines;
-//!   - auditable through structured security events.
-//!
-//! The guard does not execute instructions. It only analyzes compiler IR-like
-//! instruction identifiers and security signals.
-//!
-//! Supported compatibility API:
-//!   - `GlobalSecurityContext`
-//!   - `GlobalSecurityContext::new()`
-//!   - `GlobalSecurityContext::record_signal()`
-//!   - `GlobalSecurityContext::check_coordinated_threat()`
-//!   - `SafetyGuard::new()`
-//!   - `SafetyGuard::inspect_with_context()`
-//!
-//! Production callers should prefer `inspect_with_policy()` and
-//! `SecurityAuditEvent` for structured diagnostics.
 
-use std::collections::{HashMap, HashSet};
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+//! Zamani Compiler Safety Guard
+//!
+//! Path: src/compiler/safety_guard.rs
+//! Rust: 1.97+
+//! Edition: 2021
+//!
+//! # Purpose
+//!
+//! Provides deterministic, target-independent inspection of compiler
+//! instruction streams for explicitly configured security signatures.
+//!
+//! This module is an inspection component, not a universal security
+//! verifier, semantic analyzer, policy engine, sandbox or runtime monitor.
+//!
+//! # Architectural ownership
+//!
+//! This module owns:
+//! - instruction-stream inspection;
+//! - coordinated threat-signature matching;
+//! - precursor-signal tracking;
+//! - inspection decisions;
+//! - structured inspection events;
+//! - configurable operational retention budgets.
+//!
+//! It does not own:
+//! - source grammar or parsing;
+//! - semantic validation;
+//! - canonical IR definitions;
+//! - general authorization;
+//! - security policy evaluation;
+//! - cryptographic verification;
+//! - supply-chain verification;
+//! - backend code generation;
+//! - hardware allocation;
+//! - runtime enforcement.
+//!
+//! # Canonical integration
+//!
+//! Grammar:
+//!     grammar/security/
+//!
+//! Semantic authority:
+//!     crate::frontend::semantic
+//!
+//! Compiler security:
+//!     crate::compiler::security
+//!
+//! IR verification:
+//!     crate::compiler::ir
+//!     crate::zuir
+//!     authoritative domain IR verifiers
+//!
+//! Backend:
+//!     crate::backend
+//!
+//! Runtime:
+//!     crate::runtime
+//!
+//! # Scalability
+//!
+//! No universal identifier-length, instruction-count, substrate-count,
+//! signal-count or computing-domain ceiling is imposed.
+//!
+//! Signal and audit retention budgets are operational configuration.
+//! Their default values are not language or hardware limits.
+//!
+//! A caller may configure operational capacity according to available
+//! memory and processing resources.
+//!
+//! No implementation can promise infinite physical memory.
+//!
+//! # Security limitations
+//!
+//! A signature match is evidence of a configured pattern, not proof of
+//! malicious behavior.
+//!
+//! Absence of a signature match is not proof of program safety.
+//!
+//! Mandatory semantic, IR, policy, artifact and supply-chain verification
+//! remains the responsibility of the authoritative security subsystem.
+//!
+//! This module never executes inspected instructions.
+
+use std::collections::BTreeSet;
+use std::error::Error;
 use std::fmt;
 use std::sync::{Arc, RwLock};
 
-/// Maximum number of precursor signals retained by the global context.
+// ============================================================================
+// 1. OPERATIONAL DEFAULTS
+// ============================================================================
+
+/// Default operational signal-retention budget.
 ///
-/// A bounded context prevents an untrusted or malformed compilation stream
-/// from causing unbounded memory growth.
+/// This is configurable and is not a semantic or hardware ceiling.
 pub const DEFAULT_MAX_SIGNALS: usize = 4_096;
 
-/// Maximum length accepted for a substrate identifier.
-pub const MAX_SUBSTRATE_LENGTH: usize = 256;
-
-/// Maximum length accepted for an instruction identifier.
-pub const MAX_INSTRUCTION_LENGTH: usize = 1_024;
-
-/// Maximum length accepted for a security signal identifier.
-pub const MAX_SIGNAL_LENGTH: usize = 256;
-
-/// Maximum number of audit events retained by one context.
+/// Default operational audit-retention budget.
+///
+/// This is configurable and is not a universal audit-event ceiling.
 pub const DEFAULT_MAX_AUDIT_EVENTS: usize = 8_192;
 
-/// Security decision produced by the safety guard.
+// ============================================================================
+// 2. DECISIONS
+// ============================================================================
+
+/// Decision resulting from configured signature inspection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecurityDecision {
-    /// Instruction stream is permitted.
+    /// No configured blocking signature matched.
     Allow,
 
-    /// Instruction stream contains a suspicious precursor.
+    /// A configured precursor or warning was observed.
     Warn,
 
-    /// Instruction stream matches a coordinated threat rule.
+    /// A configured blocking signature matched.
     Block,
 }
 
 impl SecurityDecision {
+    /// Returns whether the decision permits continued inspection.
+    ///
+    /// Warning does not mean that the program has been verified safe.
     pub fn is_allowed(self) -> bool {
         matches!(self, Self::Allow | Self::Warn)
     }
 
+    /// Returns whether the decision blocks the inspected operation.
     pub fn is_blocked(self) -> bool {
         matches!(self, Self::Block)
     }
 }
 
-/// Severity assigned to an audit event.
+/// Severity associated with an inspection event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SecuritySeverity {
     Informational,
@@ -78,18 +144,39 @@ pub enum SecuritySeverity {
     Critical,
 }
 
-/// Structured security error.
+// ============================================================================
+// 3. ERRORS
+// ============================================================================
+
+/// Errors encountered during safety inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SafetyGuardError {
     InvalidSubstrate(String),
+
     InvalidInstruction(String),
+
     InvalidSignal(String),
+
+    InvalidRule {
+        rule: String,
+        reason: String,
+    },
+
+    DuplicateRule {
+        id: String,
+    },
+
     ThreatDetected {
         substrate: String,
         instruction: String,
         rule: String,
     },
+
     ContextLimitExceeded,
+
+    AuditSequenceExhausted,
+
     LockPoisoned,
 }
 
@@ -108,58 +195,116 @@ impl fmt::Display for SafetyGuardError {
                 write!(f, "invalid security signal: {value}")
             }
 
+            Self::InvalidRule { rule, reason } => {
+                write!(f, "invalid security rule '{rule}': {reason}")
+            }
+
+            Self::DuplicateRule { id } => {
+                write!(f, "duplicate security rule: {id}")
+            }
+
             Self::ThreatDetected {
                 substrate,
                 instruction,
                 rule,
-            } => write!(
-                f,
-                "coordinated adversarial activity detected: \
-                 substrate='{substrate}', instruction='{instruction}', rule='{rule}'"
-            ),
+            } => {
+                write!(
+                    f,
+                    "coordinated adversarial pattern detected: \
+                     substrate='{substrate}', \
+                     instruction='{instruction}', \
+                     rule='{rule}'"
+                )
+            }
 
             Self::ContextLimitExceeded => {
-                write!(f, "security context capacity has been exceeded")
+                write!(f, "configured security context budget exceeded")
+            }
+
+            Self::AuditSequenceExhausted => {
+                write!(f, "security audit sequence exhausted")
             }
 
             Self::LockPoisoned => {
-                write!(f, "security context lock has been poisoned")
+                write!(f, "security context lock is poisoned")
             }
         }
     }
 }
 
-impl std::error::Error for SafetyGuardError {}
+impl Error for SafetyGuardError {}
 
-/// Security rule describing a precursor/follow-up instruction chain.
+// ============================================================================
+// 4. IDENTIFIER VALIDATION
+// ============================================================================
+
+/// Validates and canonicalizes an inspection identifier.
+///
+/// No arbitrary maximum identifier length is imposed.
+///
+/// ASCII case normalization preserves the compatibility behavior of
+/// the original implementation.
+fn normalize_identifier(
+    value: &str,
+) -> Result<String, String> {
+    let value = value.trim();
+
+    if value.is_empty() {
+        return Err("identifier cannot be empty".to_owned());
+    }
+
+    if value.chars().any(char::is_control) {
+        return Err(
+            "identifier contains a control character".to_owned()
+        );
+    }
+
+    Ok(value.to_ascii_uppercase())
+}
+
+// ============================================================================
+// 5. COORDINATED THREAT RULES
+// ============================================================================
+
+/// Describes a configured precursor/follow-up signature.
+///
+/// Rules are data-driven. New substrates and instruction identifiers
+/// do not require modifications to the compiler composition root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordinatedThreatRule {
     pub id: String,
+
     pub precursor_signal: String,
+
     pub target_substrate: String,
+
     pub trigger_instruction: String,
 }
 
 impl CoordinatedThreatRule {
+    /// Constructs and validates a coordinated threat rule.
     pub fn new(
         id: impl Into<String>,
         precursor_signal: impl Into<String>,
         target_substrate: impl Into<String>,
         trigger_instruction: impl Into<String>,
     ) -> Result<Self, SafetyGuardError> {
-        let id = normalize_identifier(&id.into(), MAX_SIGNAL_LENGTH)
-            .map_err(SafetyGuardError::InvalidSignal)?;
+        let id = normalize_identifier(&id.into())
+            .map_err(|reason| SafetyGuardError::InvalidRule {
+                rule: "unnamed".to_owned(),
+                reason,
+            })?;
 
         let precursor_signal =
-            normalize_identifier(&precursor_signal.into(), MAX_SIGNAL_LENGTH)
+            normalize_identifier(&precursor_signal.into())
                 .map_err(SafetyGuardError::InvalidSignal)?;
 
         let target_substrate =
-            normalize_identifier(&target_substrate.into(), MAX_SUBSTRATE_LENGTH)
+            normalize_identifier(&target_substrate.into())
                 .map_err(SafetyGuardError::InvalidSubstrate)?;
 
         let trigger_instruction =
-            normalize_identifier(&trigger_instruction.into(), MAX_INSTRUCTION_LENGTH)
+            normalize_identifier(&trigger_instruction.into())
                 .map_err(SafetyGuardError::InvalidInstruction)?;
 
         Ok(Self {
@@ -170,59 +315,115 @@ impl CoordinatedThreatRule {
         })
     }
 
-    fn matches(&self, substrate: &str, instruction: &str, signals: &HashSet<String>) -> bool {
-        self.target_substrate.eq_ignore_ascii_case(substrate)
-            && self.trigger_instruction.eq_ignore_ascii_case(instruction)
+    fn matches(
+        &self,
+        substrate: &str,
+        instruction: &str,
+        signals: &BTreeSet<String>,
+    ) -> bool {
+        self.target_substrate == substrate
+            && self.trigger_instruction == instruction
             && signals.contains(&self.precursor_signal)
     }
 }
 
-/// Default coordinated-attack rules.
+// ============================================================================
+// 6. DEFAULT COMPATIBILITY SIGNATURES
+// ============================================================================
+
+/// Returns the legacy cross-substrate signatures.
 ///
-/// These preserve the behavior of the original implementation while moving
-/// the rules into explicit, inspectable data.
+/// These signatures are retained for compatibility with existing backend
+/// security tests and existing consumers.
+///
+/// They are illustrative configured signatures, not a complete security
+/// model and not universal declarations that the named operations are
+/// inherently malicious.
+///
+/// Production deployments should supply their own reviewed rules.
 fn default_threat_rules() -> Vec<CoordinatedThreatRule> {
     vec![
         CoordinatedThreatRule {
-            id: "cross-substrate.shared-bus-exploit".to_string(),
-            precursor_signal: "NEUROMORPHIC_BUFFER_PREP".to_string(),
-            target_substrate: "QUANTUM".to_string(),
-            trigger_instruction: "EXPLOIT_SHARED_BUS".to_string(),
+            id: "cross-substrate.shared-bus-exploit".to_owned(),
+            precursor_signal: "NEUROMORPHIC_BUFFER_PREP".to_owned(),
+            target_substrate: "QUANTUM".to_owned(),
+            trigger_instruction: "EXPLOIT_SHARED_BUS".to_owned(),
         },
         CoordinatedThreatRule {
-            id: "cross-substrate.direct-state-leak".to_string(),
-            precursor_signal: "NEUROMORPHIC_CACHE_FLUSH".to_string(),
-            target_substrate: "QUANTUM".to_string(),
-            trigger_instruction: "DIRECT_STATE_LEAK".to_string(),
+            id: "cross-substrate.direct-state-leak".to_owned(),
+            precursor_signal: "NEUROMORPHIC_CACHE_FLUSH".to_owned(),
+            target_substrate: "QUANTUM".to_owned(),
+            trigger_instruction: "DIRECT_STATE_LEAK".to_owned(),
         },
     ]
 }
 
-/// Structured security audit event.
+// ============================================================================
+// 7. AUDIT EVENTS
+// ============================================================================
+
+/// Structured safety inspection event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityAuditEvent {
     pub sequence: u64,
+
     pub severity: SecuritySeverity,
+
     pub decision: SecurityDecision,
+
     pub substrate: String,
+
     pub instruction: Option<String>,
+
     pub rule_id: Option<String>,
+
     pub message: String,
 }
 
-/// Runtime security policy.
+// ============================================================================
+// 8. INSPECTION REPORT
+// ============================================================================
+
+/// Result of a successfully completed inspection.
+///
+/// A report records what this guard inspected. It does not certify
+/// semantic correctness, IR validity or runtime safety.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SafetyInspectionReport {
+    /// Number of instructions inspected successfully.
+    pub inspected_instructions: usize,
+
+    /// Number of new precursor signals recorded.
+    pub recorded_signals: usize,
+
+    /// Inspection decision.
+    pub decision: SecurityDecision,
+
+    /// Substrate associated with this inspection.
+    pub substrate: String,
+}
+
+// ============================================================================
+// 9. SAFETY POLICY
+// ============================================================================
+
+/// Configuration for inspection and operational retention.
 #[derive(Debug, Clone)]
 pub struct SafetyPolicy {
-    /// Maximum number of precursor signals retained.
+    /// Maximum distinct precursor signals retained simultaneously.
+    ///
+    /// This is an operational budget, not a language-level maximum.
     pub max_signals: usize,
 
-    /// Maximum number of audit events retained.
+    /// Maximum retained audit events.
+    ///
+    /// Older events are evicted when this budget is reached.
     pub max_audit_events: usize,
 
-    /// Whether precursor signals should generate warning events.
+    /// Whether precursor observations generate warning events.
     pub audit_precursors: bool,
 
-    /// Threat rules evaluated by the guard.
+    /// Configured coordinated-threat signatures.
     pub threat_rules: Vec<CoordinatedThreatRule>,
 }
 
@@ -238,20 +439,36 @@ impl Default for SafetyPolicy {
 }
 
 impl SafetyPolicy {
+    /// Validates the complete policy.
     pub fn validate(&self) -> Result<(), SafetyGuardError> {
         if self.max_signals == 0 || self.max_audit_events == 0 {
             return Err(SafetyGuardError::ContextLimitExceeded);
         }
 
+        let mut identifiers = BTreeSet::new();
+
         for rule in &self.threat_rules {
-            if rule.id.is_empty()
-                || rule.precursor_signal.is_empty()
-                || rule.target_substrate.is_empty()
-                || rule.trigger_instruction.is_empty()
-            {
-                return Err(SafetyGuardError::InvalidSignal(
-                    "security rule contains an empty field".to_string(),
-                ));
+            let id = normalize_identifier(&rule.id)
+                .map_err(|reason| SafetyGuardError::InvalidRule {
+                    rule: rule.id.clone(),
+                    reason,
+                })?;
+
+            if !identifiers.insert(id.clone()) {
+                return Err(SafetyGuardError::DuplicateRule { id });
+            }
+
+            for (field, value) in [
+                ("precursor signal", &rule.precursor_signal),
+                ("target substrate", &rule.target_substrate),
+                ("trigger instruction", &rule.trigger_instruction),
+            ] {
+                normalize_identifier(value).map_err(|reason| {
+                    SafetyGuardError::InvalidRule {
+                        rule: rule.id.clone(),
+                        reason: format!("{field}: {reason}"),
+                    }
+                })?;
             }
         }
 
@@ -259,17 +476,28 @@ impl SafetyPolicy {
     }
 }
 
-/// Shared, bounded security context.
+// ============================================================================
+// 10. GLOBAL SECURITY CONTEXT
+// ============================================================================
+
+/// Mutable state associated with a security inspection scope.
 ///
-/// `GlobalSecurityContext` retains the original mutable API while internally
-/// maintaining structured state and audit information.
+/// A context should be scoped to one logical compilation/security-analysis
+/// unit. Do not share precursor state between unrelated programs.
 #[derive(Debug, Clone)]
 pub struct GlobalSecurityContext {
-    observed_precursor_signals: HashSet<String>,
+    observed_precursor_signals: BTreeSet<String>,
+
     audit_events: Vec<SecurityAuditEvent>,
+
     sequence: u64,
+
     max_signals: usize,
+
     max_audit_events: usize,
+
+    audit_precursors: bool,
+
     threat_rules: Vec<CoordinatedThreatRule>,
 }
 
@@ -280,39 +508,56 @@ impl Default for GlobalSecurityContext {
 }
 
 impl GlobalSecurityContext {
-    /// Creates a context using the production default policy.
+    /// Constructs the default compatibility policy without an
+    /// unnecessary fallible initialization path.
     pub fn new() -> Self {
-        Self::with_policy(SafetyPolicy::default())
-            .expect("default SafetyPolicy must always be valid")
-    }
+        let policy = SafetyPolicy::default();
 
-    /// Creates a context from an explicit policy.
-    pub fn with_policy(policy: SafetyPolicy) -> Result<Self, SafetyGuardError> {
-        policy.validate()?;
-
-        Ok(Self {
-            observed_precursor_signals: HashSet::new(),
+        Self {
+            observed_precursor_signals: BTreeSet::new(),
             audit_events: Vec::new(),
             sequence: 0,
             max_signals: policy.max_signals,
             max_audit_events: policy.max_audit_events,
+            audit_precursors: policy.audit_precursors,
+            threat_rules: policy.threat_rules,
+        }
+    }
+
+    /// Constructs a context using an explicitly configured policy.
+    pub fn with_policy(
+        policy: SafetyPolicy,
+    ) -> Result<Self, SafetyGuardError> {
+        policy.validate()?;
+
+        Ok(Self {
+            observed_precursor_signals: BTreeSet::new(),
+            audit_events: Vec::new(),
+            sequence: 0,
+            max_signals: policy.max_signals,
+            max_audit_events: policy.max_audit_events,
+            audit_precursors: policy.audit_precursors,
             threat_rules: policy.threat_rules,
         })
     }
 
-    /// Records a precursor signal.
+    /// Compatibility API.
     ///
-    /// Invalid signals are ignored for compatibility with the original
-    /// infallible API. New callers should use `try_record_signal()`.
+    /// Invalid input is ignored for compatibility. Production code should
+    /// use try_record_signal and handle its Result.
     pub fn record_signal(&mut self, signal: &str) {
         let _ = self.try_record_signal(signal);
     }
 
-    /// Fallible production version of `record_signal`.
-    pub fn try_record_signal(&mut self, signal: &str) -> Result<bool, SafetyGuardError> {
-        let normalized =
-            normalize_identifier(signal, MAX_SIGNAL_LENGTH)
-                .map_err(SafetyGuardError::InvalidSignal)?;
+    /// Records a precursor signal.
+    ///
+    /// Duplicate signals are idempotent.
+    pub fn try_record_signal(
+        &mut self,
+        signal: &str,
+    ) -> Result<bool, SafetyGuardError> {
+        let normalized = normalize_identifier(signal)
+            .map_err(SafetyGuardError::InvalidSignal)?;
 
         if self.observed_precursor_signals.contains(&normalized) {
             return Ok(false);
@@ -322,98 +567,100 @@ impl GlobalSecurityContext {
             return Err(SafetyGuardError::ContextLimitExceeded);
         }
 
-        self.observed_precursor_signals.insert(normalized.clone());
+        // Check sequence availability before mutating observable state.
+        let needs_audit = self.audit_precursors
+            && self.threat_rules.iter().any(|rule| {
+                rule.precursor_signal == normalized
+            });
 
-        if self
-            .threat_rules
-            .iter()
-            .any(|rule| rule.precursor_signal == normalized)
-        {
+        if needs_audit && self.sequence == u64::MAX {
+            return Err(SafetyGuardError::AuditSequenceExhausted);
+        }
+
+        self.observed_precursor_signals
+            .insert(normalized.clone());
+
+        if needs_audit {
             self.push_audit_event(
                 SecuritySeverity::Warning,
                 SecurityDecision::Warn,
-                "GLOBAL".to_string(),
+                "GLOBAL".to_owned(),
                 None,
                 None,
-                format!("precursor security signal recorded: {normalized}"),
-            );
+                format!(
+                    "configured precursor signal observed: {normalized}"
+                ),
+            )?;
         }
 
         Ok(true)
     }
 
-    /// Checks whether the current substrate/instruction pair completes a
-    /// coordinated threat chain.
+    /// Compatibility API.
     ///
-    /// This compatibility method remains infallible.
+    /// Invalid identifiers conservatively return true.
+    /// Production code should use try_check_coordinated_threat.
     pub fn check_coordinated_threat(
         &self,
         current_substrate: &str,
         instruction: &str,
     ) -> bool {
-        self.try_check_coordinated_threat(current_substrate, instruction)
-            .unwrap_or(true)
+        self.try_check_coordinated_threat(
+            current_substrate,
+            instruction,
+        )
+        .unwrap_or(true)
     }
 
-    /// Fallible production version of coordinated threat detection.
+    /// Checks configured signatures using validated identifiers.
     pub fn try_check_coordinated_threat(
         &self,
         current_substrate: &str,
         instruction: &str,
     ) -> Result<bool, SafetyGuardError> {
-        let substrate =
-            normalize_identifier(current_substrate, MAX_SUBSTRATE_LENGTH)
-                .map_err(SafetyGuardError::InvalidSubstrate)?;
+        let substrate = normalize_identifier(current_substrate)
+            .map_err(SafetyGuardError::InvalidSubstrate)?;
 
-        let instruction =
-            normalize_identifier(instruction, MAX_INSTRUCTION_LENGTH)
-                .map_err(SafetyGuardError::InvalidInstruction)?;
+        let instruction = normalize_identifier(instruction)
+            .map_err(SafetyGuardError::InvalidInstruction)?;
 
-        Ok(self
-            .threat_rules
-            .iter()
-            .any(|rule| {
-                rule.matches(
-                    &substrate,
-                    &instruction,
-                    &self.observed_precursor_signals,
-                )
-            }))
+        Ok(self.threat_rules.iter().any(|rule| {
+            rule.matches(
+                &substrate,
+                &instruction,
+                &self.observed_precursor_signals,
+            )
+        }))
     }
 
-    /// Returns all currently observed precursor signals.
+    /// Returns deterministically ordered precursor signals.
     pub fn observed_signals(&self) -> Vec<String> {
-        let mut signals: Vec<_> =
-            self.observed_precursor_signals.iter().cloned().collect();
-
-        signals.sort();
-        signals
+        self.observed_precursor_signals.iter().cloned().collect()
     }
 
-    /// Returns the number of observed precursor signals.
+    /// Returns the number of distinct precursor signals.
     pub fn signal_count(&self) -> usize {
         self.observed_precursor_signals.len()
     }
 
-    /// Returns a snapshot of the security audit log.
+    /// Returns retained audit events in insertion order.
     pub fn audit_events(&self) -> &[SecurityAuditEvent] {
         &self.audit_events
     }
 
-    /// Clears transient precursor state.
-    ///
-    /// This is useful between independent compilation units.
+    /// Clears precursor state but retains audit history.
     pub fn reset_precursors(&mut self) {
         self.observed_precursor_signals.clear();
     }
 
-    /// Clears both precursor and audit state.
+    /// Clears precursor state and retained audit history.
     pub fn reset(&mut self) {
         self.observed_precursor_signals.clear();
         self.audit_events.clear();
         self.sequence = 0;
     }
 
+    /// Adds an audit event using checked sequence advancement.
     fn push_audit_event(
         &mut self,
         severity: SecuritySeverity,
@@ -422,15 +669,21 @@ impl GlobalSecurityContext {
         instruction: Option<String>,
         rule_id: Option<String>,
         message: String,
-    ) {
-        self.sequence = self.sequence.wrapping_add(1);
+    ) -> Result<(), SafetyGuardError> {
+        let sequence = self.sequence
+            .checked_add(1)
+            .ok_or(SafetyGuardError::AuditSequenceExhausted)?;
 
+        self.sequence = sequence;
+
+        // Bounded retention is an explicit operational policy.
+        // It does not impose a limit on the number of inspections.
         if self.audit_events.len() >= self.max_audit_events {
             self.audit_events.remove(0);
         }
 
         self.audit_events.push(SecurityAuditEvent {
-            sequence: self.sequence,
+            sequence,
             severity,
             decision,
             substrate,
@@ -438,60 +691,80 @@ impl GlobalSecurityContext {
             rule_id,
             message,
         });
+
+        Ok(())
     }
 }
 
-/// Thread-safe shared security context.
-///
-/// The compiler can clone this handle and share it between independent
-/// backend-analysis workers.
-pub type SharedGlobalSecurityContext = Arc<RwLock<GlobalSecurityContext>>;
+// ============================================================================
+// 11. SHARED CONTEXT
+// ============================================================================
 
-/// Creates a thread-safe global security context.
-pub fn shared_security_context() -> Result<SharedGlobalSecurityContext, SafetyGuardError> {
-    Ok(Arc::new(RwLock::new(GlobalSecurityContext::new())))
+/// Thread-safe shared context handle.
+///
+/// Prefer independent contexts for independent compilation units.
+/// Sharing a context deliberately shares precursor state.
+pub type SharedGlobalSecurityContext =
+    Arc<RwLock<GlobalSecurityContext>>;
+
+/// Creates a shared default context.
+pub fn shared_security_context(
+) -> Result<SharedGlobalSecurityContext, SafetyGuardError> {
+    Ok(Arc::new(RwLock::new(
+        GlobalSecurityContext::new()
+    )))
 }
 
-/// Automated safety guard for one compiler substrate.
+// ============================================================================
+// 12. SAFETY GUARD
+// ============================================================================
+
+/// Instruction-stream inspection boundary for one substrate.
+///
+/// Substrate identifiers are open-world strings rather than a closed
+/// enumeration of classical, quantum, HDL or future computing domains.
 #[derive(Debug, Clone)]
 pub struct SafetyGuard {
     pub substrate_name: String,
 }
 
 impl SafetyGuard {
-    /// Creates a safety guard for a substrate.
+    /// Compatibility constructor.
     ///
-    /// This compatibility constructor cannot return a `Result`, so invalid
-    /// names are rejected by normalizing them to an explicit safe identifier.
-    /// Production code should prefer `try_new()`.
+    /// Validation is deferred until inspection because this constructor
+    /// cannot return a Result.
+    ///
+    /// New production callers should prefer try_new.
     pub fn new(substrate_name: &str) -> Self {
-        Self::try_new(substrate_name).unwrap_or_else(|_| Self {
-            substrate_name: "INVALID_SUBSTRATE".to_string(),
-        })
+        Self {
+            substrate_name: substrate_name.to_owned(),
+        }
     }
 
-    /// Fallible constructor.
-    pub fn try_new(substrate_name: &str) -> Result<Self, SafetyGuardError> {
-        let substrate_name =
-            normalize_identifier(substrate_name, MAX_SUBSTRATE_LENGTH)
-                .map_err(SafetyGuardError::InvalidSubstrate)?;
+    /// Constructs a guard using a validated substrate identifier.
+    pub fn try_new(
+        substrate_name: &str,
+    ) -> Result<Self, SafetyGuardError> {
+        let substrate_name = normalize_identifier(substrate_name)
+            .map_err(SafetyGuardError::InvalidSubstrate)?;
 
         Ok(Self { substrate_name })
     }
 
-    /// Inspects instructions using the default production policy.
-    ///
-    /// This preserves the original API.
+    /// Legacy compatibility inspection method.
     pub fn inspect_with_context(
         &self,
         instructions: &[String],
         global_ctx: &mut GlobalSecurityContext,
     ) -> Result<(), String> {
-        self.inspect_with_context_checked(instructions, global_ctx)
-            .map_err(|error| error.to_string())
+        self.inspect_with_context_checked(
+            instructions,
+            global_ctx,
+        )
+        .map_err(|error| error.to_string())
     }
 
-    /// Structured version of `inspect_with_context`.
+    /// Structured compatibility inspection method.
     pub fn inspect_with_context_checked(
         &self,
         instructions: &[String],
@@ -500,122 +773,147 @@ impl SafetyGuard {
         self.inspect_with_policy(instructions, global_ctx)
     }
 
-    /// Production inspection entry point.
+    /// Inspects an instruction stream and returns a structured report.
     ///
-    /// The guard processes instructions sequentially so that a precursor
-    /// encountered earlier in the compilation stream can affect a later
-    /// instruction in the same stream.
-    pub fn inspect_with_policy(
+    /// Processing is sequential. A precursor encountered earlier in the
+    /// stream can therefore affect a subsequent instruction.
+    ///
+    /// No instruction is executed or transformed.
+    pub fn inspect_with_report(
         &self,
         instructions: &[String],
         global_ctx: &mut GlobalSecurityContext,
-    ) -> Result<(), SafetyGuardError> {
+    ) -> Result<SafetyInspectionReport, SafetyGuardError> {
+        let substrate = normalize_identifier(&self.substrate_name)
+            .map_err(SafetyGuardError::InvalidSubstrate)?;
+
+        let mut recorded_signals = 0usize;
+        let mut inspected = 0usize;
+
         for raw_instruction in instructions {
-            let instruction =
-                normalize_identifier(raw_instruction, MAX_INSTRUCTION_LENGTH)
-                    .map_err(SafetyGuardError::InvalidInstruction)?;
+            let instruction = normalize_identifier(raw_instruction)
+                .map_err(SafetyGuardError::InvalidInstruction)?;
 
-            self.record_precursor_if_present(
+            // Preserve the existing cross-substrate compatibility behavior.
+            let precursor = self.precursor_for_instruction(
+                &substrate,
                 &instruction,
-                global_ctx,
-            )?;
+            );
 
-            if let Some(rule) = global_ctx.threat_rules.iter().find(|rule| {
-                rule.matches(
-                    &self.substrate_name,
-                    &instruction,
-                    &global_ctx.observed_precursor_signals,
-                )
-            }) {
+            if let Some(signal) = precursor {
+                if global_ctx.try_record_signal(signal)? {
+                    recorded_signals = recorded_signals
+                        .checked_add(1)
+                        .ok_or(SafetyGuardError::ContextLimitExceeded)?;
+                }
+            }
+
+            inspected = inspected
+                .checked_add(1)
+                .ok_or(SafetyGuardError::ContextLimitExceeded)?;
+
+            if let Some(rule) = global_ctx.threat_rules.iter().find(
+                |rule| {
+                    rule.matches(
+                        &substrate,
+                        &instruction,
+                        &global_ctx.observed_precursor_signals,
+                    )
+                },
+            ) {
                 global_ctx.push_audit_event(
                     SecuritySeverity::Critical,
                     SecurityDecision::Block,
-                    self.substrate_name.clone(),
+                    substrate.clone(),
                     Some(instruction.clone()),
                     Some(rule.id.clone()),
                     format!(
-                        "coordinated cross-substrate threat blocked by rule '{}'",
+                        "configured coordinated threat signature matched: {}",
                         rule.id
                     ),
-                );
+                )?;
 
                 return Err(SafetyGuardError::ThreatDetected {
-                    substrate: self.substrate_name.clone(),
+                    substrate,
                     instruction,
                     rule: rule.id.clone(),
                 });
             }
         }
 
-        Ok(())
+        Ok(SafetyInspectionReport {
+            inspected_instructions: inspected,
+            recorded_signals,
+            decision: SecurityDecision::Allow,
+            substrate,
+        })
     }
 
-    fn record_precursor_if_present(
+    /// Compatibility inspection entry point.
+    ///
+    /// A successful return means only that no configured blocking
+    /// signature matched. It does not prove program safety.
+    pub fn inspect_with_policy(
         &self,
-        instruction: &str,
+        instructions: &[String],
         global_ctx: &mut GlobalSecurityContext,
     ) -> Result<(), SafetyGuardError> {
-        match instruction {
-            "PREPARE_SHARED_BUFFER"
-                if self.substrate_name.eq_ignore_ascii_case("NEUROMORPHIC") =>
-            {
-                global_ctx.try_record_signal("NEUROMORPHIC_BUFFER_PREP")?;
-            }
-
-            "FLUSH_CACHE_LINES"
-                if self.substrate_name.eq_ignore_ascii_case("NEUROMORPHIC") =>
-            {
-                global_ctx.try_record_signal("NEUROMORPHIC_CACHE_FLUSH")?;
-            }
-
-            _ => {}
-        }
+        self.inspect_with_report(
+            instructions,
+            global_ctx,
+        )?;
 
         Ok(())
     }
+
+    /// Maps the two existing legacy precursor signatures.
+    ///
+    /// These are compatibility signatures, not universal semantic rules.
+    /// New signatures should be introduced through SafetyPolicy.
+    fn precursor_for_instruction<'a>(
+        &self,
+        substrate: &str,
+        instruction: &str,
+    ) -> Option<&'a str> {
+        if substrate == "NEUROMORPHIC" {
+            match instruction {
+                "PREPARE_SHARED_BUFFER" => {
+                    Some("NEUROMORPHIC_BUFFER_PREP")
+                }
+
+                "FLUSH_CACHE_LINES" => {
+                    Some("NEUROMORPHIC_CACHE_FLUSH")
+                }
+
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
-/// Validates and normalizes a security-sensitive identifier.
-///
-/// Normalization is intentionally conservative:
-/// - leading/trailing whitespace is removed;
-/// - empty identifiers are rejected;
-/// - embedded control characters are rejected;
-/// - excessive input is rejected;
-/// - identifiers are converted to uppercase for deterministic rule matching.
-fn normalize_identifier(
-    value: &str,
-    max_length: usize,
-) -> Result<String, String> {
-    let trimmed = value.trim();
+// ============================================================================
+// 13. CONVENIENCE API
+// ============================================================================
 
-    if trimmed.is_empty() {
-        return Err("identifier cannot be empty".to_string());
-    }
-
-    if trimmed.len() > max_length {
-        return Err(format!(
-            "identifier exceeds maximum length of {max_length} bytes"
-        ));
-    }
-
-    if trimmed.chars().any(|character| character.is_control()) {
-        return Err("identifier contains a control character".to_string());
-    }
-
-    Ok(trimmed.to_ascii_uppercase())
-}
-
-/// Convenience helper for checking an instruction stream without manually
-/// constructing a guard.
+/// Inspects an instruction stream using an existing security context.
 pub fn inspect_instructions(
     substrate: &str,
     instructions: &[String],
     context: &mut GlobalSecurityContext,
 ) -> Result<(), SafetyGuardError> {
     let guard = SafetyGuard::try_new(substrate)?;
-    guard.inspect_with_context_checked(instructions, context)
+
+    guard.inspect_with_policy(
+        instructions,
+        context,
+    )
 }
+
+// ============================================================================
+// 14. TESTS
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
@@ -633,7 +931,13 @@ mod tests {
     fn records_precursor_signal() {
         let mut context = GlobalSecurityContext::new();
 
-        assert!(context.try_record_signal("NEUROMORPHIC_BUFFER_PREP").is_ok());
+        assert_eq!(
+            context.try_record_signal(
+                "NEUROMORPHIC_BUFFER_PREP"
+            ),
+            Ok(true)
+        );
+
         assert_eq!(context.signal_count(), 1);
     }
 
@@ -642,12 +946,12 @@ mod tests {
         let mut context = GlobalSecurityContext::new();
 
         assert_eq!(
-            context.try_record_signal("NEUROMORPHIC_BUFFER_PREP"),
+            context.try_record_signal("FIRST_SIGNAL"),
             Ok(true)
         );
 
         assert_eq!(
-            context.try_record_signal("NEUROMORPHIC_BUFFER_PREP"),
+            context.try_record_signal("FIRST_SIGNAL"),
             Ok(false)
         );
 
@@ -655,7 +959,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_shared_bus_attack_chain() {
+    fn detects_shared_bus_signature() {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("NEUROMORPHIC_BUFFER_PREP");
@@ -667,7 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn detects_cache_state_leak_attack_chain() {
+    fn detects_cache_state_signature() {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("NEUROMORPHIC_CACHE_FLUSH");
@@ -679,7 +983,7 @@ mod tests {
     }
 
     #[test]
-    fn unrelated_instruction_is_allowed() {
+    fn unrelated_instruction_is_not_blocked() {
         let context = GlobalSecurityContext::new();
 
         assert!(!context.check_coordinated_threat(
@@ -689,7 +993,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_substrate_does_not_trigger_quantum_rule() {
+    fn incorrect_substrate_does_not_match() {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("NEUROMORPHIC_BUFFER_PREP");
@@ -701,22 +1005,26 @@ mod tests {
     }
 
     #[test]
-    fn full_chain_is_blocked() {
+    fn full_cross_substrate_chain_is_blocked() {
         let mut context = GlobalSecurityContext::new();
-        let guard = SafetyGuard::try_new("neuromorphic").unwrap();
 
-        let precursor = vec!["PREPARE_SHARED_BUFFER".to_string()];
+        let precursor = SafetyGuard::try_new(
+            "NEUROMORPHIC"
+        ).expect("valid substrate");
 
-        guard
-            .inspect_with_context_checked(&precursor, &mut context)
-            .unwrap();
+        precursor.inspect_with_policy(
+            &[String::from("PREPARE_SHARED_BUFFER")],
+            &mut context,
+        ).expect("precursor should be recorded");
 
-        let quantum_guard = SafetyGuard::try_new("quantum").unwrap();
+        let quantum = SafetyGuard::try_new(
+            "QUANTUM"
+        ).expect("valid substrate");
 
-        let attack = vec!["EXPLOIT_SHARED_BUS".to_string()];
-
-        let result =
-            quantum_guard.inspect_with_context_checked(&attack, &mut context);
+        let result = quantum.inspect_with_policy(
+            &[String::from("EXPLOIT_SHARED_BUS")],
+            &mut context,
+        );
 
         assert!(matches!(
             result,
@@ -728,27 +1036,27 @@ mod tests {
     fn cache_flush_chain_is_blocked() {
         let mut context = GlobalSecurityContext::new();
 
-        let neuromorphic = SafetyGuard::try_new("NEUROMORPHIC").unwrap();
+        let precursor = SafetyGuard::try_new(
+            "NEUROMORPHIC"
+        ).expect("valid substrate");
 
-        neuromorphic
-            .inspect_with_context_checked(
-                &["FLUSH_CACHE_LINES".to_string()],
-                &mut context,
-            )
-            .unwrap();
-
-        let quantum = SafetyGuard::try_new("QUANTUM").unwrap();
-
-        let result = quantum.inspect_with_context_checked(
-            &["DIRECT_STATE_LEAK".to_string()],
+        precursor.inspect_with_policy(
+            &[String::from("FLUSH_CACHE_LINES")],
             &mut context,
-        );
+        ).expect("precursor should be recorded");
 
-        assert!(result.is_err());
+        let quantum = SafetyGuard::try_new(
+            "QUANTUM"
+        ).expect("valid substrate");
+
+        assert!(quantum.inspect_with_policy(
+            &[String::from("DIRECT_STATE_LEAK")],
+            &mut context,
+        ).is_err());
     }
 
     #[test]
-    fn instruction_matching_is_case_insensitive() {
+    fn matching_is_case_insensitive() {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("neuromorphic_buffer_prep");
@@ -760,38 +1068,48 @@ mod tests {
     }
 
     #[test]
-    fn invalid_instruction_is_rejected() {
+    fn rejects_control_characters() {
+        assert!(matches!(
+            SafetyGuard::try_new("bad\nsubstrate"),
+            Err(SafetyGuardError::InvalidSubstrate(_))
+        ));
+
         let mut context = GlobalSecurityContext::new();
 
-        let result = inspect_instructions(
-            "Quantum",
-            &["\n".to_string()],
-            &mut context,
-        );
+        assert!(matches!(
+            context.try_record_signal("bad\0signal"),
+            Err(SafetyGuardError::InvalidSignal(_))
+        ));
 
         assert!(matches!(
-            result,
+            context.try_check_coordinated_threat(
+                "QUANTUM",
+                "bad\ninstruction"
+            ),
             Err(SafetyGuardError::InvalidInstruction(_))
         ));
     }
 
     #[test]
-    fn control_characters_are_rejected() {
-        let result = SafetyGuard::try_new("Quantum\n");
+    fn accepts_identifiers_without_arbitrary_length_ceiling() {
+        let identifier = "A".repeat(16_384);
 
-        assert!(result.is_err());
+        let guard = SafetyGuard::try_new(&identifier);
+
+        assert!(guard.is_ok());
     }
 
     #[test]
-    fn audit_event_is_created_for_threat() {
+    fn audit_event_is_created_for_blocked_signature() {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("NEUROMORPHIC_BUFFER_PREP");
 
-        let guard = SafetyGuard::try_new("Quantum").unwrap();
+        let guard = SafetyGuard::try_new("Quantum")
+            .expect("valid substrate");
 
-        let _ = guard.inspect_with_context_checked(
-            &["EXPLOIT_SHARED_BUS".to_string()],
+        let _ = guard.inspect_with_policy(
+            &[String::from("EXPLOIT_SHARED_BUS")],
             &mut context,
         );
 
@@ -806,7 +1124,6 @@ mod tests {
         let mut context = GlobalSecurityContext::new();
 
         context.record_signal("NEUROMORPHIC_BUFFER_PREP");
-        assert_eq!(context.signal_count(), 1);
 
         context.reset();
 
@@ -816,36 +1133,180 @@ mod tests {
 
     #[test]
     fn shared_context_can_be_created() {
-        let context = shared_security_context().unwrap();
+        let context = shared_security_context()
+            .expect("shared context should be created");
 
-        let guard = context.read().unwrap();
+        let guard = context.read()
+            .expect("context lock should be available");
 
         assert_eq!(guard.signal_count(), 0);
     }
 
     #[test]
-    fn custom_rule_can_be_installed() {
+    fn custom_rules_are_supported() {
         let rule = CoordinatedThreatRule::new(
-            "custom-rule",
-            "CPU_PRECURSOR",
-            "QUANTUM",
-            "CUSTOM_QUANTUM_ACTION",
-        )
-        .unwrap();
+            "custom.cross-domain-rule",
+            "CUSTOM_PRECURSOR",
+            "CUSTOM_ACCELERATOR",
+            "CUSTOM_UNSAFE_OPERATION",
+        ).expect("valid custom rule");
 
         let policy = SafetyPolicy {
             threat_rules: vec![rule],
             ..SafetyPolicy::default()
         };
 
-        let mut context =
-            GlobalSecurityContext::with_policy(policy).unwrap();
+        let mut context = GlobalSecurityContext::with_policy(
+            policy
+        ).expect("valid custom policy");
 
-        context.record_signal("CPU_PRECURSOR");
+        context.try_record_signal(
+            "CUSTOM_PRECURSOR"
+        ).expect("signal recorded");
 
-        assert!(context.check_coordinated_threat(
-            "QUANTUM",
-            "CUSTOM_QUANTUM_ACTION"
+        let guard = SafetyGuard::try_new(
+            "CUSTOM_ACCELERATOR"
+        ).expect("valid custom substrate");
+
+        assert!(matches!(
+            guard.inspect_with_policy(
+                &[String::from("CUSTOM_UNSAFE_OPERATION")],
+                &mut context,
+            ),
+            Err(SafetyGuardError::ThreatDetected { .. })
+        ));
+    }
+
+    #[test]
+    fn duplicate_rule_identifiers_are_rejected() {
+        let first = CoordinatedThreatRule::new(
+            "duplicate",
+            "FIRST",
+            "CPU",
+            "ACTION_ONE",
+        ).expect("valid rule");
+
+        let second = CoordinatedThreatRule::new(
+            "DUPLICATE",
+            "SECOND",
+            "GPU",
+            "ACTION_TWO",
+        ).expect("valid rule");
+
+        let policy = SafetyPolicy {
+            threat_rules: vec![first, second],
+            ..SafetyPolicy::default()
+        };
+
+        assert!(matches!(
+            GlobalSecurityContext::with_policy(policy),
+            Err(SafetyGuardError::DuplicateRule { .. })
+        ));
+    }
+
+    #[test]
+    fn configurable_operational_budget_is_enforced() {
+        let policy = SafetyPolicy {
+            max_signals: 1,
+            max_audit_events: 1,
+            ..SafetyPolicy::default()
+        };
+
+        let mut context = GlobalSecurityContext::with_policy(
+            policy
+        ).expect("valid operational budget");
+
+        assert_eq!(
+            context.try_record_signal("FIRST"),
+            Ok(true)
+        );
+
+        assert!(matches!(
+            context.try_record_signal("SECOND"),
+            Err(SafetyGuardError::ContextLimitExceeded)
+        ));
+
+        assert_eq!(context.signal_count(), 1);
+    }
+
+    #[test]
+    fn zero_operational_capacity_is_rejected() {
+        let policy = SafetyPolicy {
+            max_signals: 0,
+            ..SafetyPolicy::default()
+        };
+
+        assert!(matches!(
+            GlobalSecurityContext::with_policy(policy),
+            Err(SafetyGuardError::ContextLimitExceeded)
+        ));
+    }
+
+    #[test]
+    fn precursor_auditing_can_be_disabled() {
+        let policy = SafetyPolicy {
+            audit_precursors: false,
+            ..SafetyPolicy::default()
+        };
+
+        let mut context = GlobalSecurityContext::with_policy(
+            policy
+        ).expect("valid policy");
+
+        context.try_record_signal(
+            "NEUROMORPHIC_BUFFER_PREP"
+        ).expect("record signal");
+
+        assert!(context.audit_events().is_empty());
+    }
+
+    #[test]
+    fn inspection_returns_structured_report() {
+        let mut context = GlobalSecurityContext::new();
+
+        let guard = SafetyGuard::try_new(
+            "CPU"
+        ).expect("valid substrate");
+
+        let report = guard.inspect_with_report(
+            &[
+                String::from("LOAD"),
+                String::from("STORE"),
+            ],
+            &mut context,
+        ).expect("inspection should succeed");
+
+        assert_eq!(report.inspected_instructions, 2);
+        assert_eq!(report.recorded_signals, 0);
+        assert_eq!(report.decision, SecurityDecision::Allow);
+        assert_eq!(report.substrate, "CPU");
+    }
+
+    #[test]
+    fn invalid_instruction_is_rejected() {
+        let mut context = GlobalSecurityContext::new();
+
+        let result = inspect_instructions(
+            "Quantum",
+            &[String::from("\n")],
+            &mut context,
+        );
+
+        assert!(matches!(
+            result,
+            Err(SafetyGuardError::InvalidInstruction(_))
+        ));
+    }
+
+    #[test]
+    fn compatibility_constructor_defers_validation() {
+        let guard = SafetyGuard::new("bad\nsubstrate");
+
+        let mut context = GlobalSecurityContext::new();
+
+        assert!(matches!(
+            guard.inspect_with_policy(&[], &mut context),
+            Err(SafetyGuardError::InvalidSubstrate(_))
         ));
     }
 
@@ -858,15 +1319,16 @@ mod tests {
         let guard = SafetyGuard::new("Quantum");
 
         let result = guard.inspect_with_context(
-            &["EXPLOIT_SHARED_BUS".to_string()],
+            &[String::from("EXPLOIT_SHARED_BUS")],
             &mut context,
         );
 
         assert!(result.is_err());
+
         assert!(
-            result
-                .unwrap_err()
-                .contains("coordinated adversarial activity detected")
+            result.unwrap_err().contains(
+                "coordinated adversarial pattern detected"
+            )
         );
     }
 }
