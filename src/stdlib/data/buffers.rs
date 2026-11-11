@@ -6,153 +6,47 @@
 
 //! # Zamani Standard Library — Data Buffers
 //!
-//! Path: src/stdlib/data/buffers.rs
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
-//! Safety: Safe Rust only.
-//!
-//! ## PURPOSE
-//!
-//! Provides portable, host-side byte-buffer abstractions for Zamani.
-//!
-//! Supports:
-//!
-//! - owned dynamically sized byte buffers;
-//! - immutable borrowed views;
-//! - mutable borrowed views;
-//! - checked slicing;
-//! - fallible allocation;
-//! - fallible copying;
-//! - fallible capacity growth;
-//! - safe mutation;
-//! - byte-oriented interoperability.
-//!
-//! ## ARCHITECTURAL AUTHORITY
+//! Portable, target-independent byte storage and access.
 //!
 //! This module owns host-side byte-buffer abstractions only.
 //!
-//! Existing authorities:
-//!
-//! - src/stdlib/error.rs:
-//!   standard-library error infrastructure.
-//!
-//! - src/stdlib/context.rs:
-//!   shared operation context.
-//!
-//! - src/classical/collections/array.rs:
-//!   canonical classical array shape and storage.
-//!
-//! - src/classical/collections/tensor.rs:
-//!   canonical classical tensor convenience API.
-//!
-//! - src/quantum/:
-//!   quantum computation and quantum-specific representations.
-//!
-//! - src/ai/:
-//!   AI computation and tensor-related integration.
-//!
-//! - src/hdl/:
-//!   hardware-description representations.
-//!
-//! - src/runtime/:
-//!   execution, allocation and runtime resource management.
-//!
-//! - HAL/provider implementations:
-//!   actual hardware memory and device-buffer access.
-//!
-//! ## DOES NOT OWN
-//!
-//! This module does not define:
-//!
-//! - tensor shape;
-//! - tensor rank;
-//! - tensor element types;
-//! - array indexing semantics;
+//! It does not own:
+//! - tensor shapes or tensor storage;
+//! - classical array semantics;
 //! - quantum registers;
-//! - physical qubits;
-//! - hardware memory allocation;
-//! - device addresses;
-//! - DMA;
-//! - distributed memory placement;
+//! - physical memory allocation;
+//! - device memory or DMA;
+//! - distributed placement;
 //! - execution scheduling;
-//! - compiler IR;
-//! - source-language ownership semantics.
+//! - compiler intermediate representations.
 //!
-//! ## SCALABILITY
+//! The canonical authorities remain:
+//! - `crate::classical::collections`;
+//! - `crate::quantum`;
+//! - `crate::ai`;
+//! - `crate::hdl`;
+//! - `crate::runtime`;
+//! - the applicable HAL and provider implementations.
 //!
-//! No arbitrary universal maximum buffer size is imposed.
+//! # Scalability
 //!
-//! No fixed maximum number of buffers is imposed.
+//! No arbitrary universal buffer-size ceiling is introduced.
 //!
-//! No fixed maximum number of devices is imposed.
+//! `Buffer` provides contiguous storage.
+//! `BufferChain` provides segmented storage.
 //!
-//! No fixed maximum memory capacity is imposed.
-//!
-//! Allocation is constrained by:
-//!
-//! - host address-space representation;
-//! - Vec capacity representation;
+//! Actual allocation is subject to:
+//! - address-space representation;
 //! - allocator availability;
-//! - actual available resources;
-//! - explicitly configured external operational budgets.
+//! - platform limitations;
+//! - available resources;
+//! - explicitly configured operational budgets.
 //!
-//! These implementation constraints are not language-level limits.
+//! These are implementation constraints, not language semantics.
 //!
-//! ## MEMORY MODEL
+//! # Safety
 //!
-//! Buffer owns its byte storage.
-//!
-//! BufferView borrows immutable bytes.
-//!
-//! BufferViewMut borrows mutable bytes.
-//!
-//! Views never allocate or copy the underlying bytes.
-//!
-//! Buffer does not silently convert borrowed data into owned data.
-//!
-//! ## ERROR MODEL
-//!
-//! Operations use the canonical standard-library Error type.
-//!
-//! BufferError preserves buffer-specific causal information.
-//!
-//! Allocation failures are reported rather than silently ignored.
-//!
-//! ## POCO-REAF
-//!
-//! Buffers describe host-side data access.
-//!
-//! They do not prescribe:
-//!
-//! - CPU architecture;
-//! - GPU architecture;
-//! - FPGA architecture;
-//! - QPU architecture;
-//! - memory-bank arrangement;
-//! - cache-line size;
-//! - register width;
-//! - hardware vendor;
-//! - physical memory address.
-//!
-//! Hardware-specific buffer implementations belong behind runtime/HAL
-//! provider contracts.
-//!
-//! ## FREEZE CRITERIA
-//!
-//! This module is ready to freeze when:
-//!
-//! 1. src/stdlib/error.rs is exposed by the standard-library root.
-//! 2. src/stdlib/data/mod.rs exports this module.
-//! 3. src/stdlib/mod.rs exports data.
-//! 4. All buffer operations have unit tests.
-//! 5. Allocation failures propagate correctly.
-//! 6. Borrowing invariants are preserved.
-//! 7. Existing classical array and tensor storage remain authoritative.
-//! 8. Formatting, compilation, tests and Clippy pass.
-
-// =============================================================================
-// IMPORTS
-// =============================================================================
+//! Safe Rust only.
 
 use core::fmt;
 use core::ops::Range;
@@ -162,155 +56,133 @@ use crate::stdlib::error::{
     ErrorKind,
 };
 
-// =============================================================================
-// RESULT
-// =============================================================================
-
-/// Standard-library result type used by buffer operations.
+/// Result type used by buffer operations.
 pub type BufferResult<T> = std::result::Result<T, StdlibError>;
 
-// =============================================================================
-// BUFFER ERRORS
-// =============================================================================
-
 /// Detailed buffer-specific failures.
-///
-/// These errors are retained as the causal source of the canonical
-/// standard-library Error returned by public buffer operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BufferError {
-
-    /// A requested range starts beyond the buffer.
+    /// Range starts beyond the buffer.
     RangeStartOutOfBounds {
         /// Requested starting position.
         start: usize,
-
         /// Actual buffer length.
         buffer_len: usize,
     },
 
-    /// A requested range ends beyond the buffer.
+    /// Range ends beyond the buffer.
     RangeEndOutOfBounds {
         /// Requested ending position.
         end: usize,
-
         /// Actual buffer length.
         buffer_len: usize,
     },
 
-    /// A range starts after its ending position.
+    /// Range starts after its ending position.
     InvalidRange {
         /// Requested starting position.
         start: usize,
-
         /// Requested ending position.
         end: usize,
     },
 
-    /// Two buffers have incompatible lengths for an exact operation.
+    /// An exact-length operation received different lengths.
     LengthMismatch {
         /// Expected number of bytes.
         expected: usize,
-
         /// Actual number of bytes.
         actual: usize,
     },
 
-    /// A requested allocation failed.
+    /// Allocation failed.
     AllocationFailed {
-        /// Requested additional or total capacity.
+        /// Requested capacity or length.
         requested: usize,
     },
 
-    /// A requested capacity is not representable.
+    /// Capacity arithmetic overflowed.
     CapacityOverflow {
-        /// Requested additional capacity.
+        /// Additional requested capacity.
         additional: usize,
+    },
+
+    /// A requested segment does not exist.
+    SegmentNotFound {
+        /// Requested segment index.
+        index: usize,
+        /// Number of available segments.
+        segment_count: usize,
     },
 }
 
 impl fmt::Display for BufferError {
-
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
-
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-
             Self::RangeStartOutOfBounds {
                 start,
                 buffer_len,
             } => write!(
-                formatter,
-                "buffer range starts at {start}, \
-                 beyond buffer length {buffer_len}"
+                f,
+                "range start {start} exceeds buffer length {buffer_len}"
             ),
 
             Self::RangeEndOutOfBounds {
                 end,
                 buffer_len,
             } => write!(
-                formatter,
-                "buffer range ends at {end}, \
-                 beyond buffer length {buffer_len}"
+                f,
+                "range end {end} exceeds buffer length {buffer_len}"
             ),
 
-            Self::InvalidRange {
-                start,
-                end,
-            } => write!(
-                formatter,
-                "invalid buffer range {start}..{end}"
-            ),
+            Self::InvalidRange { start, end } => {
+                write!(f, "invalid range {start}..{end}")
+            }
 
-            Self::LengthMismatch {
-                expected,
-                actual,
-            } => write!(
-                formatter,
-                "buffer length mismatch: \
-                 expected {expected}, received {actual}"
-            ),
+            Self::LengthMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "length mismatch: expected {expected}, received {actual}"
+                )
+            }
 
-            Self::AllocationFailed {
-                requested,
-            } => write!(
-                formatter,
-                "buffer allocation failed for \
-                 requested capacity {requested}"
-            ),
+            Self::AllocationFailed { requested } => {
+                write!(
+                    f,
+                    "allocation failed for requested size {requested}"
+                )
+            }
 
-            Self::CapacityOverflow {
-                additional,
-            } => write!(
-                formatter,
-                "buffer capacity overflow while requesting \
-                 {additional} additional bytes"
-            ),
+            Self::CapacityOverflow { additional } => {
+                write!(
+                    f,
+                    "capacity overflow while requesting {additional} additional bytes"
+                )
+            }
+
+            Self::SegmentNotFound {
+                index,
+                segment_count,
+            } => {
+                write!(
+                    f,
+                    "segment {index} does not exist; segment count is {segment_count}"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for BufferError {}
 
-// =============================================================================
-// STANDARD ERROR INTEGRATION
-// =============================================================================
-
 impl From<BufferError> for StdlibError {
-
     fn from(error: BufferError) -> Self {
-
         let kind = match &error {
-
             BufferError::InvalidRange { .. }
             | BufferError::RangeStartOutOfBounds { .. }
             | BufferError::RangeEndOutOfBounds { .. }
-            | BufferError::LengthMismatch { .. } => {
-                ErrorKind::InvalidInput
-            }
+            | BufferError::LengthMismatch { .. }
+            | BufferError::SegmentNotFound { .. } => ErrorKind::InvalidInput,
 
             BufferError::AllocationFailed { .. }
             | BufferError::CapacityOverflow { .. } => {
@@ -326,352 +198,213 @@ impl From<BufferError> for StdlibError {
     }
 }
 
-// =============================================================================
-// OWNED BUFFER
-// =============================================================================
-
-/// An owned, dynamically sized host-side byte buffer.
+/// An owned, dynamically sized contiguous byte buffer.
 ///
-/// The buffer owns its bytes and may grow or shrink subject to available
-/// resources and the host's address-space representation.
+/// Allocation-sensitive operations use fallible APIs.
 ///
-/// It deliberately does not implement infallible Clone. Use
-/// [`Buffer::try_clone`] when an independent copy is required.
+/// Independent copying is explicit through [`Buffer::try_clone`].
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Buffer {
-
     bytes: Vec<u8>,
 }
 
 impl Buffer {
-
-    // -------------------------------------------------------------------------
-    // Construction
-    // -------------------------------------------------------------------------
-
     /// Creates an empty buffer.
     #[must_use]
     pub const fn new() -> Self {
-
         Self {
             bytes: Vec::new(),
         }
     }
 
-    /// Creates an empty buffer with fallibly reserved capacity.
-    ///
-    /// No bytes are initialized beyond the current length.
-    pub fn try_with_capacity(
-        capacity: usize,
-    ) -> BufferResult<Self> {
-
+    /// Creates an empty buffer with reserved capacity.
+    pub fn try_with_capacity(capacity: usize) -> BufferResult<Self> {
         let mut bytes = Vec::new();
 
-        bytes
-            .try_reserve_exact(capacity)
-            .map_err(|_| {
-                BufferError::AllocationFailed {
-                    requested: capacity,
-                }
-            })?;
+        bytes.try_reserve_exact(capacity).map_err(|_| {
+            BufferError::AllocationFailed {
+                requested: capacity,
+            }
+        })?;
 
         Ok(Self { bytes })
     }
 
-    /// Takes ownership of an existing vector without copying its bytes.
-    ///
-    /// This operation performs no additional buffer allocation.
+    /// Takes ownership of an existing vector without copying.
     #[must_use]
     pub fn from_vec(bytes: Vec<u8>) -> Self {
-
         Self { bytes }
     }
 
-    /// Copies bytes from a borrowed slice using fallible allocation.
-    pub fn try_from_slice(
-        source: &[u8],
-    ) -> BufferResult<Self> {
-
-        let mut bytes = Vec::new();
-
-        bytes
-            .try_reserve_exact(source.len())
-            .map_err(|_| {
-                BufferError::AllocationFailed {
-                    requested: source.len(),
-                }
-            })?;
-
-        bytes.extend_from_slice(source);
-
-        Ok(Self { bytes })
+    /// Copies bytes from a borrowed slice.
+    pub fn try_from_slice(source: &[u8]) -> BufferResult<Self> {
+        let mut buffer = Self::try_with_capacity(source.len())?;
+        buffer.bytes.extend_from_slice(source);
+        Ok(buffer)
     }
 
-    /// Creates a zero-initialized buffer of the requested length.
-    ///
-    /// Allocation failure is reported.
-    pub fn try_zeroed(
-        length: usize,
-    ) -> BufferResult<Self> {
-
-        let mut bytes = Vec::new();
-
-        bytes
-            .try_reserve_exact(length)
-            .map_err(|_| {
-                BufferError::AllocationFailed {
-                    requested: length,
-                }
-            })?;
-
-        bytes.resize(length, 0);
-
-        Ok(Self { bytes })
+    /// Creates a zero-initialized buffer.
+    pub fn try_zeroed(length: usize) -> BufferResult<Self> {
+        let mut buffer = Self::try_with_capacity(length)?;
+        buffer.bytes.resize(length, 0);
+        Ok(buffer)
     }
 
-    // -------------------------------------------------------------------------
-    // Metadata
-    // -------------------------------------------------------------------------
-
-    /// Returns the number of initialized bytes.
+    /// Returns the initialized byte count.
     #[must_use]
     pub fn len(&self) -> usize {
-
         self.bytes.len()
     }
 
-    /// Returns whether the buffer contains no bytes.
+    /// Returns whether the buffer is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-
         self.bytes.is_empty()
     }
 
-    /// Returns the currently reserved capacity.
+    /// Returns allocated capacity.
     #[must_use]
     pub fn capacity(&self) -> usize {
-
         self.bytes.capacity()
     }
 
-    /// Returns the number of initialized bytes.
+    /// Returns the initialized byte count.
     #[must_use]
     pub fn byte_len(&self) -> usize {
-
-        self.bytes.len()
+        self.len()
     }
 
-    // -------------------------------------------------------------------------
-    // Borrowing
-    // -------------------------------------------------------------------------
-
-    /// Returns an immutable view without copying.
+    /// Returns an immutable borrowed view.
     #[must_use]
     pub fn view(&self) -> BufferView<'_> {
-
-        BufferView {
-            bytes: &self.bytes,
-        }
+        BufferView::new(&self.bytes)
     }
 
-    /// Returns a mutable view without copying.
+    /// Returns a mutable borrowed view.
     pub fn view_mut(&mut self) -> BufferViewMut<'_> {
-
-        BufferViewMut {
-            bytes: &mut self.bytes,
-        }
+        BufferViewMut::new(&mut self.bytes)
     }
 
-    /// Returns the initialized bytes.
+    /// Returns the underlying initialized bytes.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-
         &self.bytes
     }
 
-    /// Returns the initialized bytes mutably.
+    /// Returns the underlying initialized bytes mutably.
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
-
         &mut self.bytes
     }
 
-    // -------------------------------------------------------------------------
-    // Checked access
-    // -------------------------------------------------------------------------
-
-    /// Returns a byte at the requested position.
+    /// Returns a byte by index.
     #[must_use]
-    pub fn get(
-        &self,
-        index: usize,
-    ) -> Option<&u8> {
-
+    pub fn get(&self, index: usize) -> Option<&u8> {
         self.bytes.get(index)
     }
 
-    /// Returns a mutable byte at the requested position.
-    pub fn get_mut(
-        &mut self,
-        index: usize,
-    ) -> Option<&mut u8> {
-
+    /// Returns a mutable byte by index.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut u8> {
         self.bytes.get_mut(index)
     }
 
-    /// Returns a checked immutable range.
+    /// Returns a checked immutable slice.
     pub fn slice(
         &self,
         range: Range<usize>,
     ) -> BufferResult<BufferView<'_>> {
-
         self.view().slice(range)
     }
 
-    /// Returns a checked mutable range.
+    /// Returns a checked mutable slice.
     pub fn slice_mut(
         &mut self,
         range: Range<usize>,
     ) -> BufferResult<BufferViewMut<'_>> {
-
         self.view_mut().slice(range)
     }
 
-    // -------------------------------------------------------------------------
-    // Capacity management
-    // -------------------------------------------------------------------------
-
-    /// Reserves additional capacity fallibly.
+    /// Reserves additional capacity.
     ///
-    /// The existing contents are preserved.
+    /// Existing initialized bytes are preserved.
     pub fn try_reserve(
         &mut self,
         additional: usize,
     ) -> BufferResult<()> {
+        let requested = self.bytes.len().checked_add(additional)
+            .ok_or(BufferError::CapacityOverflow { additional })?;
 
-        let requested = self
-            .bytes
-            .len()
-            .checked_add(additional)
-            .ok_or(
-                BufferError::CapacityOverflow {
-                    additional,
-                }
-            )?;
-
-        self.bytes
-            .try_reserve(additional)
-            .map_err(|_| {
-                BufferError::AllocationFailed {
-                    requested,
-                }
-            })?;
+        self.bytes.try_reserve(additional).map_err(|_| {
+            BufferError::AllocationFailed { requested }
+        })?;
 
         Ok(())
     }
 
-    /// Reserves additional capacity as exactly as the allocator permits.
+    /// Reserves additional capacity as exactly as possible.
     pub fn try_reserve_exact(
         &mut self,
         additional: usize,
     ) -> BufferResult<()> {
+        let requested = self.bytes.len().checked_add(additional)
+            .ok_or(BufferError::CapacityOverflow { additional })?;
 
-        let requested = self
-            .bytes
-            .len()
-            .checked_add(additional)
-            .ok_or(
-                BufferError::CapacityOverflow {
-                    additional,
-                }
-            )?;
-
-        self.bytes
-            .try_reserve_exact(additional)
-            .map_err(|_| {
-                BufferError::AllocationFailed {
-                    requested,
-                }
-            })?;
+        self.bytes.try_reserve_exact(additional).map_err(|_| {
+            BufferError::AllocationFailed { requested }
+        })?;
 
         Ok(())
     }
 
-    /// Changes the initialized length, filling newly added bytes with zero.
+    /// Resizes the buffer, zero-initializing newly added bytes.
     ///
     /// Shrinking truncates the buffer.
-    ///
-    /// Growing reserves the required capacity before changing the length.
     pub fn try_resize_zeroed(
         &mut self,
         new_length: usize,
     ) -> BufferResult<()> {
-
-        if new_length > self.bytes.len() {
-
-            let additional = new_length - self.bytes.len();
-
-            self.try_reserve(additional)?;
+        if new_length > self.len() {
+            self.try_reserve(new_length - self.len())?;
         }
 
         self.bytes.resize(new_length, 0);
-
         Ok(())
     }
-
-    // -------------------------------------------------------------------------
-    // Mutation
-    // -------------------------------------------------------------------------
 
     /// Appends one byte.
-    pub fn try_push(
-        &mut self,
-        byte: u8,
-    ) -> BufferResult<()> {
-
+    pub fn try_push(&mut self, byte: u8) -> BufferResult<()> {
         self.try_reserve(1)?;
-
         self.bytes.push(byte);
-
         Ok(())
     }
 
-    /// Appends a borrowed byte slice.
+    /// Appends bytes from a borrowed slice.
     pub fn try_extend_from_slice(
         &mut self,
         source: &[u8],
     ) -> BufferResult<()> {
-
         self.try_reserve(source.len())?;
-
         self.bytes.extend_from_slice(source);
-
         Ok(())
     }
 
-    /// Replaces the contents with a copy of the supplied bytes.
+    /// Replaces the complete buffer contents.
     ///
-    /// The operation reserves the necessary capacity before modifying
-    /// the current contents.
+    /// Allocation is completed before existing contents are modified.
     pub fn try_replace(
         &mut self,
         source: &[u8],
     ) -> BufferResult<()> {
-
         if source.len() > self.bytes.capacity() {
-
-            self.bytes
-                .try_reserve_exact(
-                    source.len().saturating_sub(self.bytes.len())
-                )
-                .map_err(|_| {
-                    BufferError::AllocationFailed {
-                        requested: source.len(),
-                    }
+            let additional = source.len()
+                .checked_sub(self.bytes.len())
+                .ok_or(BufferError::CapacityOverflow {
+                    additional: source.len(),
                 })?;
+
+            self.try_reserve_exact(additional)?;
         }
 
         self.bytes.clear();
-
         self.bytes.extend_from_slice(source);
 
         Ok(())
@@ -679,236 +412,170 @@ impl Buffer {
 
     /// Removes and returns the final byte.
     pub fn pop(&mut self) -> Option<u8> {
-
         self.bytes.pop()
     }
 
-    /// Removes all initialized bytes while retaining allocated capacity.
-    pub fn clear(&mut self) {
+    /// Truncates the buffer to the specified length.
+    ///
+    /// This operation never increases the buffer length.
+    pub fn truncate(&mut self, length: usize) {
+        self.bytes.truncate(length);
+    }
 
+    /// Removes all initialized bytes while retaining capacity.
+    pub fn clear(&mut self) {
         self.bytes.clear();
     }
 
-    // -------------------------------------------------------------------------
-    // Copying and ownership transfer
-    // -------------------------------------------------------------------------
-
     /// Creates an independent copy using fallible allocation.
     pub fn try_clone(&self) -> BufferResult<Self> {
-
         Self::try_from_slice(&self.bytes)
     }
 
     /// Consumes the buffer and returns its underlying vector.
     #[must_use]
     pub fn into_vec(self) -> Vec<u8> {
-
         self.bytes
     }
 }
 
-// =============================================================================
-// IMMUTABLE BUFFER VIEW
-// =============================================================================
-
-/// A borrowed, immutable view of contiguous bytes.
-///
-/// Creating or cloning a view does not copy its underlying bytes.
-///
-/// The lifetime prevents the view from outliving its source storage.
+/// An immutable borrowed view over contiguous bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BufferView<'a> {
-
     bytes: &'a [u8],
 }
 
 impl<'a> BufferView<'a> {
-
-    /// Creates a view over an existing byte slice.
+    /// Creates a borrowed view without copying.
     #[must_use]
-    pub const fn new(
-        bytes: &'a [u8],
-    ) -> Self {
-
+    pub const fn new(bytes: &'a [u8]) -> Self {
         Self { bytes }
     }
 
-    /// Returns the viewed bytes.
+    /// Returns the underlying bytes.
     #[must_use]
     pub const fn as_bytes(&self) -> &'a [u8] {
-
         self.bytes
     }
 
-    /// Returns the number of viewed bytes.
+    /// Returns the number of bytes.
     #[must_use]
     pub const fn len(&self) -> usize {
-
         self.bytes.len()
     }
 
     /// Returns whether the view is empty.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-
         self.bytes.is_empty()
     }
 
-    /// Returns a byte at the requested index.
+    /// Returns a byte by index.
     #[must_use]
-    pub fn get(
-        &self,
-        index: usize,
-    ) -> Option<&'a u8> {
-
+    pub fn get(&self, index: usize) -> Option<&'a u8> {
         self.bytes.get(index)
     }
 
-    /// Returns a checked subview.
-    ///
-    /// No allocation or copying occurs.
+    /// Returns a checked immutable subview.
     pub fn slice(
         &self,
         range: Range<usize>,
     ) -> BufferResult<BufferView<'a>> {
+        validate_range(range.start, range.end, self.len())?;
 
-        validate_range(
-            range.start,
-            range.end,
-            self.bytes.len(),
-        )?;
-
-        let bytes = self
-            .bytes
-            .get(range)
-            .ok_or_else(|| {
-                BufferError::InvalidRange {
-                    start: 0,
-                    end: 0,
-                }
-            })?;
-
-        Ok(BufferView { bytes })
+        match self.bytes.get(range.clone()) {
+            Some(bytes) => Ok(BufferView::new(bytes)),
+            None => Err(BufferError::InvalidRange {
+                start: range.start,
+                end: range.end,
+            }.into()),
+        }
     }
 
-    /// Returns the underlying byte slice as a standard Rust slice.
+    /// Returns the underlying slice.
     #[must_use]
     pub const fn as_slice(&self) -> &'a [u8] {
-
         self.bytes
     }
 }
 
 impl<'a> From<&'a [u8]> for BufferView<'a> {
-
     fn from(bytes: &'a [u8]) -> Self {
-
         Self::new(bytes)
     }
 }
 
-// =============================================================================
-// MUTABLE BUFFER VIEW
-// =============================================================================
-
-/// A borrowed, mutable view of contiguous bytes.
-///
-/// This view never owns the underlying allocation.
-///
-/// Rust's borrowing rules prevent simultaneous conflicting mutable access.
+/// A mutable borrowed view over contiguous bytes.
 #[derive(Debug, PartialEq, Eq)]
 pub struct BufferViewMut<'a> {
-
     bytes: &'a mut [u8],
 }
 
 impl<'a> BufferViewMut<'a> {
-
-    /// Creates a mutable view over an existing mutable slice.
+    /// Creates a mutable view without allocating.
     #[must_use]
-    pub fn new(
-        bytes: &'a mut [u8],
-    ) -> Self {
-
+    pub fn new(bytes: &'a mut [u8]) -> Self {
         Self { bytes }
     }
 
-    /// Returns the viewed bytes.
+    /// Returns an immutable view.
+    #[must_use]
+    pub fn as_view(&self) -> BufferView<'_> {
+        BufferView::new(self.bytes)
+    }
+
+    /// Returns the underlying bytes.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-
         self.bytes
     }
 
-    /// Returns the viewed bytes mutably.
+    /// Returns the underlying bytes mutably.
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
-
         self.bytes
     }
 
-    /// Returns the number of viewed bytes.
+    /// Returns the number of bytes.
     #[must_use]
     pub fn len(&self) -> usize {
-
         self.bytes.len()
     }
 
     /// Returns whether the view is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-
         self.bytes.is_empty()
     }
 
-    /// Returns a byte at the requested position.
+    /// Returns a byte by index.
     #[must_use]
-    pub fn get(
-        &self,
-        index: usize,
-    ) -> Option<&u8> {
-
+    pub fn get(&self, index: usize) -> Option<&u8> {
         self.bytes.get(index)
     }
 
-    /// Returns a mutable byte at the requested position.
-    pub fn get_mut(
-        &mut self,
-        index: usize,
-    ) -> Option<&mut u8> {
-
+    /// Returns a mutable byte by index.
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut u8> {
         self.bytes.get_mut(index)
     }
 
-    /// Replaces all bytes with the supplied byte.
-    pub fn fill(
-        &mut self,
-        value: u8,
-    ) {
-
+    /// Fills the view with a byte.
+    pub fn fill(&mut self, value: u8) {
         self.bytes.fill(value);
     }
 
-    /// Copies bytes into this view.
-    ///
-    /// The source and destination lengths must match exactly.
+    /// Copies an exactly matching slice into this view.
     pub fn copy_from_slice(
         &mut self,
         source: &[u8],
     ) -> BufferResult<()> {
-
-        if source.len() != self.bytes.len() {
-
-            return Err(
-                BufferError::LengthMismatch {
-                    expected: self.bytes.len(),
-                    actual: source.len(),
-                }
-                .into()
-            );
+        if source.len() != self.len() {
+            return Err(BufferError::LengthMismatch {
+                expected: self.len(),
+                actual: source.len(),
+            }.into());
         }
 
         self.bytes.copy_from_slice(source);
-
         Ok(())
     }
 
@@ -917,356 +584,336 @@ impl<'a> BufferViewMut<'a> {
         &mut self,
         range: Range<usize>,
     ) -> BufferResult<BufferViewMut<'_>> {
+        validate_range(range.start, range.end, self.len())?;
 
-        validate_range(
-            range.start,
-            range.end,
-            self.bytes.len(),
-        )?;
+        let start = range.start;
+        let end = range.end;
 
-        let bytes = self
-            .bytes
-            .get_mut(range)
-            .ok_or_else(|| {
-                BufferError::InvalidRange {
-                    start: 0,
-                    end: 0,
-                }
-            })?;
-
-        Ok(BufferViewMut { bytes })
-    }
-
-    /// Returns an immutable view of the same bytes.
-    #[must_use]
-    pub fn as_view(&self) -> BufferView<'_> {
-
-        BufferView {
-            bytes: self.bytes,
+        match self.bytes.get_mut(range) {
+            Some(bytes) => Ok(BufferViewMut::new(bytes)),
+            None => Err(BufferError::InvalidRange {
+                start,
+                end,
+            }.into()),
         }
     }
 }
 
-// =============================================================================
-// RANGE VALIDATION
-// =============================================================================
+/// A segmented collection of owned byte buffers.
+///
+/// Each segment owns an independent allocation. The chain does not require
+/// all bytes to occupy one contiguous address range.
+///
+/// Segment boundaries are preserved until an explicit flattening operation.
+///
+/// The total byte length is checked for arithmetic overflow.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct BufferChain {
+    segments: Vec<Buffer>,
+    total_len: usize,
+}
+
+impl BufferChain {
+    /// Creates an empty buffer chain.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            segments: Vec::new(),
+            total_len: 0,
+        }
+    }
+
+    /// Returns the number of segments.
+    #[must_use]
+    pub fn segment_count(&self) -> usize {
+        self.segments.len()
+    }
+
+    /// Returns the total initialized byte count.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.total_len
+    }
+
+    /// Returns whether the chain contains no bytes.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.total_len == 0
+    }
+
+    /// Appends an existing owned buffer without copying its bytes.
+    pub fn try_push(&mut self, segment: Buffer) -> BufferResult<()> {
+        let new_total = self.total_len.checked_add(segment.len())
+            .ok_or(BufferError::CapacityOverflow {
+                additional: segment.len(),
+            })?;
+
+        self.segments.try_reserve(1).map_err(|_| {
+            BufferError::AllocationFailed {
+                requested: self.segments.len().saturating_add(1),
+            }
+        })?;
+
+        self.segments.push(segment);
+        self.total_len = new_total;
+
+        Ok(())
+    }
+
+    /// Copies a byte slice into a new segment and appends it.
+    pub fn try_push_slice(
+        &mut self,
+        bytes: &[u8],
+    ) -> BufferResult<()> {
+        let segment = Buffer::try_from_slice(bytes)?;
+        self.try_push(segment)
+    }
+
+    /// Returns an iterator over borrowed segment slices.
+    pub fn segments(&self) -> impl ExactSizeIterator<Item = &[u8]> {
+        self.segments.iter().map(Buffer::as_bytes)
+    }
+
+    /// Returns the segment at the requested index.
+    pub fn get_segment(
+        &self,
+        index: usize,
+    ) -> BufferResult<BufferView<'_>> {
+        match self.segments.get(index) {
+            Some(segment) => Ok(segment.view()),
+            None => Err(BufferError::SegmentNotFound {
+                index,
+                segment_count: self.segments.len(),
+            }.into()),
+        }
+    }
+
+    /// Flattens all segments into one contiguous buffer.
+    ///
+    /// This operation requires a contiguous allocation of the complete
+    /// chain length. Use `segments()` when contiguous storage is unnecessary.
+    pub fn try_flatten(&self) -> BufferResult<Buffer> {
+        let mut result = Buffer::try_with_capacity(self.total_len)?;
+
+        for segment in &self.segments {
+            result.try_extend_from_slice(segment.as_bytes())?;
+        }
+
+        Ok(result)
+    }
+
+    /// Consumes the chain and returns its owned segments.
+    #[must_use]
+    pub fn into_segments(self) -> Vec<Buffer> {
+        self.segments
+    }
+}
 
 /// Validates a half-open byte range.
 ///
-/// Both the start and end positions may equal the buffer length.
-/// Empty ranges are valid.
-///
-/// Returns detailed errors for invalid ranges.
+/// Empty ranges are valid, including a range at the end of the buffer.
 fn validate_range(
     start: usize,
     end: usize,
     buffer_len: usize,
 ) -> std::result::Result<(), BufferError> {
-
     if start > end {
-
-        return Err(
-            BufferError::InvalidRange {
-                start,
-                end,
-            }
-        );
+        return Err(BufferError::InvalidRange { start, end });
     }
 
     if start > buffer_len {
-
-        return Err(
-            BufferError::RangeStartOutOfBounds {
-                start,
-                buffer_len,
-            }
-        );
+        return Err(BufferError::RangeStartOutOfBounds {
+            start,
+            buffer_len,
+        });
     }
 
     if end > buffer_len {
-
-        return Err(
-            BufferError::RangeEndOutOfBounds {
-                end,
-                buffer_len,
-            }
-        );
+        return Err(BufferError::RangeEndOutOfBounds {
+            end,
+            buffer_len,
+        });
     }
 
     Ok(())
 }
 
-// =============================================================================
-// TESTS
-// =============================================================================
-
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
-    fn creates_empty_buffer() {
-
+    fn empty_buffer_is_valid() {
         let buffer = Buffer::new();
-
         assert!(buffer.is_empty());
         assert_eq!(buffer.len(), 0);
-        assert_eq!(buffer.byte_len(), 0);
     }
 
     #[test]
-    fn creates_buffer_from_vector_without_copying_semantics() {
-
-        let source = vec![1, 2, 3, 4];
-
+    fn vector_ownership_is_transferred() {
+        let source = vec![1, 2, 3];
         let buffer = Buffer::from_vec(source);
-
-        assert_eq!(
-            buffer.as_bytes(),
-            &[1, 2, 3, 4]
-        );
+        assert_eq!(buffer.as_bytes(), &[1, 2, 3]);
     }
 
     #[test]
-    fn creates_buffer_from_slice() {
-
-        let source = [10, 20, 30];
-
-        let buffer = Buffer::try_from_slice(&source)
-            .expect("buffer allocation should succeed");
-
-        assert_eq!(
-            buffer.as_bytes(),
-            &[10, 20, 30]
-        );
+    fn slice_copy_is_correct() {
+        let buffer = Buffer::try_from_slice(&[1, 2, 3]).unwrap();
+        assert_eq!(buffer.as_bytes(), &[1, 2, 3]);
     }
 
     #[test]
-    fn creates_zeroed_buffer() {
-
-        let buffer = Buffer::try_zeroed(8)
-            .expect("allocation should succeed");
-
-        assert_eq!(buffer.len(), 8);
-
+    fn zeroed_allocation_is_correct() {
+        let buffer = Buffer::try_zeroed(16).unwrap();
+        assert_eq!(buffer.len(), 16);
         assert!(buffer.as_bytes().iter().all(|byte| *byte == 0));
     }
 
     #[test]
-    fn grows_buffer() {
-
-        let mut buffer = Buffer::new();
-
-        buffer
-            .try_extend_from_slice(&[1, 2, 3])
-            .expect("allocation should succeed");
-
-        buffer
-            .try_resize_zeroed(5)
-            .expect("growth should succeed");
-
-        assert_eq!(
-            buffer.as_bytes(),
-            &[1, 2, 3, 0, 0]
-        );
+    fn growth_initializes_new_bytes() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2]).unwrap();
+        buffer.try_resize_zeroed(4).unwrap();
+        assert_eq!(buffer.as_bytes(), &[1, 2, 0, 0]);
     }
 
     #[test]
-    fn shrinks_buffer() {
-
-        let mut buffer = Buffer::from_vec(
-            vec![1, 2, 3, 4, 5]
-        );
-
-        buffer
-            .try_resize_zeroed(2)
-            .expect("shrinking should succeed");
-
-        assert_eq!(
-            buffer.as_bytes(),
-            &[1, 2]
-        );
+    fn shrinking_truncates() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2, 3]).unwrap();
+        buffer.try_resize_zeroed(1).unwrap();
+        assert_eq!(buffer.as_bytes(), &[1]);
     }
 
     #[test]
-    fn immutable_view_does_not_copy() {
+    fn replacement_preserves_new_contents() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2]).unwrap();
+        buffer.try_replace(&[7, 8, 9]).unwrap();
+        assert_eq!(buffer.as_bytes(), &[7, 8, 9]);
+    }
 
+    #[test]
+    fn replacement_can_shrink() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2, 3, 4]).unwrap();
+        buffer.try_replace(&[9]).unwrap();
+        assert_eq!(buffer.as_bytes(), &[9]);
+    }
+
+    #[test]
+    fn immutable_view_is_zero_copy() {
         let source = [1, 2, 3];
-
         let view = BufferView::new(&source);
-
         assert_eq!(view.as_bytes(), &source);
-        assert_eq!(view.len(), 3);
     }
 
     #[test]
-    fn immutable_view_supports_slicing() {
-
-        let source = [10, 20, 30, 40];
-
+    fn immutable_view_slices_correctly() {
+        let source = [1, 2, 3, 4];
         let view = BufferView::new(&source);
-
-        let slice = view
-            .slice(1..3)
-            .expect("range should be valid");
-
-        assert_eq!(
-            slice.as_bytes(),
-            &[20, 30]
-        );
+        assert_eq!(view.slice(1..3).unwrap().as_bytes(), &[2, 3]);
     }
 
     #[test]
-    fn mutable_view_changes_original_storage() {
-
-        let mut source = [1, 2, 3];
-
-        {
-            let mut view = BufferViewMut::new(&mut source);
-
-            view.fill(9);
-        }
-
-        assert_eq!(source, [9, 9, 9]);
-    }
-
-    #[test]
-    fn mutable_view_copies_exact_length() {
-
-        let mut source = [0, 0, 0];
-
-        let mut view = BufferViewMut::new(&mut source);
-
-        view.copy_from_slice(&[4, 5, 6])
-            .expect("lengths should match");
-
-        assert_eq!(
-            view.as_bytes(),
-            &[4, 5, 6]
-        );
-    }
-
-    #[test]
-    fn mutable_view_rejects_length_mismatch() {
-
-        let mut source = [0, 0];
-
-        let mut view = BufferViewMut::new(&mut source);
-
-        let result = view.copy_from_slice(&[1, 2, 3]);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn invalid_start_is_rejected() {
-
+    fn empty_end_range_is_valid() {
         let source = [1, 2, 3];
-
         let view = BufferView::new(&source);
-
-        assert!(view.slice(4..4).is_err());
-    }
-
-    #[test]
-    fn invalid_end_is_rejected() {
-
-        let source = [1, 2, 3];
-
-        let view = BufferView::new(&source);
-
-        assert!(view.slice(0..4).is_err());
+        assert!(view.slice(3..3).unwrap().is_empty());
     }
 
     #[test]
     fn reversed_range_is_rejected() {
-
         let source = [1, 2, 3];
-
         let view = BufferView::new(&source);
-
         assert!(view.slice(2..1).is_err());
     }
 
     #[test]
-    fn empty_range_is_valid() {
-
+    fn out_of_bounds_range_is_rejected() {
         let source = [1, 2, 3];
-
         let view = BufferView::new(&source);
-
-        let slice = view
-            .slice(1..1)
-            .expect("empty range should be valid");
-
-        assert!(slice.is_empty());
+        assert!(view.slice(0..4).is_err());
     }
 
     #[test]
-    fn clone_is_fallible_and_independent() {
+    fn mutable_view_changes_original_storage() {
+        let mut source = [1, 2, 3];
 
-        let buffer = Buffer::from_vec(
-            vec![1, 2, 3]
+        {
+            let mut view = BufferViewMut::new(&mut source);
+            view.fill(8);
+        }
+
+        assert_eq!(source, [8, 8, 8]);
+    }
+
+    #[test]
+    fn mutable_view_checks_copy_length() {
+        let mut source = [0, 0];
+        let mut view = BufferViewMut::new(&mut source);
+
+        assert!(view.copy_from_slice(&[1, 2, 3]).is_err());
+        assert_eq!(view.as_bytes(), &[0, 0]);
+    }
+
+    #[test]
+    fn independent_copy_is_correct() {
+        let original = Buffer::try_from_slice(&[1, 2]).unwrap();
+        let mut copy = original.try_clone().unwrap();
+
+        copy.try_push(3).unwrap();
+
+        assert_eq!(original.as_bytes(), &[1, 2]);
+        assert_eq!(copy.as_bytes(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn chain_preserves_segments() {
+        let mut chain = BufferChain::new();
+
+        chain.try_push_slice(&[1, 2]).unwrap();
+        chain.try_push_slice(&[3, 4]).unwrap();
+
+        assert_eq!(chain.segment_count(), 2);
+        assert_eq!(chain.len(), 4);
+        assert_eq!(
+            chain.segments().collect::<Vec<_>>(),
+            vec![&[1, 2][..], &[3, 4][..]]
         );
+    }
 
-        let mut copied = buffer
-            .try_clone()
-            .expect("copy allocation should succeed");
+    #[test]
+    fn chain_flattens_correctly() {
+        let mut chain = BufferChain::new();
 
-        copied
-            .try_push(4)
-            .expect("growth should succeed");
+        chain.try_push_slice(&[1, 2]).unwrap();
+        chain.try_push_slice(&[3, 4]).unwrap();
 
         assert_eq!(
-            buffer.as_bytes(),
-            &[1, 2, 3]
-        );
-
-        assert_eq!(
-            copied.as_bytes(),
+            chain.try_flatten().unwrap().as_bytes(),
             &[1, 2, 3, 4]
         );
     }
 
     #[test]
-    fn clear_preserves_valid_empty_state() {
+    fn chain_reports_missing_segment() {
+        let chain = BufferChain::new();
+        assert!(chain.get_segment(0).is_err());
+    }
 
-        let mut buffer = Buffer::from_vec(
-            vec![1, 2, 3]
-        );
-
+    #[test]
+    fn clear_retains_valid_empty_state() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2]).unwrap();
         buffer.clear();
-
         assert!(buffer.is_empty());
     }
 
     #[test]
-    fn pop_removes_last_byte() {
-
-        let mut buffer = Buffer::from_vec(
-            vec![1, 2, 3]
-        );
-
-        assert_eq!(buffer.pop(), Some(3));
-        assert_eq!(buffer.as_bytes(), &[1, 2]);
+    fn pop_removes_final_byte() {
+        let mut buffer = Buffer::try_from_slice(&[1, 2]).unwrap();
+        assert_eq!(buffer.pop(), Some(2));
+        assert_eq!(buffer.as_bytes(), &[1]);
     }
 
     #[test]
-    fn ownership_can_be_transferred() {
-
-        let buffer = Buffer::from_vec(
-            vec![1, 2, 3]
-        );
-
-        let bytes = buffer.into_vec();
-
-        assert_eq!(bytes, vec![1, 2, 3]);
-    }
-
-    #[test]
-    fn buffer_errors_preserve_their_cause() {
-
+    fn standard_error_preserves_cause() {
         let error = StdlibError::from(
             BufferError::LengthMismatch {
                 expected: 4,
@@ -1274,11 +921,7 @@ mod tests {
             }
         );
 
-        assert_eq!(
-            error.kind(),
-            ErrorKind::InvalidInput
-        );
-
-        assert!(error.source().is_some());
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+        assert!(std::error::Error::source(&error).is_some());
     }
 }
