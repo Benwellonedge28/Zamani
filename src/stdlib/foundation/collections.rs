@@ -5,140 +5,136 @@
 
 //! # Zamani foundational collections
 //!
-//! Path: `src/foundation/collections.rs`
-//! Rust edition: 2021
+//! Path: `src/stdlib/foundation/collections.rs`
+//! Edition: Rust 2021
 //! Minimum Rust version: 1.97
 //! Safety: safe Rust only.
 //!
-//! ## Purpose
+//! # Purpose
 //!
-//! Provide generic, platform-independent collection abstractions for
-//! foundational Zamani APIs.
+//! Provide reusable, target-independent collection APIs for the Zamani
+//! standard library.
 //!
-//! This module supplies:
+//! This module owns:
 //!
 //! - `List<T>`: dynamically sized, ordered, duplicate-preserving storage.
 //! - `Map<K, V>`: dynamically sized hash-based key/value storage.
-//! - `CollectionError`: structured allocation failures.
+//! - `CollectionError`: structured collection-operation failures.
 //! - `CollectionKind`: identifies the affected collection.
 //!
-//! ## Ownership boundaries
+//! # Ownership boundaries
 //!
 //! This module does not own:
 //!
-//! - Zamani source syntax, AST, or semantic types;
-//! - classical array, vector, matrix, tensor, sequence, map, or set semantics;
+//! - source grammar, lexer, parser, AST, or semantic types;
+//! - canonical classical collection implementations;
+//! - tensor, matrix, vector, or multidimensional storage;
 //! - quantum registers, states, or quantum IR;
 //! - HDL signals, registers, or hardware storage;
 //! - distributed storage, sharding, replication, or coordination;
-//! - runtime allocation policy, scheduling, or device selection;
+//! - runtime allocation policy or resource budgets;
+//! - scheduling, device discovery, or hardware placement;
 //! - compiler IR or backend representations.
 //!
-//! The classical collection subsystem remains authoritative for its
-//! specialized collection types.
+//! Specialized classical collection semantics remain owned by
+//! `crate::classical::collections`.
 //!
-//! ## Scalability
+//! # Scalability
 //!
-//! No arbitrary collection-length or capacity ceiling is imposed.
+//! No arbitrary universal collection-length or capacity ceiling is imposed.
 //!
-//! A collection grows according to its allocator and available resources.
-//! Its concrete representation remains subject to:
+//! Storage grows according to the underlying allocator and available
+//! resources. Concrete storage remains subject to:
 //!
-//! - Rust's `usize` indexing representation;
-//! - the collection's element layout;
+//! - Rust's `usize` indexing and length representation;
+//! - element layout and representability;
 //! - allocator behavior;
 //! - process and operating-system resource availability.
 //!
-//! This does not promise literal infinite physical memory.
+//! This module does not promise literal infinite physical storage.
 //!
-//! `try_reserve`, `try_reserve_exact`, `try_push`, `try_insert`,
-//! and `try_extend` expose allocation failures where practical.
+//! Fallible operations are provided for callers that need allocation
+//! failures reported through `Result` instead of relying on infallible
+//! allocation behavior.
 //!
-//! Infallible convenience methods are also supplied for interoperability
-//! with Rust's standard collection conventions. They may panic or abort
-//! under allocator failure, as ordinary standard-library allocation APIs
-//! can do. Callers requiring explicit failure handling should use the
-//! fallible alternatives.
+//! Capacity is a reservation request, not a semantic maximum.
 //!
-//! ## Determinism
+//! # Determinism
 //!
 //! `List<T>` preserves insertion order.
 //!
-//! `Map<K, V>` uses `HashMap` and does not promise iteration order.
-//! Its iteration order may vary between instances and executions.
+//! `Map<K, V>` uses `HashMap`. Its iteration order is unspecified and
+//! must not be relied upon for serialization, reproducible builds,
+//! consensus, or deterministic computation.
 //!
-//! Consumers requiring deterministic key ordering must use the dedicated
-//! `ClassicalMap<K, V>` implementation or another explicitly ordered
-//! collection.
+//! Use `crate::classical::collections::ClassicalMap` when deterministic
+//! ordered-map behavior is required.
 //!
-//! ## Equality and hashing
+//! # Failure and mutation guarantees
 //!
-//! Map keys must satisfy Rust's `Eq` and `Hash` contracts.
-//! Equal keys must produce equal hashes.
+//! - A failed `try_push` leaves the existing list unchanged.
+//! - A failed `try_insert` leaves the existing list unchanged.
+//! - A failed `try_insert` with an invalid index returns an error.
+//! - `try_extend` is incremental: earlier successful additions remain
+//!   if a later reservation fails.
+//! - A failed map `try_insert` does not change existing entries.
+//! - Map replacement does not require additional capacity.
+//! - Map `try_extend` is incremental: earlier successful insertions and
+//!   replacements remain if a later insertion fails.
 //!
-//! Mutating a stored key in a way that changes its equality or hash
-//! behavior while it is in the map is a logic error.
+//! Iterators may have external side effects. Those effects cannot
+//! generally be rolled back after an allocation failure.
 //!
-//! ## Integration
+//! # Compatibility
 //!
-//! `src/foundation/mod.rs` exports this module.
+//! `crate::stdlib::collections` should re-export the public types here.
+//! `crate::stdlib::core` should re-export the same `List` and `Map`
+//! rather than define competing implementations.
 //!
-//! `src/lib.rs` exposes the `foundation` module.
+//! # Freeze rule
 //!
-//! `src/stdlib/collections.rs` re-exports these canonical types for
-//! compatibility with existing standard-library consumers.
-//!
-//! `src/stdlib/core.rs` must stop defining competing `List` and `Map`
-//! types and re-export these canonical types instead.
-//!
-//! `src/classical/collections/` retains ownership of specialized
-//! classical collection implementations.
-//!
-//! Grammar and semantic analysis remain separate authorities.
-//!
-//! ## Resource and failure semantics
-//!
-//! Fallible operations report reservation failures without silently
-//! truncating a collection.
-//!
-//! `try_extend` is incremental: successful earlier insertions remain
-//! if a later reservation fails.
-//!
-//! The error reports the number of successfully processed input items.
-//!
-//! Iterators may have side effects. Those effects cannot generally be
-//! rolled back after an allocation failure.
-//!
-//! ## Freeze rule
-//!
-//! Changes to ordering guarantees, key equivalence, duplicate handling,
-//! allocation failure semantics, or public iterator types require
+//! Changes to ordering guarantees, duplicate handling, key equivalence,
+//! allocation failure behavior, or public iterator types require
 //! compatibility review and regression tests.
 
 use core::borrow::Borrow;
 use core::fmt;
 use core::hash::Hash;
-use core::iter::FusedIterator;
 use core::ops::{Index, IndexMut};
 
-use std::collections::{
-    hash_map,
-    HashMap,
-    HashSet,
-};
+use std::collections::hash_map;
+use std::collections::HashMap;
 use std::collections::TryReserveError;
+
+// =============================================================================
+// Standard collection interoperability
+// =============================================================================
+
+/// Standard-library collection types available without introducing
+/// additional Zamani-specific storage implementations.
+///
+/// These are Rust standard-library types, not competing Zamani
+/// collection authorities.
+pub use std::collections::{
+    BTreeMap,
+    BTreeSet,
+    BinaryHeap,
+    HashSet,
+    LinkedList,
+    VecDeque,
+};
 
 // =============================================================================
 // Error model
 // =============================================================================
 
-/// Identifies the generic collection involved in an allocation failure.
+/// Identifies the general-purpose collection involved in an operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CollectionKind {
-    /// Dynamically sized list.
+    /// Dynamically sized ordered list.
     List,
 
-    /// Hash-based map.
+    /// Dynamically sized hash-based map.
     Map,
 }
 
@@ -151,7 +147,7 @@ impl fmt::Display for CollectionKind {
     }
 }
 
-/// Errors produced by fallible foundational collection operations.
+/// Structured errors returned by fallible collection operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CollectionError {
     /// The underlying collection could not reserve the requested capacity.
@@ -162,46 +158,73 @@ pub enum CollectionError {
         /// Additional elements or entries requested.
         requested_additional: usize,
 
-        /// Successfully processed input elements or entries before failure.
+        /// Number of successfully processed input items before failure.
         ///
-        /// This is diagnostic information. It does not contain the
-        /// partially constructed collection.
+        /// For a single-item operation this is zero.
+        /// For an incremental extension it counts successful additions
+        /// or replacements performed by that operation.
         items_processed: usize,
+    },
+
+    /// A requested list index or insertion position is invalid.
+    InvalidIndex {
+        /// Collection whose operation received the invalid index.
+        collection: CollectionKind,
+
+        /// Requested index.
+        index: usize,
+
+        /// Collection length at validation time.
+        len: usize,
+
+        /// Whether the index is an insertion position.
+        ///
+        /// Insertion permits `index == len`.
+        /// Element access and removal require `index < len`.
+        insertion_position: bool,
     },
 }
 
 impl CollectionError {
-    /// Returns the collection associated with the failure.
+    /// Returns the collection associated with the error.
     #[must_use]
     pub const fn collection(&self) -> CollectionKind {
         match self {
-            Self::AllocationFailed { collection, .. } => *collection,
+            Self::AllocationFailed { collection, .. }
+            | Self::InvalidIndex { collection, .. } => *collection,
         }
     }
 
-    /// Returns the additional capacity requested by the failed operation.
+    /// Returns the additional capacity requested by an allocation error.
+    ///
+    /// Returns `None` for errors unrelated to allocation.
     #[must_use]
-    pub const fn requested_additional(&self) -> usize {
+    pub const fn requested_additional(&self) -> Option<usize> {
         match self {
             Self::AllocationFailed {
                 requested_additional,
                 ..
-            } => *requested_additional,
+            } => Some(*requested_additional),
+            Self::InvalidIndex { .. } => None,
         }
     }
 
-    /// Returns the number of successfully processed input items.
+    /// Returns the number of input items processed before an error.
+    ///
+    /// Returns `None` when the error is not an allocation failure.
     #[must_use]
-    pub const fn items_processed(&self) -> usize {
+    pub const fn items_processed(&self) -> Option<usize> {
         match self {
             Self::AllocationFailed {
                 items_processed,
                 ..
-            } => *items_processed,
+            } => Some(*items_processed),
+            Self::InvalidIndex { .. } => None,
         }
     }
 
-    fn allocation_failed(
+    /// Creates an allocation failure with the correct collection identity.
+    const fn allocation_failed(
         collection: CollectionKind,
         requested_additional: usize,
         items_processed: usize,
@@ -210,6 +233,21 @@ impl CollectionError {
             collection,
             requested_additional,
             items_processed,
+        }
+    }
+
+    /// Creates an invalid-index error.
+    const fn invalid_index(
+        collection: CollectionKind,
+        index: usize,
+        len: usize,
+        insertion_position: bool,
+    ) -> Self {
+        Self::InvalidIndex {
+            collection,
+            index,
+            len,
+            insertion_position,
         }
     }
 }
@@ -223,25 +261,43 @@ impl fmt::Display for CollectionError {
                 items_processed,
             } => write!(
                 f,
-                "{collection} allocation failed while requesting \
+                "{collection} could not reserve capacity for \
                  {requested_additional} additional entries after \
                  processing {items_processed} input items"
             ),
+
+            Self::InvalidIndex {
+                collection,
+                index,
+                len,
+                insertion_position,
+            } => {
+                if *insertion_position {
+                    write!(
+                        f,
+                        "{collection} insertion position {index} \
+                         is invalid for length {len}"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{collection} index {index} is out of bounds \
+                         for length {len}"
+                    )
+                }
+            }
         }
     }
 }
 
 impl std::error::Error for CollectionError {}
 
-impl From<TryReserveError> for CollectionError {
-    fn from(_: TryReserveError) -> Self {
-        Self::allocation_failed(
-            CollectionKind::List,
-            0,
-            0,
-        )
-    }
-}
+// Deliberately do not implement From<TryReserveError>.
+//
+// A TryReserveError does not identify which collection produced it.
+// An unconditional conversion would therefore risk reporting a map
+// allocation failure as a list allocation failure, or vice versa.
+// Each operation attaches its own collection identity instead.
 
 // =============================================================================
 // List
@@ -251,13 +307,18 @@ impl From<TryReserveError> for CollectionError {
 ///
 /// `List<T>` uses contiguous `Vec<T>` storage.
 ///
-/// It preserves insertion order and supports indexed access.
+/// Its ordering and duplicate behavior are observable:
 ///
-/// It does not impose an arbitrary maximum length.
+/// - insertion order is preserved;
+/// - duplicate values are permitted;
+/// - indexing is zero-based;
+/// - `pop` removes the final element.
 ///
-/// Use the `try_*` methods when allocation failure must be reported
-/// through a `Result`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// The collection does not impose a universal maximum length.
+///
+/// Use the `try_*` methods when allocation failures must be reported
+/// explicitly.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct List<T> {
     elements: Vec<T>,
 }
@@ -267,7 +328,7 @@ impl<T> List<T> {
     // Construction
     // -------------------------------------------------------------------------
 
-    /// Creates an empty list.
+    /// Creates an empty list without allocating element storage.
     #[must_use]
     pub const fn new() -> Self {
         Self {
@@ -275,28 +336,26 @@ impl<T> List<T> {
         }
     }
 
-    /// Creates an empty list and attempts to reserve the requested capacity.
+    /// Creates an empty list and fallibly reserves capacity.
     ///
-    /// Capacity is an allocation request, not a semantic maximum.
+    /// Capacity is an allocation request, not a maximum length.
     pub fn try_with_capacity(
         capacity: usize,
     ) -> Result<Self, CollectionError> {
         let mut elements = Vec::new();
 
-        elements
-            .try_reserve_exact(capacity)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::List,
-                    capacity,
-                    0,
-                )
-            })?;
+        elements.try_reserve_exact(capacity).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::List,
+                capacity,
+                0,
+            )
+        })?;
 
         Ok(Self { elements })
     }
 
-    /// Creates a list from an existing vector without copying its elements.
+    /// Wraps an existing vector without copying its elements.
     #[must_use]
     pub fn from_vec(elements: Vec<T>) -> Self {
         Self { elements }
@@ -304,11 +363,8 @@ impl<T> List<T> {
 
     /// Creates a list by consuming an iterator with fallible allocation.
     ///
-    /// The iterator's lower size hint is used as an initial reservation
-    /// request. Its upper size hint is not treated as a maximum.
-    ///
-    /// If a later reservation fails, the temporary list is dropped and
-    /// the error reports how many items were processed before failure.
+    /// If allocation fails, the partially constructed list is dropped.
+    /// The error reports how many elements were successfully appended.
     pub fn try_from_iter<I>(
         iterator: I,
     ) -> Result<Self, CollectionError>
@@ -320,9 +376,7 @@ impl<T> List<T> {
         Ok(list)
     }
 
-    /// Returns a copy of the list's elements as a vector.
-    ///
-    /// This requires cloning each element.
+    /// Returns a cloned vector of the list's elements.
     #[must_use]
     pub fn to_vec(&self) -> Vec<T>
     where
@@ -347,7 +401,7 @@ impl<T> List<T> {
         self.elements.len()
     }
 
-    /// Returns true when the list contains no elements.
+    /// Returns whether the list contains no elements.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
@@ -355,44 +409,43 @@ impl<T> List<T> {
 
     /// Returns the currently allocated element capacity.
     ///
-    /// Capacity is an implementation detail and not a language-level limit.
+    /// Capacity is an implementation detail, not a semantic limit.
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.elements.capacity()
     }
 
-    /// Removes every element while retaining allocated capacity.
+    /// Removes all elements while retaining allocated capacity.
     pub fn clear(&mut self) {
         self.elements.clear();
     }
 
-    /// Removes elements after the specified length.
+    /// Removes all elements after `length`.
     ///
-    /// If `length` is greater than the current length, this does nothing.
+    /// Does nothing when `length` is greater than or equal to the
+    /// current length.
     pub fn truncate(&mut self, length: usize) {
         self.elements.truncate(length);
     }
 
     // -------------------------------------------------------------------------
-    // Allocation
+    // Fallible allocation
     // -------------------------------------------------------------------------
 
     /// Fallibly reserves capacity for at least `additional` elements.
     ///
-    /// The list's logical contents remain unchanged if reservation fails.
+    /// Existing contents remain unchanged if reservation fails.
     pub fn try_reserve(
         &mut self,
         additional: usize,
     ) -> Result<(), CollectionError> {
-        self.elements
-            .try_reserve(additional)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::List,
-                    additional,
-                    0,
-                )
-            })
+        self.elements.try_reserve(additional).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::List,
+                additional,
+                0,
+            )
+        })
     }
 
     /// Fallibly reserves capacity for at least `additional` elements,
@@ -416,13 +469,13 @@ impl<T> List<T> {
     // Element access
     // -------------------------------------------------------------------------
 
-    /// Returns a reference to an element at `index`, if present.
+    /// Returns a reference to an element, if the index exists.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&T> {
         self.elements.get(index)
     }
 
-    /// Returns a mutable reference to an element at `index`, if present.
+    /// Returns a mutable reference to an element, if the index exists.
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.elements.get_mut(index)
     }
@@ -438,25 +491,24 @@ impl<T> List<T> {
         self.elements.first_mut()
     }
 
-    /// Returns the last element, if present.
+    /// Returns the final element, if present.
     #[must_use]
     pub fn last(&self) -> Option<&T> {
         self.elements.last()
     }
 
-    /// Returns the last element mutably, if present.
+    /// Returns the final element mutably, if present.
     pub fn last_mut(&mut self) -> Option<&mut T> {
         self.elements.last_mut()
     }
 
-    /// Returns the backing elements as an immutable slice.
+    /// Returns the elements as a borrowed slice.
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
         self.elements.as_slice()
     }
 
-    /// Returns the backing elements as a mutable slice.
-    #[must_use]
+    /// Returns the elements as a mutable borrowed slice.
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         self.elements.as_mut_slice()
     }
@@ -467,39 +519,37 @@ impl<T> List<T> {
 
     /// Appends an element.
     ///
-    /// This is the standard infallible convenience operation.
-    /// Use `try_push` when allocation failure must be reported.
+    /// This is an infallible convenience operation following Rust
+    /// collection conventions. Use `try_push` when allocation failure
+    /// must be reported through `Result`.
     pub fn push(&mut self, value: T) {
         self.elements.push(value);
     }
 
     /// Fallibly appends an element.
     ///
-    /// If additional capacity is needed and cannot be reserved, the
-    /// existing list contents remain unchanged.
-    ///
-    /// The supplied value is dropped if reservation fails.
+    /// If additional capacity cannot be reserved, existing contents
+    /// remain unchanged. The supplied value is dropped on failure.
     pub fn try_push(
         &mut self,
         value: T,
     ) -> Result<(), CollectionError> {
-        self.elements
-            .try_reserve(1)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::List,
-                    1,
-                    0,
-                )
-            })?;
+        self.elements.try_reserve(1).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::List,
+                1,
+                0,
+            )
+        })?;
 
         self.elements.push(value);
         Ok(())
     }
 
-    /// Inserts an element at the specified position.
+    /// Inserts an element at `index`.
     ///
     /// Panics if `index > len()`, following `Vec::insert` semantics.
+    /// Use `try_insert` when invalid positions must be reported as errors.
     pub fn insert(
         &mut self,
         index: usize,
@@ -508,38 +558,41 @@ impl<T> List<T> {
         self.elements.insert(index, value);
     }
 
-    /// Fallibly inserts an element at the specified position.
+    /// Fallibly inserts an element at `index`.
     ///
-    /// Returns an allocation error if reservation fails.
-    /// Panics if `index > len()`, matching the ordinary insertion contract.
+    /// Valid insertion positions are `0..=len()`.
+    ///
+    /// Invalid positions return `CollectionError::InvalidIndex`.
+    /// Allocation failure leaves existing contents unchanged.
     pub fn try_insert(
         &mut self,
         index: usize,
         value: T,
     ) -> Result<(), CollectionError> {
-        assert!(
-            index <= self.elements.len(),
-            "list insertion index exceeds list length"
-        );
+        let len = self.elements.len();
 
-        self.elements
-            .try_reserve(1)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::List,
-                    1,
-                    0,
-                )
-            })?;
+        if index > len {
+            return Err(CollectionError::invalid_index(
+                CollectionKind::List,
+                index,
+                len,
+                true,
+            ));
+        }
+
+        self.elements.try_reserve(1).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::List,
+                1,
+                0,
+            )
+        })?;
 
         self.elements.insert(index, value);
         Ok(())
     }
 
-    /// Appends all items from an iterator.
-    ///
-    /// This follows standard collection behavior and may allocate
-    /// infallibly through the allocator.
+    /// Appends all elements from an iterator using ordinary allocation.
     pub fn extend<I>(&mut self, iterator: I)
     where
         I: IntoIterator<Item = T>,
@@ -547,16 +600,16 @@ impl<T> List<T> {
         self.elements.extend(iterator);
     }
 
-    /// Fallibly appends all items from an iterator.
+    /// Fallibly appends elements from an iterator.
     ///
-    /// This operation is incremental. If allocation fails:
+    /// The operation is incremental. Previously appended elements remain
+    /// if a later reservation fails.
     ///
-    /// - previously appended elements remain in the list;
-    /// - the current and remaining iterator items are not appended;
-    /// - the iterator is consumed up to the failure point;
-    /// - the returned error reports successfully processed items.
+    /// The iterator's lower size hint is used as an initial reservation
+    /// request. Its upper size hint is not treated as a semantic maximum.
     ///
-    /// The iterator's upper size hint is never treated as a limit.
+    /// The returned error reports the number of successfully appended
+    /// elements from this operation.
     pub fn try_extend<I>(
         &mut self,
         iterator: I,
@@ -580,21 +633,16 @@ impl<T> List<T> {
         let mut processed = 0usize;
 
         for item in iterator {
-            self.elements
-                .try_reserve(1)
-                .map_err(|_| {
-                    CollectionError::allocation_failed(
-                        CollectionKind::List,
-                        1,
-                        processed,
-                    )
-                })?;
+            self.elements.try_reserve(1).map_err(|_| {
+                CollectionError::allocation_failed(
+                    CollectionKind::List,
+                    1,
+                    processed,
+                )
+            })?;
 
             self.elements.push(item);
-
-            // The count cannot exceed the number of successfully appended
-            // elements, which is itself representable by Vec's length.
-            processed += 1;
+            processed = processed.saturating_add(1);
         }
 
         Ok(())
@@ -604,7 +652,7 @@ impl<T> List<T> {
     // Removal
     // -------------------------------------------------------------------------
 
-    /// Removes and returns the last element.
+    /// Removes and returns the final element, if present.
     pub fn pop(&mut self) -> Option<T> {
         self.elements.pop()
     }
@@ -620,9 +668,9 @@ impl<T> List<T> {
         Some(self.elements.remove(index))
     }
 
-    /// Removes and returns the element at `index` without preserving order.
+    /// Removes and returns an element without preserving order.
     ///
-    /// The last element is moved into the removed position when necessary.
+    /// The final element is moved into the removed position when needed.
     pub fn swap_remove(&mut self, index: usize) -> Option<T> {
         if index >= self.elements.len() {
             return None;
@@ -640,20 +688,20 @@ impl<T> List<T> {
     }
 
     // -------------------------------------------------------------------------
-    // Traversal
+    // Iteration
     // -------------------------------------------------------------------------
 
-    /// Returns an immutable iterator over the elements.
+    /// Returns an immutable iterator over elements.
     pub fn iter(&self) -> core::slice::Iter<'_, T> {
         self.elements.iter()
     }
 
-    /// Returns a mutable iterator over the elements.
+    /// Returns a mutable iterator over elements.
     pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
         self.elements.iter_mut()
     }
 
-    /// Consumes the list and returns an owning iterator.
+    /// Returns an owning iterator over elements.
     pub fn into_iter(self) -> std::vec::IntoIter<T> {
         self.elements.into_iter()
     }
@@ -666,12 +714,6 @@ impl<T> List<T> {
     /// Returns a mutable iterator over the elements.
     pub fn values_mut(&mut self) -> core::slice::IterMut<'_, T> {
         self.iter_mut()
-    }
-}
-
-impl<T> Default for List<T> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -698,20 +740,6 @@ impl<T> FromIterator<T> for List<T> {
 impl<T> Extend<T> for List<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iterator: I) {
         self.elements.extend(iterator);
-    }
-}
-
-impl<T> Index<usize> for List<T> {
-    type Output = T;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.elements[index]
-    }
-}
-
-impl<T> IndexMut<usize> for List<T> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.elements[index]
     }
 }
 
@@ -742,25 +770,50 @@ impl<'a, T> IntoIterator for &'a mut List<T> {
     }
 }
 
+impl<T> Index<usize> for List<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.elements[index]
+    }
+}
+
+impl<T> IndexMut<usize> for List<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.elements[index]
+    }
+}
+
 // =============================================================================
 // Map
 // =============================================================================
 
-/// A dynamically sized hash-based key/value collection.
+/// A dynamically sized hash-based map.
 ///
-/// `Map<K, V>` uses Rust's `HashMap<K, V>`.
+/// `Map<K, V>` maps unique keys to values.
 ///
-/// It provides average-case hash-based lookup and does not promise
-/// deterministic iteration order.
+/// Key requirements:
 ///
-/// Use `ClassicalMap<K, V>` when deterministic ordered-map behavior
-/// is required by a classical computation.
+/// - `K: Eq + Hash` for operations that insert or look up keys;
+/// - equal keys must produce equal hashes;
+/// - key equality and hash behavior must not change while a key is stored.
 ///
-/// Keys must implement `Eq + Hash`.
+/// Iteration order is unspecified. Use `ClassicalMap` when deterministic
+/// key ordering is required.
+///
+/// The map does not impose an arbitrary universal entry-count limit.
 #[derive(Debug, Clone)]
 pub struct Map<K, V> {
     entries: HashMap<K, V>,
 }
+
+impl<K: Eq + Hash, V: PartialEq> PartialEq for Map<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        self.entries == other.entries
+    }
+}
+
+impl<K: Eq + Hash, V: Eq> Eq for Map<K, V> {}
 
 impl<K, V> Map<K, V> {
     // -------------------------------------------------------------------------
@@ -769,43 +822,35 @@ impl<K, V> Map<K, V> {
 
     /// Creates an empty map.
     #[must_use]
-    pub fn new() -> Self
-    where
-        K: Eq + Hash,
-    {
+    pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
         }
     }
 
-    /// Creates an empty map and attempts to reserve capacity.
+    /// Creates an empty map and fallibly reserves capacity.
     ///
-    /// Capacity is an allocation request, not a maximum entry count.
+    /// Capacity is an allocation request, not a semantic maximum.
     pub fn try_with_capacity(
         capacity: usize,
-    ) -> Result<Self, CollectionError>
-    where
-        K: Eq + Hash,
-    {
+    ) -> Result<Self, CollectionError> {
         let mut entries = HashMap::new();
 
-        entries
-            .try_reserve(capacity)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::Map,
-                    capacity,
-                    0,
-                )
-            })?;
+        entries.try_reserve(capacity).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::Map,
+                capacity,
+                0,
+            )
+        })?;
 
         Ok(Self { entries })
     }
 
-    /// Creates a map from an iterator using fallible incremental insertion.
+    /// Creates a map by consuming an iterator with fallible allocation.
     ///
-    /// If an allocation fails, the partially built map is dropped and
-    /// the error is returned.
+    /// Duplicate keys replace earlier values.
+    /// If allocation fails, the partially constructed map is dropped.
     pub fn try_from_iter<I>(
         iterator: I,
     ) -> Result<Self, CollectionError>
@@ -818,36 +863,35 @@ impl<K, V> Map<K, V> {
         Ok(map)
     }
 
-    /// Creates a map from an iterator using ordinary allocation behavior.
-    pub fn from_iter<I>(iterator: I) -> Self
-    where
-        K: Eq + Hash,
-        I: IntoIterator<Item = (K, V)>,
-    {
-        Self {
-            entries: iterator.into_iter().collect(),
-        }
+    /// Consumes the map and returns its underlying `HashMap`.
+    #[must_use]
+    pub fn into_hash_map(self) -> HashMap<K, V> {
+        self.entries
+    }
+
+    /// Returns a reference to the underlying `HashMap`.
+    #[must_use]
+    pub fn as_hash_map(&self) -> &HashMap<K, V> {
+        &self.entries
     }
 
     // -------------------------------------------------------------------------
     // Length and capacity
     // -------------------------------------------------------------------------
 
-    /// Returns the number of stored entries.
+    /// Returns the number of entries.
     #[must_use]
     pub fn len(&self) -> usize {
         self.entries.len()
     }
 
-    /// Returns true when the map contains no entries.
+    /// Returns whether the map is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     /// Returns the currently allocated entry capacity.
-    ///
-    /// This is not a semantic or language-level maximum.
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.entries.capacity()
@@ -859,7 +903,7 @@ impl<K, V> Map<K, V> {
     }
 
     // -------------------------------------------------------------------------
-    // Allocation
+    // Fallible allocation
     // -------------------------------------------------------------------------
 
     /// Fallibly reserves capacity for at least `additional` entries.
@@ -867,15 +911,13 @@ impl<K, V> Map<K, V> {
         &mut self,
         additional: usize,
     ) -> Result<(), CollectionError> {
-        self.entries
-            .try_reserve(additional)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::Map,
-                    additional,
-                    0,
-                )
-            })
+        self.entries.try_reserve(additional).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::Map,
+                additional,
+                0,
+            )
+        })
     }
 
     /// Fallibly reserves capacity for at least `additional` entries,
@@ -884,25 +926,21 @@ impl<K, V> Map<K, V> {
         &mut self,
         additional: usize,
     ) -> Result<(), CollectionError> {
-        self.entries
-            .try_reserve_exact(additional)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::Map,
-                    additional,
-                    0,
-                )
-            })
+        // HashMap exposes try_reserve rather than a separate exact-reserve
+        // operation. This method preserves a consistent collection API;
+        // the implementation uses the allocator strategy provided by
+        // the standard HashMap implementation.
+        self.try_reserve(additional)
     }
 
     // -------------------------------------------------------------------------
     // Lookup
     // -------------------------------------------------------------------------
 
-    /// Returns the value associated with `key`, if present.
+    /// Returns a reference to the value associated with `key`.
     ///
-    /// Borrowed lookup is supported when the key type implements
-    /// `Borrow<Q>` and the borrowed form has matching hash/equality behavior.
+    /// Borrowed lookup is supported when `K` implements `Borrow<Q>` and
+    /// the borrowed type has matching equality and hashing behavior.
     #[must_use]
     pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
@@ -921,7 +959,7 @@ impl<K, V> Map<K, V> {
         self.entries.get_mut(key)
     }
 
-    /// Returns true if the map contains `key`.
+    /// Returns whether the map contains `key`.
     #[must_use]
     pub fn contains_key<Q>(&self, key: &Q) -> bool
     where
@@ -932,14 +970,13 @@ impl<K, V> Map<K, V> {
     }
 
     // -------------------------------------------------------------------------
-    // Insertion
+    // Insertion and replacement
     // -------------------------------------------------------------------------
 
     /// Inserts or replaces an entry.
     ///
-    /// If the key already exists, its previous value is returned.
+    /// Returns the previous value if the key already existed.
     ///
-    /// This is the ordinary infallible convenience operation.
     /// Use `try_insert` when allocation failure must be reported.
     pub fn insert(
         &mut self,
@@ -954,12 +991,10 @@ impl<K, V> Map<K, V> {
 
     /// Fallibly inserts or replaces an entry.
     ///
-    /// Replacing an existing entry does not require additional capacity.
+    /// Replacing an existing value does not require additional capacity.
+    /// A new key is inserted only after capacity has been reserved.
     ///
-    /// For a new key, the map reserves capacity before insertion.
-    /// If reservation fails, existing map contents remain unchanged.
-    ///
-    /// The supplied key and value are dropped if reservation fails.
+    /// Existing entries remain unchanged if reservation fails.
     pub fn try_insert(
         &mut self,
         key: K,
@@ -972,22 +1007,20 @@ impl<K, V> Map<K, V> {
             return Ok(Some(core::mem::replace(existing, value)));
         }
 
-        self.entries
-            .try_reserve(1)
-            .map_err(|_| {
-                CollectionError::allocation_failed(
-                    CollectionKind::Map,
-                    1,
-                    0,
-                )
-            })?;
+        self.entries.try_reserve(1).map_err(|_| {
+            CollectionError::allocation_failed(
+                CollectionKind::Map,
+                1,
+                0,
+            )
+        })?;
 
         Ok(self.entries.insert(key, value))
     }
 
     /// Builder-style insertion.
     ///
-    /// Returns the map so that calls can be chained.
+    /// Returns the map so insertions can be chained.
     pub fn with(
         mut self,
         key: K,
@@ -1013,10 +1046,9 @@ impl<K, V> Map<K, V> {
         Ok(self)
     }
 
-    /// Extends the map from an iterator.
+    /// Extends the map from an iterator using ordinary allocation.
     ///
     /// Duplicate keys replace earlier values.
-    /// This uses ordinary allocator behavior.
     pub fn extend<I>(&mut self, iterator: I)
     where
         K: Eq + Hash,
@@ -1027,8 +1059,8 @@ impl<K, V> Map<K, V> {
 
     /// Fallibly extends the map from an iterator.
     ///
-    /// The operation is incremental. If allocation fails, earlier
-    /// successful insertions and replacements remain in the map.
+    /// This operation is incremental. Earlier successful insertions
+    /// and replacements remain if a later insertion fails.
     ///
     /// `items_processed` counts successful input entries, including
     /// replacements of existing keys.
@@ -1054,10 +1086,11 @@ impl<K, V> Map<K, V> {
                         requested_additional,
                         processed,
                     ),
+                    other => other,
                 });
             }
 
-            processed += 1;
+            processed = processed.saturating_add(1);
         }
 
         Ok(())
@@ -1090,7 +1123,7 @@ impl<K, V> Map<K, V> {
 
     /// Retains only entries for which `keep` returns true.
     ///
-    /// Keys are immutable through the callback, preserving the hash-map
+    /// Keys are immutable through the callback, preserving hash-map
     /// key invariants.
     pub fn retain<F>(&mut self, keep: F)
     where
@@ -1101,7 +1134,7 @@ impl<K, V> Map<K, V> {
     }
 
     // -------------------------------------------------------------------------
-    // Traversal
+    // Iteration
     // -------------------------------------------------------------------------
 
     /// Returns an iterator over key/value pairs.
@@ -1113,8 +1146,7 @@ impl<K, V> Map<K, V> {
 
     /// Returns a mutable iterator over key/value pairs.
     ///
-    /// Keys are immutable through this iterator.
-    /// Iteration order is unspecified.
+    /// Keys cannot be mutated through this iterator.
     pub fn iter_mut(&mut self) -> hash_map::IterMut<'_, K, V> {
         self.entries.iter_mut()
     }
@@ -1133,32 +1165,9 @@ impl<K, V> Map<K, V> {
     pub fn values_mut(&mut self) -> hash_map::ValuesMut<'_, K, V> {
         self.entries.values_mut()
     }
-
-    /// Returns the map's entries as an immutable reference.
-    ///
-    /// This exposes the standard map API without allowing callers to
-    /// replace the backing map.
-    #[must_use]
-    pub fn as_hash_map(&self) -> &HashMap<K, V> {
-        &self.entries
-    }
-
-    /// Returns the map's entries as a mutable reference.
-    ///
-    /// The caller receives the standard `HashMap` API. Key invariants
-    /// remain governed by Rust's `Eq` and `Hash` contracts.
-    pub fn as_hash_map_mut(&mut self) -> &mut HashMap<K, V> {
-        &mut self.entries
-    }
-
-    /// Consumes this wrapper and returns the underlying hash map.
-    #[must_use]
-    pub fn into_hash_map(self) -> HashMap<K, V> {
-        self.entries
-    }
 }
 
-impl<K: Eq + Hash, V> Default for Map<K, V> {
+impl<K, V> Default for Map<K, V> {
     fn default() -> Self {
         Self::new()
     }
@@ -1170,7 +1179,7 @@ impl<K: Eq + Hash, V> From<HashMap<K, V>> for Map<K, V> {
     }
 }
 
-impl<K: Eq + Hash, V> From<Map<K, V>> for HashMap<K, V> {
+impl<K, V> From<Map<K, V>> for HashMap<K, V> {
     fn from(map: Map<K, V>) -> Self {
         map.entries
     }
@@ -1246,7 +1255,7 @@ mod tests {
     }
 
     #[test]
-    fn list_preserves_insertion_order_and_duplicates() {
+    fn list_preserves_order_and_duplicates() {
         let mut list = List::new();
 
         list.push(4);
@@ -1290,8 +1299,18 @@ mod tests {
     }
 
     #[test]
-    fn list_can_be_consumed_into_a_vector() {
+    fn list_supports_owned_iteration() {
         let list = List::from(vec![1, 2, 3]);
+
+        let values: Vec<_> = list.into_iter().collect();
+
+        assert_eq!(values, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn list_supports_vector_conversion() {
+        let list = List::from(vec![1, 2, 3]);
+
         let values: Vec<_> = list.into();
 
         assert_eq!(values, vec![1, 2, 3]);
@@ -1316,6 +1335,25 @@ mod tests {
         list.try_insert(1, 2).unwrap();
 
         assert_eq!(list.as_slice(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn list_try_insert_rejects_invalid_position() {
+        let mut list = List::from(vec![1, 2]);
+
+        let error = list.try_insert(4, 3).unwrap_err();
+
+        assert_eq!(
+            error,
+            CollectionError::InvalidIndex {
+                collection: CollectionKind::List,
+                index: 4,
+                len: 2,
+                insertion_position: true,
+            }
+        );
+
+        assert_eq!(list.as_slice(), &[1, 2]);
     }
 
     #[test]
@@ -1609,7 +1647,8 @@ mod tests {
             ("b", 2),
         ]);
 
-        let mut pairs: Vec<_> = map.iter()
+        let mut pairs: Vec<_> = map
+            .iter()
             .map(|(key, value)| (*key, *value))
             .collect();
 
@@ -1622,23 +1661,38 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Shared error tests
+    // Error tests
     // -------------------------------------------------------------------------
 
     #[test]
     fn allocation_error_exposes_machine_readable_information() {
-        let error = CollectionError::AllocationFailed {
-            collection: CollectionKind::Map,
-            requested_additional: 8,
-            items_processed: 3,
-        };
+        let error = CollectionError::allocation_failed(
+            CollectionKind::Map,
+            8,
+            3,
+        );
 
         assert_eq!(error.collection(), CollectionKind::Map);
-        assert_eq!(error.requested_additional(), 8);
-        assert_eq!(error.items_processed(), 3);
+        assert_eq!(error.requested_additional(), Some(8));
+        assert_eq!(error.items_processed(), Some(3));
 
         assert!(error.to_string().contains("map"));
         assert!(error.to_string().contains("8"));
+    }
+
+    #[test]
+    fn invalid_index_is_structured() {
+        let error = CollectionError::invalid_index(
+            CollectionKind::List,
+            7,
+            3,
+            false,
+        );
+
+        assert_eq!(error.collection(), CollectionKind::List);
+        assert_eq!(error.requested_additional(), None);
+        assert_eq!(error.items_processed(), None);
+        assert!(error.to_string().contains("out of bounds"));
     }
 
     #[test]
@@ -1655,8 +1709,8 @@ mod tests {
     }
 
     #[test]
-    fn hash_set_remains_available_from_foundation() {
-        let mut values = HashSet::new();
+    fn standard_hash_set_remains_available() {
+        let mut values = super::HashSet::new();
 
         values.insert(10);
         values.insert(10);
