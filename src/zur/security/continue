@@ -1,0 +1,1519 @@
+
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+#![deny(missing_docs)]
+
+//! # Zamani Universal Runtime — Code Integrity
+//!
+//! Path: src/zur/security/code_integrity.rs
+//! Edition: Rust 2021
+//! Minimum Rust version: 1.97
+//! Safety: Safe Rust only.
+//!
+//! # Purpose
+//!
+//! Provides the ZUR security boundary for verifying the integrity and
+//! authenticity of compiler-produced artifacts and generated executable
+//! code before they are accepted for execution.
+//!
+//! # Ownership
+//!
+//! This module owns:
+//!
+//! - Runtime artifact-integrity verification.
+//! - Expected-digest comparison.
+//! - Cryptographic artifact-signature verification.
+//! - Trust-authority integration.
+//! - Provenance structural validation.
+//! - Artifact identity and metadata binding.
+//! - Immutable verification receipts.
+//! - Fail-closed integrity policy enforcement.
+//!
+//! This module does NOT own:
+//!
+//! - Artifact construction.
+//! - Artifact payload storage.
+//! - Artifact manifest construction.
+//! - Compiler provenance generation.
+//! - Cryptographic key generation.
+//! - Private-key storage.
+//! - Trust-store persistence.
+//! - Authentication.
+//! - Authorization.
+//! - Semantic verification.
+//! - IR verification.
+//! - Backend selection.
+//! - Code generation.
+//! - Executable-memory management.
+//! - Hardware discovery.
+//! - Resource reservation.
+//! - Scheduling.
+//! - Execution.
+//!
+//! These responsibilities remain with their existing authorities.
+//!
+//! # Canonical integration
+//!
+//! Artifact:
+//!     crate::backend::artifact::OutputArtifact
+//!
+//! Artifact payload:
+//!     crate::backend::artifact::ArtifactPayload
+//!
+//! Artifact manifest:
+//!     crate::backend::manifest
+//!
+//! Runtime error:
+//!     crate::zur::error
+//!
+//! JIT:
+//!     crate::zur::jit::verification
+//!
+//! Runtime authorization:
+//!     crate::zur::security::permissions
+//!
+//! Runtime isolation:
+//!     crate::zur::security::isolation
+//!
+//! # Security invariants
+//!
+//! 1. An artifact must have a trusted expected digest.
+//! 2. The digest is calculated from the exact artifact payload bytes.
+//! 3. An artifact's self-reported digest is not independently trusted.
+//! 4. A digest is not a digital signature.
+//! 5. A valid signature is not proof of semantic correctness.
+//! 6. A signature must be checked against a trusted public key.
+//! 7. Unknown or revoked signing keys must not authorize an artifact.
+//! 8. Signature verification must bind the exact artifact identity,
+//!    target, format, payload size, digest and provenance.
+//! 9. Provenance metadata is not authenticated merely because it exists.
+//! 10. Missing required evidence causes rejection.
+//! 11. Verification failures must never become successful receipts.
+//! 12. A verification receipt is not an execution result.
+//! 13. Successful verification does not reserve resources.
+//! 14. Verification must happen before executable code is accepted.
+//! 15. No global mutable trust state is maintained.
+//!
+//! # Scalability
+//!
+//! No arbitrary maximum is imposed on:
+//!
+//! - Artifact sizes.
+//! - Artifact counts.
+//! - Computational domains.
+//! - Providers.
+//! - Signing identities.
+//! - Provenance transformations.
+//! - Artifact dependencies.
+//! - Hardware resources.
+//!
+//! Actual memory and processing requirements remain subject to
+//! available resources and platform constraints.
+//!
+//! # POCO-REAF
+//!
+//! Integrity verification is independent of the physical execution
+//! target. The same verification contract applies to compatible
+//! classical, quantum, HDL, AI, accelerator, hybrid, distributed,
+//! photonic and future-domain artifacts.
+//!
+//! This module does not claim that an artifact is executable on
+//! every target merely because its integrity is verified.
+
+use std::fmt;
+use std::sync::Arc;
+
+use ed25519_dalek::{
+    Signature,
+    Verifier,
+    VerifyingKey,
+};
+
+use sha2::{Digest, Sha256};
+
+use crate::backend::artifact::OutputArtifact;
+
+use crate::zur::error::{
+    ErrorKind,
+    ErrorCode,
+    ZurError,
+    ZurResult,
+};
+
+// ============================================================================
+// COMPONENT IDENTITY
+// ============================================================================
+
+const COMPONENT: &str = "zur.security.code_integrity";
+
+const SIGNATURE_DOMAIN: &[u8] =
+    b"ZAMANI-ARTIFACT-INTEGRITY-ED25519-V1";
+
+// ============================================================================
+// ERROR CONSTRUCTION
+// ============================================================================
+
+fn integrity_error(
+    message: impl Into<String>,
+) -> ZurError {
+    ZurError::new(
+        ErrorKind::Integrity,
+        ErrorCode::new(
+            "zur.security.artifact_integrity_failed",
+        )
+        .expect("static error code is valid"),
+        message,
+    )
+    .with_component(COMPONENT)
+    .with_operation("verify_artifact")
+}
+
+fn signature_error(
+    message: impl Into<String>,
+) -> ZurError {
+    ZurError::new(
+        ErrorKind::Cryptographic,
+        ErrorCode::new(
+            "zur.security.signature_verification_failed",
+        )
+        .expect("static error code is valid"),
+        message,
+    )
+    .with_component(COMPONENT)
+    .with_operation("verify_signature")
+}
+
+fn trust_error(
+    message: impl Into<String>,
+) -> ZurError {
+    ZurError::new(
+        ErrorKind::Security,
+        ErrorCode::new(
+            "zur.security.signing_identity_untrusted",
+        )
+        .expect("static error code is valid"),
+        message,
+    )
+    .with_component(COMPONENT)
+    .with_operation("resolve_signing_identity")
+}
+
+fn configuration_error(
+    message: impl Into<String>,
+) -> ZurError {
+    ZurError::new(
+        ErrorKind::Configuration,
+        ErrorCode::new(
+            "zur.security.integrity_configuration_invalid",
+        )
+        .expect("static error code is valid"),
+        message,
+    )
+    .with_component(COMPONENT)
+    .with_operation("configure_integrity_verification")
+}
+
+// ============================================================================
+// IDENTIFIER VALIDATION
+// ============================================================================
+
+fn validate_identifier(
+    value: &str,
+    description: &str,
+) -> ZurResult<()> {
+    if value.is_empty() {
+        return Err(integrity_error(
+            format!("{description} must not be empty"),
+        ));
+    }
+
+    if value.trim() != value {
+        return Err(integrity_error(
+            format!(
+                "{description} contains surrounding whitespace"
+            ),
+        ));
+    }
+
+    if value.chars().any(char::is_control) {
+        return Err(integrity_error(
+            format!(
+                "{description} contains control characters"
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// EXPECTED ARTIFACT INTEGRITY
+// ============================================================================
+
+/// Trusted metadata against which an artifact is verified.
+///
+/// This structure must be populated from an authoritative source,
+/// such as a validated compiler artifact manifest or an authenticated
+/// distribution record.
+///
+/// It must NOT be populated merely by copying values from the
+/// artifact being verified.
+///
+/// This module deliberately does not duplicate the canonical
+/// backend manifest representation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegrityExpectation {
+    artifact_id: String,
+    target: String,
+    format: String,
+    size_bytes: u64,
+    sha256_digest: String,
+}
+
+impl IntegrityExpectation {
+    /// Constructs an integrity expectation.
+    ///
+    /// The expected digest must use the canonical representation:
+    ///
+    /// sha256:<64 lowercase hexadecimal characters>
+    ///
+    /// The expected values must originate from a trusted manifest
+    /// or another authenticated integrity authority.
+    pub fn new(
+        artifact_id: impl Into<String>,
+        target: impl Into<String>,
+        format: impl Into<String>,
+        size_bytes: u64,
+        sha256_digest: impl Into<String>,
+    ) -> ZurResult<Self> {
+        let artifact_id = artifact_id.into();
+        let target = target.into();
+        let format = format.into();
+        let sha256_digest = sha256_digest.into();
+
+        validate_identifier(
+            &artifact_id,
+            "expected artifact identity",
+        )?;
+
+        validate_identifier(
+            &target,
+            "expected artifact target",
+        )?;
+
+        validate_identifier(
+            &format,
+            "expected artifact format",
+        )?;
+
+        validate_sha256(&sha256_digest)?;
+
+        Ok(Self {
+            artifact_id,
+            target,
+            format,
+            size_bytes,
+            sha256_digest,
+        })
+    }
+
+    /// Returns the expected artifact identity.
+    #[must_use]
+    pub fn artifact_id(&self) -> &str {
+        &self.artifact_id
+    }
+
+    /// Returns the expected target identity.
+    #[must_use]
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+
+    /// Returns the expected artifact format.
+    #[must_use]
+    pub fn format(&self) -> &str {
+        &self.format
+    }
+
+    /// Returns the expected payload size.
+    #[must_use]
+    pub const fn size_bytes(&self) -> u64 {
+        self.size_bytes
+    }
+
+    /// Returns the trusted expected SHA-256 digest.
+    #[must_use]
+    pub fn sha256_digest(&self) -> &str {
+        &self.sha256_digest
+    }
+}
+
+// ============================================================================
+// SHA-256 VALIDATION
+// ============================================================================
+
+fn validate_sha256(
+    digest: &str,
+) -> ZurResult<()> {
+    let Some(hex_digest) = digest.strip_prefix("sha256:") else {
+        return Err(integrity_error(
+            "expected digest must use the sha256 algorithm",
+        ));
+    };
+
+    if hex_digest.len() != 64 {
+        return Err(integrity_error(
+            "SHA-256 digest must contain exactly 64 hexadecimal characters",
+        ));
+    }
+
+    if !hex_digest
+        .bytes()
+        .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(integrity_error(
+            "SHA-256 digest contains invalid hexadecimal characters",
+        ));
+    }
+
+    if hex_digest.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return Err(integrity_error(
+            "SHA-256 digest must use canonical lowercase hexadecimal",
+        ));
+    }
+
+    Ok(())
+}
+
+/// Computes SHA-256 over the exact payload bytes.
+///
+/// The result is compatible with the canonical backend artifact
+/// digest representation.
+#[must_use]
+pub fn calculate_sha256(
+    payload: &[u8],
+) -> String {
+    let digest = Sha256::digest(payload);
+
+    format!(
+        "sha256:{}",
+        hex::encode(digest),
+    )
+}
+
+// ============================================================================
+// SIGNATURE CONTRACT
+// ============================================================================
+
+/// A digital signature associated with one artifact.
+///
+/// The algorithm identifier is extensible at the wider security
+/// architecture level. This implementation currently supports
+/// Ed25519 verification.
+///
+/// Unsupported algorithms are rejected rather than silently
+/// interpreted as another algorithm.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArtifactSignature {
+    key_identity: String,
+    algorithm: String,
+    signature: Vec<u8>,
+}
+
+impl ArtifactSignature {
+    /// Constructs an artifact signature.
+    pub fn new(
+        key_identity: impl Into<String>,
+        algorithm: impl Into<String>,
+        signature: impl Into<Vec<u8>>,
+    ) -> ZurResult<Self> {
+        let key_identity = key_identity.into();
+        let algorithm = algorithm.into();
+        let signature = signature.into();
+
+        validate_identifier(
+            &key_identity,
+            "signing key identity",
+        )?;
+
+        validate_identifier(
+            &algorithm,
+            "signature algorithm",
+        )?;
+
+        if algorithm != "ed25519" {
+            return Err(ZurError::unsupported(
+                format!(
+                    "unsupported artifact signature algorithm: {algorithm}"
+                ),
+            )
+            .with_component(COMPONENT)
+            .with_operation("construct_signature"));
+        }
+
+        // Ed25519 signatures have a defined encoding length.
+        // This is a cryptographic format requirement, not a
+        // hardware or scalability ceiling.
+        if signature.len() != 64 {
+            return Err(signature_error(
+                "Ed25519 signature must contain exactly 64 bytes",
+            ));
+        }
+
+        Ok(Self {
+            key_identity,
+            algorithm,
+            signature,
+        })
+    }
+
+    /// Returns the signing key identity.
+    #[must_use]
+    pub fn key_identity(&self) -> &str {
+        &self.key_identity
+    }
+
+    /// Returns the signature algorithm.
+    #[must_use]
+    pub fn algorithm(&self) -> &str {
+        &self.algorithm
+    }
+
+    /// Returns the signature bytes.
+    #[must_use]
+    pub fn signature_bytes(&self) -> &[u8] {
+        &self.signature
+    }
+}
+
+// ============================================================================
+// TRUST AUTHORITY
+// ============================================================================
+
+/// A public signing key resolved by an authoritative trust service.
+///
+/// Constructing this value does not independently establish trust.
+/// The runtime accepts it only through an injected
+/// `ArtifactTrustAuthority`.
+#[derive(Debug, Clone)]
+pub struct TrustedSigningKey {
+    identity: String,
+    verifying_key: VerifyingKey,
+}
+
+impl TrustedSigningKey {
+    /// Constructs a signing key from its raw Ed25519 public key.
+    pub fn new(
+        identity: impl Into<String>,
+        public_key: [u8; 32],
+    ) -> ZurResult<Self> {
+        let identity = identity.into();
+
+        validate_identifier(
+            &identity,
+            "trusted signing key identity",
+        )?;
+
+        let verifying_key =
+            VerifyingKey::from_bytes(&public_key)
+                .map_err(|_| {
+                    signature_error(
+                        "trusted Ed25519 public key is invalid",
+                    )
+                })?;
+
+        Ok(Self {
+            identity,
+            verifying_key,
+        })
+    }
+
+    /// Returns the signing key identity.
+    #[must_use]
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+}
+
+/// Result of resolving a signing identity.
+#[derive(Debug, Clone)]
+pub enum SigningKeyResolution {
+    /// The authority recognizes and trusts the signing key.
+    Trusted(TrustedSigningKey),
+
+    /// The identity is unknown to the authority.
+    Unknown,
+
+    /// The identity has been explicitly revoked.
+    Revoked,
+}
+
+/// Authority responsible for resolving trusted signing identities.
+///
+/// Implementations should integrate with the repository's canonical
+/// trust, key-management, certificate and attestation infrastructure.
+///
+/// This module does not maintain a second trust store.
+pub trait ArtifactTrustAuthority: Send + Sync {
+    /// Returns the stable authority identity.
+    fn authority_identity(&self) -> &str;
+
+    /// Resolves a signing key against the authority's current trust state.
+    ///
+    /// Revocation and unknown identities must never be treated as trusted.
+    fn resolve_signing_key(
+        &self,
+        key_identity: &str,
+    ) -> ZurResult<SigningKeyResolution>;
+}
+
+// ============================================================================
+// INTEGRITY POLICY
+// ============================================================================
+
+/// Operational policy governing artifact-integrity verification.
+///
+/// Security policy is separate from semantic requirements,
+/// capabilities, preferences and execution constraints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegrityPolicy {
+    identity: String,
+    require_signature: bool,
+    require_provenance: bool,
+}
+
+impl IntegrityPolicy {
+    /// Constructs an explicit integrity policy.
+    ///
+    /// Production execution should normally require a signature.
+    pub fn new(
+        identity: impl Into<String>,
+        require_signature: bool,
+        require_provenance: bool,
+    ) -> ZurResult<Self> {
+        let identity = identity.into();
+
+        validate_identifier(
+            &identity,
+            "integrity policy identity",
+        )?;
+
+        Ok(Self {
+            identity,
+            require_signature,
+            require_provenance,
+        })
+    }
+
+    /// Returns the policy identity.
+    #[must_use]
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+
+    /// Whether a valid digital signature is mandatory.
+    #[must_use]
+    pub const fn requires_signature(&self) -> bool {
+        self.require_signature
+    }
+
+    /// Whether nonempty, structurally valid provenance is mandatory.
+    #[must_use]
+    pub const fn requires_provenance(&self) -> bool {
+        self.require_provenance
+    }
+}
+
+impl Default for IntegrityPolicy {
+    fn default() -> Self {
+        Self {
+            identity: "zamani.security.integrity.default".to_owned(),
+            require_signature: true,
+            require_provenance: false,
+        }
+    }
+}
+
+// ============================================================================
+// SIGNATURE MESSAGE ENCODING
+// ============================================================================
+
+/// Appends a length-prefixed field to a canonical signed message.
+///
+/// Length-prefixing prevents ambiguous concatenation of metadata fields.
+///
+/// The representation is deterministic and independent of the
+/// computational domain.
+fn append_field(
+    output: &mut Vec<u8>,
+    value: &[u8],
+) -> ZurResult<()> {
+    let length = u64::try_from(value.len())
+        .map_err(|_| {
+            integrity_error(
+                "signed metadata field cannot be represented by the signature format",
+            )
+        })?;
+
+    output.extend_from_slice(&length.to_be_bytes());
+    output.extend_from_slice(value);
+
+    Ok(())
+}
+
+/// Produces the canonical message bound by an artifact signature.
+///
+/// The signed statement includes:
+///
+/// - Domain-separation identifier.
+/// - Artifact identity.
+/// - Target identity.
+/// - Format identity.
+/// - Payload size.
+/// - Exact SHA-256 digest.
+/// - Provenance fields.
+///
+/// A signature cannot therefore be reused for another artifact
+/// merely because its payload happens to be identical.
+fn signature_message(
+    artifact: &OutputArtifact,
+    expectation: &IntegrityExpectation,
+) -> ZurResult<Vec<u8>> {
+    let mut message = Vec::new();
+
+    append_field(
+        &mut message,
+        SIGNATURE_DOMAIN,
+    )?;
+
+    append_field(
+        &mut message,
+        expectation.artifact_id.as_bytes(),
+    )?;
+
+    append_field(
+        &mut message,
+        expectation.target.as_bytes(),
+    )?;
+
+    append_field(
+        &mut message,
+        expectation.format.as_bytes(),
+    )?;
+
+    append_field(
+        &mut message,
+        &expectation.size_bytes.to_be_bytes(),
+    )?;
+
+    append_field(
+        &mut message,
+        expectation.sha256_digest.as_bytes(),
+    )?;
+
+    match &artifact.provenance {
+        Some(provenance) => {
+            append_field(&mut message, b"provenance-present")?;
+
+            for value in [
+                provenance.backend.as_deref(),
+                provenance.backend_version.as_deref(),
+                provenance.input_identity.as_deref(),
+                provenance.stage.as_deref(),
+            ] {
+                match value {
+                    Some(value) => {
+                        append_field(&mut message, b"present")?;
+                        append_field(&mut message, value.as_bytes())?;
+                    }
+                    None => {
+                        append_field(&mut message, b"absent")?;
+                    }
+                }
+            }
+
+            let count = u64::try_from(
+                provenance.transformations.len(),
+            )
+            .map_err(|_| {
+                integrity_error(
+                    "provenance transformation count cannot be represented",
+                )
+            })?;
+
+            append_field(
+                &mut message,
+                &count.to_be_bytes(),
+            )?;
+
+            for transformation in &provenance.transformations {
+                append_field(
+                    &mut message,
+                    transformation.as_bytes(),
+                )?;
+            }
+        }
+
+        None => {
+            append_field(&mut message, b"provenance-absent")?;
+        }
+    }
+
+    Ok(message)
+}
+
+// ============================================================================
+// VERIFICATION RECEIPT
+// ============================================================================
+
+/// Immutable record of a completed integrity-verification operation.
+///
+/// A receipt is produced only after all mandatory checks have succeeded.
+///
+/// It is not an execution result, trust-store entry, resource reservation,
+/// semantic proof, or hardware compatibility guarantee.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationReceipt {
+    artifact_id: String,
+    target: String,
+    format: String,
+    sha256_digest: String,
+    policy_identity: String,
+    authority_identity: Option<String>,
+    signing_key_identity: Option<String>,
+    signature_verified: bool,
+    provenance_present: bool,
+}
+
+impl VerificationReceipt {
+    /// Returns the verified artifact identity.
+    #[must_use]
+    pub fn artifact_id(&self) -> &str {
+        &self.artifact_id
+    }
+
+    /// Returns the verified target identity.
+    #[must_use]
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+
+    /// Returns the verified artifact format.
+    #[must_use]
+    pub fn format(&self) -> &str {
+        &self.format
+    }
+
+    /// Returns the verified SHA-256 digest.
+    #[must_use]
+    pub fn sha256_digest(&self) -> &str {
+        &self.sha256_digest
+    }
+
+    /// Returns the policy that authorized verification.
+    #[must_use]
+    pub fn policy_identity(&self) -> &str {
+        &self.policy_identity
+    }
+
+    /// Returns the authority that resolved the signing identity.
+    #[must_use]
+    pub fn authority_identity(&self) -> Option<&str> {
+        self.authority_identity.as_deref()
+    }
+
+    /// Returns the signing key identity, if a signature was verified.
+    #[must_use]
+    pub fn signing_key_identity(&self) -> Option<&str> {
+        self.signing_key_identity.as_deref()
+    }
+
+    /// Whether a digital signature was successfully verified.
+    #[must_use]
+    pub const fn signature_verified(&self) -> bool {
+        self.signature_verified
+    }
+
+    /// Whether provenance metadata was present and validated.
+    #[must_use]
+    pub const fn provenance_present(&self) -> bool {
+        self.provenance_present
+    }
+}
+
+// ============================================================================
+// VERIFIER
+// ============================================================================
+
+/// Runtime artifact-integrity verification service.
+///
+/// The trust authority is explicitly injected.
+///
+/// No global mutable trust state or automatic key discovery is used.
+pub struct ArtifactIntegrityVerifier {
+    policy: IntegrityPolicy,
+    trust_authority: Option<Arc<dyn ArtifactTrustAuthority>>,
+}
+
+impl fmt::Debug for ArtifactIntegrityVerifier {
+    fn fmt(
+        &self,
+        formatter: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        formatter
+            .debug_struct("ArtifactIntegrityVerifier")
+            .field("policy", &self.policy)
+            .field(
+                "has_trust_authority",
+                &self.trust_authority.is_some(),
+            )
+            .finish()
+    }
+}
+
+impl ArtifactIntegrityVerifier {
+    /// Constructs an integrity verifier.
+    ///
+    /// A trust authority is mandatory when the policy requires
+    /// signature verification.
+    pub fn new(
+        policy: IntegrityPolicy,
+        trust_authority: Option<
+            Arc<dyn ArtifactTrustAuthority>,
+        >,
+    ) -> ZurResult<Self> {
+        if policy.requires_signature()
+            && trust_authority.is_none()
+        {
+            return Err(configuration_error(
+                "signature verification requires an injected trust authority",
+            ));
+        }
+
+        if let Some(authority) = &trust_authority {
+            validate_identifier(
+                authority.authority_identity(),
+                "trust authority identity",
+            )?;
+        }
+
+        Ok(Self {
+            policy,
+            trust_authority,
+        })
+    }
+
+    /// Returns the active integrity policy.
+    #[must_use]
+    pub fn policy(&self) -> &IntegrityPolicy {
+        &self.policy
+    }
+
+    /// Verifies one compiler-produced artifact.
+    ///
+    /// `expectation` must originate from an independently trusted
+    /// artifact manifest or authenticated distribution authority.
+    ///
+    /// `signature` is the detached artifact signature, when present.
+    ///
+    /// Verification order:
+    ///
+    /// 1. Validate artifact metadata.
+    /// 2. Compare artifact identity and target with trusted expectations.
+    /// 3. Compare exact payload size.
+    /// 4. Calculate the actual payload digest.
+    /// 5. Compare the actual digest with the trusted expected digest.
+    /// 6. Validate any digest already recorded on the artifact.
+    /// 7. Validate provenance.
+    /// 8. Verify the required signature against a trusted public key.
+    /// 9. Produce an immutable verification receipt.
+    ///
+    /// No receipt is produced if any mandatory check fails.
+    pub fn verify(
+        &self,
+        artifact: &OutputArtifact,
+        expectation: &IntegrityExpectation,
+        signature: Option<&ArtifactSignature>,
+    ) -> ZurResult<VerificationReceipt> {
+        // ------------------------------------------------------------
+        // 1. Canonical artifact metadata validation
+        // ------------------------------------------------------------
+
+        artifact.validate_metadata()
+            .map_err(|error| {
+                integrity_error(format!(
+                    "canonical artifact metadata validation failed: {error}"
+                ))
+            })?;
+
+        // ------------------------------------------------------------
+        // 2. Artifact identity and metadata binding
+        // ------------------------------------------------------------
+
+        let actual_id = artifact.id.to_string();
+
+        if actual_id != expectation.artifact_id {
+            return Err(integrity_error(
+                "artifact identity does not match the trusted expectation",
+            ));
+        }
+
+        if artifact.target != expectation.target {
+            return Err(integrity_error(
+                "artifact target does not match the trusted expectation",
+            ));
+        }
+
+        if artifact.format != expectation.format {
+            return Err(integrity_error(
+                "artifact format does not match the trusted expectation",
+            ));
+        }
+
+        // ------------------------------------------------------------
+        // 3. Payload size verification
+        // ------------------------------------------------------------
+
+        let actual_size = u64::try_from(
+            artifact.payload.len(),
+        )
+        .map_err(|_| {
+            integrity_error(
+                "artifact payload size cannot be represented",
+            )
+        })?;
+
+        if actual_size != expectation.size_bytes {
+            return Err(integrity_error(
+                "artifact payload size does not match the trusted expectation",
+            ));
+        }
+
+        // ------------------------------------------------------------
+        // 4. Calculate the digest from actual payload bytes
+        // ------------------------------------------------------------
+
+        let actual_digest = calculate_sha256(
+            artifact.payload.as_bytes(),
+        );
+
+        // ------------------------------------------------------------
+        // 5. Compare with independently supplied expected digest
+        // ------------------------------------------------------------
+
+        if actual_digest != expectation.sha256_digest {
+            return Err(integrity_error(
+                "artifact payload does not match the trusted SHA-256 digest",
+            ));
+        }
+
+        // ------------------------------------------------------------
+        // 6. Validate any artifact-recorded digest
+        // ------------------------------------------------------------
+
+        if let Some(recorded_digest) =
+            artifact.content_digest.as_deref()
+        {
+            validate_sha256(recorded_digest)?;
+
+            if recorded_digest != actual_digest {
+                return Err(integrity_error(
+                    "artifact-recorded digest does not match its payload",
+                ));
+            }
+        }
+
+        // ------------------------------------------------------------
+        // 7. Validate provenance
+        // ------------------------------------------------------------
+
+        if let Some(provenance) = &artifact.provenance {
+            provenance.validate()
+                .map_err(|error| {
+                    integrity_error(format!(
+                        "artifact provenance validation failed: {error}"
+                    ))
+                })?;
+        }
+
+        let provenance_present =
+            artifact.provenance.is_some();
+
+        if self.policy.requires_provenance()
+            && !provenance_present
+        {
+            return Err(integrity_error(
+                "the active integrity policy requires artifact provenance",
+            ));
+        }
+
+        // ------------------------------------------------------------
+        // 8. Signature verification
+        // ------------------------------------------------------------
+
+        let mut authority_identity = None;
+        let mut signing_key_identity = None;
+        let mut signature_verified = false;
+
+        match signature {
+            Some(signature) => {
+                let authority = self.trust_authority
+                    .as_ref()
+                    .ok_or_else(|| {
+                        configuration_error(
+                            "artifact signature supplied without a trust authority",
+                        )
+                    })?;
+
+                if signature.algorithm != "ed25519" {
+                    return Err(signature_error(
+                        "unsupported signature algorithm",
+                    ));
+                }
+
+                let resolved = authority.resolve_signing_key(
+                    &signature.key_identity,
+                )?;
+
+                let trusted_key = match resolved {
+                    SigningKeyResolution::Trusted(key) => key,
+
+                    SigningKeyResolution::Unknown => {
+                        return Err(trust_error(
+                            "artifact signing identity is unknown",
+                        ));
+                    }
+
+                    SigningKeyResolution::Revoked => {
+                        return Err(trust_error(
+                            "artifact signing identity has been revoked",
+                        ));
+                    }
+                };
+
+                if trusted_key.identity != signature.key_identity {
+                    return Err(trust_error(
+                        "resolved signing key identity does not match the requested identity",
+                    ));
+                }
+
+                let message = signature_message(
+                    artifact,
+                    expectation,
+                )?;
+
+                let parsed_signature =
+                    Signature::from_slice(
+                        &signature.signature,
+                    )
+                    .map_err(|_| {
+                        signature_error(
+                            "artifact signature encoding is invalid",
+                        )
+                    })?;
+
+                trusted_key.verifying_key
+                    .verify(
+                        &message,
+                        &parsed_signature,
+                    )
+                    .map_err(|_| {
+                        signature_error(
+                            "artifact digital signature verification failed",
+                        )
+                    })?;
+
+                authority_identity = Some(
+                    authority.authority_identity().to_owned(),
+                );
+
+                signing_key_identity = Some(
+                    trusted_key.identity,
+                );
+
+                signature_verified = true;
+            }
+
+            None if self.policy.requires_signature() => {
+                return Err(signature_error(
+                    "artifact signature is required by the active integrity policy",
+                ));
+            }
+
+            None => {
+                // An explicitly configured policy may permit unsigned
+                // artifacts. Their digest still must match the independently
+                // trusted expectation.
+            }
+        }
+
+        // ------------------------------------------------------------
+        // 9. Produce the verification receipt
+        // ------------------------------------------------------------
+
+        Ok(VerificationReceipt {
+            artifact_id: actual_id,
+            target: artifact.target.clone(),
+            format: artifact.format.clone(),
+            sha256_digest: actual_digest,
+            policy_identity: self.policy.identity.clone(),
+            authority_identity,
+            signing_key_identity,
+            signature_verified,
+            provenance_present,
+        })
+    }
+}
+
+// ============================================================================
+// INTEGRATION HELPERS
+// ============================================================================
+
+/// Verifies an artifact against a canonical expected digest.
+///
+/// This is useful for artifact pipelines that already have an
+/// authenticated manifest but do not require detached signatures.
+///
+/// The caller must still establish the authenticity of the manifest
+/// through the appropriate compiler/distribution trust authority.
+pub fn verify_digest_only(
+    artifact: &OutputArtifact,
+    expectation: &IntegrityExpectation,
+) -> ZurResult<String> {
+    artifact.validate_metadata()
+        .map_err(|error| {
+            integrity_error(format!(
+                "artifact metadata validation failed: {error}"
+            ))
+        })?;
+
+    if artifact.id.to_string() != expectation.artifact_id {
+        return Err(integrity_error(
+            "artifact identity does not match the expected identity",
+        ));
+    }
+
+    if artifact.target != expectation.target
+        || artifact.format != expectation.format
+    {
+        return Err(integrity_error(
+            "artifact metadata does not match the expected metadata",
+        ));
+    }
+
+    let actual_size = u64::try_from(
+        artifact.payload.len(),
+    )
+    .map_err(|_| {
+        integrity_error(
+            "artifact payload size cannot be represented",
+        )
+    })?;
+
+    if actual_size != expectation.size_bytes {
+        return Err(integrity_error(
+            "artifact payload size does not match the expected size",
+        ));
+    }
+
+    let actual = calculate_sha256(
+        artifact.payload.as_bytes(),
+    );
+
+    if actual != expectation.sha256_digest {
+        return Err(integrity_error(
+            "artifact digest verification failed",
+        ));
+    }
+
+    if let Some(recorded) = artifact.content_digest.as_deref() {
+        validate_sha256(recorded)?;
+
+        if recorded != actual {
+            return Err(integrity_error(
+                "artifact-recorded digest is inconsistent",
+            ));
+        }
+    }
+
+    Ok(actual)
+}
+
+// ============================================================================
+// TESTS
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use ed25519_dalek::{
+        Signer,
+        SigningKey,
+    };
+
+    use std::sync::atomic::{
+        AtomicUsize,
+        Ordering,
+    };
+
+    struct TestTrustAuthority {
+        key: TrustedSigningKey,
+        calls: AtomicUsize,
+    }
+
+    impl ArtifactTrustAuthority for TestTrustAuthority {
+        fn authority_identity(&self) -> &str {
+            "zamani.test.trust"
+        }
+
+        fn resolve_signing_key(
+            &self,
+            identity: &str,
+        ) -> ZurResult<SigningKeyResolution> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+
+            if identity == self.key.identity() {
+                Ok(SigningKeyResolution::Trusted(
+                    self.key.clone(),
+                ))
+            } else {
+                Ok(SigningKeyResolution::Unknown)
+            }
+        }
+    }
+
+    struct UnknownTrustAuthority;
+
+    impl ArtifactTrustAuthority for UnknownTrustAuthority {
+        fn authority_identity(&self) -> &str {
+            "zamani.test.unknown"
+        }
+
+        fn resolve_signing_key(
+            &self,
+            _identity: &str,
+        ) -> ZurResult<SigningKeyResolution> {
+            Ok(SigningKeyResolution::Unknown)
+        }
+    }
+
+    #[test]
+    fn sha256_is_deterministic() {
+        let first = calculate_sha256(b"zamani");
+        let second = calculate_sha256(b"zamani");
+
+        assert_eq!(first, second);
+        assert!(first.starts_with("sha256:"));
+        assert_eq!(first.len(), 71);
+    }
+
+    #[test]
+    fn sha256_distinguishes_different_payloads() {
+        assert_ne!(
+            calculate_sha256(b"first"),
+            calculate_sha256(b"second"),
+        );
+    }
+
+    #[test]
+    fn sha256_handles_empty_payload() {
+        assert_eq!(
+            calculate_sha256(b""),
+            "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_digest_algorithm() {
+        assert!(
+            validate_sha256("sha3:abcd").is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_digest_length() {
+        assert!(
+            validate_sha256("sha256:abcd").is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_noncanonical_uppercase_digest() {
+        let digest = calculate_sha256(b"zamani")
+            .to_uppercase();
+
+        assert!(
+            validate_sha256(&digest).is_err()
+        );
+    }
+
+    #[test]
+    fn accepts_canonical_digest() {
+        assert!(
+            validate_sha256(
+                &calculate_sha256(b"zamani")
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn rejects_empty_artifact_identity() {
+        assert!(
+            IntegrityExpectation::new(
+                "",
+                "host",
+                "native",
+                0,
+                calculate_sha256(b""),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_empty_target() {
+        assert!(
+            IntegrityExpectation::new(
+                "artifact.one",
+                "",
+                "native",
+                0,
+                calculate_sha256(b""),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_signature_algorithm() {
+        assert!(
+            ArtifactSignature::new(
+                "test.key",
+                "unknown-algorithm",
+                vec![0; 64],
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_signature_length() {
+        assert!(
+            ArtifactSignature::new(
+                "test.key",
+                "ed25519",
+                vec![0; 32],
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn constructs_valid_ed25519_trusted_key() {
+        let signing_key =
+            SigningKey::from_bytes(&[7u8; 32]);
+
+        let trusted = TrustedSigningKey::new(
+            "zamani.test.key",
+            signing_key.verifying_key().to_bytes(),
+        );
+
+        assert!(trusted.is_ok());
+    }
+
+    #[test]
+    fn default_policy_requires_signature() {
+        let policy = IntegrityPolicy::default();
+
+        assert!(policy.requires_signature());
+        assert!(!policy.requires_provenance());
+    }
+
+    #[test]
+    fn signature_policy_requires_trust_authority() {
+        let result = ArtifactIntegrityVerifier::new(
+            IntegrityPolicy::default(),
+            None,
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn unsigned_policy_can_be_constructed_without_authority() {
+        let policy = IntegrityPolicy::new(
+            "zamani.test.unsigned-policy",
+            false,
+            false,
+        )
+        .expect("valid policy");
+
+        let verifier = ArtifactIntegrityVerifier::new(
+            policy,
+            None,
+        );
+
+        assert!(verifier.is_ok());
+    }
+
+    #[test]
+    fn trust_authority_rejects_unknown_signing_identity() {
+        let authority = UnknownTrustAuthority;
+
+        let result = authority.resolve_signing_key(
+            "zamani.unknown.key",
+        );
+
+        assert!(matches!(
+            result,
+            Ok(SigningKeyResolution::Unknown)
+        ));
+    }
+
+    #[test]
+    fn trusted_key_identity_is_preserved() {
+        let signing_key =
+            SigningKey::from_bytes(&[9u8; 32]);
+
+        let key = TrustedSigningKey::new(
+            "zamani.test.signer",
+            signing_key.verifying_key().to_bytes(),
+        )
+        .expect("valid public key");
+
+        assert_eq!(
+            key.identity(),
+            "zamani.test.signer",
+        );
+    }
+
+    #[test]
+    fn test_authority_has_no_implicit_global_state() {
+        let signing_key =
+            SigningKey::from_bytes(&[3u8; 32]);
+
+        let key = TrustedSigningKey::new(
+            "zamani.test.signer",
+            signing_key.verifying_key().to_bytes(),
+        )
+        .expect("valid key");
+
+        let authority = TestTrustAuthority {
+            key,
+            calls: AtomicUsize::new(0),
+        };
+
+        assert_eq!(
+            authority.authority_identity(),
+            "zamani.test.trust",
+        );
+
+        assert_eq!(
+            authority.calls.load(Ordering::SeqCst),
+            0,
+        );
+    }
+}
