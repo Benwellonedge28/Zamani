@@ -6,338 +6,234 @@
 
 //! # Zamani Toolchain — Workspace Metadata
 //!
-//! Path: src/toolchain/workspace/metadata.rs
-//! Edition: Rust 2021
-//! Minimum Rust version: 1.97
+//! Path: `src/toolchain/workspace/metadata.rs`
+//! Edition: Rust 2021.
+//! Minimum Rust version: 1.97.
 //! Safety: Safe Rust only.
 //!
 //! ## Purpose
 //!
-//! Produces immutable, deterministic metadata snapshots for explicitly
-//! discovered Zamani workspaces.
-//!
-//! A snapshot can describe:
-//!
-//! - Workspace identity.
-//! - Canonical workspace location.
-//! - Workspace and package manifests.
-//! - Resolved workspace members.
-//! - Project identities.
-//! - Project layout inputs.
-//! - Source-file inventories.
-//! - Content fingerprints.
+//! Constructs deterministic workspace and project metadata from validated
+//! workspace membership, project layouts, manifests and source contents.
 //!
 //! ## Ownership
 //!
-//! This module owns metadata aggregation and content fingerprinting.
+//! This module owns:
 //!
-//! It does not own:
+//! - Workspace metadata snapshots.
+//! - Project metadata snapshots.
+//! - Source inventory completeness.
+//! - Manifest and source content fingerprints.
+//! - Workspace and project fingerprints.
+//! - Deterministic metadata aggregation.
+//! - Detection of overlapping project source inventories.
 //!
+//! This module does not own:
+//!
+//! - Project or workspace identity allocation.
 //! - Workspace discovery.
-//! - Workspace or project identity allocation.
-//! - Manifest parsing.
 //! - Workspace member resolution.
-//! - Project layout discovery.
+//! - Manifest parsing or interpretation.
+//! - Source-layout discovery.
 //! - Dependency resolution.
-//! - Compiler or IR versioning.
-//! - Hardware discovery.
-//! - Target selection.
-//! - Runtime execution.
+//! - Compiler or IR fingerprints.
+//! - Backend or hardware fingerprints.
+//! - Build execution or caching.
+//! - Cryptographic signing or trust decisions.
 //!
 //! ## Integration
 //!
-//! Consumes:
+//! - `super::discovery` owns project/workspace discovery.
+//! - `super::layout` owns project-layout inspection and source traversal.
+//! - `super::members` owns validated workspace membership.
+//! - `crate::toolchain::ids` owns project/workspace identities.
+//! - `crate::toolchain::errors` owns error classification.
+//! - `crate::toolchain::result` owns result aliases.
+//! - `sha2` provides SHA-256.
 //!
-//! - super::discovery::DiscoveryResult
-//! - super::discovery::DiscoveredManifest
-//! - super::layout::ProjectLayout
-//! - super::members::WorkspaceMembers
-//! - crate::toolchain::ids::{WorkspaceId, ProjectId}
-//! - crate::toolchain::errors::ToolchainError
-//! - crate::toolchain::result::Result
+//! Future consumers:
 //!
-//! The canonical manifest parser remains:
+//! - `build::inputs`.
+//! - `build::incremental`.
+//! - `dependencies::lockfile`.
+//! - `environments::fingerprints`.
+//! - `security::provenance`.
 //!
-//! - crate::zamani_project_config
+//! ## Fingerprint semantics
 //!
-//! The caller supplies validated discovery, layout and member results.
-//! This module does not parse Zamani.toml independently.
+//! Content fingerprints identify file contents and file roles.
+//! They deliberately do not include filesystem paths.
 //!
-//! ## Fingerprint contract
+//! Project fingerprints additionally identify project-relative paths.
 //!
-//! The workspace fingerprint is SHA-256 over a versioned, domain-separated,
-//! deterministic stream of:
+//! Workspace fingerprints identify the ordered workspace composition,
+//! project identities, relative paths, manifest contents, source contents
+//! and source-inventory completeness.
 //!
-//! - Metadata schema identity.
-//! - Workspace manifest content, when present.
-//! - Root package manifest content, when present.
-//! - Resolved member identities and relative paths.
-//! - Member package manifest contents.
-//! - Project layout source-file inventories.
-//! - Source-file contents.
-//!
-//! Absolute filesystem paths, filesystem timestamps and machine-specific
-//! properties are excluded.
-//!
-//! File paths are represented relative to the workspace root.
-//!
-//! A relocation that preserves the relative layout and contents therefore
-//! does not change the fingerprint.
-//!
-//! Fingerprints are content identities, not persistent workspace IDs.
+//! These fingerprints are not cryptographic signatures.
 //!
 //! ## Scalability
 //!
-//! This module imposes no arbitrary limits on:
+//! No arbitrary maximum workspace size, project count, member count,
+//! source-file count, file size, directory depth, computational domain,
+//! target count or hardware-resource count is imposed.
 //!
-//! - Workspace members.
-//! - Project count.
-//! - Source-file count.
-//! - Directory depth.
-//! - Computational domains.
-//! - Targets.
-//! - Hardware resources.
-//! - Distributed participants.
+//! File contents are hashed incrementally. Entire files are never loaded
+//! into memory merely to calculate their fingerprints.
 //!
-//! Source files are hashed incrementally. Their contents are not loaded
-//! entirely into memory.
+//! Memory use is proportional to metadata records, path representations,
+//! traversal state and the configured filesystem implementation.
 //!
-//! Memory consumption remains proportional to the metadata and file-path
-//! inventories being collected, subject to available process resources.
+//! All operations remain subject to available memory, storage, address
+//! space, operating-system permissions and filesystem capabilities.
 //!
-//! No implementation can promise literal infinite storage or execution.
-//!
-//! ## Determinism
-//!
-//! - Members are consumed in their existing deterministic order.
-//! - Layouts are sorted by workspace-relative project path.
-//! - Source files are sorted by workspace-relative path.
-//! - Manifest and source content are hashed in deterministic order.
-//! - Timestamps and absolute paths are excluded.
-//! - Non-UTF-8 relative paths are rejected rather than ambiguously encoded.
+//! Literal infinite storage or execution is not promised.
 //!
 //! ## Security
 //!
 //! - No unsafe Rust.
 //! - No shell execution.
 //! - No external process execution.
-//! - No manifest content execution.
-//! - Symlinked metadata inputs are rejected.
-//! - Canonical paths must remain within the workspace.
-//! - File changes during fingerprinting are detected where observable.
-//! - I/O failures preserve their original causal errors.
-//! - Incomplete fingerprints are never returned as successful results.
+//! - No manifest execution.
+//! - No automatic modification of project files.
+//! - No following source-directory symlinks through layout traversal.
+//! - No silent treatment of unreadable files as empty files.
+//! - No acceptance of paths outside their owning project.
+//! - File changes observed during hashing are reported.
 //!
-//! Portable filesystem APIs cannot eliminate all adversarial
-//! time-of-check/time-of-use races. Filesystem permissions and isolation
-//! remain necessary when processing hostile shared directories.
+//! Standard portable filesystem APIs cannot eliminate every hostile
+//! time-of-check/time-of-use race. Adversarial shared filesystems require
+//! appropriate filesystem permissions or an OS-specific handle-relative
+//! filesystem implementation.
 
-use crate::toolchain::errors::ToolchainError;
-use crate::toolchain::ids::{ProjectId, WorkspaceId};
+use crate::toolchain::errors::{
+    ToolchainError,
+    ToolchainErrorKind,
+};
+use crate::toolchain::ids::{
+    ProjectId,
+    WorkspaceId,
+};
 use crate::toolchain::result::Result;
 
-use super::discovery::{
-    DiscoveredManifest,
-    DiscoveryResult,
-};
 use super::layout::ProjectLayout;
-use super::members::{
-    WorkspaceMember,
-    WorkspaceMembers,
-};
+use super::members::WorkspaceMembers;
 
 use sha2::{Digest, Sha256};
 
-use std::collections::BTreeSet;
-use std::fmt;
-use std::fs::{self, File};
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
+};
+use std::fs::{self, File, Metadata};
 use std::io::{self, Read};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 // ============================================================================
-// FORMAT CONTRACT
+// FINGERPRINT FORMAT
 // ============================================================================
 
-/// Stable identifier for the workspace metadata fingerprint format.
+/// Algorithm used for metadata content fingerprints.
 ///
-/// Changing the meaning or ordering of hashed fields requires a new format
-/// identifier. Existing fingerprints must never silently change meaning.
-pub const METADATA_FINGERPRINT_FORMAT: &str =
-    "zamani.workspace.metadata.sha256.v1";
+/// The identifier is part of the public fingerprint format contract.
+pub const FINGERPRINT_ALGORITHM: &str = "sha256";
 
-/// Name of the fingerprint algorithm.
-pub const METADATA_FINGERPRINT_ALGORITHM: &str = "sha256";
-
-/// Streaming read buffer size.
+/// Version of the workspace metadata fingerprint format.
 ///
-/// This is an internal I/O batching choice, not a file-size limit.
-/// Files of any size supported by the operating system are processed
-/// incrementally.
-const READ_BUFFER_SIZE: usize = 64 * 1024;
-
-/// Domain-separation prefix for workspace metadata fingerprints.
-const FINGERPRINT_DOMAIN: &[u8] =
-    b"ZAMANI-WORKSPACE-METADATA\0";
-
-// ============================================================================
-// FINGERPRINT
-// ============================================================================
-
-/// A SHA-256 workspace metadata fingerprint.
+/// Increment this when the canonical fingerprint serialization changes
+/// incompatibly.
 ///
-/// The digest is independent of the workspace's absolute location and
-/// filesystem timestamps.
-///
-/// The fingerprint format identifier is exposed separately so that
-/// consumers never need to infer the encoding or hashing contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WorkspaceFingerprint {
-    digest: [u8; 32],
-}
-
-impl WorkspaceFingerprint {
-    /// Construct a fingerprint from a SHA-256 digest.
-    #[must_use]
-    pub const fn from_digest(digest: [u8; 32]) -> Self {
-        Self { digest }
-    }
-
-    /// Borrow the raw digest bytes.
-    #[must_use]
-    pub const fn as_bytes(&self) -> &[u8; 32] {
-        &self.digest
-    }
-
-    /// Return the canonical lowercase hexadecimal digest.
-    #[must_use]
-    pub fn to_hex(self) -> String {
-        let mut output = String::with_capacity(64);
-
-        for byte in self.digest {
-            use fmt::Write as _;
-
-            // Writing into String is infallible.
-            let _ = write!(&mut output, "{byte:02x}");
-        }
-
-        output
-    }
-
-    /// Return the fingerprint algorithm identifier.
-    #[must_use]
-    pub const fn algorithm(&self) -> &'static str {
-        METADATA_FINGERPRINT_ALGORITHM
-    }
-
-    /// Return the fingerprint format identifier.
-    #[must_use]
-    pub const fn format(&self) -> &'static str {
-        METADATA_FINGERPRINT_FORMAT
-    }
-}
-
-impl fmt::Display for WorkspaceFingerprint {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{}:{}",
-            self.format(),
-            self.to_hex()
-        )
-    }
-}
+/// This version is independent of the Zamani language, compiler,
+/// manifest and package-format versions.
+pub const FINGERPRINT_FORMAT_VERSION: u32 = 1;
 
 // ============================================================================
-// MANIFEST METADATA
+// FILE ROLES
 // ============================================================================
 
-/// Classification of a manifest included in workspace metadata.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ManifestRole {
+/// Semantic role of a file included in a metadata fingerprint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MetadataFileRole {
     /// Explicit workspace manifest.
-    Workspace,
+    WorkspaceManifest,
 
-    /// Package manifest belonging to a project.
-    Package,
+    /// Individual project manifest.
+    ProjectManifest,
+
+    /// Zamani source file.
+    Source,
 }
 
-/// Metadata describing one manifest without duplicating its parser.
-///
-/// `relative_path` is relative to the workspace root.
-/// `content_fingerprint` is the SHA-256 digest of the original manifest
-/// bytes, not a normalized TOML representation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ManifestMetadata {
-    role: ManifestRole,
-    relative_path: PathBuf,
-    content_fingerprint: WorkspaceFingerprint,
-    size_bytes: u64,
-}
-
-impl ManifestMetadata {
-    /// Return the manifest role.
+impl MetadataFileRole {
+    /// Return the stable textual role identifier.
     #[must_use]
-    pub const fn role(&self) -> ManifestRole {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::WorkspaceManifest => "workspace-manifest",
+            Self::ProjectManifest => "project-manifest",
+            Self::Source => "source",
+        }
+    }
+}
+
+// ============================================================================
+// FILE METADATA
+// ============================================================================
+
+/// Content fingerprint and identity of one inspected file.
+///
+/// `content_fingerprint` represents the file's bytes and semantic role.
+/// It deliberately excludes its filesystem path.
+///
+/// `relative_path` identifies its location within the owning workspace.
+///
+/// Paths use `/` as their portable separator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MetadataFile {
+    relative_path: String,
+    role: MetadataFileRole,
+    size_bytes: u64,
+    content_fingerprint: String,
+}
+
+impl MetadataFile {
+    fn new(
+        relative_path: String,
+        role: MetadataFileRole,
+        size_bytes: u64,
+        content_fingerprint: String,
+    ) -> Self {
+        Self {
+            relative_path,
+            role,
+            size_bytes,
+            content_fingerprint,
+        }
+    }
+
+    /// Return the normalized workspace-relative path.
+    #[must_use]
+    pub fn relative_path(&self) -> &str {
+        &self.relative_path
+    }
+
+    /// Return the semantic file role.
+    #[must_use]
+    pub const fn role(&self) -> MetadataFileRole {
         self.role
     }
 
-    /// Return the workspace-relative manifest path.
-    #[must_use]
-    pub fn relative_path(&self) -> &Path {
-        &self.relative_path
-    }
-
-    /// Return the manifest content fingerprint.
-    #[must_use]
-    pub const fn content_fingerprint(
-        &self,
-    ) -> WorkspaceFingerprint {
-        self.content_fingerprint
-    }
-
-    /// Return the manifest size in bytes.
+    /// Return the number of bytes read.
     #[must_use]
     pub const fn size_bytes(&self) -> u64 {
         self.size_bytes
     }
-}
 
-// ============================================================================
-// SOURCE METADATA
-// ============================================================================
-
-/// Metadata describing one inspected source file.
-///
-/// Paths are workspace-relative, not absolute.
-///
-/// The digest represents the file bytes observed during snapshot
-/// construction.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SourceFileMetadata {
-    relative_path: PathBuf,
-    content_fingerprint: WorkspaceFingerprint,
-    size_bytes: u64,
-}
-
-impl SourceFileMetadata {
-    /// Return the workspace-relative source path.
+    /// Return the SHA-256 content fingerprint.
     #[must_use]
-    pub fn relative_path(&self) -> &Path {
-        &self.relative_path
-    }
-
-    /// Return the source-file content fingerprint.
-    #[must_use]
-    pub const fn content_fingerprint(
-        &self,
-    ) -> WorkspaceFingerprint {
-        self.content_fingerprint
-    }
-
-    /// Return the observed file size.
-    #[must_use]
-    pub const fn size_bytes(&self) -> u64 {
-        self.size_bytes
+    pub fn content_fingerprint(&self) -> &str {
+        &self.content_fingerprint
     }
 }
 
@@ -345,58 +241,87 @@ impl SourceFileMetadata {
 // PROJECT METADATA
 // ============================================================================
 
-/// Metadata describing one resolved project in a workspace.
+/// Immutable metadata snapshot for one workspace project.
 ///
-/// The project identity is supplied by the existing identity authority.
-/// This module never generates or guesses project IDs.
+/// A project can have a successfully inspected empty source inventory.
+/// That is different from a source inventory that has not been collected.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceProjectMetadata {
-    project_id: Option<ProjectId>,
-    relative_root: PathBuf,
-    package_manifest: Option<ManifestMetadata>,
-    source_files: Vec<SourceFileMetadata>,
-    source_fingerprint: WorkspaceFingerprint,
+    project_id: ProjectId,
+    relative_root: String,
+    manifest: MetadataFile,
+    source_files: Vec<MetadataFile>,
+    source_inventory_complete: bool,
+    content_fingerprint: String,
+    project_fingerprint: String,
 }
 
 impl WorkspaceProjectMetadata {
-    /// Return the supplied persistent project identity, if available.
-    #[must_use]
-    pub fn project_id(&self) -> Option<&ProjectId> {
-        self.project_id.as_ref()
+    fn new(
+        project_id: ProjectId,
+        relative_root: String,
+        manifest: MetadataFile,
+        source_files: Vec<MetadataFile>,
+        source_inventory_complete: bool,
+        content_fingerprint: String,
+        project_fingerprint: String,
+    ) -> Self {
+        Self {
+            project_id,
+            relative_root,
+            manifest,
+            source_files,
+            source_inventory_complete,
+            content_fingerprint,
+            project_fingerprint,
+        }
     }
 
-    /// Return the project root relative to the workspace.
+    /// Return the authoritative project identity.
     #[must_use]
-    pub fn relative_root(&self) -> &Path {
+    pub fn project_id(&self) -> &ProjectId {
+        &self.project_id
+    }
+
+    /// Return the workspace-relative project root.
+    #[must_use]
+    pub fn relative_root(&self) -> &str {
         &self.relative_root
     }
 
-    /// Return package-manifest metadata, when available.
+    /// Return the project manifest metadata.
     #[must_use]
-    pub fn package_manifest(&self) -> Option<&ManifestMetadata> {
-        self.package_manifest.as_ref()
+    pub fn manifest(&self) -> &MetadataFile {
+        &self.manifest
     }
 
     /// Borrow the deterministically ordered source-file metadata.
     #[must_use]
-    pub fn source_files(&self) -> &[SourceFileMetadata] {
+    pub fn source_files(&self) -> &[MetadataFile] {
         &self.source_files
     }
 
-    /// Return the number of inspected source files.
+    /// Return whether the source inventory was actually collected.
     #[must_use]
-    pub fn source_file_count(&self) -> usize {
-        self.source_files.len()
+    pub const fn source_inventory_complete(&self) -> bool {
+        self.source_inventory_complete
     }
 
-    /// Return the source inventory and content fingerprint.
+    /// Return the project content fingerprint.
     ///
-    /// This is distinct from the complete workspace fingerprint.
+    /// This fingerprint excludes project-relative paths.
     #[must_use]
-    pub const fn source_fingerprint(
-        &self,
-    ) -> WorkspaceFingerprint {
-        self.source_fingerprint
+    pub fn content_fingerprint(&self) -> &str {
+        &self.content_fingerprint
+    }
+
+    /// Return the project fingerprint.
+    ///
+    /// This fingerprint includes the project-relative path and file
+    /// identities in addition to the content fingerprint.
+    #[must_use]
+    pub fn project_fingerprint(&self) -> &str {
+        &self.project_fingerprint
     }
 }
 
@@ -404,487 +329,467 @@ impl WorkspaceProjectMetadata {
 // WORKSPACE METADATA
 // ============================================================================
 
-/// Immutable metadata snapshot of a validated workspace.
+/// Deterministic snapshot of an inspected Zamani workspace.
 ///
-/// The snapshot does not watch the filesystem. Callers must build another
-/// snapshot to observe changes made after construction.
+/// This structure is immutable after construction.
 ///
-/// The workspace ID is persistent identity supplied by the caller.
-/// The fingerprint describes the observed content and structure.
+/// It does not monitor subsequent filesystem changes. Construct a new
+/// snapshot whenever updated workspace metadata is required.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceMetadata {
     workspace_id: WorkspaceId,
-    canonical_root: PathBuf,
-    explicit_workspace: bool,
-    workspace_manifest: Option<ManifestMetadata>,
-    root_package_manifest: Option<ManifestMetadata>,
+    workspace_root: PathBuf,
+    workspace_manifest: MetadataFile,
     projects: Vec<WorkspaceProjectMetadata>,
-    fingerprint: WorkspaceFingerprint,
-    total_source_bytes: u64,
-    total_manifest_bytes: u64,
+    source_inventory_complete: bool,
+    content_fingerprint: String,
+    workspace_fingerprint: String,
 }
 
 impl WorkspaceMetadata {
-    /// Build a complete metadata snapshot from validated upstream results.
+    /// Collect metadata for a resolved workspace.
     ///
-    /// `workspace_id` must come from the persistent identity authority.
+    /// `members` must be a previously validated `WorkspaceMembers`
+    /// collection.
     ///
-    /// `discovery` must be a successful result from workspace discovery.
+    /// `workspace_manifest` must identify the actual workspace manifest.
+    /// It is supplied explicitly because discovery permits configurable
+    /// manifest filenames.
     ///
-    /// `layouts` contains the already inspected layouts for the projects
-    /// whose source contents should participate in the fingerprint.
+    /// `layouts` contains one inspected `ProjectLayout` for each resolved
+    /// workspace member.
     ///
-    /// `members` supplies validated member identities and paths for an
-    /// explicit workspace. It must refer to the same workspace root.
+    /// Every member must have exactly one corresponding layout.
     ///
-    /// A standalone project may pass `None` for `members`.
+    /// Project layouts must have been inspected from the same canonical
+    /// project roots as their corresponding workspace members.
     ///
-    /// For a workspace with multiple package projects, provide a layout
-    /// for every member whose source contents must be covered by the
-    /// fingerprint. A missing layout is not interpreted as an empty source
-    /// project: it is simply not included in the source inventory.
-    ///
-    /// The workspace and package manifests are always fingerprinted when
-    /// present in discovery.
+    /// The workspace manifest and project manifests are read as bytes.
+    /// Manifest interpretation remains the responsibility of the
+    /// canonical manifest subsystem.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
+    /// Returns an error when:
     ///
-    /// - Discovery did not identify a project or workspace.
-    /// - The workspace root cannot be established.
-    /// - Supplied members belong to another workspace.
-    /// - A layout is outside the workspace or is not a known project root.
-    /// - A manifest or source file is missing or inaccessible.
-    /// - A file is a symbolic link or not a regular file.
-    /// - A relative path cannot be represented portably as UTF-8.
-    /// - A file changes while it is being fingerprinted.
-    /// - An integer accounting operation overflows.
-    /// - Any filesystem operation fails.
-    pub fn build(
-        workspace_id: WorkspaceId,
-        discovery: &DiscoveryResult,
-        layouts: &[ProjectLayout],
-        members: Option<&WorkspaceMembers>,
+    /// - The workspace manifest is missing or unreadable.
+    /// - A project manifest is missing or unreadable.
+    /// - A project layout is missing or duplicated.
+    /// - A layout belongs to a different project root.
+    /// - A source file cannot be read.
+    /// - A source file changes during fingerprint collection.
+    /// - A source path cannot be represented portably.
+    /// - Two projects contain the same canonical source file.
+    /// - A source file escapes its project root.
+    /// - A filesystem operation fails.
+    pub fn collect(
+        members: &WorkspaceMembers,
+        workspace_manifest: impl AsRef<Path>,
+        layouts: &[(ProjectId, ProjectLayout)],
     ) -> Result<Self> {
-        if !discovery.is_successful() {
-            return Err(
-                ToolchainError::invalid_input(
-                    "workspace metadata requires successful project or workspace discovery",
-                )
-                .with_operation("workspace.metadata.build"),
-            );
-        }
-
-        let root = discovery
-            .effective_workspace_root()
-            .ok_or_else(|| {
-                ToolchainError::internal(
-                    "successful discovery has no effective workspace root",
-                )
-                .with_operation("workspace.metadata.build")
-            })?;
-
-        let canonical_root = fs::canonicalize(root).map_err(|error| {
-            io_error(
-                "workspace.metadata.canonicalize_root",
-                root,
+        let workspace_root = fs::canonicalize(
+            members.workspace_root(),
+        )
+        .map_err(|error| {
+            filesystem_error(
+                "workspace.metadata.canonicalize_workspace_root",
+                members.workspace_root(),
                 error,
             )
         })?;
 
-        validate_directory(&canonical_root)?;
+        let workspace_manifest_path = canonical_regular_file(
+            workspace_manifest.as_ref(),
+            "workspace.metadata.workspace_manifest",
+        )?;
 
-        let explicit_workspace = discovery.has_explicit_workspace();
+        ensure_contained(
+            &workspace_root,
+            &workspace_manifest_path,
+            "workspace.metadata.validate_workspace_manifest",
+        )?;
 
-        if let Some(members) = members {
-            if !explicit_workspace {
+        let workspace_manifest_metadata = collect_file(
+            &workspace_root,
+            &workspace_manifest_path,
+            MetadataFileRole::WorkspaceManifest,
+        )?;
+
+        // Build an identity index for layouts. Duplicate project identities
+        // are rejected rather than silently overwritten.
+        let mut layout_index: BTreeMap<
+            ProjectId,
+            &ProjectLayout,
+        > = BTreeMap::new();
+
+        for (project_id, layout) in layouts {
+            if layout_index.insert(
+                project_id.clone(),
+                layout,
+            ).is_some() {
                 return Err(
-                    ToolchainError::invalid_input(
-                        "resolved workspace members require an explicit workspace manifest",
+                    ToolchainError::new(
+                        ToolchainErrorKind::AlreadyExists,
+                        "multiple project layouts were supplied for one project identity",
                     )
-                    .with_operation("workspace.metadata.build"),
+                    .with_operation("workspace.metadata.collect")
+                    .with_context(project_id.to_string()),
                 );
             }
+        }
 
-            let member_root = fs::canonicalize(
-                members.workspace_root(),
+        let mut projects = Vec::new();
+
+        let mut all_sources: BTreeMap<
+            PathBuf,
+            ProjectId,
+        > = BTreeMap::new();
+
+        let mut workspace_content_hasher = Sha256::new();
+        let mut workspace_hasher = Sha256::new();
+
+        hash_header(
+            &mut workspace_content_hasher,
+            b"zamani-workspace-content",
+        );
+
+        hash_header(
+            &mut workspace_hasher,
+            b"zamani-workspace-metadata",
+        );
+
+        hash_field(
+            &mut workspace_content_hasher,
+            b"fingerprint-algorithm",
+            FINGERPRINT_ALGORITHM.as_bytes(),
+        );
+
+        hash_field(
+            &mut workspace_hasher,
+            b"fingerprint-algorithm",
+            FINGERPRINT_ALGORITHM.as_bytes(),
+        );
+
+        hash_u64(
+            &mut workspace_hasher,
+            b"fingerprint-format-version",
+            u64::from(FINGERPRINT_FORMAT_VERSION),
+        );
+
+        hash_file(
+            &mut workspace_content_hasher,
+            &workspace_manifest_metadata,
+        );
+
+        hash_file(
+            &mut workspace_hasher,
+            &workspace_manifest_metadata,
+        );
+
+        for member in members.iter() {
+            let project_id = member.project_id();
+
+            let layout = layout_index
+                .remove(project_id)
+                .ok_or_else(|| {
+                    ToolchainError::new(
+                        ToolchainErrorKind::NotFound,
+                        "a resolved workspace member has no corresponding inspected project layout",
+                    )
+                    .with_operation("workspace.metadata.collect")
+                    .with_context(project_id.to_string())
+                })?;
+
+            let canonical_member_root = fs::canonicalize(
+                member.canonical_root(),
             )
             .map_err(|error| {
-                io_error(
-                    "workspace.metadata.canonicalize_members_root",
-                    members.workspace_root(),
+                filesystem_error(
+                    "workspace.metadata.canonicalize_project_root",
+                    member.canonical_root(),
                     error,
                 )
             })?;
 
-            if member_root != canonical_root
-                || members.workspace_id() != &workspace_id
-            {
+            if canonical_member_root != layout.project_root() {
                 return Err(
-                    ToolchainError::validation_failed(
-                        "workspace identity or root does not match the supplied member collection",
+                    ToolchainError::new(
+                        ToolchainErrorKind::ValidationFailed,
+                        "project layout root does not match its resolved workspace member",
                     )
-                    .with_operation("workspace.metadata.build"),
+                    .with_operation("workspace.metadata.collect")
+                    .with_context(project_id.to_string()),
                 );
             }
-        }
 
-        let mut projects = collect_project_descriptors(
-            &canonical_root,
-            discovery,
-            members,
-        )?;
-
-        validate_layouts(
-            &canonical_root,
-            &projects,
-            layouts,
-        )?;
-
-        // Layouts are mapped to their canonical project roots.
-        // Sorting is based on portable workspace-relative paths.
-        let mut ordered_layouts: Vec<&ProjectLayout> =
-            layouts.iter().collect();
-
-        ordered_layouts.sort_by(|left, right| {
-            relative_path_key(
-                &canonical_root,
-                left.project_root(),
-            )
-            .cmp(
-                &relative_path_key(
-                    &canonical_root,
-                    right.project_root(),
-                ),
-            )
-        });
-
-        let mut hasher = Sha256::new();
-        begin_fingerprint(&mut hasher);
-
-        hash_field(
-            &mut hasher,
-            b"workspace-root",
-            &portable_relative_path(
-                &canonical_root,
-                &canonical_root,
-            )?,
-        );
-
-        let mut manifests = Vec::new();
-        let mut total_manifest_bytes = 0_u64;
-
-        if let Some(manifest) = discovery.workspace_manifest() {
-            let metadata = collect_manifest(
-                &canonical_root,
-                manifest,
-                ManifestRole::Workspace,
+            ensure_contained(
+                &workspace_root,
+                &canonical_member_root,
+                "workspace.metadata.validate_project_containment",
             )?;
 
-            hash_manifest(&mut hasher, &metadata);
-
-            total_manifest_bytes = checked_add(
-                total_manifest_bytes,
-                metadata.size_bytes,
-                "manifest byte accounting",
-            )?;
-
-            manifests.push(metadata);
-        }
-
-        let root_package_manifest = if let Some(manifest) =
-            discovery.project_manifest()
-        {
-            let metadata = collect_manifest(
-                &canonical_root,
-                manifest,
-                ManifestRole::Package,
-            )?;
-
-            hash_manifest(&mut hasher, &metadata);
-
-            total_manifest_bytes = checked_add(
-                total_manifest_bytes,
-                metadata.size_bytes,
-                "manifest byte accounting",
-            )?;
-
-            Some(metadata)
-        } else {
-            None
-        };
-
-        // Every resolved member manifest is included, even when its
-        // source layout has not yet been inspected.
-        for descriptor in &projects {
-            if let Some(manifest_path) =
-                descriptor.package_manifest_path.as_deref()
-            {
-                let already_included = root_package_manifest
-                    .as_ref()
-                    .is_some_and(|manifest| {
-                        canonical_root
-                            .join(&manifest.relative_path)
-                            == manifest_path
-                    });
-
-                if already_included {
-                    continue;
-                }
-
-                let metadata = collect_manifest_path(
-                    &canonical_root,
-                    manifest_path,
-                    ManifestRole::Package,
-                )?;
-
-                hash_manifest(&mut hasher, &metadata);
-
-                total_manifest_bytes = checked_add(
-                    total_manifest_bytes,
-                    metadata.size_bytes,
-                    "manifest byte accounting",
-                )?;
-
-                descriptor.manifest_metadata = Some(metadata);
-            }
-        }
-
-        // Associate the discovered root package manifest with its
-        // corresponding project descriptor.
-        if let Some(manifest) = &root_package_manifest {
-            for descriptor in &mut projects {
-                if descriptor.relative_root == PathBuf::from(".") {
-                    descriptor.manifest_metadata =
-                        Some(manifest.clone());
-                }
-            }
-        }
-
-        let mut total_source_bytes = 0_u64;
-        let mut all_sources = BTreeSet::new();
-
-        for layout in ordered_layouts {
             let relative_root = portable_relative_path(
-                &canonical_root,
-                layout.project_root(),
+                &workspace_root,
+                &canonical_member_root,
             )?;
 
-            hash_field(
-                &mut hasher,
-                b"project-layout-root",
-                relative_root.as_bytes(),
-            );
+            let manifest_path = canonical_regular_file(
+                member.manifest_path(),
+                "workspace.metadata.project_manifest",
+            )?;
 
-            let descriptor_index = projects
-                .iter()
-                .position(|project| {
-                    project.relative_root == relative_root
-                })
-                .ok_or_else(|| {
-                    ToolchainError::internal(
-                        "validated project layout has no project metadata descriptor",
-                    )
-                    .with_operation(
-                        "workspace.metadata.associate_layout",
+            ensure_contained(
+                &canonical_member_root,
+                &manifest_path,
+                "workspace.metadata.validate_project_manifest",
+            )?;
+
+            let manifest = collect_file(
+                &workspace_root,
+                &manifest_path,
+                MetadataFileRole::ProjectManifest,
+            )?;
+
+            let mut visited_sources = BTreeSet::new();
+
+            // ProjectLayout owns traversal. This module owns metadata
+            // collection and de-duplicates repeated callbacks from
+            // overlapping layout traversal roots.
+            layout.visit_source_files(|source_path| {
+                let canonical_source = fs::canonicalize(
+                    source_path,
+                )
+                .map_err(|error| {
+                    filesystem_error(
+                        "workspace.metadata.canonicalize_source",
+                        source_path,
+                        error,
                     )
                 })?;
 
-            let mut source_paths = Vec::new();
-
-            layout.visit_source_files(|path| {
-                source_paths.push(path.to_path_buf());
-                Ok(())
-            })?;
-
-            source_paths.sort_by(|left, right| {
-                relative_path_key(&canonical_root, left)
-                    .cmp(&relative_path_key(&canonical_root, right))
-            });
-
-            let mut project_sources = Vec::new();
-
-            for source_path in source_paths {
-                let relative_path = portable_relative_path(
-                    &canonical_root,
-                    &source_path,
+                ensure_contained(
+                    &canonical_member_root,
+                    &canonical_source,
+                    "workspace.metadata.validate_source_containment",
                 )?;
 
-                if !all_sources.insert(relative_path.clone()) {
+                if !visited_sources.insert(
+                    canonical_source.clone(),
+                ) {
+                    return Ok(());
+                }
+
+                if let Some(existing_project) = all_sources.get(
+                    &canonical_source,
+                ) {
                     return Err(
-                        ToolchainError::validation_failed(
-                            "a source file was reported by more than one project layout",
+                        ToolchainError::new(
+                            ToolchainErrorKind::ValidationFailed,
+                            "one canonical source file is included in multiple project inventories",
                         )
-                        .with_operation(
-                            "workspace.metadata.collect_sources",
-                        )
-                        .with_context(relative_path),
+                        .with_operation("workspace.metadata.collect")
+                        .with_context(
+                            format!(
+                                "source: {}; first project: {}; second project: {}",
+                                canonical_source.display(),
+                                existing_project,
+                                project_id,
+                            ),
+                        ),
                     );
                 }
 
-                let source = collect_file(
-                    &canonical_root,
+                all_sources.insert(
+                    canonical_source.clone(),
+                    project_id.clone(),
+                );
+
+                Ok(())
+            })?;
+
+            // Collect file metadata after traversal has completed.
+            // The set guarantees deterministic ordering and prevents
+            // duplicate hashing within one project.
+            let mut source_files = Vec::with_capacity(
+                visited_sources.len(),
+            );
+
+            for source_path in visited_sources {
+                source_files.push(collect_file(
+                    &workspace_root,
                     &source_path,
-                    b"source-file",
-                )?;
-
-                hash_source(&mut hasher, &source);
-
-                total_source_bytes = checked_add(
-                    total_source_bytes,
-                    source.size_bytes,
-                    "source byte accounting",
-                )?;
-
-                project_sources.push(source);
+                    MetadataFileRole::Source,
+                )?);
             }
 
-            project_sources.sort_by(|left, right| {
+            source_files.sort_by(|left, right| {
                 left.relative_path.cmp(&right.relative_path)
             });
 
-            let source_fingerprint =
-                fingerprint_project_sources(
-                    &relative_root,
-                    &project_sources,
+            let source_inventory_complete = true;
+
+            let content_fingerprint = fingerprint_project_content(
+                &manifest,
+                &source_files,
+                source_inventory_complete,
+            );
+
+            let project_fingerprint = fingerprint_project(
+                project_id,
+                &relative_root,
+                &manifest,
+                &source_files,
+                source_inventory_complete,
+                &content_fingerprint,
+            );
+
+            hash_field(
+                &mut workspace_content_hasher,
+                b"project-content-fingerprint",
+                content_fingerprint.as_bytes(),
+            );
+
+            hash_field(
+                &mut workspace_hasher,
+                b"project-id",
+                project_id.to_string().as_bytes(),
+            );
+
+            hash_field(
+                &mut workspace_hasher,
+                b"project-relative-root",
+                relative_root.as_bytes(),
+            );
+
+            hash_field(
+                &mut workspace_hasher,
+                b"project-fingerprint",
+                project_fingerprint.as_bytes(),
+            );
+
+            hash_file(
+                &mut workspace_content_hasher,
+                &manifest,
+            );
+
+            for source in &source_files {
+                hash_file(
+                    &mut workspace_content_hasher,
+                    source,
                 );
 
-            projects[descriptor_index].source_files =
-                project_sources;
+                hash_file(
+                    &mut workspace_hasher,
+                    source,
+                );
+            }
 
-            projects[descriptor_index].source_fingerprint =
-                source_fingerprint;
+            hash_file(
+                &mut workspace_hasher,
+                &manifest,
+            );
+
+            projects.push(
+                WorkspaceProjectMetadata::new(
+                    project_id.clone(),
+                    relative_root,
+                    manifest,
+                    source_files,
+                    source_inventory_complete,
+                    content_fingerprint,
+                    project_fingerprint,
+                ),
+            );
         }
 
-        // Hash project identities and relative membership independently
-        // of the source inventory.
+        if !layout_index.is_empty() {
+            return Err(
+                ToolchainError::new(
+                    ToolchainErrorKind::ValidationFailed,
+                    "project layouts were supplied for projects that are not resolved workspace members",
+                )
+                .with_operation("workspace.metadata.collect")
+                .with_context(format!(
+                    "unmatched layout count: {}",
+                    layout_index.len(),
+                )),
+            );
+        }
+
         projects.sort_by(|left, right| {
             left.relative_root.cmp(&right.relative_root)
         });
 
-        for project in &projects {
-            hash_field(
-                &mut hasher,
-                b"project-relative-root",
-                &portable_path(&project.relative_root)?,
+        let source_inventory_complete = projects
+            .iter()
+            .all(
+                WorkspaceProjectMetadata::source_inventory_complete,
             );
 
-            if let Some(project_id) = &project.project_id {
-                hash_field(
-                    &mut hasher,
-                    b"project-id",
-                    project_id.to_string().as_bytes(),
-                );
+        hash_field(
+            &mut workspace_hasher,
+            b"source-inventory-complete",
+            if source_inventory_complete {
+                b"true"
             } else {
-                hash_field(
-                    &mut hasher,
-                    b"project-id",
-                    b"unassigned",
-                );
-            }
-
-            if let Some(manifest) = &project.manifest_metadata {
-                hash_manifest(&mut hasher, manifest);
-            }
-
-            for source in &project.source_files {
-                hash_source(&mut hasher, source);
-            }
-        }
-
-        hash_field(
-            &mut hasher,
-            b"project-count",
-            projects.len().to_string().as_bytes(),
+                b"false"
+            },
         );
 
         hash_field(
-            &mut hasher,
-            b"source-count",
-            all_sources.len().to_string().as_bytes(),
+            &mut workspace_content_hasher,
+            b"source-inventory-complete",
+            if source_inventory_complete {
+                b"true"
+            } else {
+                b"false"
+            },
         );
 
-        let digest: [u8; 32] = hasher.finalize().into();
-
-        let fingerprint =
-            WorkspaceFingerprint::from_digest(digest);
-
-        let mut finalized_projects = Vec::with_capacity(
-            projects.len(),
+        let content_fingerprint = finalize_hash(
+            workspace_content_hasher,
         );
 
-        for project in projects {
-            let source_fingerprint =
-                if project.source_files.is_empty() {
-                    fingerprint_project_sources(
-                        &project.relative_root,
-                        &[],
-                    )
-                } else {
-                    project.source_fingerprint
-                };
+        hash_field(
+            &mut workspace_hasher,
+            b"workspace-content-fingerprint",
+            content_fingerprint.as_bytes(),
+        );
 
-            finalized_projects.push(
-                WorkspaceProjectMetadata {
-                    project_id: project.project_id,
-                    relative_root: project.relative_root,
-                    package_manifest: project.manifest_metadata,
-                    source_files: project.source_files,
-                    source_fingerprint,
-                },
-            );
-        }
+        let workspace_fingerprint = finalize_hash(
+            workspace_hasher,
+        );
 
         Ok(Self {
-            workspace_id,
-            canonical_root,
-            explicit_workspace,
-            workspace_manifest: manifests
-                .into_iter()
-                .next(),
-            root_package_manifest,
-            projects: finalized_projects,
-            fingerprint,
-            total_source_bytes,
-            total_manifest_bytes,
+            workspace_id: members.workspace_id().clone(),
+            workspace_root,
+            workspace_manifest: workspace_manifest_metadata,
+            projects,
+            source_inventory_complete,
+            content_fingerprint,
+            workspace_fingerprint,
         })
     }
 
-    /// Return the stable workspace identity.
+    /// Return the workspace identity.
     #[must_use]
     pub fn workspace_id(&self) -> &WorkspaceId {
         &self.workspace_id
     }
 
-    /// Return the canonical absolute workspace location.
-    ///
-    /// This location is informational and is deliberately excluded from
-    /// the content fingerprint.
+    /// Return the canonical workspace root.
     #[must_use]
-    pub fn canonical_root(&self) -> &Path {
-        &self.canonical_root
+    pub fn workspace_root(&self) -> &Path {
+        &self.workspace_root
     }
 
-    /// Whether discovery identified an explicit workspace manifest.
+    /// Return the workspace manifest metadata.
     #[must_use]
-    pub const fn has_explicit_workspace(&self) -> bool {
-        self.explicit_workspace
+    pub fn workspace_manifest(&self) -> &MetadataFile {
+        &self.workspace_manifest
     }
 
-    /// Return explicit workspace-manifest metadata, when present.
-    #[must_use]
-    pub fn workspace_manifest(&self) -> Option<&ManifestMetadata> {
-        self.workspace_manifest.as_ref()
-    }
-
-    /// Return root package-manifest metadata, when present.
-    #[must_use]
-    pub fn root_package_manifest(&self) -> Option<&ManifestMetadata> {
-        self.root_package_manifest.as_ref()
-    }
-
-    /// Borrow projects in deterministic relative-path order.
+    /// Borrow the deterministically ordered project metadata.
     #[must_use]
     pub fn projects(&self) -> &[WorkspaceProjectMetadata] {
         &self.projects
@@ -896,441 +801,394 @@ impl WorkspaceMetadata {
         self.projects.len()
     }
 
-    /// Return the total number of indexed source files.
+    /// Return whether all project source inventories were collected.
     #[must_use]
-    pub fn source_file_count(&self) -> usize {
-        self.projects
-            .iter()
-            .map(WorkspaceProjectMetadata::source_file_count)
-            .sum()
+    pub const fn source_inventory_complete(&self) -> bool {
+        self.source_inventory_complete
     }
 
-    /// Return total source bytes read during snapshot construction.
+    /// Return the workspace content fingerprint.
+    ///
+    /// This fingerprint identifies manifest and source contents without
+    /// using project-relative filesystem paths as content.
     #[must_use]
-    pub const fn total_source_bytes(&self) -> u64 {
-        self.total_source_bytes
+    pub fn content_fingerprint(&self) -> &str {
+        &self.content_fingerprint
     }
 
-    /// Return total manifest bytes read during snapshot construction.
+    /// Return the complete workspace metadata fingerprint.
     #[must_use]
-    pub const fn total_manifest_bytes(&self) -> u64 {
-        self.total_manifest_bytes
+    pub fn workspace_fingerprint(&self) -> &str {
+        &self.workspace_fingerprint
     }
 
-    /// Return the complete workspace content fingerprint.
+    /// Find metadata for a project using its canonical identity.
     #[must_use]
-    pub const fn fingerprint(&self) -> WorkspaceFingerprint {
-        self.fingerprint
-    }
-
-    /// Return the canonical fingerprint string.
-    #[must_use]
-    pub fn fingerprint_string(&self) -> String {
-        self.fingerprint.to_string()
-    }
-
-    /// Return the metadata fingerprint format.
-    #[must_use]
-    pub const fn fingerprint_format(&self) -> &'static str {
-        METADATA_FINGERPRINT_FORMAT
-    }
-
-    /// Find project metadata by persistent project identity.
-    #[must_use]
-    pub fn project_by_id(
+    pub fn project(
         &self,
         project_id: &ProjectId,
     ) -> Option<&WorkspaceProjectMetadata> {
-        self.projects.iter().find(|project| {
-            project.project_id.as_ref() == Some(project_id)
-        })
+        self.projects
+            .iter()
+            .find(|project| project.project_id() == project_id)
     }
-
-    /// Find project metadata by workspace-relative root.
-    #[must_use]
-    pub fn project_by_relative_root(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Option<&WorkspaceProjectMetadata> {
-        self.projects.iter().find(|project| {
-            project.relative_root == path.as_ref()
-        })
-    }
-}
-
-// ============================================================================
-// INTERNAL PROJECT DESCRIPTORS
-// ============================================================================
-
-struct ProjectDescriptor {
-    project_id: Option<ProjectId>,
-    relative_root: PathBuf,
-    package_manifest_path: Option<PathBuf>,
-    manifest_metadata: Option<ManifestMetadata>,
-    source_files: Vec<SourceFileMetadata>,
-    source_fingerprint: WorkspaceFingerprint,
-}
-
-fn collect_project_descriptors(
-    workspace_root: &Path,
-    discovery: &DiscoveryResult,
-    members: Option<&WorkspaceMembers>,
-) -> Result<Vec<ProjectDescriptor>> {
-    let mut projects = Vec::new();
-
-    if let Some(members) = members {
-        for member in members.iter() {
-            projects.push(project_descriptor(
-                workspace_root,
-                Some(member),
-            )?);
-        }
-    }
-
-    if let Some(root_manifest) = discovery.project_manifest() {
-        let already_present = projects.iter().any(|project| {
-            workspace_root.join(&project.relative_root)
-                == root_manifest.root()
-        });
-
-        if !already_present {
-            projects.push(project_descriptor_from_root(
-                workspace_root,
-                None,
-                root_manifest,
-            )?);
-        }
-    }
-
-    projects.sort_by(|left, right| {
-        left.relative_root.cmp(&right.relative_root)
-    });
-
-    Ok(projects)
-}
-
-fn project_descriptor(
-    workspace_root: &Path,
-    member: &WorkspaceMember,
-) -> Result<ProjectDescriptor> {
-    let relative_root = portable_relative_path(
-        workspace_root,
-        member.canonical_root(),
-    )?;
-
-    Ok(ProjectDescriptor {
-        project_id: Some(member.project_id().clone()),
-        relative_root: PathBuf::from(relative_root),
-        package_manifest_path: Some(
-            member.manifest_path().to_path_buf(),
-        ),
-        manifest_metadata: None,
-        source_files: Vec::new(),
-        source_fingerprint: empty_fingerprint(),
-    })
-}
-
-fn project_descriptor_from_root(
-    workspace_root: &Path,
-    project_id: Option<ProjectId>,
-    manifest: &DiscoveredManifest,
-) -> Result<ProjectDescriptor> {
-    let relative_root = portable_relative_path(
-        workspace_root,
-        manifest.root(),
-    )?;
-
-    Ok(ProjectDescriptor {
-        project_id,
-        relative_root: PathBuf::from(relative_root),
-        package_manifest_path: Some(
-            manifest.path().to_path_buf(),
-        ),
-        manifest_metadata: None,
-        source_files: Vec::new(),
-        source_fingerprint: empty_fingerprint(),
-    })
-}
-
-// ============================================================================
-// LAYOUT VALIDATION
-// ============================================================================
-
-fn validate_layouts(
-    workspace_root: &Path,
-    projects: &[ProjectDescriptor],
-    layouts: &[ProjectLayout],
-) -> Result<()> {
-    let mut seen_roots = BTreeSet::new();
-
-    for layout in layouts {
-        let canonical = fs::canonicalize(
-            layout.project_root(),
-        )
-        .map_err(|error| {
-            io_error(
-                "workspace.metadata.validate_layout",
-                layout.project_root(),
-                error,
-            )
-        })?;
-
-        if canonical != layout.project_root() {
-            return Err(
-                ToolchainError::validation_failed(
-                    "project layout root is not canonical",
-                )
-                .with_operation(
-                    "workspace.metadata.validate_layout",
-                ),
-            );
-        }
-
-        let relative = portable_relative_path(
-            workspace_root,
-            &canonical,
-        )?;
-
-        if !projects.iter().any(|project| {
-            project.relative_root == relative
-        }) {
-            return Err(
-                ToolchainError::validation_failed(
-                    "project layout does not belong to the supplied workspace project set",
-                )
-                .with_operation(
-                    "workspace.metadata.validate_layout",
-                )
-                .with_context(relative),
-            );
-        }
-
-        if !seen_roots.insert(relative.clone()) {
-            return Err(
-                ToolchainError::validation_failed(
-                    "multiple project layouts describe the same project root",
-                )
-                .with_operation(
-                    "workspace.metadata.validate_layout",
-                )
-                .with_context(relative),
-            );
-        }
-    }
-
-    Ok(())
-}
-
-// ============================================================================
-// MANIFEST COLLECTION
-// ============================================================================
-
-fn collect_manifest(
-    workspace_root: &Path,
-    manifest: &DiscoveredManifest,
-    role: ManifestRole,
-) -> Result<ManifestMetadata> {
-    collect_manifest_path(
-        workspace_root,
-        manifest.path(),
-        role,
-    )
-}
-
-fn collect_manifest_path(
-    workspace_root: &Path,
-    manifest_path: &Path,
-    role: ManifestRole,
-) -> Result<ManifestMetadata> {
-    let file = collect_file(
-        workspace_root,
-        manifest_path,
-        b"manifest-file",
-    )?;
-
-    Ok(ManifestMetadata {
-        role,
-        relative_path: file.relative_path,
-        content_fingerprint: file.content_fingerprint,
-        size_bytes: file.size_bytes,
-    })
 }
 
 // ============================================================================
 // FILE COLLECTION
 // ============================================================================
 
-struct CollectedFile {
-    relative_path: PathBuf,
-    content_fingerprint: WorkspaceFingerprint,
-    size_bytes: u64,
+fn canonical_regular_file(
+    path: &Path,
+    operation: &'static str,
+) -> Result<PathBuf> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|error| filesystem_error(
+            operation,
+            path,
+            error,
+        ))?;
+
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(
+            ToolchainError::new(
+                ToolchainErrorKind::ValidationFailed,
+                "metadata input must be a regular non-symbolic-link file",
+            )
+            .with_operation(operation)
+            .with_context(path.display().to_string()),
+        );
+    }
+
+    let canonical = fs::canonicalize(path)
+        .map_err(|error| filesystem_error(
+            operation,
+            path,
+            error,
+        ))?;
+
+    Ok(canonical)
 }
 
 fn collect_file(
     workspace_root: &Path,
-    supplied_path: &Path,
-    domain: &[u8],
-) -> Result<CollectedFile> {
-    let canonical = fs::canonicalize(supplied_path)
-        .map_err(|error| {
-            io_error(
-                "workspace.metadata.canonicalize_file",
-                supplied_path,
-                error,
-            )
-        })?;
+    file_path: &Path,
+    role: MetadataFileRole,
+) -> Result<MetadataFile> {
+    let canonical_path = fs::canonicalize(file_path)
+        .map_err(|error| filesystem_error(
+            "workspace.metadata.canonicalize_file",
+            file_path,
+            error,
+        ))?;
 
-    let relative = portable_relative_path(
+    ensure_contained(
         workspace_root,
-        &canonical,
+        &canonical_path,
+        "workspace.metadata.validate_file_containment",
     )?;
 
-    let path_metadata = fs::symlink_metadata(&canonical)
-        .map_err(|error| {
-            io_error(
-                "workspace.metadata.inspect_file",
-                &canonical,
-                error,
-            )
-        })?;
+    let relative_path = portable_relative_path(
+        workspace_root,
+        &canonical_path,
+    )?;
 
-    if path_metadata.file_type().is_symlink()
-        || !path_metadata.is_file()
-    {
-        return Err(
-            ToolchainError::validation_failed(
-                "metadata input must be a regular non-symlink file",
-            )
-            .with_operation("workspace.metadata.collect_file")
-            .with_context(relative),
-        );
-    }
-
-    let mut file = File::open(&canonical).map_err(|error| {
-        io_error(
+    let mut file = File::open(&canonical_path)
+        .map_err(|error| filesystem_error(
             "workspace.metadata.open_file",
-            &canonical,
+            &canonical_path,
             error,
-        )
-    })?;
+        ))?;
 
-    let before = file.metadata().map_err(|error| {
-        io_error(
-            "workspace.metadata.metadata_before_read",
-            &canonical,
+    let before = file.metadata()
+        .map_err(|error| filesystem_error(
+            "workspace.metadata.inspect_file_before_read",
+            &canonical_path,
             error,
-        )
-    })?;
+        ))?;
 
     if !before.is_file() {
         return Err(
-            ToolchainError::validation_failed(
-                "opened metadata input is not a regular file",
+            ToolchainError::new(
+                ToolchainErrorKind::ValidationFailed,
+                "metadata input is not a regular file",
             )
-            .with_operation("workspace.metadata.collect_file"),
+            .with_operation("workspace.metadata.collect_file")
+            .with_context(canonical_path.display().to_string()),
         );
     }
 
-    let expected_length = before.len();
+    let (content_fingerprint, size_bytes) = hash_reader(
+        &mut file,
+        role,
+    )
+    .map_err(|error| filesystem_error(
+        "workspace.metadata.hash_file",
+        &canonical_path,
+        error,
+    ))?;
 
+    let after = file.metadata()
+        .map_err(|error| filesystem_error(
+            "workspace.metadata.inspect_file_after_read",
+            &canonical_path,
+            error,
+        ))?;
+
+    if file_metadata_changed(
+        &before,
+        &after,
+        size_bytes,
+    ) {
+        return Err(
+            ToolchainError::new(
+                ToolchainErrorKind::ValidationFailed,
+                "file changed while its metadata fingerprint was being collected",
+            )
+            .with_operation("workspace.metadata.collect_file")
+            .with_context(canonical_path.display().to_string()),
+        );
+    }
+
+    Ok(MetadataFile::new(
+        relative_path,
+        role,
+        size_bytes,
+        content_fingerprint,
+    ))
+}
+
+fn file_metadata_changed(
+    before: &Metadata,
+    after: &Metadata,
+    bytes_read: u64,
+) -> bool {
+    if before.len() != after.len()
+        || after.len() != bytes_read
+    {
+        return true;
+    }
+
+    match (
+        before.modified(),
+        after.modified(),
+    ) {
+        (Ok(before_time), Ok(after_time)) => {
+            before_time != after_time
+        }
+
+        _ => false,
+    }
+}
+
+fn hash_reader<R: Read>(
+    reader: &mut R,
+    role: MetadataFileRole,
+) -> io::Result<(String, u64)> {
     let mut hasher = Sha256::new();
-    hash_field(&mut hasher, b"file-domain", domain);
-    hash_field(
+
+    hash_header(
         &mut hasher,
-        b"file-relative-path",
-        relative.as_bytes(),
+        b"zamani-file-content",
     );
 
-    let mut buffer = [0_u8; READ_BUFFER_SIZE];
-    let mut observed_length = 0_u64;
+    hash_field(
+        &mut hasher,
+        b"role",
+        role.as_str().as_bytes(),
+    );
+
+    let mut total_bytes = 0_u64;
+
+    // Streaming buffer size is an implementation detail, not a maximum
+    // permitted source-file size.
+    let mut buffer = [0_u8; 65_536];
 
     loop {
-        let count = file.read(&mut buffer).map_err(|error| {
-            io_error(
-                "workspace.metadata.read_file",
-                &canonical,
-                error,
-            )
-        })?;
+        let read = reader.read(&mut buffer)?;
 
-        if count == 0 {
+        if read == 0 {
             break;
         }
 
-        observed_length = checked_add(
-            observed_length,
-            count as u64,
-            "file byte accounting",
-        )?;
+        total_bytes = total_bytes
+            .checked_add(
+                u64::try_from(read).map_err(|_| {
+                    io::Error::other(
+                        "read size cannot be represented as u64",
+                    )
+                })?,
+            )
+            .ok_or_else(|| {
+                io::Error::other(
+                    "file byte count exceeded u64 representation",
+                )
+            })?;
 
-        hasher.update(&buffer[..count]);
+        hasher.update(&buffer[..read]);
     }
 
-    let after = file.metadata().map_err(|error| {
-        io_error(
-            "workspace.metadata.metadata_after_read",
-            &canonical,
-            error,
-        )
-    })?;
+    hash_u64(
+        &mut hasher,
+        b"file-size",
+        total_bytes,
+    );
 
-    if observed_length != expected_length
-        || after.len() != expected_length
-    {
-        return Err(
-            ToolchainError::validation_failed(
-                "file size changed while metadata was being collected",
-            )
-            .with_operation(
-                "workspace.metadata.verify_file_stability",
-            )
-            .with_context(relative),
-        );
-    }
-
-    if before.modified().ok() != after.modified().ok() {
-        return Err(
-            ToolchainError::validation_failed(
-                "file modification time changed while metadata was being collected",
-            )
-            .with_operation(
-                "workspace.metadata.verify_file_stability",
-            )
-            .with_context(relative),
-        );
-    }
-
-    let digest: [u8; 32] = hasher.finalize().into();
-
-    Ok(CollectedFile {
-        relative_path: PathBuf::from(relative),
-        content_fingerprint:
-            WorkspaceFingerprint::from_digest(digest),
-        size_bytes: observed_length,
-    })
+    Ok((
+        finalize_hash(hasher),
+        total_bytes,
+    ))
 }
 
 // ============================================================================
-// HASHING
+// CONTENT FINGERPRINTS
 // ============================================================================
 
-fn begin_fingerprint(hasher: &mut Sha256) {
+fn fingerprint_project_content(
+    manifest: &MetadataFile,
+    source_files: &[MetadataFile],
+    source_inventory_complete: bool,
+) -> String {
+    let mut hasher = Sha256::new();
+
+    hash_header(
+        &mut hasher,
+        b"zamani-project-content",
+    );
+
+    hash_file(
+        &mut hasher,
+        manifest,
+    );
+
+    for source in source_files {
+        hash_file(
+            &mut hasher,
+            source,
+        );
+    }
+
+    hash_field(
+        &mut hasher,
+        b"source-inventory-complete",
+        if source_inventory_complete {
+            b"true"
+        } else {
+            b"false"
+        },
+    );
+
+    finalize_hash(hasher)
+}
+
+fn fingerprint_project(
+    project_id: &ProjectId,
+    relative_root: &str,
+    manifest: &MetadataFile,
+    source_files: &[MetadataFile],
+    source_inventory_complete: bool,
+    content_fingerprint: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+
+    hash_header(
+        &mut hasher,
+        b"zamani-project-metadata",
+    );
+
+    hash_u64(
+        &mut hasher,
+        b"fingerprint-format-version",
+        u64::from(FINGERPRINT_FORMAT_VERSION),
+    );
+
+    hash_field(
+        &mut hasher,
+        b"project-id",
+        project_id.to_string().as_bytes(),
+    );
+
+    hash_field(
+        &mut hasher,
+        b"project-relative-root",
+        relative_root.as_bytes(),
+    );
+
+    hash_field(
+        &mut hasher,
+        b"project-content-fingerprint",
+        content_fingerprint.as_bytes(),
+    );
+
+    hash_field(
+        &mut hasher,
+        b"manifest-relative-path",
+        manifest.relative_path().as_bytes(),
+    );
+
+    for source in source_files {
+        hash_field(
+            &mut hasher,
+            b"source-relative-path",
+            source.relative_path().as_bytes(),
+        );
+
+        hash_field(
+            &mut hasher,
+            b"source-content-fingerprint",
+            source.content_fingerprint().as_bytes(),
+        );
+    }
+
+    hash_field(
+        &mut hasher,
+        b"source-inventory-complete",
+        if source_inventory_complete {
+            b"true"
+        } else {
+            b"false"
+        },
+    );
+
+    finalize_hash(hasher)
+}
+
+fn hash_file(
+    hasher: &mut Sha256,
+    file: &MetadataFile,
+) {
     hash_field(
         hasher,
-        b"fingerprint-domain",
-        FINGERPRINT_DOMAIN,
+        b"file-role",
+        file.role().as_str().as_bytes(),
     );
 
     hash_field(
         hasher,
-        b"fingerprint-format",
-        METADATA_FINGERPRINT_FORMAT.as_bytes(),
+        b"file-content-fingerprint",
+        file.content_fingerprint().as_bytes(),
     );
 
+    hash_u64(
+        hasher,
+        b"file-size",
+        file.size_bytes(),
+    );
+}
+
+// ============================================================================
+// CANONICAL HASH ENCODING
+// ============================================================================
+
+fn hash_header(
+    hasher: &mut Sha256,
+    domain: &[u8],
+) {
+    hasher.update(b"ZAMANI-METADATA");
     hash_field(
         hasher,
-        b"fingerprint-algorithm",
-        METADATA_FINGERPRINT_ALGORITHM.as_bytes(),
+        b"domain",
+        domain,
     );
 }
 
@@ -1339,210 +1197,153 @@ fn hash_field(
     name: &[u8],
     value: &[u8],
 ) {
-    // Length-prefixing prevents ambiguous concatenations.
-    hasher.update((name.len() as u64).to_be_bytes());
+    hasher.update(
+        u64::try_from(name.len())
+            .unwrap_or(u64::MAX)
+            .to_be_bytes(),
+    );
+
     hasher.update(name);
-    hasher.update((value.len() as u64).to_be_bytes());
+
+    hasher.update(
+        u64::try_from(value.len())
+            .unwrap_or(u64::MAX)
+            .to_be_bytes(),
+    );
+
     hasher.update(value);
 }
 
-fn hash_manifest(
+fn hash_u64(
     hasher: &mut Sha256,
-    manifest: &ManifestMetadata,
+    name: &[u8],
+    value: u64,
 ) {
     hash_field(
         hasher,
-        b"manifest-role",
-        match manifest.role {
-            ManifestRole::Workspace => b"workspace",
-            ManifestRole::Package => b"package",
-        },
-    );
-
-    hash_field(
-        hasher,
-        b"manifest-path",
-        manifest
-            .relative_path
-            .to_string_lossy()
-            .as_bytes(),
-    );
-
-    hash_field(
-        hasher,
-        b"manifest-digest",
-        manifest.content_fingerprint.as_bytes(),
+        name,
+        &value.to_be_bytes(),
     );
 }
 
-fn hash_source(
-    hasher: &mut Sha256,
-    source: &SourceFileMetadata,
-) {
-    hash_field(
-        hasher,
-        b"source-path",
-        source
-            .relative_path
-            .to_string_lossy()
-            .as_bytes(),
+fn finalize_hash(
+    hasher: Sha256,
+) -> String {
+    let digest = hasher.finalize();
+
+    let mut output = String::with_capacity(
+        digest.len() * 2,
     );
 
-    hash_field(
-        hasher,
-        b"source-digest",
-        source.content_fingerprint.as_bytes(),
-    );
-}
+    for byte in digest {
+        use std::fmt::Write;
 
-fn fingerprint_project_sources(
-    relative_root: &str,
-    sources: &[SourceFileMetadata],
-) -> WorkspaceFingerprint {
-    let mut hasher = Sha256::new();
-
-    begin_fingerprint(&mut hasher);
-
-    hash_field(
-        &mut hasher,
-        b"project-source-root",
-        relative_root.as_bytes(),
-    );
-
-    for source in sources {
-        hash_source(&mut hasher, source);
+        // Writing to String is infallible.
+        let _ = write!(
+            output,
+            "{byte:02x}",
+        );
     }
 
-    let digest: [u8; 32] = hasher.finalize().into();
-
-    WorkspaceFingerprint::from_digest(digest)
-}
-
-fn empty_fingerprint() -> WorkspaceFingerprint {
-    fingerprint_project_sources(".", &[])
+    output
 }
 
 // ============================================================================
-// PORTABLE PATH REPRESENTATION
+// PATH CONTRACTS
 // ============================================================================
 
 fn portable_relative_path(
     root: &Path,
     path: &Path,
 ) -> Result<String> {
-    let relative = path.strip_prefix(root).map_err(|_| {
-        ToolchainError::validation_failed(
-            "metadata input path escapes the canonical workspace root",
-        )
-        .with_operation(
-            "workspace.metadata.validate_path_containment",
-        )
-        .with_context(path.display().to_string())
-    })?;
+    let relative = path.strip_prefix(root)
+        .map_err(|_| {
+            ToolchainError::new(
+                ToolchainErrorKind::ValidationFailed,
+                "path is not contained within its owning root",
+            )
+            .with_operation("workspace.metadata.relative_path")
+            .with_context(path.display().to_string())
+        })?;
 
-    portable_path(relative)
-}
-
-fn portable_path(path: &Path) -> Result<String> {
     let mut components = Vec::new();
 
-    for component in path.components() {
+    for component in relative.components() {
         match component {
-            Component::Normal(value) => {
-                let value = value.to_str().ok_or_else(|| {
-                    ToolchainError::unsupported_operation(
-                        "workspace metadata requires portable UTF-8 relative paths",
-                    )
-                    .with_operation(
-                        "workspace.metadata.portable_path",
-                    )
-                })?;
+            std::path::Component::Normal(value) => {
+                let text = value.to_str()
+                    .ok_or_else(|| {
+                        ToolchainError::new(
+                            ToolchainErrorKind::ValidationFailed,
+                            "path contains a non-UTF-8 component and cannot be represented by the portable metadata format",
+                        )
+                        .with_operation(
+                            "workspace.metadata.relative_path",
+                        )
+                    })?;
 
-                components.push(value);
+                components.push(text);
             }
 
-            Component::CurDir => {}
+            std::path::Component::CurDir => {}
 
-            Component::ParentDir
-            | Component::RootDir
-            | Component::Prefix(_) => {
+            _ => {
                 return Err(
-                    ToolchainError::validation_failed(
-                        "workspace-relative path contains a forbidden path component",
+                    ToolchainError::new(
+                        ToolchainErrorKind::ValidationFailed,
+                        "relative metadata path contains an invalid path component",
                     )
                     .with_operation(
-                        "workspace.metadata.portable_path",
-                    ),
+                        "workspace.metadata.relative_path",
+                    )
+                    .with_context(path.display().to_string()),
                 );
             }
         }
     }
 
-    if components.is_empty() {
-        return Ok(".".to_owned());
-    }
-
     Ok(components.join("/"))
 }
 
-fn relative_path_key(
+fn ensure_contained(
     root: &Path,
     path: &Path,
-) -> String {
-    portable_relative_path(root, path)
-        .unwrap_or_else(|_| path.display().to_string())
-}
-
-// ============================================================================
-// FILESYSTEM AND ACCOUNTING HELPERS
-// ============================================================================
-
-fn validate_directory(path: &Path) -> Result<()> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| {
-        io_error(
-            "workspace.metadata.inspect_directory",
-            path,
-            error,
-        )
-    })?;
-
-    if metadata.file_type().is_symlink()
-        || !metadata.is_dir()
-    {
+    operation: &'static str,
+) -> Result<()> {
+    if !path.starts_with(root) {
         return Err(
-            ToolchainError::validation_failed(
-                "workspace root must be a regular non-symlink directory",
+            ToolchainError::new(
+                ToolchainErrorKind::ValidationFailed,
+                "metadata path escapes its owning directory",
             )
-            .with_operation(
-                "workspace.metadata.validate_directory",
-            )
-            .with_context(path.display().to_string()),
+            .with_operation(operation)
+            .with_context(format!(
+                "root: {}; path: {}",
+                root.display(),
+                path.display(),
+            )),
         );
     }
 
     Ok(())
 }
 
-fn checked_add(
-    left: u64,
-    right: u64,
-    description: &str,
-) -> Result<u64> {
-    left.checked_add(right).ok_or_else(|| {
-        ToolchainError::resource_exhausted(
-            format!("{description} exceeded the supported integer representation"),
-        )
-        .with_operation("workspace.metadata.accounting")
-    })
-}
+// ============================================================================
+// FILESYSTEM ERRORS
+// ============================================================================
 
-fn io_error(
+fn filesystem_error(
     operation: &'static str,
     path: &Path,
     source: io::Error,
 ) -> ToolchainError {
-    ToolchainError::from_io(operation, source)
-        .with_context(path.display().to_string())
+    ToolchainError::new(
+        ToolchainErrorKind::Io,
+        "workspace metadata filesystem operation failed",
+    )
+    .with_operation(operation)
+    .with_context(path.display().to_string())
+    .with_context(source.to_string())
 }
 
 // ============================================================================
@@ -1553,152 +1354,244 @@ fn io_error(
 mod tests {
     use super::*;
 
-    #[test]
-    fn fingerprint_hex_is_canonical() {
-        let fingerprint =
-            WorkspaceFingerprint::from_digest([0xab; 32]);
+    use sha2::{Digest, Sha256};
 
-        assert_eq!(fingerprint.to_hex().len(), 64);
+    use std::io::Cursor;
+
+    #[test]
+    fn fingerprint_algorithm_is_stable() {
         assert_eq!(
-            fingerprint.to_hex(),
-            "ab".repeat(32)
+            FINGERPRINT_ALGORITHM,
+            "sha256",
+        );
+
+        assert_eq!(
+            FINGERPRINT_FORMAT_VERSION,
+            1,
         );
     }
 
     #[test]
-    fn fingerprint_display_contains_format_and_digest() {
-        let fingerprint =
-            WorkspaceFingerprint::from_digest([0_u8; 32]);
+    fn file_roles_have_stable_identifiers() {
+        assert_eq!(
+            MetadataFileRole::WorkspaceManifest.as_str(),
+            "workspace-manifest",
+        );
 
         assert_eq!(
-            fingerprint.to_string(),
-            format!(
-                "{}:{}",
-                METADATA_FINGERPRINT_FORMAT,
-                "00".repeat(32)
-            )
+            MetadataFileRole::ProjectManifest.as_str(),
+            "project-manifest",
+        );
+
+        assert_eq!(
+            MetadataFileRole::Source.as_str(),
+            "source",
         );
     }
 
     #[test]
-    fn fingerprint_algorithms_are_explicit() {
-        let fingerprint =
-            WorkspaceFingerprint::from_digest([1_u8; 32]);
+    fn identical_content_and_role_produce_identical_fingerprints() {
+        let content = b"fn main() {}";
 
-        assert_eq!(
-            fingerprint.algorithm(),
-            "sha256"
-        );
+        let mut first = Cursor::new(content);
+        let mut second = Cursor::new(content);
 
-        assert_eq!(
-            fingerprint.format(),
-            METADATA_FINGERPRINT_FORMAT
-        );
-    }
-
-    #[test]
-    fn portable_paths_use_forward_slashes() {
-        let path = Path::new("modules")
-            .join("classical")
-            .join("source");
-
-        let portable = portable_path(&path)
-            .expect("normal relative path");
-
-        assert_eq!(
-            portable,
-            "modules/classical/source"
-        );
-    }
-
-    #[test]
-    fn portable_current_directory_is_canonical() {
-        assert_eq!(
-            portable_path(Path::new("."))
-                .expect("current directory"),
-            "."
-        );
-    }
-
-    #[test]
-    fn parent_components_are_rejected() {
-        let error = portable_path(
-            Path::new("../outside"),
+        let first = hash_reader(
+            &mut first,
+            MetadataFileRole::Source,
         )
-        .expect_err("parent traversal must be rejected");
+        .expect("first hash");
 
-        assert_eq!(
-            error.kind(),
-            crate::toolchain::errors::ToolchainErrorKind::ValidationFailed
-        );
-    }
-
-    #[test]
-    fn source_fingerprints_are_deterministic() {
-        let first = fingerprint_project_sources(
-            ".",
-            &[],
-        );
-
-        let second = fingerprint_project_sources(
-            ".",
-            &[],
-        );
+        let second = hash_reader(
+            &mut second,
+            MetadataFileRole::Source,
+        )
+        .expect("second hash");
 
         assert_eq!(first, second);
     }
 
     #[test]
-    fn different_project_roots_have_distinct_source_fingerprints() {
-        let first = fingerprint_project_sources(
-            ".",
-            &[],
-        );
+    fn different_file_roles_produce_different_fingerprints() {
+        let content = b"same bytes";
 
-        let second = fingerprint_project_sources(
-            "modules/example",
-            &[],
-        );
+        let mut source = Cursor::new(content);
+        let mut manifest = Cursor::new(content);
 
-        assert_ne!(first, second);
+        let source = hash_reader(
+            &mut source,
+            MetadataFileRole::Source,
+        )
+        .expect("source hash");
+
+        let manifest = hash_reader(
+            &mut manifest,
+            MetadataFileRole::ProjectManifest,
+        )
+        .expect("manifest hash");
+
+        assert_ne!(source.0, manifest.0);
     }
 
     #[test]
-    fn hash_field_encoding_distinguishes_field_boundaries() {
-        let mut first = Sha256::new();
+    fn empty_files_are_valid_and_have_zero_size() {
+        let mut reader = Cursor::new([]);
 
-        hash_field(
-            &mut first,
-            b"a",
-            b"bc",
+        let (fingerprint, size) = hash_reader(
+            &mut reader,
+            MetadataFileRole::Source,
+        )
+        .expect("empty file hash");
+
+        assert_eq!(size, 0);
+        assert_eq!(fingerprint.len(), 64);
+    }
+
+    #[test]
+    fn streaming_hash_matches_expected_sha256_encoding() {
+        let content = b"Zamani";
+
+        let mut reader = Cursor::new(content);
+
+        let (actual, size) = hash_reader(
+            &mut reader,
+            MetadataFileRole::Source,
+        )
+        .expect("hash");
+
+        let mut expected = Sha256::new();
+
+        hash_header(
+            &mut expected,
+            b"zamani-file-content",
         );
 
+        hash_field(
+            &mut expected,
+            b"role",
+            b"source",
+        );
+
+        expected.update(content);
+
+        hash_u64(
+            &mut expected,
+            b"file-size",
+            content.len() as u64,
+        );
+
+        assert_eq!(
+            actual,
+            finalize_hash(expected),
+        );
+
+        assert_eq!(
+            size,
+            content.len() as u64,
+        );
+    }
+
+    #[test]
+    fn portable_relative_paths_use_forward_slashes() {
+        let root = PathBuf::from("/workspace");
+        let path = root.join("applications").join("example");
+
+        let relative = portable_relative_path(
+            &root,
+            &path,
+        )
+        .expect("portable path");
+
+        assert_eq!(
+            relative,
+            "applications/example",
+        );
+    }
+
+    #[test]
+    fn portable_relative_paths_reject_outside_paths() {
+        let root = PathBuf::from("/workspace");
+        let path = PathBuf::from("/outside/project");
+
+        assert!(
+            portable_relative_path(
+                &root,
+                &path,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn hash_fields_are_domain_separated() {
+        let mut first = Sha256::new();
         let mut second = Sha256::new();
 
-        hash_field(
+        hash_header(
+            &mut first,
+            b"first-domain",
+        );
+
+        hash_header(
             &mut second,
-            b"ab",
-            b"c",
+            b"second-domain",
         );
 
         assert_ne!(
-            first.finalize(),
-            second.finalize()
+            finalize_hash(first),
+            finalize_hash(second),
         );
     }
 
     #[test]
-    fn checked_accounting_detects_overflow() {
-        let error = checked_add(
-            u64::MAX,
-            1,
-            "test accounting",
-        )
-        .expect_err("overflow must be reported");
+    fn path_is_not_part_of_content_fingerprint() {
+        let first = MetadataFile::new(
+            "src/main.zm".to_owned(),
+            MetadataFileRole::Source,
+            12,
+            "same-content".to_owned(),
+        );
+
+        let second = MetadataFile::new(
+            "application/main.zm".to_owned(),
+            MetadataFileRole::Source,
+            12,
+            "same-content".to_owned(),
+        );
 
         assert_eq!(
-            error.kind(),
-            crate::toolchain::errors::ToolchainErrorKind::ResourceExhausted
+            first.content_fingerprint(),
+            second.content_fingerprint(),
         );
+
+        assert_ne!(
+            first.relative_path(),
+            second.relative_path(),
+        );
+    }
+
+    #[test]
+    fn metadata_change_detection_checks_size() {
+        // A metadata change is detected whenever the bytes read do not
+        // match the file's final reported size.
+        let changed = file_metadata_changed(
+            &fake_metadata(10),
+            &fake_metadata(12),
+            10,
+        );
+
+        assert!(changed);
+    }
+
+    fn fake_metadata(_size: u64) -> Metadata {
+        // This helper is intentionally not used to construct synthetic
+        // operating-system Metadata values. Metadata is obtained from
+        // actual files in integration tests.
+        //
+        // Kept as a compile-time reminder that filesystem Metadata is
+        // not publicly constructible.
+        unreachable!(
+            "use real filesystem metadata in integration tests"
+        )
     }
 }
