@@ -1,333 +1,240 @@
-#![allow(unused_imports, unused_variables, dead_code, unused_mut)]
 
-//! Zamani Universal Meta-Compiler (UMC) - Main Entry Point
+#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unused_must_use)]
+
+//! Zamani command-line compiler entry point.
 //!
-//! Entry point for the Zamani compiler CLI. Reads a `.zn` source file,
-//! runs it through the real compiler pipeline (lex -> parse -> semantic
-//! analysis -> IR generation -> optimization -> codegen), and either
-//! writes the generated output to disk or reports diagnostics with
-//! file/line/column information.
+//! This binary is a thin client of the public compiler API. It does not
+//! implement a second lexer, parser, semantic analyzer, IR, optimizer,
+//! backend, runtime, or hardware-selection system.
 
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process;
+use std::process::ExitCode;
 use std::time::Instant;
 
-use zamani_compiler::backend::CodeGenerator;
-use zamani_compiler::compiler_types::{CompilationTarget, CompilerConfig, OptimizationLevel};
-use zamani_compiler::ir_gen::IrGenerator;
-use zamani_compiler::lexer::Lexer;
-use zamani_compiler::optimizer::Optimizer;
-use zamani_compiler::parser::Parser;
-use zamani_compiler::semantic::SemanticAnalyzer;
-use zamani_compiler::source_map::{FileId, SourceFile};
+use zamani_compiler::compiler::api::{CompilationRequest, CompilerApi};
 use zamani_compiler::VERSION;
 
-struct Args {
-    source_file: String,
-    target: CompilationTarget,
-    opt_level: OptimizationLevel,
-    output: Option<String>,
-    emit_ir: bool,
-    emit_ast: bool,
-}
-
-fn print_banner() {
-    println!("╔══════════════════════════════════════════════════╗");
-    println!("║  Zamani Universal Meta-Compiler (UMC) v{:<10}║", VERSION);
-    println!("║  The Omniversal AGI Language & Operating Intel.   ║");
-    println!("╚══════════════════════════════════════════════════╝");
-    println!();
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Arguments {
+    source: PathBuf,
+    output: Option<PathBuf>,
 }
 
 fn print_help() {
-    println!("Zamani UMC — Usage:");
+    println!("Zamani compiler {}", VERSION);
     println!();
-    println!("  zamani <file.zn> [options]   Compile a Zamani source file");
-    println!("  zamani --version             Print version information");
-    println!("  zamani --help                Show this help message");
+    println!("Usage:");
+    println!("  zamani <source.zm> [--output <path>]");
+    println!("  zamani --version");
+    println!("  zamani --help");
     println!();
     println!("Options:");
-    println!("  -o, --output <path>          Write generated code to <path>");
-    println!("                                (default: <file> with target extension)");
-    println!("  -t, --target <target>        Codegen target. One of:");
-    println!("                                  llvm (default), x86-64, arm64, wasm32,");
-    println!("                                  qasm, riscv, mts, nano");
-    println!("  -O, --opt <level>             Optimization level. One of:");
-    println!("                                  none, basic (default), aggressive, ultra");
-    println!("      --emit-ir                 Print unoptimized IR to stdout before codegen");
-    println!("      --emit-ast                Print the parsed AST (debug form) to stdout");
+    println!("  -o, --output <path>  Write the compiled artifact to <path>");
+    println!("  -h, --help           Show this help");
+    println!("  -V, --version        Show package version");
     println!();
-    println!("Language features:");
-    println!("  Quantum computing primitives  (quantum, circuit keywords)");
-    println!("  Nano-agent programming        (nano, @atom, @molecule)");
-    println!("  Linear & affine types         (linear, affine keywords)");
-    println!("  Algebraic effects             (handle, effect, perform)");
-    println!("  Formal verification           (#[prove], invariant, post_condition)");
-    println!("  Multi-temporal semantics      (zamani, sasa, ancestor)");
+    println!("Target and compilation policy are supplied through the compiler's");
+    println!("canonical configuration API; this CLI does not maintain a duplicate");
+    println!("closed list of targets or backend implementations.");
 }
 
-fn parse_target(s: &str) -> Option<CompilationTarget> {
-    match s.to_ascii_lowercase().as_str() {
-        "llvm" | "llvm-ir" | "llvmir" => Some(CompilationTarget::LLVMIR),
-        "x86" | "x86-64" | "x86_64" | "x86-64-linux" => Some(CompilationTarget::X86_64Linux),
-        "arm64" | "aarch64" => Some(CompilationTarget::Arm64),
-        "wasm" | "wasm32" | "wat" => Some(CompilationTarget::Wasm32),
-        "qasm" | "quantum" => Some(CompilationTarget::QASM),
-        "riscv" | "risc-v" | "rv64" => Some(CompilationTarget::RiscV),
-        "mts" | "mts-bytecode" => Some(CompilationTarget::MTSBytecode),
-        "nano" | "nanocontrol" => Some(CompilationTarget::NanoControl),
-        _ => None,
-    }
-}
+fn parse_arguments(raw: &[String]) -> Result<Arguments, String> {
+    let mut source: Option<PathBuf> = None;
+    let mut output: Option<PathBuf> = None;
+    let mut index = 0;
 
-fn parse_opt_level(s: &str) -> Option<OptimizationLevel> {
-    match s.to_ascii_lowercase().as_str() {
-        "none" | "0" => Some(OptimizationLevel::None),
-        "basic" | "1" => Some(OptimizationLevel::Basic),
-        "aggressive" | "2" => Some(OptimizationLevel::Aggressive),
-        "ultra" | "ultra-agi" | "3" => Some(OptimizationLevel::UltraAGI),
-        _ => None,
-    }
-}
-
-fn opt_level_to_u8(level: &OptimizationLevel) -> u8 {
-    match level {
-        OptimizationLevel::None => 0,
-        OptimizationLevel::Basic => 1,
-        OptimizationLevel::Aggressive => 2,
-        OptimizationLevel::UltraAGI => 3,
-    }
-}
-
-fn parse_args(raw: &[String]) -> Result<Args, String> {
-    let mut source_file: Option<String> = None;
-    let mut target = CompilationTarget::LLVMIR;
-    let mut opt_level = OptimizationLevel::Basic;
-    let mut output: Option<String> = None;
-    let mut emit_ir = false;
-    let mut emit_ast = false;
-
-    let mut i = 0;
-    while i < raw.len() {
-        let arg = &raw[i];
-        match arg.as_str() {
+    while index < raw.len() {
+        match raw[index].as_str() {
             "-o" | "--output" => {
-                i += 1;
-                let val = raw.get(i).ok_or("--output requires a path argument")?;
-                output = Some(val.clone());
-            }
-            "-t" | "--target" => {
-                i += 1;
-                let val = raw.get(i).ok_or("--target requires a value")?;
-                target = parse_target(val).ok_or_else(|| format!("Unknown target: {}", val))?;
-            }
-            "-O" | "--opt" => {
-                i += 1;
-                let val = raw.get(i).ok_or("--opt requires a value")?;
-                opt_level =
-                    parse_opt_level(val).ok_or_else(|| format!("Unknown opt level: {}", val))?;
-            }
-            "--emit-ir" => emit_ir = true,
-            "--emit-ast" => emit_ast = true,
-            other if other.starts_with('-') => {
-                return Err(format!("Unknown flag: {}", other));
-            }
-            other => {
-                if source_file.is_some() {
-                    return Err(format!("Unexpected extra argument: {}", other));
+                index += 1;
+                let value = raw
+                    .get(index)
+                    .ok_or_else(|| "--output requires a path".to_string())?;
+
+                if value.starts_with('-') {
+                    return Err(
+                        "--output requires a path that is not an option".into()
+                    );
                 }
-                source_file = Some(other.to_string());
+
+                output = Some(PathBuf::from(value));
+            }
+            "-h" | "--help" | "-V" | "--version" => {
+                return Err(format!(
+                    "{} must be used on its own",
+                    raw[index]
+                ));
+            }
+            option if option.starts_with('-') => {
+                return Err(format!("unknown option: {option}"));
+            }
+            value => {
+                if source.is_some() {
+                    return Err(format!(
+                        "unexpected extra argument: {value}"
+                    ));
+                }
+
+                source = Some(PathBuf::from(value));
             }
         }
-        i += 1;
+
+        index += 1;
     }
 
-    let source_file = source_file.ok_or("No source file provided")?;
-    Ok(Args {
-        source_file,
-        target,
-        opt_level,
-        output,
-        emit_ir,
-        emit_ast,
-    })
+    let source = source
+        .ok_or_else(|| "no source file was provided".to_string())?;
+
+    Ok(Arguments { source, output })
 }
 
-fn default_output_path(source_file: &str, extension: &str) -> PathBuf {
-    // Backend `file_extension()` impls return a leading-dot form (e.g.
-    // ".ll", ".wat") since that's convenient for display purposes.
-    // `Path::with_extension` adds its own separating dot, so strip any
-    // leading dot here to avoid producing "name..ll".
-    let ext = extension.trim_start_matches('.');
-    let path = Path::new(source_file);
-    path.with_extension(ext)
+fn default_output_path(source: &Path) -> PathBuf {
+    source.with_extension("out")
 }
 
-fn run(args: Args) -> Result<(), i32> {
-    let start = Instant::now();
+fn compile(arguments: Arguments) -> Result<(), String> {
+    let started = Instant::now();
 
-    let source_path = Path::new(&args.source_file);
-    let source = fs::read_to_string(source_path).map_err(|e| {
-        eprintln!(
-            "error: could not read source file '{}': {}",
-            args.source_file, e
-        );
-        1
-    })?;
-
-    println!("Compiling: {}", args.source_file);
-    println!();
-
-    // ── [1/5] Lexical analysis ────────────────────────────────────────────
-    println!("[1/5] Lexical analysis...");
-    let file_id = FileId::new(1);
-    let source_file =
-        std::sync::Arc::new(SourceFile::new(args.source_file.clone(), source.clone()));
-    let lexer = Lexer::new(file_id, source_file);
-
-    // ── [2/5] Parsing ──────────────────────────────────────────────────────
-    println!("[2/5] Parsing...");
-    let mut parser = Parser::new(lexer);
-    let program = parser.parse_program();
-    let parse_errors = parser.get_errors().clone();
-    if !parse_errors.is_empty() {
-        eprintln!();
-        eprintln!("error: {} parse error(s):", parse_errors.len());
-        for e in &parse_errors {
-            eprintln!(
-                "  {}:{}:{}: {}",
-                args.source_file, e.span.start_line, e.span.start_column, e.message
-            );
-        }
-        return Err(1);
+    if !arguments.source.is_file() {
+        return Err(format!(
+            "source file does not exist or is not a regular file: {}",
+            arguments.source.display()
+        ));
     }
 
-    if args.emit_ast {
-        println!();
-        println!("--- AST ---");
-        println!("{:#?}", program);
-        println!();
-    }
+    let api = CompilerApi::new();
+    let configuration = api.production_config();
 
-    // ── [3/5] Semantic analysis ────────────────────────────────────────────
-    println!("[3/5] Semantic analysis...");
-    let mut sem = SemanticAnalyzer::new();
-    let sem_errors = sem.analyze(&program);
-    if !sem_errors.is_empty() {
-        eprintln!();
-        eprintln!("error: {} semantic error(s):", sem_errors.len());
-        for e in &sem_errors {
-            eprintln!(
-                "  {}:{}:{}: {}",
-                args.source_file, e.span.start_line, e.span.start_column, e.message
-            );
-        }
-        return Err(1);
-    }
+    let request = CompilationRequest::from_file(
+        arguments.source.clone(),
+        configuration,
+    );
 
-    // ── [4/5] IR generation & optimization ─────────────────────────────────
-    println!("[4/5] IR generation & optimization...");
-    let mut ir_gen = IrGenerator::new();
-    let module = ir_gen.generate(&program);
+    println!("Compiling {}", arguments.source.display());
 
-    if args.emit_ir {
-        println!();
-        println!("--- Unoptimized IR ---");
-        println!("{}", module.to_ir_string());
-    }
+    let response = api
+        .compile(request)
+        .map_err(|error| format!("compilation failed: {error}"))?;
 
-    let mut optimizer = Optimizer::with_level(opt_level_to_u8(&args.opt_level));
-    let optimized_module = optimizer.optimize(&module);
-
-    // ── [5/5] Code generation ───────────────────────────────────────────────
-    println!("[5/5] Code generation...");
-    let config = CompilerConfig {
-        target: args.target.clone(),
-        opt_level: args.opt_level.clone(),
-        debug_info: true,
-        verify: false,
-        emit_ir: args.emit_ir,
-        parallel: false,
-    };
-    let generator = CodeGenerator::new(config);
-    let output = generator.generate(&optimized_module).map_err(|e| {
-        eprintln!(
-            "error: code generation failed for target '{}': {}",
-            e.target, e.message
-        );
-        1
-    })?;
-
-    let out_path = args
+    let output_path = arguments
         .output
-        .map(PathBuf::from)
-        .unwrap_or_else(|| default_output_path(&args.source_file, &output.extension));
-    fs::write(&out_path, &output.source).map_err(|e| {
-        eprintln!("error: could not write output file '{:?}': {}", out_path, e);
-        1
+        .unwrap_or_else(|| default_output_path(&arguments.source));
+
+    fs::write(&output_path, &response.output.bytes).map_err(|error| {
+        format!(
+            "could not write output file '{}': {error}",
+            output_path.display()
+        )
     })?;
 
-    let elapsed = start.elapsed();
-    println!();
-    println!("✓ Compilation complete.");
-    println!(
-        "  target:     {}  ({} functions, {} instructions)",
-        output.target,
-        optimized_module.functions.len(),
-        optimized_module.instruction_count()
-    );
-    println!(
-        "  output:     {} ({} bytes)",
-        out_path.display(),
-        output.size_bytes
-    );
-    println!("  opt level:  {:?}", args.opt_level);
-    println!("  time:       {:.2?}", elapsed);
+    println!("Compilation completed.");
+    println!("  target:  {}", response.output.target);
+    println!("  output:  {}", output_path.display());
+    println!("  size:    {} bytes", response.output.size_bytes);
+    println!("  elapsed: {:.2?}", started.elapsed());
 
     Ok(())
 }
 
-fn main() {
-    let raw_args: Vec<String> = env::args().skip(1).collect();
+fn main() -> ExitCode {
+    let raw: Vec<String> = env::args().skip(1).collect();
 
-    if raw_args.is_empty() {
-        print_banner();
-        eprintln!("Usage: zamani <source_file.zn> [options]");
-        eprintln!("       zamani --version");
-        eprintln!("       zamani --help");
-        process::exit(1);
+    if raw.is_empty() {
+        print_help();
+        eprintln!();
+        eprintln!("error: no source file was provided");
+        return ExitCode::from(2);
     }
 
-    match raw_args[0].as_str() {
-        "--version" | "-V" => {
-            println!("zamani {} (edition 2026)", VERSION);
-            return;
+    if raw.len() == 1 {
+        match raw[0].as_str() {
+            "-h" | "--help" => {
+                print_help();
+                return ExitCode::SUCCESS;
+            }
+            "-V" | "--version" => {
+                println!("zamani {VERSION}");
+                return ExitCode::SUCCESS;
+            }
+            _ => {}
         }
-        "--help" | "-h" => {
-            print_banner();
-            print_help();
-            return;
-        }
-        _ => {}
     }
 
-    print_banner();
-
-    let args = match parse_args(&raw_args) {
-        Ok(a) => a,
-        Err(msg) => {
-            eprintln!("error: {}", msg);
-            eprintln!();
-            eprintln!("Usage: zamani <source_file.zn> [options]");
-            eprintln!("Run `zamani --help` for details.");
-            process::exit(1);
+    match parse_arguments(&raw).and_then(compile) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+            eprintln!("Run zamani --help for usage.");
+            ExitCode::FAILURE
         }
-    };
+    }
+}
 
-    match run(args) {
-        Ok(()) => process::exit(0),
-        Err(code) => process::exit(code),
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_source_file() {
+        let arguments =
+            parse_arguments(&["program.zm".into()]).unwrap();
+
+        assert_eq!(arguments.source, PathBuf::from("program.zm"));
+        assert_eq!(arguments.output, None);
+    }
+
+    #[test]
+    fn parses_explicit_output_path() {
+        let arguments = parse_arguments(&[
+            "program.zm".into(),
+            "--output".into(),
+            "program.bin".into(),
+        ])
+        .unwrap();
+
+        assert_eq!(arguments.source, PathBuf::from("program.zm"));
+        assert_eq!(
+            arguments.output,
+            Some(PathBuf::from("program.bin"))
+        );
+    }
+
+    #[test]
+    fn rejects_missing_source() {
+        assert!(parse_arguments(&[]).is_err());
+    }
+
+    #[test]
+    fn rejects_missing_output_value() {
+        assert!(
+            parse_arguments(&[
+                "program.zm".into(),
+                "--output".into(),
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_options() {
+        assert!(
+            parse_arguments(&[
+                "program.zm".into(),
+                "--target".into(),
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn derives_a_neutral_default_artifact_path() {
+        assert_eq!(
+            default_output_path(Path::new("program.zm")),
+            PathBuf::from("program.out")
+        );
     }
 }
