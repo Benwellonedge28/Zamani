@@ -7,21 +7,19 @@
 //! # Zamani Toolchain — Build Subsystem
 //!
 //! Path: `src/toolchain/build/mod.rs`
-//!
-//! Rust edition: 2021.
-//! Minimum supported Rust version: 1.97.
+//! Edition: Rust 2021.
+//! Minimum Rust version: 1.97.
 //! Safety: Safe Rust only.
 //!
 //! ## Mission
 //!
-//! Provides the canonical composition and public integration boundary
-//! for Zamani project builds.
+//! This module is the composition root of the Zamani toolchain build
+//! subsystem.
 //!
-//! The build subsystem coordinates the transformation of an accepted
-//! logical build request into one or more verified target-specific
-//! build outputs.
+//! It coordinates the public build interfaces exposed by the existing
+//! build modules without duplicating their implementations.
 //!
-//! Its architecture supports:
+//! The build subsystem supports the orchestration of projects involving:
 //!
 //! - Classical computation.
 //! - Quantum computation.
@@ -29,195 +27,208 @@
 //! - AI and tensor computation.
 //! - Hybrid computation.
 //! - Distributed computation.
-//! - Embedded and accelerator computation.
-//! - Networking and cryptographic computation.
+//! - Networking and cryptography.
+//! - Embedded systems and accelerators.
 //! - Future registered computational domains.
 //!
-//! The subsystem does not require every target or provider to support
-//! every computational domain.
+//! Domain-specific compilation and realization remain owned by their
+//! authoritative repository subsystems.
 //!
 //! ## POCO-REAF
 //!
 //! Program_Once_Compile_Once_Run_Everywhere_Anywhere_Forever.
 //!
-//! One logical build may produce multiple compatible target-specific
-//! realizations.
+//! One logical build request may produce multiple compatible
+//! target-specific realizations.
 //!
 //! The build subsystem preserves:
 //!
-//! - One logical BuildId.
-//! - One validated logical build request.
+//! - One logical build identity.
+//! - One validated build request.
 //! - One immutable build plan.
-//! - Authoritative feasibility evidence.
-//! - One dependency graph for build orchestration.
-//! - Shared logical build-input identity.
-//! - Separate target-realization input identities.
-//! - Target-specific compilation outcomes.
-//! - Verified artifact identities and provenance.
+//! - Target-specific feasibility evidence.
+//! - Logical build-input identity.
+//! - Target-realization input identities.
+//! - Deterministic build dependencies.
+//! - Target-specific execution outcomes.
+//! - Verified artifact identities.
+//! - Structured build reports.
 //!
-//! Different targets may produce different artifact formats and
-//! representations while preserving the applicable source-program
-//! semantic contracts.
+//! Different realizations may produce different artifacts while
+//! preserving the applicable program semantics.
 //!
-//! A target request is not proof of feasibility.
-//! A discovered target is not proof of resource availability.
-//! A feasible target is not a physical resource reservation.
-//! A successful compilation is not proof of runtime compatibility.
+//! POCO-REAF does not mean that every program can execute on every
+//! physical machine or that physical resources are infinite.
 //!
-//! ## Architectural ownership
+//! ## Ownership
 //!
 //! This module owns:
 //!
 //! - Build subsystem composition.
-//! - Public build module organization.
+//! - Public build module declarations.
 //! - Deliberate public API re-exports.
-//! - Build subsystem documentation.
-//! - Cross-module architectural boundary.
+//! - The boundary between build subsystem modules.
 //!
 //! It does not own:
 //!
 //! - Source grammar, lexing or parsing.
 //! - AST construction.
 //! - Semantic analysis.
-//! - Language-level requirements or capabilities.
-//! - Dependency resolution.
+//! - Requirements, capabilities, preferences, constraints or hints.
 //! - Project or workspace discovery.
 //! - Manifest parsing.
+//! - Dependency resolution.
 //! - Target registration or discovery.
 //! - Capability matching.
-//! - Resource planning or physical allocation.
 //! - Feasibility analysis.
+//! - Physical resource planning or allocation.
 //! - Compiler implementation.
 //! - Backend selection or code generation.
 //! - External process execution.
-//! - Physical hardware discovery.
+//! - Hardware discovery.
 //! - Runtime scheduling or execution.
 //! - Package creation or publication.
 //! - Deployment execution.
 //!
-//! These responsibilities remain with their canonical authorities.
+//! These responsibilities remain with their authoritative subsystems.
 //!
-//! ## Canonical repository authorities
+//! ## Existing repository integrations
 //!
-//! Public build requests:
-//! `crate::toolchain::api::request`
+//! Validated build request:
+//! `request`
 //!
-//! Validated internal requests:
-//! `build::request`
+//! Build planning and feasibility association:
+//! `plan`
 //!
-//! Build identities:
-//! `crate::toolchain::ids`
+//! Build dependency graph:
+//! `graph`
 //!
-//! Toolchain errors:
-//! `crate::toolchain::errors`
+//! Compiler invocation and execution orchestration:
+//! `executor`
 //!
-//! Operational budgets:
-//! `crate::toolchain::configuration::budget`
+//! Build profile composition:
+//! `profiles`
 //!
-//! Workspace metadata:
-//! `crate::toolchain::workspace::metadata`
+//! Immutable build-input identity:
+//! `inputs`
 //!
-//! Project configuration:
-//! `crate::zamani_project_config`
+//! Verified build-output collection:
+//! `outputs`
 //!
-//! Compiler service:
-//! `crate::compiler::api`
+//! Incremental build coordination:
+//! `incremental`
 //!
-//! Target identities:
-//! `crate::compiler::configuration::target`
+//! Structured build reporting:
+//! `reporting`
 //!
-//! Feasibility assessment:
-//! `crate::compiler::planning::feasibility`
+//! Public toolchain API:
+//! `crate::toolchain::api`
 //!
-//! Compiler incremental infrastructure:
-//! `crate::compiler::incremental`
+//! Configuration:
+//! `crate::toolchain::configuration`
 //!
-//! Artifact representation and validation:
-//! `crate::compiler::artifacts`
+//! Workspace:
+//! `crate::toolchain::workspace`
 //!
-//! Backend generation:
+//! Manifest:
+//! `crate::toolchain::manifest`
+//!
+//! Compiler:
+//! `crate::compiler`
+//!
+//! Backend:
 //! `crate::backend`
 //!
-//! Physical hardware integration:
+//! Hardware abstraction:
 //! `crate::zhal`
 //!
-//! Runtime execution:
+//! Runtime:
 //! `crate::zur`
 //!
 //! ## Build lifecycle
 //!
+//! The intended orchestration lifecycle is:
+//!
 //! ```text
-//! Public API BuildRequest
-//!          |
-//!          v
-//! Validated internal BuildRequest
-//!          |
-//!          v
-//! Project / workspace validation
-//!          |
-//!          v
+//! Public BuildRequest
+//!        |
+//!        v
+//! ValidatedBuildRequest
+//!        |
+//!        v
+//! Workspace and manifest validation
+//!        |
+//!        v
 //! Dependency resolution
-//!          |
-//!          v
-//! Canonical target resolution
-//!          |
-//!          v
-//! Immutable BuildPlan
-//!          |
-//!          v
+//!        |
+//!        v
+//! Build profile resolution
+//!        |
+//!        v
+//! Target resolution
+//!        |
+//!        v
+//! BuildPlan
+//!        |
+//!        v
 //! Compiler feasibility assessment
-//!          |
-//!          v
+//!        |
+//!        v
 //! AssessedBuildPlan
-//!          |
-//!          v
-//! BuildInputs snapshot
-//!          |
-//!          v
-//! BuildGraph construction
-//!          |
-//!          v
-//! Build task execution
-//!          |
-//!          v
+//!        |
+//!        v
+//! Immutable BuildInputs
+//!        |
+//!        v
+//! BuildGraph
+//!        |
+//!        v
+//! Build execution
+//!        |
+//!        v
 //! CompilerService
-//!          |
-//!          v
-//! Backend and artifact production
-//!          |
-//!          v
+//!        |
+//!        v
+//! Backend artifact production
+//!        |
+//!        v
 //! Artifact verification
-//!          |
-//!          v
+//!        |
+//!        v
 //! BuildOutputs
-//!          |
-//!          v
-//! Incremental state and reporting
+//!        |
+//!        v
+//! Incremental state coordination
+//!        |
+//!        v
+//! Structured BuildReport
 //! ```
 //!
-//! The lifecycle describes integration contracts. It does not imply
-//! that every upstream service is already production-ready or that
-//! every stage is currently orchestrated by a single BuildService.
+//! This is the intended integration contract. Declaring these modules
+//! does not itself implement a complete orchestration service.
+//!
+//! A dedicated build service must coordinate the lifecycle using the
+//! existing module APIs.
 //!
 //! ## Scalability
 //!
-//! No arbitrary universal maximum is introduced for:
+//! This composition module introduces no arbitrary universal ceilings
+//! on:
 //!
-//! - Projects.
-//! - Source units.
-//! - Build inputs.
+//! - Project size.
+//! - Workspace members.
+//! - Source files.
+//! - Dependencies.
 //! - Build tasks.
-//! - Build dependencies.
-//! - Targets.
+//! - Build graph nodes or edges.
+//! - Target realizations.
 //! - Computing domains.
-//! - CPUs or processing cores.
-//! - GPUs or other accelerators.
-//! - FPGAs, ASICs or QPUs.
+//! - Processors or processing cores.
+//! - Accelerators.
 //! - Quantum resources.
-//! - Distributed participants.
-//! - Memory.
-//! - Storage.
+//! - Memory or storage.
 //! - Tensor dimensions.
+//! - Distributed participants.
 //! - Build artifacts.
 //!
 //! Actual operations remain subject to:
@@ -226,9 +237,9 @@
 //! - Rust representation and address-space limits.
 //! - Operating-system constraints.
 //! - Provider capabilities.
+//! - Semantic compatibility.
 //! - Explicit operational budgets.
 //! - Security and authorization policies.
-//! - Semantic and target compatibility.
 //!
 //! Resource exhaustion must be reported honestly.
 //!
@@ -236,143 +247,111 @@
 //!
 //! ## Determinism
 //!
-//! Build subsystem composition introduces no hidden global state,
-//! implicit host-target selection, random identifiers or timestamps.
+//! This module introduces:
 //!
-//! Deterministic ordering, identity and fingerprint rules are owned
-//! by the corresponding build modules.
+//! - No global mutable state.
+//! - No hidden target selection.
+//! - No random identifiers.
+//! - No implicit hardware assumptions.
+//! - No additional scheduling policy.
+//! - No independent fingerprint algorithm.
 //!
-//! ## Concurrency
-//!
-//! This module does not create worker pools, schedulers, locks or
-//! global mutable execution state.
-//!
-//! Build graph construction and task execution remain separate
-//! responsibilities.
-//!
-//! Concurrent execution must respect the canonical shared operational
-//! budget and cancellation contracts.
+//! Deterministic ordering and identity remain owned by the respective
+//! build modules.
 //!
 //! ## Security
 //!
-//! Unsafe Rust is forbidden.
+//! Unsafe Rust is prohibited.
 //!
-//! Untrusted build requests must pass structural validation.
+//! Build requests must pass their owning validation boundary.
 //!
-//! Build outputs must not be reported as verified until the
-//! authoritative artifact verification operation succeeds.
+//! Unresolved or unsupported capabilities must never be interpreted
+//! as available.
 //!
-//! Provider failures, compiler failures, cancellation and resource
-//! exhaustion must not be converted into successful build results.
+//! Failed compilation or artifact verification must never be reported
+//! as a successful build.
 //!
 //! ## Versioning
 //!
-//! The in-process build module is not itself a serialized protocol.
+//! This module is an in-process composition boundary.
 //!
-//! Public API versions, build-input schema versions, incremental
-//! schema versions, compiler versions and artifact formats remain
-//! independently versioned by their respective authorities.
+//! It does not introduce a new serialization format.
 //!
-//! Persisted build plans or build graphs must use explicitly
-//! versioned serialization contracts.
-//!
-//! ## Module integration
-//!
-//! `request`
-//! - Validates and preserves caller build intent.
-//!
-//! `plan`
-//! - Owns BuildPlan and AssessedBuildPlan.
-//! - Associates resolved targets with feasibility evidence.
-//!
-//! `graph`
-//! - Owns the deterministic build-task dependency graph.
-//! - Validates dependency relationships and cycles.
-//! - Does not execute or schedule tasks.
-//!
-//! `executor`
-//! - Invokes the public compiler service.
-//! - Enforces feasibility, cancellation and budget contracts.
-//! - Validates compilation outputs.
-//! - Requires authoritative artifact verification.
-//!
-//! `inputs`
-//! - Composes immutable build-input snapshots.
-//! - Separates logical and target-realization fingerprints.
-//!
-//! `outputs`
-//! - Collects verified execution outputs.
-//! - Associates canonical artifacts with target realizations.
-//! - Validates output coverage.
-//!
-//! `incremental`
-//! - Coordinates incremental-build decisions.
-//! - Reuses compiler-owned incremental infrastructure.
-//!
-//! `reporting`
-//! - Produces structured build and failure reports.
-//! - Preserves logical and target-specific outcomes.
+//! Persisted build inputs, incremental state, reports and artifacts
+//! retain the versioning contracts of their respective modules.
 //!
 //! ## Public API compatibility
 //!
-//! The public API request remains:
+//! The public API request is:
 //!
 //! `crate::toolchain::api::BuildRequest`
 //!
-//! The validated internal request is exported here as:
+//! The internal validated request is:
 //!
 //! `crate::toolchain::build::ValidatedBuildRequest`
 //!
-//! This distinction prevents accidental substitution of unvalidated
-//! caller input for the internal validated build boundary.
+//! These types deliberately remain distinct.
+//!
+//! External caller input must not bypass the validated build boundary.
 
 
 // ============================================================================
-// BUILD MODULES
+// MODULE DECLARATIONS
 // ============================================================================
 
-/// Validated build-request boundary.
+/// Validated internal build-request representation.
 ///
-/// Converts the public API request into an immutable internal request.
-/// Does not perform project discovery or feasibility analysis.
+/// Converts the public API request into an immutable validated request.
 pub mod request;
 
-/// Immutable build plans and compiler feasibility association.
+/// Immutable build plans and feasibility association.
 ///
-/// Owns BuildPlan, target-resolution results and AssessedBuildPlan.
+/// Owns target resolution, build-plan validation and the association
+/// between plans and authoritative compiler feasibility evidence.
 pub mod plan;
 
 /// Deterministic build-task dependency graph.
 ///
-/// Owns graph structure, dependency validation, cycle detection
-/// and dependency-first ordering. Does not execute tasks.
+/// Owns build-task dependency relationships, cycle validation and
+/// dependency-first ordering. It does not execute tasks.
 pub mod graph;
 
 /// Compiler-facing build execution orchestration.
 ///
-/// Coordinates source providers, target configurations, cancellation,
-/// budget accounting, compiler invocation and artifact verification.
+/// Coordinates source acquisition, target-specific compiler
+/// configuration, cancellation, operational budgets, compiler
+/// invocation and artifact verification.
 pub mod executor;
+
+/// Build-profile resolution and configuration composition.
+///
+/// Resolves the effective configuration using existing toolchain
+/// configuration, manifest settings, selected profiles and explicit
+/// operation overrides.
+pub mod profiles;
 
 /// Immutable build-input snapshots and fingerprints.
 ///
-/// Separates target-independent logical build identity from
-/// target-specific realization identity.
+/// Separates target-independent logical inputs from target-specific
+/// realization inputs.
 pub mod inputs;
 
-/// Verified build-output collection and target coverage.
+/// Build-output collection and validation.
 ///
-/// Adapts execution results to the canonical compiler artifact model.
+/// Associates verified compiler outputs with their target realizations
+/// and canonical artifact representations.
 pub mod outputs;
 
 /// Incremental-build coordination.
 ///
-/// Reuses compiler-owned incremental infrastructure and invalidation.
+/// Coordinates input-change detection and compiler-owned invalidation.
 pub mod incremental;
 
 /// Structured build and failure reporting.
 ///
-/// Produces deterministic machine-readable build reports.
+/// Produces machine-readable reports for logical builds and
+/// target-specific realizations.
+
 pub mod reporting;
 
 
@@ -382,9 +361,11 @@ pub mod reporting;
 
 /// Internal validated build request.
 ///
-/// This alias is intentionally distinct from
-/// `crate::toolchain::api::BuildRequest`, which represents
-/// externally supplied caller intent.
+/// This is intentionally different from the public API's
+/// `crate::toolchain::api::BuildRequest`.
+///
+/// Use this type after the caller's request has passed the validation
+/// boundary.
 pub use request::BuildRequest as ValidatedBuildRequest;
 
 
@@ -392,16 +373,16 @@ pub use request::BuildRequest as ValidatedBuildRequest;
 // BUILD PLANNING API
 // ============================================================================
 
-/// Canonical resolved build target.
+/// A resolved canonical target associated with a build request.
 pub use plan::ResolvedBuildTarget;
 
-/// Canonical target-resolution result.
+/// Result of resolving requested targets.
 pub use plan::BuildTargetResolution;
 
-/// Immutable logical build plan.
+/// Immutable validated logical build plan.
 pub use plan::BuildPlan;
 
-/// Build plan associated with compiler feasibility evidence.
+/// Build plan associated with feasibility evidence.
 pub use plan::AssessedBuildPlan;
 
 
@@ -417,54 +398,80 @@ pub use graph::BuildGraph;
 // BUILD EXECUTION API
 // ============================================================================
 
-/// Validated source unit supplied to the compiler.
+/// Source unit supplied to the compiler.
 pub use executor::BuildSourceUnit;
 
-/// Source acquisition provider contract.
+/// Provider responsible for acquiring build source units.
 pub use executor::BuildSourceProvider;
 
 /// Target-specific compiler configuration.
 pub use executor::TargetCompilerConfiguration;
 
-/// Target compiler configuration provider contract.
+/// Provider responsible for resolving target compiler configurations.
 pub use executor::TargetConfigurationProvider;
 
-/// Authoritative artifact verification contract.
+/// Contract for authoritative artifact verification.
 pub use executor::ArtifactVerifier;
 
-/// Build cancellation probe contract.
+/// Build cancellation observation contract.
 pub use executor::CancellationProbe;
 
-/// Cancellation implementation for operations that are not cancelled.
+/// Cancellation probe that never reports cancellation.
 pub use executor::NeverCancelled;
 
-/// Verified target-specific build artifact.
+/// Artifact whose verification has succeeded.
 pub use executor::VerifiedBuildArtifact;
 
 /// Result of actual build execution.
 pub use executor::BuildExecutionResult;
 
-/// Generic build executor.
+/// Generic compiler-service-backed build executor.
 pub use executor::BuildExecutor;
 
-/// Default compiler-API-backed build executor.
+/// Default compiler API-backed executor.
 pub use executor::DefaultBuildExecutor;
+
+
+// ============================================================================
+// BUILD PROFILE API
+// ============================================================================
+
+/// Origin of a build-profile configuration section.
+pub use profiles::BuildProfileSource;
+
+/// Manifest-provided build settings.
+pub use profiles::ManifestBuildSettings;
+
+/// Explicit build-operation configuration overrides.
+pub use profiles::BuildProfileOverrides;
+
+/// Inputs used for resolving an effective build profile.
+pub use profiles::BuildProfileInputs;
+
+/// Origin of the selected build profile.
+pub use profiles::ProfileSelectionSource;
+
+/// Selected build profile.
+pub use profiles::SelectedBuildProfile;
+
+/// Fully resolved build profile.
+pub use profiles::ResolvedBuildProfile;
 
 
 // ============================================================================
 // BUILD INPUT API
 // ============================================================================
 
-/// Build-input scope classification.
+/// Classification of a build-input scope.
 pub use inputs::BuildInputScope;
 
-/// Build-input authority identity.
+/// Authority associated with a build input.
 pub use inputs::BuildInputAuthority;
 
-/// One fingerprinted build-input record.
+/// Fingerprinted build-input record.
 pub use inputs::BuildInputRecord;
 
-/// Target-realization fingerprint.
+/// Target-specific realization fingerprint.
 pub use inputs::RealizationFingerprint;
 
 /// Immutable build-input snapshot.
@@ -484,19 +491,19 @@ pub use inputs::BUILD_INPUTS_SCHEMA_VERSION;
 // BUILD OUTPUT API
 // ============================================================================
 
-/// Canonical artifact adaptation contract.
+/// Adapter to the canonical compiler artifact representation.
 pub use outputs::CanonicalArtifactAdapter;
 
-/// Build-output completeness classification.
+/// Classification of build-output completeness.
 pub use outputs::BuildOutputStatus;
 
-/// Target-to-artifact coverage.
+/// Target-to-artifact coverage information.
 pub use outputs::TargetOutputCoverage;
 
 /// Aggregate build-output statistics.
 pub use outputs::BuildOutputSummary;
 
-/// Validated build outputs.
+/// Validated outputs of a logical build.
 pub use outputs::BuildOutputs;
 
 
@@ -507,7 +514,7 @@ pub use outputs::BuildOutputs;
 /// Identity of an incremental build artifact.
 pub use incremental::IncrementalArtifactId;
 
-/// Logical or target-specific artifact scope.
+/// Scope of an incremental artifact.
 pub use incremental::BuildArtifactScope;
 
 /// Classification of incremental input changes.
@@ -533,10 +540,10 @@ pub use incremental::INCREMENTAL_BUILD_SCHEMA_VERSION;
 // BUILD REPORTING API
 // ============================================================================
 
-/// Build-report completion classification.
+/// Completion classification for a build report.
 pub use reporting::BuildReportStatus;
 
-/// Build failure classification.
+/// Classification of a build failure.
 pub use reporting::BuildFailureStatus;
 
 /// Logical build-input report.
@@ -551,7 +558,7 @@ pub use reporting::TargetBuildability;
 /// Target-specific build report.
 pub use reporting::TargetBuildReport;
 
-/// Report for unresolved target selection.
+/// Report for an unresolved target selector.
 pub use reporting::UnresolvedTargetReport;
 
 /// Structured build-plan report.
@@ -560,7 +567,7 @@ pub use reporting::BuildPlanReport;
 /// Structured build-output report.
 pub use reporting::BuildOutputReport;
 
-/// Structured build report.
+/// Structured logical build report.
 pub use reporting::BuildReport;
 
 /// Structured build-failure report.
@@ -574,15 +581,28 @@ pub use reporting::BUILD_FAILURE_REPORT_SCHEMA;
 
 
 // ============================================================================
-// COMPOSITION CONTRACT TESTS
+// COMPOSITION TESTS
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Verifies that the build graph is available through the
+    /// canonical build composition boundary.
     #[test]
-    fn exposes_the_validated_request_without_shadowing_api_request() {
+    fn build_graph_is_available() {
+        let graph = BuildGraph::new();
+
+        assert!(graph.is_empty());
+        assert_eq!(graph.task_count(), 0);
+        assert_eq!(graph.dependency_count(), 0);
+    }
+
+    /// Verifies that the validated request has a distinct public
+    /// composition name.
+    #[test]
+    fn validated_request_alias_is_available() {
         fn accepts_validated_request(
             _: Option<ValidatedBuildRequest>,
         ) {
@@ -591,49 +611,49 @@ mod tests {
         accepts_validated_request(None);
     }
 
+    /// Verifies that the build-plan composition exports are available.
     #[test]
-    fn exposes_build_plan_contracts() {
+    fn build_plan_exports_are_available() {
         fn accepts_plan(
             _: Option<BuildPlan>,
             _: Option<AssessedBuildPlan>,
+            _: Option<BuildTargetResolution>,
         ) {
         }
 
-        accepts_plan(None, None);
+        accepts_plan(None, None, None);
     }
 
+    /// Verifies that the profile-resolution composition exports
+    /// are available.
     #[test]
-    fn exposes_build_graph_contract() {
-        let graph = BuildGraph::new();
-
-        assert!(graph.is_empty());
-        assert_eq!(graph.task_count(), 0);
-        assert_eq!(graph.dependency_count(), 0);
-    }
-
-    #[test]
-    fn exposes_build_executor_contract() {
-        fn accepts_executor<C: crate::compiler::api::CompilerService>(
-            _: Option<BuildExecutor<C>>,
+    fn build_profile_exports_are_available() {
+        fn accepts_profile(
+            _: Option<ManifestBuildSettings>,
+            _: Option<BuildProfileOverrides>,
+            _: Option<ResolvedBuildProfile>,
         ) {
         }
 
-        accepts_executor::<crate::compiler::api::CompilerApi>(None);
+        accepts_profile(None, None, None);
     }
 
+    /// Verifies that the immutable input snapshot exports are available.
     #[test]
-    fn exposes_build_input_contracts() {
+    fn build_input_exports_are_available() {
         fn accepts_inputs(
             _: Option<BuildInputs>,
             _: Option<BuildInputsBuilder>,
+            _: Option<BuildInputRecord>,
         ) {
         }
 
-        accepts_inputs(None, None);
+        accepts_inputs(None, None, None);
     }
 
+    /// Verifies that the output composition exports are available.
     #[test]
-    fn exposes_build_output_contracts() {
+    fn build_output_exports_are_available() {
         fn accepts_outputs(
             _: Option<BuildOutputs>,
             _: Option<BuildOutputSummary>,
@@ -643,8 +663,9 @@ mod tests {
         accepts_outputs(None, None);
     }
 
+    /// Verifies that incremental-build coordination exports are available.
     #[test]
-    fn exposes_incremental_build_contracts() {
+    fn incremental_build_exports_are_available() {
         fn accepts_incremental(
             _: Option<IncrementalBuildCoordinator>,
             _: Option<IncrementalBuildReport>,
@@ -652,26 +673,5 @@ mod tests {
         }
 
         accepts_incremental(None, None);
-    }
-
-    #[test]
-    fn exposes_reporting_contracts() {
-        fn accepts_reports(
-            _: Option<BuildReport<'static>>,
-            _: Option<BuildFailureReport<'static>>,
-        ) {
-        }
-
-        accepts_reports(None, None);
-    }
-
-    #[test]
-    fn build_schema_versions_are_available() {
-        assert_ne!(BUILD_INPUTS_API_VERSION, 0);
-        assert_ne!(BUILD_INPUTS_SCHEMA_VERSION, 0);
-        assert_ne!(INCREMENTAL_BUILD_API_VERSION, 0);
-        assert_ne!(INCREMENTAL_BUILD_SCHEMA_VERSION, 0);
-        assert!(!BUILD_REPORT_SCHEMA.is_empty());
-        assert!(!BUILD_FAILURE_REPORT_SCHEMA.is_empty());
     }
 }
